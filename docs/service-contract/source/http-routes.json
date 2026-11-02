@@ -1,0 +1,2841 @@
+{
+  "records": [
+    {
+      "build_constraint": "default",
+      "file": "cmd/operator/main.go",
+      "function": "newHealthServer",
+      "handler_expression": "func(w http.ResponseWriter, _ *http.Request) {\n\t\tw.WriteHeader(http.StatusOK)\n\t\t_, _ = w.Write([]byte(\"ok\"))\n\t}",
+      "line": 124,
+      "pattern_expression": "\"/healthz\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "cmd/operator/main.go",
+      "function": "newHealthServer",
+      "handler_expression": "func(w http.ResponseWriter, r *http.Request) {\n\t\tctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)\n\t\tdefer cancel()\n\t\tif err := client.Readyz(ctx); err != nil {\n\t\t\tlogger.Debug(\"readyz probe failed\", zap.Error(err))\n\t\t\tw.WriteHeader(http.StatusServiceUnavailable)\n\t\t\t_, _ = w.Write([]byte(\"core_unavailable\"))\n\t\t\treturn\n\t\t}\n\t\tw.WriteHeader(http.StatusOK)\n\t\t_, _ = w.Write([]byte(\"ready\"))\n\t}",
+      "line": 128,
+      "pattern_expression": "\"/readyz\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleRoot",
+      "line": 403,
+      "pattern_expression": "\"GET /{$}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleHealthz",
+      "line": 404,
+      "pattern_expression": "\"GET /healthz\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMetrics",
+      "line": 405,
+      "pattern_expression": "\"GET /metrics\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleOpenAPI",
+      "line": 406,
+      "pattern_expression": "\"GET /openapi.json\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleManifestListGeneric",
+      "line": 411,
+      "pattern_expression": "\"GET /api/v1/manifests\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleManifestCreateGeneric",
+      "line": 412,
+      "pattern_expression": "\"POST /api/v1/manifests\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleManifestDelete",
+      "line": 416,
+      "pattern_expression": "\"DELETE /api/v1/manifests/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleEventPublish",
+      "line": 422,
+      "pattern_expression": "\"POST /api/v1/events\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleEventPublisherAuthorization",
+      "line": 426,
+      "pattern_expression": "\"POST \"+eventPublisherAuthorizationPath",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleGitHubWebhook",
+      "line": 427,
+      "pattern_expression": "\"POST /api/v1/github/webhook\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleReadyz",
+      "line": 428,
+      "pattern_expression": "\"GET /readyz\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAuthPasswordUpsert",
+      "line": 429,
+      "pattern_expression": "\"POST /api/v1/auth/passwords\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIssueSetupToken",
+      "line": 433,
+      "pattern_expression": "\"POST /api/v1/auth/passwords/setup-tokens\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSetupCommit",
+      "line": 434,
+      "pattern_expression": "\"POST /api/v1/auth/passwords/setup\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSetupPreflight",
+      "line": 437,
+      "pattern_expression": "\"GET /api/v1/auth/passwords/setup/preflight\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handlePasswordChange))",
+      "line": 440,
+      "pattern_expression": "\"POST /api/v1/auth/passwords/change\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handlePasswordForgot",
+      "line": 442,
+      "pattern_expression": "\"POST /api/v1/auth/passwords/forgot\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handlePasswordReset))",
+      "line": 445,
+      "pattern_expression": "\"POST /api/v1/auth/passwords/reset\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleForgotOptions",
+      "line": 450,
+      "pattern_expression": "\"GET /api/v1/auth/passwords/forgot/options\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleResetPreflight",
+      "line": 451,
+      "pattern_expression": "\"GET /api/v1/auth/passwords/reset/preflight\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleAuthLogin))",
+      "line": 455,
+      "pattern_expression": "\"POST /api/v1/auth/login\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAuthThirdPartyStart",
+      "line": 460,
+      "pattern_expression": "\"GET /api/v1/auth/third-party/start/{provider}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAuthThirdPartyCallback",
+      "line": 461,
+      "pattern_expression": "\"GET /api/v1/auth/third-party/callback/{provider}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleThirdPartyIdentityList",
+      "line": 462,
+      "pattern_expression": "\"GET /api/v1/auth/third-party-identities\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityUpsert)",
+      "line": 468,
+      "pattern_expression": "\"POST /api/v1/auth/third-party-identities\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityDelete)",
+      "line": 469,
+      "pattern_expression": "\"DELETE /api/v1/auth/third-party-identities/{provider}/{subject}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleThirdPartyAuthProviderList",
+      "line": 470,
+      "pattern_expression": "\"GET /api/v1/auth/providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderUpsert)",
+      "line": 471,
+      "pattern_expression": "\"POST /api/v1/auth/providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleThirdPartyAuthProviderGet",
+      "line": 472,
+      "pattern_expression": "\"GET /api/v1/auth/providers/{provider}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderDelete)",
+      "line": 473,
+      "pattern_expression": "\"DELETE /api/v1/auth/providers/{provider}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAuthSession",
+      "line": 474,
+      "pattern_expression": "\"GET /api/v1/auth/session\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAuthVerify",
+      "line": 480,
+      "pattern_expression": "\"GET /api/v1/auth/verify\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAuthLogout",
+      "line": 481,
+      "pattern_expression": "\"POST /api/v1/auth/logout\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFAEnrollRequest",
+      "line": 483,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/enroll/request\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFAEnrollValidate",
+      "line": 484,
+      "pattern_expression": "\"GET /api/v1/auth/mfa/enroll/validate\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFATOTPBegin",
+      "line": 485,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/factors/totp/begin\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFATOTPFinish",
+      "line": 486,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/factors/totp/finish\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFAContactOptions",
+      "line": 487,
+      "pattern_expression": "\"GET /api/v1/auth/mfa/contact/options\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAContactLoginBegin))",
+      "line": 488,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/contact/login/begin\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFAWebAuthnBegin",
+      "line": 489,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/factors/webauthn/begin\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFAWebAuthnFinish",
+      "line": 490,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/factors/webauthn/finish\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAWebAuthnLoginBegin))",
+      "line": 498,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/webauthn/login/begin\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAWebAuthnLoginFinish))",
+      "line": 500,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/webauthn/login/finish\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleMFAFactorsList",
+      "line": 504,
+      "pattern_expression": "\"GET /api/v1/auth/mfa/factors\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleMFAWebAuthnRename)",
+      "line": 505,
+      "pattern_expression": "\"PATCH /api/v1/auth/mfa/factors/webauthn/{credential_id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleMFAWebAuthnDelete)",
+      "line": 506,
+      "pattern_expression": "\"DELETE /api/v1/auth/mfa/factors/webauthn/{credential_id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleMFAGenerateRecoveryCodes)",
+      "line": 507,
+      "pattern_expression": "\"POST /api/v1/auth/mfa/recovery-codes\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientCreate)",
+      "line": 509,
+      "pattern_expression": "\"POST /api/v1/auth/scim/clients\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSCIMClientList",
+      "line": 510,
+      "pattern_expression": "\"GET /api/v1/auth/scim/clients\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSAMLMetadata",
+      "line": 514,
+      "pattern_expression": "\"GET /saml/metadata\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSAMLSSO",
+      "line": 515,
+      "pattern_expression": "\"POST /saml/sso\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSAMLSSO",
+      "line": 516,
+      "pattern_expression": "\"GET /saml/sso\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSAMLSLO",
+      "line": 517,
+      "pattern_expression": "\"POST /saml/slo\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLSPRegister)",
+      "line": 520,
+      "pattern_expression": "\"POST /api/v1/auth/saml/service-providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSAMLSPList",
+      "line": 521,
+      "pattern_expression": "\"GET /api/v1/auth/saml/service-providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLRotateSigningCert)",
+      "line": 522,
+      "pattern_expression": "\"POST /api/v1/auth/saml/rotate-signing-cert\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "scim.BearerAuth(server.db)(scim.ReadOnlyGuard()(scimMux))",
+      "line": 528,
+      "pattern_expression": "\"/scim/v2/\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permCreateCollaborator, guard(server.handleInviteCreate))",
+      "line": 534,
+      "pattern_expression": "\"POST /api/v1/invites\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleInviteList)",
+      "line": 535,
+      "pattern_expression": "\"GET /api/v1/invites\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleInviteValidate",
+      "line": 536,
+      "pattern_expression": "\"GET /api/v1/invites/validate\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationCatalogList",
+      "line": 537,
+      "pattern_expression": "\"GET /api/v1/integration-catalog\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationCatalogEntry",
+      "line": 538,
+      "pattern_expression": "\"GET /api/v1/integration-catalog/{domain}/{section}/{entry}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleCatalogDiscovery",
+      "line": 539,
+      "pattern_expression": "\"GET /api/v1/catalog/discovery\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleCatalogDiscoveryRegister)",
+      "line": 540,
+      "pattern_expression": "\"POST /api/v1/catalog/discovery/register\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationInstanceList",
+      "line": 541,
+      "pattern_expression": "\"GET /api/v1/integration-instances\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationInstanceCreate)",
+      "line": 542,
+      "pattern_expression": "\"POST /api/v1/integration-instances\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationRuntimeStateList",
+      "line": 543,
+      "pattern_expression": "\"GET /api/v1/integration-runtime-states\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationTypeSync(server.buildManifestSyncDeps())",
+      "line": 546,
+      "pattern_expression": "\"POST /api/v1/integration-types/{id}/sync\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationWebhook",
+      "line": 547,
+      "pattern_expression": "\"POST /api/v1/integrations/{instance_id}/webhook\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfacesList)",
+      "line": 567,
+      "pattern_expression": "\"GET /api/v1/ops/surfaces\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceTargetsList)",
+      "line": 568,
+      "pattern_expression": "\"GET /api/v1/ops/surface-targets\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceTargetUpsert)",
+      "line": 569,
+      "pattern_expression": "\"PUT /api/v1/ops/surface-targets/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceTargetDelete)",
+      "line": 570,
+      "pattern_expression": "\"DELETE /api/v1/ops/surface-targets/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceTargetRefresh)",
+      "line": 571,
+      "pattern_expression": "\"POST /api/v1/ops/surface-targets/{id}/refresh\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceManifest)",
+      "line": 572,
+      "pattern_expression": "\"GET /api/v1/ops/surfaces/{id}/manifest\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceData)",
+      "line": 573,
+      "pattern_expression": "\"GET /api/v1/ops/surfaces/{id}/data/{viewId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceAction)",
+      "line": 574,
+      "pattern_expression": "\"POST /api/v1/ops/surfaces/{id}/action/{actionId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDisposition)",
+      "line": 575,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/original-create-dispositions\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDisposition)",
+      "line": 576,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/native-denied-dispositions\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDispositionRead)",
+      "line": 577,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/native-denied-dispositions/{grantId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDisposition)",
+      "line": 578,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-original-dispositions\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDispositionRead)",
+      "line": 579,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/failed-original-dispositions/{grantId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPartialNativeOffReconciliation)",
+      "line": 580,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/partial-native-off-reconciliations\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPartialNativeOffReconciliationRead)",
+      "line": 581,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/partial-native-off-reconciliations/{preregistrationId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPartialNativeOffReconciliationObserve)",
+      "line": 582,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/partial-native-off-reconciliations/observe\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPrejournalRefusalRecovery)",
+      "line": 583,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/prejournal-refusal-recoveries\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPrejournalRefusalRecoveryRead)",
+      "line": 584,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/prejournal-refusal-recoveries/{preregistrationId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPresendRetirementRecovery)",
+      "line": 585,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPresendRetirementRecoveryRead)",
+      "line": 586,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries/{preregistrationId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalAdvance)",
+      "line": 587,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/advance\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalComplete)",
+      "line": 588,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/complete\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposal)",
+      "line": 589,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalRead)",
+      "line": 590,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/{preregistrationId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDisposition)",
+      "line": 591,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/enrolled-failed-original-dispositions\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDispositionRead)",
+      "line": 592,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/enrolled-failed-original-dispositions/{grantId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDispositionRead)",
+      "line": 593,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/original-create-dispositions/{grantId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejection)",
+      "line": 594,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/dispatch-prestart-rejections\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejectionRead)",
+      "line": 595,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/dispatch-prestart-rejections/{jobId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowsList)",
+      "line": 596,
+      "pattern_expression": "\"GET /api/v1/ops/workflows\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowDetail)",
+      "line": 597,
+      "pattern_expression": "\"GET /api/v1/ops/workflows/{runId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowRetry)",
+      "line": 598,
+      "pattern_expression": "\"POST /api/v1/ops/workflows/{runId}/retry\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowAbort)",
+      "line": 599,
+      "pattern_expression": "\"POST /api/v1/ops/workflows/{runId}/abort\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowReplay)",
+      "line": 600,
+      "pattern_expression": "\"POST /api/v1/ops/workflows/{runId}/replay\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsApprovalsList)",
+      "line": 601,
+      "pattern_expression": "\"GET /api/v1/ops/approvals\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsApprovalDecide(\"approved\"))",
+      "line": 602,
+      "pattern_expression": "\"POST /api/v1/ops/approvals/{id}/approve\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsApprovalDecide(\"rejected\"))",
+      "line": 603,
+      "pattern_expression": "\"POST /api/v1/ops/approvals/{id}/reject\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsDriftList)",
+      "line": 604,
+      "pattern_expression": "\"GET /api/v1/ops/drift\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsDriftReconcile)",
+      "line": 605,
+      "pattern_expression": "\"POST /api/v1/ops/drift/{id}/reconcile\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsCatalog)",
+      "line": 606,
+      "pattern_expression": "\"GET /api/v1/ops/catalog\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsSystemHealth)",
+      "line": 607,
+      "pattern_expression": "\"GET /api/v1/ops/system/health\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewAudit, server.handleOpsAuditList)",
+      "line": 608,
+      "pattern_expression": "\"GET /api/v1/ops/audit\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleOpsCollaboratorsMissingMFA)",
+      "line": 609,
+      "pattern_expression": "\"GET /api/v1/ops/collaborators/missing-mfa\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleCollaboratorList",
+      "line": 616,
+      "pattern_expression": "\"GET /api/v1/collaborators\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permCreateCollaborator, server.handleCollaboratorCreate)",
+      "line": 617,
+      "pattern_expression": "\"POST /api/v1/collaborators\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleCollaboratorGet",
+      "line": 618,
+      "pattern_expression": "\"GET /api/v1/collaborators/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUpdate)",
+      "line": 619,
+      "pattern_expression": "\"PATCH /api/v1/collaborators/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorDelete)",
+      "line": 620,
+      "pattern_expression": "\"DELETE /api/v1/collaborators/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorOffboard)",
+      "line": 621,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/offboard\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorSuspend)",
+      "line": 622,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/suspend\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUnsuspend)",
+      "line": 623,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/unsuspend\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorReOnboard)",
+      "line": 624,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/re-onboard\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorRoleChange)",
+      "line": 625,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/role-change\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamAdd)",
+      "line": 626,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/team-add\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamRemove)",
+      "line": 627,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/team-remove\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAttributeSet)",
+      "line": 628,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/attribute-set\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorManagerChange)",
+      "line": 629,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/manager-change\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceStart)",
+      "line": 630,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/absence/start\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceEnd)",
+      "line": 631,
+      "pattern_expression": "\"POST /api/v1/collaborators/{id}/absence/end\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleCollaboratorLifecycleEvents",
+      "line": 632,
+      "pattern_expression": "\"GET /api/v1/collaborators/{id}/lifecycle-events\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleCollaboratorProviderState",
+      "line": 633,
+      "pattern_expression": "\"GET /api/v1/collaborators/{id}/provider-state\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleEffectiveTartaroActions",
+      "line": 634,
+      "pattern_expression": "\"GET /api/v1/collaborators/{id}/effective-tartaro-actions\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityPost)",
+      "line": 635,
+      "pattern_expression": "\"POST /api/v1/collaborator-external-identities\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleExternalIdentityGet",
+      "line": 636,
+      "pattern_expression": "\"GET /api/v1/collaborator-external-identities\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityDelete)",
+      "line": 637,
+      "pattern_expression": "\"DELETE /api/v1/collaborator-external-identities/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handlePermissionList",
+      "line": 638,
+      "pattern_expression": "\"GET /api/v1/permissions/catalog\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionRegister)",
+      "line": 639,
+      "pattern_expression": "\"POST /api/v1/permissions/catalog\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handlePermissionBindingList",
+      "line": 640,
+      "pattern_expression": "\"GET /api/v1/permissions/bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingCreate)",
+      "line": 641,
+      "pattern_expression": "\"POST /api/v1/permissions/bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionEvaluate)",
+      "line": 642,
+      "pattern_expression": "\"POST /api/v1/permissions/evaluate\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleTeamList",
+      "line": 643,
+      "pattern_expression": "\"GET /api/v1/teams\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permCreateTeam, server.handleTeamCreate)",
+      "line": 644,
+      "pattern_expression": "\"POST /api/v1/teams\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleTeamGet",
+      "line": 645,
+      "pattern_expression": "\"GET /api/v1/teams/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamUpdate)",
+      "line": 646,
+      "pattern_expression": "\"PATCH /api/v1/teams/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamDelete)",
+      "line": 647,
+      "pattern_expression": "\"DELETE /api/v1/teams/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamSync)",
+      "line": 648,
+      "pattern_expression": "\"POST /api/v1/teams/{id}/sync\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleTeamProvisioningStatus",
+      "line": 649,
+      "pattern_expression": "\"GET /api/v1/teams/{id}/provisioning-status\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleTeamGrantList",
+      "line": 650,
+      "pattern_expression": "\"GET /api/v1/teams/{id}/grants\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantCreate)",
+      "line": 651,
+      "pattern_expression": "\"POST /api/v1/teams/{id}/grants\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantDelete)",
+      "line": 652,
+      "pattern_expression": "\"DELETE /api/v1/teams/{id}/grants/{grant_id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleTeamAvailableSources",
+      "line": 653,
+      "pattern_expression": "\"GET /api/v1/teams/{id}/available-sources\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleTeamMembershipList",
+      "line": 654,
+      "pattern_expression": "\"GET /api/v1/team-memberships\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamMembershipUpsert)",
+      "line": 655,
+      "pattern_expression": "\"POST /api/v1/team-memberships\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleProductList",
+      "line": 656,
+      "pattern_expression": "\"GET /api/v1/products\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleProductCreate)",
+      "line": 657,
+      "pattern_expression": "\"POST /api/v1/products\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleManagedSecretList",
+      "line": 659,
+      "pattern_expression": "\"GET /api/v1/secrets\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleManagedSecretGet",
+      "line": 660,
+      "pattern_expression": "\"GET /api/v1/secrets/{namespace}/{name}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretCreate)",
+      "line": 661,
+      "pattern_expression": "\"POST /api/v1/secrets\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRotate)",
+      "line": 662,
+      "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/rotate\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretDisable)",
+      "line": 663,
+      "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/disable\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRevoke)",
+      "line": 664,
+      "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/revoke\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeAll)",
+      "line": 665,
+      "pattern_expression": "\"POST /api/v1/secrets/materialize-all\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeOne)",
+      "line": 666,
+      "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/materialize\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleReconcilerStatus",
+      "line": 667,
+      "pattern_expression": "\"GET /api/v1/reconciler/status\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleRepositoryBindingList",
+      "line": 668,
+      "pattern_expression": "\"GET /api/v1/repository-bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleRepositoryBindingCreate)",
+      "line": 669,
+      "pattern_expression": "\"POST /api/v1/repository-bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleGuardianPolicyList",
+      "line": 670,
+      "pattern_expression": "\"GET /api/v1/guardian-policies\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianPolicyCreate)",
+      "line": 671,
+      "pattern_expression": "\"POST /api/v1/guardian-policies\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleGuardianApprovalList",
+      "line": 672,
+      "pattern_expression": "\"GET /api/v1/guardian-approvals\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalCreate)",
+      "line": 673,
+      "pattern_expression": "\"POST /api/v1/guardian-approvals\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalDecision)",
+      "line": 674,
+      "pattern_expression": "\"POST /api/v1/guardian-approvals/{namespace}/{name}/decision\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleGuardianMemoryList",
+      "line": 675,
+      "pattern_expression": "\"GET /api/v1/guardian-memories\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleRemediationBundleList",
+      "line": 676,
+      "pattern_expression": "\"GET /api/v1/remediation-bundles\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationBundleCreate)",
+      "line": 677,
+      "pattern_expression": "\"POST /api/v1/remediation-bundles\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianMemoryReview)",
+      "line": 678,
+      "pattern_expression": "\"POST /api/v1/guardian-memories/review\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleRemediationContractList",
+      "line": 679,
+      "pattern_expression": "\"GET /api/v1/remediation-contracts\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationContractCreate)",
+      "line": 680,
+      "pattern_expression": "\"POST /api/v1/remediation-contracts\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleSurfaceList",
+      "line": 681,
+      "pattern_expression": "\"GET /api/v1/surfaces\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleSurfaceCreate)",
+      "line": 682,
+      "pattern_expression": "\"POST /api/v1/surfaces\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleWorkflowList",
+      "line": 683,
+      "pattern_expression": "\"GET /api/v1/workflows\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowCreate)",
+      "line": 684,
+      "pattern_expression": "\"POST /api/v1/workflows\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowRun)",
+      "line": 685,
+      "pattern_expression": "\"POST /api/v1/workflow-runs\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleWorkflowRunGet",
+      "line": 686,
+      "pattern_expression": "\"GET /api/v1/workflow-runs/{run_id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleInstallIntegration)",
+      "line": 687,
+      "pattern_expression": "\"POST /api/v1/integrations/install\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, server.handleProvisionAWS)",
+      "line": 688,
+      "pattern_expression": "\"POST /api/v1/provision/aws\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "requireDeployToken(server.handleDeployProduct)",
+      "line": 689,
+      "pattern_expression": "\"POST /api/v1/products/{namespace}/{name}/deploy\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "requireDeployToken(server.handleDeployAll)",
+      "line": 690,
+      "pattern_expression": "\"POST /api/v1/products/deploy-all\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "requireDeployToken(server.handleBootstrap)",
+      "line": 691,
+      "pattern_expression": "\"POST /api/v1/bootstrap\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleTenantBrandGet",
+      "line": 692,
+      "pattern_expression": "\"GET /api/v1/tenant/brand\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, server.handleTenantBrandPatch)",
+      "line": 693,
+      "pattern_expression": "\"PATCH /api/v1/tenant/brand\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleSelfPhoneGet)",
+      "line": 694,
+      "pattern_expression": "\"GET /api/v1/me/contact/phone\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleSelfPhonePut)",
+      "line": 695,
+      "pattern_expression": "\"PUT /api/v1/me/contact/phone\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleOperatorPhoneGet",
+      "line": 696,
+      "pattern_expression": "\"GET /api/v1/console/collaborators/{id}/contact/phone\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleOperatorPhonePut)",
+      "line": 697,
+      "pattern_expression": "\"PUT /api/v1/console/collaborators/{id}/contact/phone\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleMe)",
+      "line": 698,
+      "pattern_expression": "\"GET /api/v1/me\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleUserPreferencesGet)",
+      "line": 699,
+      "pattern_expression": "\"GET /api/v1/me/preferences\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleUserPreferencesPatch)",
+      "line": 700,
+      "pattern_expression": "\"PATCH /api/v1/me/preferences\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleMeSessionsList)",
+      "line": 705,
+      "pattern_expression": "\"GET /api/v1/me/sessions\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "guard(server.handleMeSessionsRevoke)",
+      "line": 706,
+      "pattern_expression": "\"DELETE /api/v1/me/sessions/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationCatalogList)",
+      "line": 718,
+      "pattern_expression": "\"GET /api/v1/console/integration-catalog\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationCatalogEntry)",
+      "line": 719,
+      "pattern_expression": "\"GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleCatalogDiscovery)",
+      "line": 720,
+      "pattern_expression": "\"GET /api/v1/console/catalog-discovery\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleCatalogDiscoveryRegister)",
+      "line": 721,
+      "pattern_expression": "\"POST /api/v1/console/catalog-discovery/register\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationInstanceList)",
+      "line": 722,
+      "pattern_expression": "\"GET /api/v1/console/integration-instances\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationInstanceCreate)",
+      "line": 723,
+      "pattern_expression": "\"POST /api/v1/console/integration-instances\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorList)",
+      "line": 730,
+      "pattern_expression": "\"GET /api/v1/console/collaborators\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permCreateCollaborator, server.handleCollaboratorCreate)",
+      "line": 731,
+      "pattern_expression": "\"POST /api/v1/console/collaborators\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorGet)",
+      "line": 732,
+      "pattern_expression": "\"GET /api/v1/console/collaborators/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUpdate)",
+      "line": 733,
+      "pattern_expression": "\"PATCH /api/v1/console/collaborators/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorDelete)",
+      "line": 734,
+      "pattern_expression": "\"DELETE /api/v1/console/collaborators/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorOffboard)",
+      "line": 735,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/offboard\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorSuspend)",
+      "line": 736,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/suspend\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUnsuspend)",
+      "line": 737,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/unsuspend\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorReOnboard)",
+      "line": 738,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/re-onboard\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorRoleChange)",
+      "line": 739,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/role-change\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamAdd)",
+      "line": 740,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/team-add\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamRemove)",
+      "line": 741,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/team-remove\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAttributeSet)",
+      "line": 742,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/attribute-set\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorManagerChange)",
+      "line": 743,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/manager-change\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceStart)",
+      "line": 744,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/absence/start\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceEnd)",
+      "line": 745,
+      "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/absence/end\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorLifecycleEvents)",
+      "line": 746,
+      "pattern_expression": "\"GET /api/v1/console/collaborators/{id}/lifecycle-events\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorProviderState)",
+      "line": 747,
+      "pattern_expression": "\"GET /api/v1/console/collaborators/{id}/provider-state\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionList)",
+      "line": 752,
+      "pattern_expression": "\"GET /api/v1/console/permissions/catalog\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionRegister)",
+      "line": 753,
+      "pattern_expression": "\"POST /api/v1/console/permissions/catalog\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingList)",
+      "line": 754,
+      "pattern_expression": "\"GET /api/v1/console/permissions/bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingCreate)",
+      "line": 755,
+      "pattern_expression": "\"POST /api/v1/console/permissions/bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionEvaluate)",
+      "line": 756,
+      "pattern_expression": "\"POST /api/v1/console/permissions/evaluate\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamList)",
+      "line": 760,
+      "pattern_expression": "\"GET /api/v1/console/teams\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permCreateTeam, server.handleTeamCreate)",
+      "line": 761,
+      "pattern_expression": "\"POST /api/v1/console/teams\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamGet)",
+      "line": 762,
+      "pattern_expression": "\"GET /api/v1/console/teams/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamUpdate)",
+      "line": 763,
+      "pattern_expression": "\"PATCH /api/v1/console/teams/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamDelete)",
+      "line": 764,
+      "pattern_expression": "\"DELETE /api/v1/console/teams/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamSync)",
+      "line": 765,
+      "pattern_expression": "\"POST /api/v1/console/teams/{id}/sync\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamProvisioningStatus)",
+      "line": 766,
+      "pattern_expression": "\"GET /api/v1/console/teams/{id}/provisioning-status\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantList)",
+      "line": 767,
+      "pattern_expression": "\"GET /api/v1/console/teams/{id}/grants\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantCreate)",
+      "line": 768,
+      "pattern_expression": "\"POST /api/v1/console/teams/{id}/grants\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantDelete)",
+      "line": 769,
+      "pattern_expression": "\"DELETE /api/v1/console/teams/{id}/grants/{grant_id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamAvailableSources)",
+      "line": 770,
+      "pattern_expression": "\"GET /api/v1/console/teams/{id}/available-sources\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamMembershipList)",
+      "line": 773,
+      "pattern_expression": "\"GET /api/v1/console/team-memberships\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamMembershipUpsert)",
+      "line": 774,
+      "pattern_expression": "\"POST /api/v1/console/team-memberships\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityList)",
+      "line": 779,
+      "pattern_expression": "\"GET /api/v1/console/auth/third-party-identities\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityUpsert)",
+      "line": 780,
+      "pattern_expression": "\"POST /api/v1/console/auth/third-party-identities\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityDelete)",
+      "line": 781,
+      "pattern_expression": "\"DELETE /api/v1/console/auth/third-party-identities/{provider}/{subject}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderList)",
+      "line": 782,
+      "pattern_expression": "\"GET /api/v1/console/auth/providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderUpsert)",
+      "line": 783,
+      "pattern_expression": "\"POST /api/v1/console/auth/providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderGet)",
+      "line": 784,
+      "pattern_expression": "\"GET /api/v1/console/auth/providers/{provider}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderDelete)",
+      "line": 785,
+      "pattern_expression": "\"DELETE /api/v1/console/auth/providers/{provider}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientCreate)",
+      "line": 786,
+      "pattern_expression": "\"POST /api/v1/console/auth/scim/clients\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientList)",
+      "line": 787,
+      "pattern_expression": "\"GET /api/v1/console/auth/scim/clients\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLSPRegister)",
+      "line": 788,
+      "pattern_expression": "\"POST /api/v1/console/auth/saml/service-providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLSPList)",
+      "line": 789,
+      "pattern_expression": "\"GET /api/v1/console/auth/saml/service-providers\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLRotateSigningCert)",
+      "line": 790,
+      "pattern_expression": "\"POST /api/v1/console/auth/saml/rotate-signing-cert\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleProductList)",
+      "line": 794,
+      "pattern_expression": "\"GET /api/v1/console/products\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleProductCreate)",
+      "line": 795,
+      "pattern_expression": "\"POST /api/v1/console/products\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretList)",
+      "line": 812,
+      "pattern_expression": "\"GET /api/v1/console/secrets\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretGet)",
+      "line": 813,
+      "pattern_expression": "\"GET /api/v1/console/secrets/{namespace}/{name}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretCreate)",
+      "line": 814,
+      "pattern_expression": "\"POST /api/v1/console/secrets\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRotate)",
+      "line": 815,
+      "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/rotate\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretDisable)",
+      "line": 816,
+      "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/disable\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRevoke)",
+      "line": 817,
+      "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/revoke\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeAll)",
+      "line": 818,
+      "pattern_expression": "\"POST /api/v1/console/secrets/materialize-all\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeOne)",
+      "line": 819,
+      "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/materialize\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleReconcilerStatus)",
+      "line": 822,
+      "pattern_expression": "\"GET /api/v1/console/reconciler/status\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleRepositoryBindingList)",
+      "line": 825,
+      "pattern_expression": "\"GET /api/v1/console/repository-bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleRepositoryBindingCreate)",
+      "line": 826,
+      "pattern_expression": "\"POST /api/v1/console/repository-bindings\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleGuardianPolicyList)",
+      "line": 830,
+      "pattern_expression": "\"GET /api/v1/console/guardian-policies\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianPolicyCreate)",
+      "line": 831,
+      "pattern_expression": "\"POST /api/v1/console/guardian-policies\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleGuardianApprovalList)",
+      "line": 832,
+      "pattern_expression": "\"GET /api/v1/console/guardian-approvals\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalCreate)",
+      "line": 833,
+      "pattern_expression": "\"POST /api/v1/console/guardian-approvals\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalDecision)",
+      "line": 834,
+      "pattern_expression": "\"POST /api/v1/console/guardian-approvals/{namespace}/{name}/decision\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleGuardianMemoryList)",
+      "line": 835,
+      "pattern_expression": "\"GET /api/v1/console/guardian-memories\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleRemediationBundleList)",
+      "line": 836,
+      "pattern_expression": "\"GET /api/v1/console/remediation-bundles\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationBundleCreate)",
+      "line": 837,
+      "pattern_expression": "\"POST /api/v1/console/remediation-bundles\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianMemoryReview)",
+      "line": 838,
+      "pattern_expression": "\"POST /api/v1/console/guardian-memories/review\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleRemediationContractList)",
+      "line": 839,
+      "pattern_expression": "\"GET /api/v1/console/remediation-contracts\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationContractCreate)",
+      "line": 840,
+      "pattern_expression": "\"POST /api/v1/console/remediation-contracts\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleSurfaceList)",
+      "line": 844,
+      "pattern_expression": "\"GET /api/v1/console/surfaces\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleSurfaceCreate)",
+      "line": 845,
+      "pattern_expression": "\"POST /api/v1/console/surfaces\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleWorkflowList)",
+      "line": 848,
+      "pattern_expression": "\"GET /api/v1/console/workflows\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowCreate)",
+      "line": 849,
+      "pattern_expression": "\"POST /api/v1/console/workflows\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowRun)",
+      "line": 850,
+      "pattern_expression": "\"POST /api/v1/console/workflow-runs\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleWorkflowRunGet)",
+      "line": 851,
+      "pattern_expression": "\"GET /api/v1/console/workflow-runs/{run_id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleInstallIntegration)",
+      "line": 854,
+      "pattern_expression": "\"POST /api/v1/console/integrations/install\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, server.handleProvisionAWS)",
+      "line": 858,
+      "pattern_expression": "\"POST /api/v1/console/provision/aws\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewOverview, server.handleConsoleOverviewSummary)",
+      "line": 875,
+      "pattern_expression": "\"GET /api/v1/console/overview-summary\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleConsoleTeamEditContext)",
+      "line": 876,
+      "pattern_expression": "\"GET /api/v1/console/teams/{id}/edit-context\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceConfigureContext)",
+      "line": 877,
+      "pattern_expression": "\"GET /api/v1/ops/surfaces/{id}/configure-context\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, requireDeployToken(server.handleDeployProduct))",
+      "line": 884,
+      "pattern_expression": "\"POST /api/v1/console/products/{namespace}/{name}/deploy\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, requireDeployToken(server.handleDeployAll))",
+      "line": 885,
+      "pattern_expression": "\"POST /api/v1/console/products/deploy-all\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, requireDeployToken(server.handleBootstrap))",
+      "line": 886,
+      "pattern_expression": "\"POST /api/v1/console/bootstrap\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAuditList",
+      "line": 887,
+      "pattern_expression": "\"GET /api/v1/audit\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowTemplateInstantiate)",
+      "line": 889,
+      "pattern_expression": "\"POST /api/v1/workflow-templates/{namespace}/{name}/instantiate\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationSurfacesList()",
+      "line": 895,
+      "pattern_expression": "\"GET /api/v1/integration-surfaces\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationSurfaceGet()",
+      "line": 896,
+      "pattern_expression": "\"GET /api/v1/integration-surfaces/{name}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationSurfaceUpdateIcon())",
+      "line": 897,
+      "pattern_expression": "\"PATCH /api/v1/integration-surfaces/{name}/icon\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationSurfaceSync()",
+      "line": 898,
+      "pattern_expression": "\"POST /api/v1/integration-surfaces/{name}/sync\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationSurfaceDeactivate())",
+      "line": 899,
+      "pattern_expression": "\"DELETE /api/v1/integration-surfaces/{name}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleIntegrationSurfaceQuery()",
+      "line": 900,
+      "pattern_expression": "\"POST /api/v1/integrations/{instance_id}/surface-query\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleOIDCIntrospect",
+      "line": 943,
+      "pattern_expression": "\"POST /api/v1/oidc/introspect\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAdminCollaboratorRevokeSessions",
+      "line": 944,
+      "pattern_expression": "\"POST /api/v1/admin/collaborators/{id}/revoke-sessions\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.handleAdminOIDCClientPatch",
+      "line": 949,
+      "pattern_expression": "\"PATCH /api/v1/admin/oidc-clients/{id}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.consoleHandler",
+      "line": 959,
+      "pattern_expression": "prefix",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.consoleHandler",
+      "line": 960,
+      "pattern_expression": "prefix+\"/\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/oidc/handlers.go",
+      "function": "MountOIDC",
+      "handler_expression": "provider",
+      "line": 90,
+      "pattern_expression": "\"/.well-known/openid-configuration\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/oidc/handlers.go",
+      "function": "MountOIDC",
+      "handler_expression": "http.StripPrefix(\"/oidc\", provider)",
+      "line": 91,
+      "pattern_expression": "\"/oidc/\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/oidc/handlers.go",
+      "function": "MountOIDC",
+      "handler_expression": "http.StripPrefix(prefix, provider)",
+      "line": 93,
+      "pattern_expression": "prefix+\"/\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "internal/auth/scim/server.go",
+      "function": "RegisterRoutes",
+      "handler_expression": "http.HandlerFunc(s.handleListUsers)",
+      "line": 44,
+      "pattern_expression": "\"GET /scim/v2/Users\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "internal/auth/scim/server.go",
+      "function": "RegisterRoutes",
+      "handler_expression": "http.HandlerFunc(s.handleGetUser)",
+      "line": 45,
+      "pattern_expression": "\"GET /scim/v2/Users/{id}\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "internal/auth/scim/server.go",
+      "function": "RegisterRoutes",
+      "handler_expression": "http.HandlerFunc(s.handleListGroups)",
+      "line": 46,
+      "pattern_expression": "\"GET /scim/v2/Groups\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "internal/auth/scim/server.go",
+      "function": "RegisterRoutes",
+      "handler_expression": "http.HandlerFunc(s.handleGetGroup)",
+      "line": 47,
+      "pattern_expression": "\"GET /scim/v2/Groups/{id}\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "internal/auth/scim/server.go",
+      "function": "RegisterRoutes",
+      "handler_expression": "http.HandlerFunc(s.handleSchemas)",
+      "line": 48,
+      "pattern_expression": "\"GET /scim/v2/Schemas\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "internal/auth/scim/server.go",
+      "function": "RegisterRoutes",
+      "handler_expression": "http.HandlerFunc(s.handleServiceProviderConfig)",
+      "line": 49,
+      "pattern_expression": "\"GET /scim/v2/ServiceProviderConfig\"",
+      "registration": "Handle"
+    },
+    {
+      "build_constraint": "default",
+      "file": "internal/auth/scim/server.go",
+      "function": "RegisterRoutes",
+      "handler_expression": "http.HandlerFunc(s.handleResourceTypes)",
+      "line": 50,
+      "pattern_expression": "\"GET /scim/v2/ResourceTypes\"",
+      "registration": "Handle"
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

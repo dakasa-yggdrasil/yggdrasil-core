@@ -1,0 +1,51 @@
+package adapter
+
+// Compiled only in remote Core CI inside the exact approved adapter source.
+// Operator pins use that adapter's typed projection, not the consumer's SDK.
+import (
+	"encoding/json"
+	"os"
+	"testing"
+
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+func TestCapacityCoreBirthProjectionProducer(t *testing.T) {
+	raw, err := os.ReadFile(os.Getenv("CAPACITY_NATIVE_INPUT_FILE"))
+	if err != nil || len(raw) > 2<<20 {
+		t.Fatal("native Deployment projection input unavailable")
+	}
+	var object unstructured.Unstructured
+	if object.UnmarshalJSON(raw) != nil || object.GetAPIVersion() != "apps/v1" || object.GetKind() != "Deployment" || !capacityPodUUID(string(object.GetUID())) || object.GetResourceVersion() == "" {
+		t.Fatal("current native Deployment identity required")
+	}
+	var deployment appsv1.Deployment
+	if runtime.DefaultUnstructuredConverter.FromUnstructured(object.Object, &deployment) != nil {
+		t.Fatal("typed adapter projection unavailable")
+	}
+	projected, err := json.Marshal(deployment.Spec)
+	if err != nil {
+		t.Fatal("typed adapter projection encoding failed")
+	}
+	var view map[string]any
+	if json.Unmarshal(projected, &view) != nil {
+		t.Fatal("native projection view unavailable")
+	}
+	// Pin the real cross-version discrepancy, rather than inserting a nil field
+	// into Core's newer typed schema by hand. This is diagnostic, not readiness.
+	metadata := view["template"].(map[string]any)["metadata"].(map[string]any)
+	timestamp, present := metadata["creationTimestamp"]
+	if !present || timestamp != nil {
+		t.Fatal("exact adapter schema projection drifted")
+	}
+	digest := birthDigest(deployment.Spec)
+	if !birthSHA(digest) {
+		t.Fatal("exact native projection digest unavailable")
+	}
+	result, err := json.Marshal(map[string]any{"schema_version": 1, "deployment_spec_sha256": digest})
+	if err != nil || os.WriteFile(os.Getenv("CAPACITY_NATIVE_OUTPUT_FILE"), result, 0600) != nil {
+		t.Fatal("native projection output unavailable")
+	}
+}

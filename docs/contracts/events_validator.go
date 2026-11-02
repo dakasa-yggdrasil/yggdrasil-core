@@ -72,8 +72,14 @@ func ValidateEventPayload(eventType string, schemaVersion string, payload interf
 // `events/v1/integration_mutation/<verb>.json`. The schema's `verb` const
 // catches mismatches between the event type and the payload's verb field.
 func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
-	_ = schemaVersion // placeholder for v2+ routing when multiple versions coexist
+	if path := nativeQualificationMutationSchemaPath(eventType); path != "" {
+		if schemaVersion != "v1" {
+			return ""
+		}
+		return path
+	}
 
+	// Generic routing retains its existing schema-version behavior.
 	if m := integrationMutationEventTypePattern.FindStringSubmatch(eventType); len(m) == 2 {
 		return "events/v1/integration_mutation/" + m[1] + ".json"
 	}
@@ -144,7 +150,7 @@ func loadEventSchema(schemaPath string) (*jsonschema.Schema, error) {
 	}
 	eventSchemasMu.RUnlock()
 
-	data, err := eventSchemaFS.ReadFile(schemaPath)
+	data, err := readEventSchemaFile(schemaPath)
 	if err != nil {
 		return nil, err
 	}

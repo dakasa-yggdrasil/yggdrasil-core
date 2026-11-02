@@ -1,0 +1,134 @@
+name: Guest historical unknown read recovery
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  signed-postgres-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: recovery-fixture-only
+          POSTGRES_DB: recovery_fixture
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recovery_fixture"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: recovery_fixture
+      DB_USER: postgres
+      DB_PASSWORD: recovery-fixture-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:recovery-fixture-only@127.0.0.1:5432/recovery_fixture?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply source-owned schema
+        run: go run ./scripts/goose up
+      - name: Verify signed lineage and PostgreSQL guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/unknown-read
+          go test -race -json -p 1 -count=1 -timeout=3m ./repository -run '^(TestHistoricalUnknownRead.*|TestHistoricalRecoverySignedSourceFixture|TestInstalledGuestPreviousHeldPublicationRemainsHeldAndUnknownRemainsUnknown)$' | tee artifacts/unknown-read/events.jsonl
+          python3 - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          events=[json.loads(line) for line in Path('artifacts/unknown-read/events.jsonl').read_text().splitlines() if line]
+          required={'TestHistoricalUnknownReadTransportKeepsUncertainty','TestHistoricalUnknownReadRetainsOriginalAndVerifierIsRequired','TestHistoricalUnknownReadVerifiesSignedSQLLineage','TestHistoricalUnknownReadPostgresSignedLineage','TestHistoricalUnknownReadPostgresB509Compatibility','TestHistoricalRecoverySignedSourceFixture','TestInstalledGuestPreviousHeldPublicationRemainsHeldAndUnknownRemainsUnknown'}
+          runs=Counter(e.get('Test') for e in events if e.get('Action')=='run')
+          passed=Counter(e.get('Test') for e in events if e.get('Action')=='pass' and e.get('Test'))
+          if any(runs[n]!=1 or passed[n]!=1 for n in required) or any(e.get('Action') in ('skip','fail','build-fail') for e in events):
+              raise SystemExit('signed original lineage test census incomplete or failed')
+          if sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+              raise SystemExit('owning repository package did not pass')
+          PY
+      - name: Retain source test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unknown-read-signed-postgres
+          path: artifacts/unknown-read/
+          if-no-files-found: warn
+  synthetic-resume-transaction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install local PostgreSQL 16
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-16
+      - name: Run synthetic approval and full resume transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/recovery-artifacts" "$RUNNER_TEMP/recovery-pg-socket"
+          PG_BIN=/usr/lib/postgresql/16/bin
+          cleanup() {
+            original_rc=$?
+            trap - EXIT
+            if test -f "$RUNNER_TEMP/recovery-pg-data/postmaster.pid"; then
+              "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/recovery-pg-data" -m immediate -w stop || true
+            fi
+            mkdir -p artifacts/unknown-read-fixture
+            cp -a "$RUNNER_TEMP/recovery-artifacts/." artifacts/unknown-read-fixture/
+            if test -f "$RUNNER_TEMP/recovery-pg.log"; then cp "$RUNNER_TEMP/recovery-pg.log" artifacts/unknown-read-fixture/postgres-start.log; fi
+            exit "$original_rc"
+          }
+          trap cleanup EXIT
+          "$PG_BIN/initdb" --auth-local=trust --auth-host=reject -D "$RUNNER_TEMP/recovery-pg-data" > "$RUNNER_TEMP/recovery-artifacts/postgres-init.log" 2>&1
+          "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/recovery-pg-data" -l "$RUNNER_TEMP/recovery-pg.log" -o "-k $RUNNER_TEMP/recovery-pg-socket -c listen_addresses= -p 55492" -w start
+          "$PG_BIN/createdb" -h "$RUNNER_TEMP/recovery-pg-socket" -p 55492 recovery_fixture
+          export DB_HOST="$RUNNER_TEMP/recovery-pg-socket" DB_PORT=55492 DB_NAME=recovery_fixture DB_USER="$(id -un)" DB_PASSWORD='' DB_SSLMODE=disable GOWORK=off
+          export DB_URL="host=$DB_HOST port=$DB_PORT user=$DB_USER dbname=$DB_NAME sslmode=disable"
+          export RECOVERY_FIXTURE_ADMIN_URL="$(python3 -c 'import os,urllib.parse; print("postgres://"+urllib.parse.quote(os.environ["DB_USER"],safe="")+"@/postgres?host="+urllib.parse.quote(os.environ["DB_HOST"],safe="")+"&port=55492&sslmode=disable")')"
+          export CAPACITY_RECOVERY_FIXTURE_ONLY=true
+          go run ./scripts/goose up
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          go test -race -buildvcs=true -tags recoveryfixture -json -p 1 -count=1 -timeout=5m ./internal/capacity ./repository -run '^TestRecoveryFixture' | tee "$RUNNER_TEMP/recovery-artifacts/events.jsonl"
+          python3 - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          import os
+          events=[json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'recovery-artifacts/events.jsonl').read_text().splitlines() if line]
+          required={'TestRecoveryFixtureUnanchoredUncertainCreateCannotConfirmPostgres','TestRecoveryFixtureUnanchoredUncertainCreateCannotConfirmPostgres/foreign_resource_from_qemu_refusal','TestRecoveryFixtureUnanchoredUncertainCreateCannotConfirmPostgres/unrelated_action_without_owner','TestRecoveryFixtureAcceptedCreateStillConfirmsPostgres','TestRecoveryFixtureHistoricalConfirmedReplayPostgres','TestRecoveryFixtureApprovalIsExplicitAndSeparate','TestRecoveryFixtureSignedRegistrationV2','TestRecoveryFixtureSignedEnrollmentAndInstallationV2','TestRecoveryFixtureOneMemberInventoryShape','TestRecoveryFixtureCausalPublicationAndRead','TestRecoveryFixtureSignedInstallationStoredPostgres','TestRecoveryFixtureCurrentSourceRegistry','TestRecoveryFixtureSourceBindingsPostgres','TestRecoveryFixtureResumeSetupPostgres','TestRecoveryFixtureResumeSetupPostgres/bad_return_digest','TestRecoveryFixtureResumeSetupPostgres/bad_run_lineage','TestRecoveryFixtureResumeSetupPostgres/foreign_executor','TestRecoveryFixtureResumeSetupPostgres/different_resource','TestRecoveryFixtureResumeSetupPostgres/valid'}
+          runs=Counter(e.get('Test') for e in events if e.get('Action')=='run')
+          passed=Counter(e.get('Test') for e in events if e.get('Action')=='pass' and e.get('Test'))
+          if any(runs[n]!=1 or passed[n]!=1 for n in required) or any(e.get('Action') in ('skip','fail','build-fail') for e in events):
+              raise SystemExit('synthetic resume fixture census incomplete or failed')
+          if sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=2:
+              raise SystemExit('owning fixture packages did not pass')
+          PY
+      - name: Retain synthetic fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unknown-read-synthetic-resume
+          path: artifacts/unknown-read-fixture/
+          if-no-files-found: warn

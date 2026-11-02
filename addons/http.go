@@ -2,12 +2,16 @@ package addons
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +23,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	surfacesvc "github.com/dakasa-yggdrasil/yggdrasil-core/internal/surface"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
@@ -30,6 +35,15 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER"))
 	if strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_CLIENTS_FILE")) != "" && issuer == "" {
 		return fmt.Errorf("oidc confidential client bootstrap requires YGGDRASIL_OIDC_ISSUER")
+	}
+	tlsConfig, err := httpTLSConfigFromEnv()
+	if err != nil {
+		return err
+	}
+	addr := httpListenAddr()
+	secondaryAddr, err := httpTLSSecondaryAddrFromEnv(tlsConfig, addr)
+	if err != nil {
+		return err
 	}
 	db, ok := Postgres(app)
 	if !ok {
@@ -43,6 +57,15 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 
 	var opts []httpapi.ServerOption
+	opts = append(opts, httpapi.WithRabbitMQConnectionProvider(func() *amqp.Connection {
+		current, _ := RabbitMQ(app)
+		return current
+	}))
+	// This is an in-process service of the SAME HTTP authorization owner,
+	// never a new caller-controlled route or anonymous dispatch wrapper.
+	opts = append(opts, httpapi.WithCapacityDispatchServiceReceiver(func(service *httpapi.CapacityDispatchService) {
+		app.SetResource(capacityDispatchServiceResource, service)
+	}))
 	if engine, ok := Reconciler(app); ok {
 		opts = append(opts, httpapi.WithReconciler(engine))
 	}
@@ -123,30 +146,147 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 		return fmt.Errorf("build http api: %w", err)
 	}
 
-	addr := httpListenAddr()
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		ReadHeaderTimeout: httpDurationFromEnv("HTTP_READ_HEADER_TIMEOUT_SECONDS", 10*time.Second),
-		ReadTimeout:       httpDurationFromEnv("HTTP_READ_TIMEOUT_SECONDS", 30*time.Second),
-		WriteTimeout:      httpDurationFromEnv("HTTP_WRITE_TIMEOUT_SECONDS", 30*time.Second),
-		IdleTimeout:       httpDurationFromEnv("HTTP_IDLE_TIMEOUT_SECONDS", 120*time.Second),
+	servers := configuredHTTPServers(addr, secondaryAddr, handler, tlsConfig)
+	listeners, err := listenHTTPServers(servers)
+	if err != nil {
+		return err
 	}
-
-	go func() {
-		if serveErr := server.ListenAndServe(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-			logger.Fatal("http server stopped unexpectedly", zap.String("addr", addr), zap.Error(serveErr))
-		}
-	}()
-
-	logger.Info("http api started", zap.String("addr", addr))
-
-	app.SetResource("http_server", server)
+	for i, server := range servers {
+		listener := listeners[i]
+		go func() {
+			if serveErr := serveConfiguredHTTP(server, listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+				logger.Fatal("http server stopped unexpectedly", zap.String("addr", server.Addr), zap.Error(serveErr))
+			}
+		}()
+		logger.Info("http api started", zap.String("addr", server.Addr), zap.Bool("tls", server.TLSConfig != nil))
+	}
+	app.SetResource("http_server", servers[0])
 	app.SetResource("http_addr", addr)
+	if len(servers) == 2 {
+		app.SetResource("http_tls_server", servers[1])
+		app.SetResource("http_tls_addr", secondaryAddr)
+	}
 	app.RegisterCloser(func(ctx context.Context) error {
-		return server.Shutdown(ctx)
+		return shutdownHTTPServers(ctx, servers)
 	})
 	return nil
+}
+
+// A secondary TLS listener uses the SAME handler and private authorization
+// registry. It preserves primary HTTP while old and new processes coexist.
+func configuredHTTPServers(addr, secondaryAddr string, handler http.Handler, tlsConfig *tls.Config) []*http.Server {
+	newServer := func(address string, identity *tls.Config) *http.Server {
+		return &http.Server{
+			Addr:              address,
+			Handler:           handler,
+			ReadHeaderTimeout: httpDurationFromEnv("HTTP_READ_HEADER_TIMEOUT_SECONDS", 10*time.Second),
+			ReadTimeout:       httpDurationFromEnv("HTTP_READ_TIMEOUT_SECONDS", 30*time.Second),
+			WriteTimeout:      httpDurationFromEnv("HTTP_WRITE_TIMEOUT_SECONDS", 30*time.Second),
+			IdleTimeout:       httpDurationFromEnv("HTTP_IDLE_TIMEOUT_SECONDS", 120*time.Second),
+			TLSConfig:         identity,
+		}
+	}
+	server := newServer(addr, tlsConfig)
+	if secondaryAddr == "" {
+		return []*http.Server{server}
+	}
+	server.TLSConfig = nil
+	return []*http.Server{server, newServer(secondaryAddr, tlsConfig)}
+}
+
+// Bind every listener before any Serve call. A failed second bind closes the
+// first socket; it cannot leave a partially started API behind.
+func listenHTTPServers(servers []*http.Server) ([]net.Listener, error) {
+	var listeners []net.Listener
+	for _, server := range servers {
+		listener, err := net.Listen("tcp", server.Addr)
+		if err != nil {
+			for _, bound := range listeners {
+				_ = bound.Close()
+			}
+			return nil, fmt.Errorf("bind http listener: %w", err)
+		}
+		listeners = append(listeners, listener)
+	}
+	return listeners, nil
+}
+
+func shutdownHTTPServers(ctx context.Context, servers []*http.Server) error {
+	var result error
+	for _, server := range servers {
+		result = errors.Join(result, server.Shutdown(ctx))
+	}
+	return result
+}
+
+func httpTLSSecondaryAddrFromEnv(identity *tls.Config, primaryAddr string) (string, error) {
+	addr, present := os.LookupEnv("HTTP_TLS_SECONDARY_ADDR")
+	if !present {
+		return "", nil
+	}
+	refuse := func() (string, error) { return "", httpTLSConfigurationError{} }
+	if identity == nil || addr == "" || strings.TrimSpace(addr) != addr {
+		return refuse()
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return refuse()
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 || strconv.Itoa(n) != port {
+		return refuse()
+	}
+	if host != "" {
+		ip, err := netip.ParseAddr(host)
+		if err != nil || ip.Zone() != "" || ip.String() != host {
+			return refuse()
+		}
+	}
+	if net.JoinHostPort(host, port) != addr {
+		return refuse()
+	}
+	_, primaryPort, err := net.SplitHostPort(primaryAddr)
+	primaryNumber, portErr := strconv.Atoi(primaryPort)
+	if err != nil || portErr != nil || primaryNumber == n {
+		return refuse()
+	}
+	return addr, nil
+}
+
+type httpTLSConfigurationError struct{ cause error }
+
+func (httpTLSConfigurationError) Error() string                { return "configured HTTP TLS identity unavailable" }
+func (e httpTLSConfigurationError) Unwrap() error              { return e.cause }
+func (e httpTLSConfigurationError) Format(s fmt.State, _ rune) { _, _ = fmt.Fprint(s, e.Error()) }
+
+// Explicit mounted identities are loaded once before the HTTP addon accesses
+// its database resource or performs OIDC/API bootstrap effects. Earlier addons
+// may already have initialized their own resources. Absence preserves the
+// original HTTP transport. A partial, blank or
+// malformed opt-in never silently falls back to plaintext or a proxy header.
+func httpTLSConfigFromEnv() (*tls.Config, error) {
+	certFile, hasCert := os.LookupEnv("HTTP_TLS_CERT_FILE")
+	keyFile, hasKey := os.LookupEnv("HTTP_TLS_KEY_FILE")
+	if !hasCert && !hasKey {
+		return nil, nil
+	}
+	if !hasCert || !hasKey || certFile == "" || keyFile == "" || strings.TrimSpace(certFile) != certFile || strings.TrimSpace(keyFile) != keyFile || !filepath.IsAbs(certFile) || !filepath.IsAbs(keyFile) || filepath.Clean(certFile) != certFile || filepath.Clean(keyFile) != keyFile || strings.ContainsAny(certFile+keyFile, "\r\n\x00") {
+		return nil, httpTLSConfigurationError{}
+	}
+	identity, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, httpTLSConfigurationError{cause: err}
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{identity}}, nil
+}
+
+func serveConfiguredHTTP(server *http.Server, listener net.Listener) error {
+	if server.TLSConfig == nil {
+		return server.Serve(listener)
+	}
+	// The already loaded identity and SAME original API handler/registry are
+	// used. No certificate path/key is retained in server logs or request data.
+	return server.ServeTLS(listener, "", "")
 }
 
 func ensureConfiguredOIDCClients(ctx context.Context, db *sql.DB, logger *zap.Logger) error {

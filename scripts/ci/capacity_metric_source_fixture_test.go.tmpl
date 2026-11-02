@@ -1,0 +1,42 @@
+package adapter
+
+// Remote CI fixture inside exact reviewed integration-prometheus source.
+// Native /api/v1/query_range is a Core test's persistent HTTP server, so the
+// source URL and operator binding fingerprint stay fixed across observations.
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"testing"
+
+	"github.com/dakasa-yggdrasil/integration-prometheus/internal/protocol"
+)
+
+func TestCapacityCoreMetricSourceFixtureProducer(t *testing.T) {
+	var in struct {
+		Mode    string                                      `json:"mode"`
+		Request protocol.AdapterGenerateInstallationRequest `json:"request"`
+	}
+	raw, err := os.ReadFile(os.Getenv("CAPACITY_NATIVE_INPUT_FILE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if json.Unmarshal(raw, &in) != nil {
+		t.Fatal("closed fixture request missing")
+	}
+	value, err := ObserveMetricRangeEvidence(context.Background(), in.Request)
+	if err != nil {
+		t.Fatal("actual range source failed", err)
+	}
+	out := map[string]any{"operation": OperationObserveMetricRangeEvidence, "capability": OperationObserveMetricRangeEvidence, "status": "succeeded", "output": value, "metadata": value}
+	if in.Mode == "seed" {
+		out["describe"] = Describe()
+	}
+	raw, err = json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.WriteFile(os.Getenv("CAPACITY_NATIVE_OUTPUT_FILE"), raw, 0600) != nil {
+		t.Fatal("fixture output missing")
+	}
+}

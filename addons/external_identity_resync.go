@@ -25,17 +25,15 @@ func init() {
 // Tunable via YGGDRASIL_EXTERNAL_IDENTITY_RESYNC_INTERVAL (default 4h).
 // Setting "0" disables the ticker (used in tests).
 func bootstrapExternalIdentityResync(ctx context.Context, app *runtime.ServiceApp) error {
+	ctx = withBrokerConnection(ctx, app)
 	db, ok := Postgres(app)
 	if !ok {
 		return nil
 	}
-	// RabbitMQ(app) returns (nil, true) when the broker was unreachable at
-	// boot (typed-nil resource), so `ok` alone is NOT enough — guard the
-	// nil conn explicitly. Without this the runner would call
-	// ExecuteIntegration(ctx, nil, ...) → conn.Channel() on a nil
-	// *amqp.Connection → panic, crashing the whole process.
+	// Install the loop even when the session is temporarily unavailable; each
+	// tick obtains its own connection and refuses before calling the adapter.
 	conn, ok := RabbitMQ(app)
-	if !ok || conn == nil {
+	if !ok {
 		return nil
 	}
 	logger, _ := Logger(app)
@@ -47,7 +45,7 @@ func bootstrapExternalIdentityResync(ctx context.Context, app *runtime.ServiceAp
 	// brokerLive is re-evaluated per tick so a runtime broker drop (the conn
 	// closes after a healthy boot) also skips the tick instead of dispatching
 	// through a dead connection. Mirrors the reactor Runner's BrokerAvailable.
-	brokerAvailable := func() bool { return brokerLive(conn) }
+	brokerAvailable := func() bool { return brokerLive(brokerConnectionFor(ctx, conn)) }
 
 	stop := make(chan struct{})
 	go runExternalIdentityResync(ctx, db, conn, brokerAvailable, logger, interval, stop)
@@ -68,7 +66,8 @@ func runExternalIdentityResync(ctx context.Context, db *sql.DB, conn *amqp.Conne
 	// nil or closed connection panics. Skipping leaves nothing half-done —
 	// drift is observed-only and re-detected on the next live tick.
 	runTick := func(phase string) {
-		if brokerAvailable != nil && !brokerAvailable() {
+		conn := brokerConnectionFor(ctx, conn)
+		if !brokerLive(conn) || (brokerAvailable != nil && !brokerAvailable()) {
 			if logger != nil {
 				logger.Warn("external_identity_resync: broker unavailable — skipping tick",
 					zap.String("phase", phase))

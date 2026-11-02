@@ -3,6 +3,7 @@ package addons
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -35,7 +36,7 @@ func bootstrapPostgres(ctx context.Context, app *runtime.ServiceApp) error {
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	if err := db.PingContext(pingCtx); err != nil {
+	if err := pingPostgresStartup(pingCtx, db.PingContext); err != nil {
 		_ = db.Close()
 		return fmt.Errorf("ping postgres: %w", err)
 	}
@@ -43,6 +44,27 @@ func bootstrapPostgres(ctx context.Context, app *runtime.ServiceApp) error {
 	app.SetResource("postgres", db)
 	app.RegisterCloser(func(context.Context) error { return db.Close() })
 	return nil
+}
+
+// A newly started pod can briefly precede service connectivity. Retry the
+// read-only ping within the original startup deadline, before exposing HTTP.
+func pingPostgresStartup(ctx context.Context, ping func(context.Context) error) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := ping(ctx)
+		if err == nil {
+			return ctx.Err()
+		}
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(err, ctx.Err())
+		case <-timer.C:
+		}
+	}
 }
 
 // Postgres returns the shared SQL handle when the addon is installed.

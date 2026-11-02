@@ -14,7 +14,6 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
@@ -786,7 +785,7 @@ func reconcileIntegrationComponent(
 	}
 
 	var response model.AdapterReconcileInstallationResponse
-	if err := callContractRPC(rpcCtx, rpcamqp.New(conn), queue, reconcileInstallationContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, sessionAMQPTransport(conn), queue, reconcileInstallationContract, request, &response); err != nil {
 		return model.ProductInstallationReconcileResult{}, fmt.Errorf("call integration execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "reconcile_installation" {
@@ -905,7 +904,7 @@ func reconcileGitComponent(
 	// callContractRPC (AMQP-only) path used by reconcileIntegrationComponent
 	// would fail here with "execute queue does not expose" — the typed
 	// queue field is empty for HTTP transports.
-	transport := NewAdapterTransportClient(rpcamqp.New(conn))
+	transport := NewAdapterTransportClient(sessionAMQPTransport(conn))
 	var response model.AdapterGenerateInstallationResponse
 	if err := transport.Call(rpcCtx, generateInstallationContract, integrationTypeSpec, instanceSpec, "execute", request, &response); err != nil {
 		return model.ProductInstallationReconcileResult{}, fmt.Errorf("call integration execute transport %q for git+renderer render: %w", integrationTypeSpec.Adapter.Transport, err)
@@ -1000,7 +999,7 @@ func discoverIntegrationComponentState(
 	}
 
 	var response model.AdapterDiscoverInstallationStateResponse
-	if err := callContractRPC(rpcCtx, rpcamqp.New(conn), queue, discoverInstallationStateContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, sessionAMQPTransport(conn), queue, discoverInstallationStateContract, request, &response); err != nil {
 		return model.ProductInstallationStateResult{}, fmt.Errorf("call integration execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "discover_installation_state" {
@@ -1121,7 +1120,7 @@ func (g rabbitMQProductGenerator) Generate(ctx context.Context, input manifesten
 	}
 
 	var response model.AdapterGenerateInstallationResponse
-	if err := callContractRPC(rpcCtx, rpcamqp.New(g.conn), queue, generateInstallationContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, sessionAMQPTransport(g.conn), queue, generateInstallationContract, request, &response); err != nil {
 		return manifestengine.GenerateProductComponentOutput{}, fmt.Errorf("call integration execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != operation {
@@ -1776,7 +1775,7 @@ func (e *productTargetExecutor) applyComponentTarget(
 	}
 
 	var response model.AdapterDeclarativeApplyResponse
-	transport := NewAdapterTransportClient(rpcamqp.New(e.conn))
+	transport := NewAdapterTransportClient(sessionAMQPTransport(e.conn))
 	if err := transport.Call(rpcCtx, declarativeApplyContract, targetTypeSpec, targetInstanceSpec, "execute", request, &response); err != nil {
 		return model.ProductInstallationApplyResult{}, fmt.Errorf("call target execute transport %q: %w", targetTypeSpec.Adapter.Transport, err)
 	}
@@ -1864,7 +1863,7 @@ func (e *productTargetExecutor) observeComponentTarget(
 	}
 
 	var response model.AdapterObserveObjectsResponse
-	transport := NewAdapterTransportClient(rpcamqp.New(e.conn))
+	transport := NewAdapterTransportClient(sessionAMQPTransport(e.conn))
 	if err := transport.Call(rpcCtx, observeObjectsContract, targetTypeSpec, targetInstanceSpec, "execute", request, &response); err != nil {
 		return model.ProductInstallationObservationResult{}, fmt.Errorf("call target execute transport %q: %w", targetTypeSpec.Adapter.Transport, err)
 	}
@@ -1937,7 +1936,7 @@ func (e *productTargetExecutor) uninstallComponentTarget(
 	}
 
 	var response model.AdapterDeclarativeDeleteResponse
-	transport := NewAdapterTransportClient(rpcamqp.New(e.conn))
+	transport := NewAdapterTransportClient(sessionAMQPTransport(e.conn))
 	if err := transport.Call(rpcCtx, declarativeDeleteContract, targetTypeSpec, targetInstanceSpec, "execute", request, &response); err != nil {
 		return model.ProductInstallationUninstallResult{}, fmt.Errorf("call target execute transport %q: %w", targetTypeSpec.Adapter.Transport, err)
 	}

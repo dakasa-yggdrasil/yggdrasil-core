@@ -11,9 +11,9 @@ package model
 // When FamilyRef is empty the type is standalone — the legacy single-implementation
 // model with no family contract.
 type IntegrationTypeManifestSpec struct {
-	Provider              string                          `json:"provider"`
-	FamilyRef             *ManifestSelector               `json:"family_ref,omitempty"`
-	ImplementedOperations []string                        `json:"implemented_operations,omitempty"`
+	Provider              string            `json:"provider"`
+	FamilyRef             *ManifestSelector `json:"family_ref,omitempty"`
+	ImplementedOperations []string          `json:"implemented_operations,omitempty"`
 	// Domain is the business-purpose bucket the adapter belongs to.
 	// Drives client-side grouping in /ops/integrations and equivalent
 	// surfaces. Closed enum (see INTEGRATION_CONTRACT §17): identity,
@@ -27,19 +27,19 @@ type IntegrationTypeManifestSpec struct {
 	// when the integration is configured outside Yggdrasil
 	// (Stripe / EFI / NFE.io and similar). Optional; absent when the
 	// adapter ships its own federated surface or runs purely internal.
-	Dashboard             *IntegrationDashboardSpec       `json:"dashboard,omitempty"`
+	Dashboard *IntegrationDashboardSpec `json:"dashboard,omitempty"`
 	// Display carries operator-readable presentation hints declared by
 	// the adapter. Surfaces consume these directly so generic form +
 	// card rendering can avoid `if normalized.includes("X")` switches
 	// on type name (§15 amplification, INTEGRATION_CONTRACT).
-	Display               *IntegrationDisplaySpec         `json:"display,omitempty"`
+	Display *IntegrationDisplaySpec `json:"display,omitempty"`
 	// Icon is the visual mark + accent color the adapter declares to
 	// drive per-integration branding in surfaces. Replaces per-provider
 	// component lookups (BrandLogos.tsx) in console code.
-	Icon                  *IntegrationIconSpec            `json:"icon,omitempty"`
-	Adapter               IntegrationAdapterSpec          `json:"adapter"`
-	Capabilities          []string                        `json:"capabilities"`
-	CredentialPolicy      IntegrationCredentialPolicySpec `json:"credential_policy,omitempty"`
+	Icon             *IntegrationIconSpec            `json:"icon,omitempty"`
+	Adapter          IntegrationAdapterSpec          `json:"adapter"`
+	Capabilities     []string                        `json:"capabilities"`
+	CredentialPolicy IntegrationCredentialPolicySpec `json:"credential_policy,omitempty"`
 	GuardianSupport  IntegrationGuardianSupportSpec  `json:"guardian_support,omitempty"`
 	CredentialSchema IntegrationSchemaSpec           `json:"credential_schema"`
 	InstanceSchema   IntegrationSchemaSpec           `json:"instance_schema"`
@@ -167,29 +167,29 @@ type IntegrationSchemaProperty struct {
 	MinLength   *int   `json:"minLength,omitempty"`
 
 	// UI metadata (§15) — optional, drives generic form rendering in surfaces.
-	Label                   string                       `json:"label,omitempty"                    yaml:"label,omitempty"`
-	LabelLocale             map[string]string            `json:"label_locale,omitempty"             yaml:"label_locale,omitempty"`
-	Placeholder             string                       `json:"placeholder,omitempty"              yaml:"placeholder,omitempty"`
-	PlaceholderLocale       map[string]string            `json:"placeholder_locale,omitempty"       yaml:"placeholder_locale,omitempty"`
-	DescriptionLocale       map[string]string            `json:"description_locale,omitempty"       yaml:"description_locale,omitempty"`
-	Group                   string                       `json:"group,omitempty"                    yaml:"group,omitempty"`
-	GroupLocale             map[string]string            `json:"group_locale,omitempty"             yaml:"group_locale,omitempty"`
-	Order                   int                          `json:"order,omitempty"                    yaml:"order,omitempty"`
-	Sensitive               bool                         `json:"sensitive,omitempty"                yaml:"sensitive,omitempty"`
-	DependsOn               *IntegrationSchemaDependency `json:"depends_on,omitempty"               yaml:"depends_on,omitempty"`
-	Format                  string                       `json:"format,omitempty"                   yaml:"format,omitempty"`
-	Pattern                 string                       `json:"pattern,omitempty"                  yaml:"pattern,omitempty"`
-	MaxLength               *int                         `json:"max_length,omitempty"               yaml:"max_length,omitempty"`
+	Label             string                       `json:"label,omitempty"                    yaml:"label,omitempty"`
+	LabelLocale       map[string]string            `json:"label_locale,omitempty"             yaml:"label_locale,omitempty"`
+	Placeholder       string                       `json:"placeholder,omitempty"              yaml:"placeholder,omitempty"`
+	PlaceholderLocale map[string]string            `json:"placeholder_locale,omitempty"       yaml:"placeholder_locale,omitempty"`
+	DescriptionLocale map[string]string            `json:"description_locale,omitempty"       yaml:"description_locale,omitempty"`
+	Group             string                       `json:"group,omitempty"                    yaml:"group,omitempty"`
+	GroupLocale       map[string]string            `json:"group_locale,omitempty"             yaml:"group_locale,omitempty"`
+	Order             int                          `json:"order,omitempty"                    yaml:"order,omitempty"`
+	Sensitive         bool                         `json:"sensitive,omitempty"                yaml:"sensitive,omitempty"`
+	DependsOn         *IntegrationSchemaDependency `json:"depends_on,omitempty"               yaml:"depends_on,omitempty"`
+	Format            string                       `json:"format,omitempty"                   yaml:"format,omitempty"`
+	Pattern           string                       `json:"pattern,omitempty"                  yaml:"pattern,omitempty"`
+	MaxLength         *int                         `json:"max_length,omitempty"               yaml:"max_length,omitempty"`
 	// EnumDescriptions maps each enum value (as string) to a human label.
 	// Surfaces use it to render "<value> — <label>" without per-provider
 	// OPTION_LABELS tables. §15.
-	EnumDescriptions        map[string]string            `json:"enum_descriptions,omitempty"        yaml:"enum_descriptions,omitempty"`
+	EnumDescriptions map[string]string `json:"enum_descriptions,omitempty"        yaml:"enum_descriptions,omitempty"`
 	// EnumDescriptionsLocale lets the adapter ship per-locale enum labels:
 	//   enum_descriptions_locale:
 	//     pt-BR: { aws: "AWS", gcp: "Google Cloud" }
 	//     en-US: { aws: "AWS", gcp: "Google Cloud" }
 	// Outer key is BCP-47 locale; inner map mirrors EnumDescriptions.
-	EnumDescriptionsLocale  map[string]map[string]string `json:"enum_descriptions_locale,omitempty" yaml:"enum_descriptions_locale,omitempty"`
+	EnumDescriptionsLocale map[string]map[string]string `json:"enum_descriptions_locale,omitempty" yaml:"enum_descriptions_locale,omitempty"`
 }
 
 // IntegrationSchemaDependency expresses a conditional-visibility relationship
@@ -253,17 +253,20 @@ type IntegrationResourceType struct {
 // Category lets UIs (team-grant picker, console catalog) sort actions by
 // semantic role:
 //   - "reactor"    : framework hook (on_team_*, on_membership_*). Never
-//                    user-grantable; hidden from grant pickers.
+//     user-grantable; hidden from grant pickers.
 //   - "capability" : adapter operation dispatched by Yggdrasil via Execute.
-//                    Default when unset (back-compat for older adapters).
+//     Default when unset (back-compat for older adapters).
 //   - "permission" : product-level permission, NOT dispatched; granted via
-//                    team_grant and authorized by the downstream app.
+//     team_grant and authorized by the downstream app.
 type IntegrationActionDefinition struct {
 	Name          string   `json:"name"`
 	Description   string   `json:"description,omitempty"`
 	ResourceTypes []string `json:"resource_types,omitempty"`
 	Idempotent    bool     `json:"idempotent,omitempty"`
 	Category      string   `json:"category,omitempty"`
+	// InputSchema is the adapter-declared action contract, not dispatch
+	// authority. Retain it in registration and the live Describe comparison.
+	InputSchema map[string]any `json:"input_schema,omitempty"`
 }
 
 // IntegrationDiscoverySpec declares how the adapter discovers external resources.
@@ -314,20 +317,28 @@ type AdapterDescribeRequest struct {
 // set via the manifest catalog, the operator's value wins (see
 // `internal/manifestsync/merge.go::MergeSpec`).
 type AdapterDescribeResponse struct {
-	Provider              string                        `json:"provider"`
-	FamilyRef             *ManifestSelector             `json:"family_ref,omitempty"`
-	ImplementedOperations []string                      `json:"implemented_operations,omitempty"`
-	Adapter               IntegrationAdapterSpec        `json:"adapter"`
-	Capabilities          []string                      `json:"capabilities"`
-	CredentialSchema      IntegrationSchemaSpec         `json:"credential_schema"`
-	InstanceSchema        IntegrationSchemaSpec         `json:"instance_schema"`
-	ResourceTypes         []IntegrationResourceType     `json:"resource_types"`
-	ActionCatalog         []IntegrationActionDefinition `json:"action_catalog,omitempty"`
-	Discovery             IntegrationDiscoverySpec      `json:"discovery"`
-	Normalization         IntegrationNormalizationSpec  `json:"normalization"`
-	Execution             IntegrationExecutionSpec      `json:"execution"`
-	Extensions            IntegrationExtensionsSpec     `json:"extensions"`
-	Reactors              []IntegrationTypeReactor      `json:"reactors,omitempty"`
+	Provider              string            `json:"provider"`
+	FamilyRef             *ManifestSelector `json:"family_ref,omitempty"`
+	ImplementedOperations []string          `json:"implemented_operations,omitempty"`
+	// Canonical catalog metadata must survive strict native decoding too.
+	// Pointers keep absent optional declarations absent on the legacy wire.
+	Domain           string                           `json:"domain,omitempty"`
+	Dashboard        *IntegrationDashboardSpec        `json:"dashboard,omitempty"`
+	Display          *IntegrationDisplaySpec          `json:"display,omitempty"`
+	Icon             *IntegrationIconSpec             `json:"icon,omitempty"`
+	CredentialPolicy *IntegrationCredentialPolicySpec `json:"credential_policy,omitempty"`
+	GuardianSupport  *IntegrationGuardianSupportSpec  `json:"guardian_support,omitempty"`
+	Adapter          IntegrationAdapterSpec           `json:"adapter"`
+	Capabilities     []string                         `json:"capabilities"`
+	CredentialSchema IntegrationSchemaSpec            `json:"credential_schema"`
+	InstanceSchema   IntegrationSchemaSpec            `json:"instance_schema"`
+	ResourceTypes    []IntegrationResourceType        `json:"resource_types"`
+	ActionCatalog    []IntegrationActionDefinition    `json:"action_catalog,omitempty"`
+	Discovery        IntegrationDiscoverySpec         `json:"discovery"`
+	Normalization    IntegrationNormalizationSpec     `json:"normalization"`
+	Execution        IntegrationExecutionSpec         `json:"execution"`
+	Extensions       IntegrationExtensionsSpec        `json:"extensions"`
+	Reactors         []IntegrationTypeReactor         `json:"reactors,omitempty"`
 }
 
 // IntegrationTypeReactor describes one event-driven reaction configuration.

@@ -1,0 +1,73 @@
+name: Service contract
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  svc-doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Exact reviewed private Commons publication and clean tracked-tree digest.
+      COMMONS_SOURCE_COMMIT: 3ad45d29acd7fd730618959a43e31fd1eea24ddd
+      COMMONS_REVIEWED_TREE_SHA256: f4d5b55f01d765954d8aee968dd366b519ee6ce141b0fd80df66099e998c3a3b
+      GOMAXPROCS: "2"
+      GOMEMLIMIT: 512MiB
+      GOWORK: "off"
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Require exact reviewed checker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMMONS_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$COMMONS_REVIEWED_TREE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+      - name: Read exact private checker source with existing application
+        id: checker-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-co
+          repositories: dakasa-commons
+          permission-contents: read
+      - uses: actions/checkout@v4
+        with:
+          repository: dakasa-co/dakasa-commons
+          ref: ${{ env.COMMONS_SOURCE_COMMIT }}
+          path: .ci-service-doctor
+          token: ${{ steps.checker-token.outputs.token }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .ci-service-doctor/go.mod
+          cache: false
+      - name: Verify and compile owning checker
+        shell: bash
+        run: |
+          set -euo pipefail
+          checker_source="$RUNNER_TEMP/service-doctor-source"
+          test ! -e "$checker_source"
+          mv .ci-service-doctor "$checker_source"
+          python3 scripts/ci/verify_service_doctor_source.py "$checker_source" "$COMMONS_SOURCE_COMMIT" "$COMMONS_REVIEWED_TREE_SHA256"
+          cd "$checker_source"
+          go test -mod=readonly -p 1 -count=1 -timeout=60s ./cli/svccmd ./cli/svccatalog ./cli/repocmd
+          go build -mod=readonly -p 1 -trimpath -buildvcs=true -o "$RUNNER_TEMP/service-doctor" ./cmd/service-doctor
+          go version -m "$RUNNER_TEMP/service-doctor" > "$RUNNER_TEMP/service-doctor-build.txt"
+          grep -q "vcs.revision=$COMMONS_SOURCE_COMMIT" "$RUNNER_TEMP/service-doctor-build.txt"
+          grep -q 'vcs.modified=false' "$RUNNER_TEMP/service-doctor-build.txt"
+          sha256sum "$RUNNER_TEMP/service-doctor"
+      - name: Verify complete source census
+        run: python3 scripts/ci/service_contract_inventory.py --root . --out docs/service-contract/source --verify
+      - name: Verify exact Core service contract
+        run: '"$RUNNER_TEMP/service-doctor" svc doctor --quiet'
