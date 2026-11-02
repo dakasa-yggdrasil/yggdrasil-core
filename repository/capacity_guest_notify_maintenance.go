@@ -55,6 +55,9 @@ func GuestNotifyMaintenanceOwner(executor string) string {
 }
 
 func guestNotifyStableEpoch(current model.CapacityIntent) bool {
+	if failedServingQuarantineBlocks(&current) {
+		return false
+	}
 	return current.Generation > 0 && current.FencingToken > 0 && !current.RecoveryOnly && current.LeaseOwner == "" && current.LeaseExecutorID == "" && current.LeaseExpiresAt == nil && (current.Phase == "promoted" || current.Phase == "reconciled" || current.Phase == "reconciled_partial")
 }
 

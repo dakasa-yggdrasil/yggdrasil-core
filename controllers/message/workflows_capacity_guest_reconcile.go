@@ -279,6 +279,15 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		}
 	}
 	if step.Use.Operation == capacity.PlanOriginalGuestOperation || parsed.Mode == "retire" {
+		serving, quarantined, servingErr := store.FailedServingGuestDisposalWaiting(ctx, policy)
+		if servingErr != nil {
+			return fail(servingErr)
+		}
+		if quarantined {
+			result.Metadata = map[string]any{"mode": "hold", "reason": "serving_guest_quarantined", "admission_id": serving.ID, "historical_use_preserved": true, "business_effects_preserved": true, "native_write_sent": false}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
 		early := store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, model.CapacityVMFleetInventory{}, model.CapacityMetricRangeObservation{})
 		held, waiting, e := early.FailedInstalledGuestDisposalWaiting(ctx, policy, parsed.RequestID)
 		if e != nil {

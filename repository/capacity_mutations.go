@@ -43,14 +43,15 @@ type capacityMutationRecord struct {
 }
 
 type capacityResourceSlot struct {
-	BindingName       string    `json:"binding_name"`
-	ProfileName       string    `json:"profile_name"`
-	DesiredSpecSHA256 string    `json:"desired_spec_sha256"`
-	ResourceID        string    `json:"resource_id"`
-	ResourceCreatedAt string    `json:"resource_created_at"`
-	ReceiptRef        string    `json:"receipt_ref"`
-	ObservedAt        time.Time `json:"observed_at"`
-	Tombstone         bool      `json:"tombstone"`
+	FailedServingDisposalID string    `json:"failed_serving_disposal_id,omitempty"`
+	BindingName             string    `json:"binding_name"`
+	ProfileName             string    `json:"profile_name"`
+	DesiredSpecSHA256       string    `json:"desired_spec_sha256"`
+	ResourceID              string    `json:"resource_id"`
+	ResourceCreatedAt       string    `json:"resource_created_at"`
+	ReceiptRef              string    `json:"receipt_ref"`
+	ObservedAt              time.Time `json:"observed_at"`
+	Tombstone               bool      `json:"tombstone"`
 }
 
 // lockMutationScope uses the same lock as capacity intents. Every mutation path
@@ -66,7 +67,10 @@ func lockMutationScope(ctx context.Context, tx *sql.Tx, namespace string, p mode
 func lockNativeMutationSlot(ctx context.Context, tx *sql.Tx, b model.CapacityMutationBinding, slot int) error {
 	key, _ := json.Marshal([]any{"capacity-native-slot", b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, slot})
 	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, string(key))
-	return err
+	if err != nil {
+		return err
+	}
+	return guardFailedServingSlotTx(ctx, tx, b, slot)
 }
 
 func (s CapacityStore) mutationTransaction(ctx context.Context, policy model.Manifest, historical bool, generation, fence int64, owner string, fn func(*sql.Tx, model.CapacityPolicySpec, model.CapacityIntent, time.Time) error) error {
@@ -114,6 +118,9 @@ func (s CapacityStore) mutationTransactionWithCommitReturn(ctx context.Context, 
 	intent, err := loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true)
 	if err != nil {
 		return err
+	}
+	if failedServingQuarantineBlocks(&intent) {
+		return ErrCapacityConflict
 	}
 	if !policyActive && !intent.RecoveryOnly {
 		return ErrCapacityConflict
@@ -475,6 +482,9 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		intent, err := loadCapacityIntent(ctx, tx, ns, scope, true)
 		if err != nil {
 			return err
+		}
+		if failedServingQuarantineBlocks(&intent) {
+			return ErrCapacityConflict
 		}
 		store := s
 		store.ExecutorID = record.ExecutorID

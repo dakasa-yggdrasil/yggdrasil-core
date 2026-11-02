@@ -11,6 +11,7 @@
     {"url": "https://yggdrasil.example.com", "description": "Adopter-hosted instance"}
   ],
   "tags": [
+    {"name": "capacity-recovery", "description": "Private named-human, history-preserving recovery; no provider write or business-readiness authority."},
     {"name":"capacity-mutations","description":"Private one-time provider mutation authority; disabled without operator principal inventory and bindings."},
     {"name": "health", "description": "Liveness / readiness"},
     {"name": "manifests", "description": "Manifest CRUD"},
@@ -22,6 +23,263 @@
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
   ],
   "paths": {
+    "/api/v1/ops/capacity/failed-serving-guest-disposals": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Quarantine an original single member that previously served",
+        "description": "Named-human recovery for the sole original slot-one Notify AWS or Hetzner member. Core derives the original life, validates the exact current epoch/full-frame CAS and obtains a bounded authenticated inventory GET. It appends quarantine, increments the fence once and blocks ordinary authority. The operator separately owns power-off and deletion. No caller native facts, URLs or health are accepted.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Frozen frame, live authority, lineage, source-owned observation or native state conflict. Reconcile an uncertain action before any later action."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "Not the exact closed request object."
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSRF value for the same authenticated human session. A machine bearer cannot inherit recovery authority."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "At most 4096 bytes. Duplicate, unknown, missing, null, noncanonical identity/hash/epoch members and trailing data are refused.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailedServingGuestDisposalRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/failed-serving-guest-disposals/{preregistrationId}": {
+      "get": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Read retained serving-member recovery summaries",
+        "description": "Reads stored facts only, without a provider or Guest request. An empty array means no retained admission for the original preregistration.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "A canonical original preregistration UUID is required."
+          },
+          "404": {
+            "description": "The retained recovery records could not be read."
+          }
+        },
+        "parameters": [
+          {
+            "name": "preregistrationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ops/capacity/failed-serving-guest-disposals/native-off": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Observe the quarantined original native in OFF state",
+        "description": "After separate exact operator power-off, Core makes one fresh bounded authenticated GET and revalidates the frozen frame. AWS joins the instance/lifecycle read to the original CREATE action. The quiescent record claims only observed native OFF; no stop/delete, Guest drain, cause or operator native action ACK is claimed.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Frozen frame, live authority, lineage, source-owned observation or native state conflict. Reconcile an uncertain action before any later action."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "Not the exact closed request object."
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSRF value for the same authenticated human session. A machine bearer cannot inherit recovery authority."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "At most 4096 bytes. Duplicate, unknown, missing, null, noncanonical identity/hash/epoch members and trailing data are refused.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailedServingGuestDisposalReference"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/failed-serving-guest-disposals/complete": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Record complete original absence and an observed floor deficit",
+        "description": "After separate exact operator cleanup, Core reads the original CREATE tuple and every required owned auxiliary, plus an independent fresh complete same-profile inventory of zero members/all eight missing slots. It atomically appends terminal and tombstones only the original slot, preserving historical use/uncertain effects. Only ordinary later new-generation floor repair with a new life/enrollment may restore readiness.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Frozen frame, live authority, lineage, source-owned observation or native state conflict. Reconcile an uncertain action before any later action."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "Not the exact closed request object."
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSRF value for the same authenticated human session. A machine bearer cannot inherit recovery authority."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "At most 4096 bytes. Duplicate, unknown, missing, null, noncanonical identity/hash/epoch members and trailing data are refused.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailedServingGuestDisposalReference"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/capacity/mutations/native/redeem": {
       "post": {
         "tags": [
@@ -1024,6 +1282,233 @@
       }
     },
     "schemas": {
+      "FailedServingGuestDisposalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preregistration_id",
+          "policy_id",
+          "policy_checksum",
+          "generation",
+          "fencing_token",
+          "intent_sha256"
+        ],
+        "minProperties": 6,
+        "maxProperties": 6,
+        "properties": {
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "policy_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "policy_checksum": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "fencing_token": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA256 of the exact current PostgreSQL intent::text bytes; never hash a decoded/re-encoded JSON object."
+          }
+        }
+      },
+      "FailedServingGuestDisposalReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preregistration_id",
+          "admission_id"
+        ],
+        "minProperties": 2,
+        "maxProperties": 2,
+        "properties": {
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "admission_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        }
+      },
+      "FailedServingGuestDisposalSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "id",
+          "record_id",
+          "stage",
+          "preregistration_id",
+          "actual_core_source",
+          "original_intent_sha256",
+          "quarantine_intent_sha256",
+          "terminal_intent_sha256",
+          "installation_sha256",
+          "enrollment_sha256",
+          "original_slot_sha256",
+          "quarantine_slot_sha256",
+          "current_stable_event_sha256",
+          "native_off_record_id",
+          "historical_accepted_read_count",
+          "historical_promoted_count",
+          "business_effects_preserved",
+          "Core_or_Guest_native_write_sent",
+          "Guest_writer_drain_claimed",
+          "native_off_observed",
+          "native_absence_observed",
+          "operator_native_action_ACK_claimed",
+          "original_failure_cause_fixed_claimed",
+          "historical_zero_useful_capacity_claimed",
+          "replacement_requires_new_original_enrollment"
+        ],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "failed_serving_guest_disposal_v1"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "quarantined",
+              "quiescent",
+              "terminal"
+            ]
+          },
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "actual_core_source": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "original_intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "quarantine_intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "terminal_intent_sha256": {
+            "type": "string",
+            "pattern": "^(?:|[0-9a-f]{64})$"
+          },
+          "installation_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "enrollment_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "original_slot_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "quarantine_slot_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "current_stable_event_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "native_off_record_id": {
+            "type": "string",
+            "description": "Retained native-OFF row identity when linked; empty before a terminal link."
+          },
+          "historical_accepted_read_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "historical_promoted_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "business_effects_preserved": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "Core_or_Guest_native_write_sent": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "Guest_writer_drain_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "native_off_observed": {
+            "type": "boolean"
+          },
+          "native_absence_observed": {
+            "type": "boolean"
+          },
+          "operator_native_action_ACK_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "original_failure_cause_fixed_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "historical_zero_useful_capacity_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "replacement_requires_new_original_enrollment": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "description": "Closed public projection. Original intent, candidates, enrollment/provider payloads and historical job/canary wires stay private. OFF/absence is not remote business completion or a fixed cause."
+      },
       "CapacityNativeAuthorityPermit": {
         "type": "object",
         "additionalProperties": false,

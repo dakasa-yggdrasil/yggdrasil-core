@@ -462,6 +462,9 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return model.CapacityIntent{}, err
 	}
+	if failedServingQuarantineBlocks(previous) {
+		return model.CapacityIntent{}, ErrCapacityConflict
+	}
 	// The original Host claim is single-use. A durable association blocks
 	// re-Claim, renewal, recovery and phase replacement even without its
 	// private context, before an expired lease or a replay can be considered.
@@ -607,6 +610,9 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 }
 
 func pendingCapacityPhase(phase string) bool {
+	if phase == FailedServingGuestDisposedPhase {
+		return false
+	}
 	return phase != "disposed_failed_installed" && phase != "envelope_applied" && phase != "native_completed" && phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
 }
 func sameCapacityResources(a, b model.CapacitySnapshot) bool {
