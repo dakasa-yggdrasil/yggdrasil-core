@@ -266,26 +266,39 @@ real `manifest/*.json` files.
   your Claude Code project memory dir, note `reference_yggdrasil_core_repos`).
 - The DaKasa cluster pulls Core from the ECR pull-through cache of
   GHCR, not GHCR direct: `ghcr/dakasa-yggdrasil/yggdrasil-core` in the
-  us-east-1 registry, pinned by OCI index digest, pull secret
-  `ecr-pull-fresh`. Do not assume adapters work the same way: most
+  us-east-1 registry, with pull secret `ecr-pull-fresh`. Retain the reviewed
+  source, OCI index, platform manifest and image config as distinct provenance.
+  Select the platform manifest that matches the live Pod imageID and owned
+  network image allowlist; an index or config digest is not a substitute.
+  Promoting main or a later operational-source change must not replace or
+  retag an already qualified source/image/tag tuple. A new build has its own
+  provenance. Do not assume adapters work the same way: most
   `integration-*` repos push from their own `release.yml` straight to
   their own ECR repository in sa-east-1 through GitHub Actions OIDC
   (repo variable `AWS_ECR_PUSH_ROLE_ARN`), and the cluster pulls those
   cross-region with `ecr-pull-sa-east-1`. A few push to the us-east-1
   registry or publish only to GHCR, so read the adapter's `release.yml`
   and the image its deploy references before assuming one.
-- Rolling a new Core image into production is a dakasa-system change,
-  not a dispatch from this repo. Each Core release adds one
+- Core release catalog convergence is a dakasa-system change. Under its
+  accepted ADR-0343, each release adds one manual, named-human
   `pin-yggdrasil-core-<sha7>-production` workflow
   under `yggdrasil/dakasa/workflows/`, retires the previous pin to an
-  inactive tombstone, and moves `deploy/infra/base/yggdrasil/deployment.yaml`
-  and `yggdrasil/dakasa/control-planes/yggdrasil.json` to the new OCI
-  index digest in the same change. CI there lets exactly one active
-  workflow in the catalog set the Core image, and only to that digest.
-  The catalog is not live Brain state: after merge the new pin is
-  registered and read back, and the previously registered pin is
-  soft-deleted before an authorized human dispatches the new one. It
-  changes the `core` image as its last step, because Core restarts
-  itself.
+  inactive read-only tombstone with its RBAC grants removed, and aligns
+  `deploy/infra/base/yggdrasil/deployment.yaml` and
+  `yggdrasil/dakasa/control-planes/yggdrasil.json` with the reviewed platform
+  manifest. The active pin only reads the exact Brain Deployment and its
+  owned ReplicaSets/Pods, waits for real readiness and reads again. It cannot
+  mutate the image, migrate, prewarm or restart anything. A successful
+  readback does not assert image equality, adoption or release qualification;
+  a false workflow condition skips a step and is not an assertion.
+  The catalog is not live Brain state. Before registration or dispatch,
+  independently verify the migration/schema readback, qualified owned
+  network, exact singleton rollout identity, actual Pod imageID and required
+  E2E evidence. Image mutation belongs to a separately reviewed rollout with
+  exact Deployment UID/resourceVersion CAS, preserving configuration,
+  environment, resources and projections. Multiple observations do not make
+  an adapter write atomic. Retire the previously registered pin through the
+  separate exact-identity cleanup before an authorized human runs the new
+  readback.
   `upgrade-yggdrasil-core-edge` (mutable `:edge`) is inactive there and
   is not a rollout path.
