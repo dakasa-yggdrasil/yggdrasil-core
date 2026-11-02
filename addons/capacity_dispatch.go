@@ -10,6 +10,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
+	"go.uber.org/zap"
 )
 
 const capacityDispatchServiceResource = "capacity_dispatch_private_service"
@@ -53,13 +54,25 @@ func bootstrapCapacityDispatch(parent context.Context, app *runtime.ServiceApp) 
 					// Opaque category only; original causes remain private.
 					logger.Warn("protected capacity dispatch remains unresolved")
 				}
+				// Secret-free finalization categories with the job identity
+				// only (ADR-0090): no envelope, input, response or cause text.
+				for _, event := range service.DrainEvents() {
+					if logger != nil {
+						logger.Warn("capacity dispatch finalization event", zap.String("category", event.Category), zap.String("job_id", event.JobID.String()))
+					}
+				}
 			}
 		}
 	})
 	app.RegisterCloser(func(owner context.Context) error {
 		cancel()
-		// Stop/cancellation cannot impersonate an original worker return.
-		<-returned
+		// Stop/cancellation cannot impersonate an original worker return. The
+		// wait is bounded by the closer's own context: a wedged pass must not
+		// block process shutdown, and an abandoned 'started' row stays a hold.
+		select {
+		case <-returned:
+		case <-owner.Done():
+		}
 		return owner.Err()
 	})
 	return nil

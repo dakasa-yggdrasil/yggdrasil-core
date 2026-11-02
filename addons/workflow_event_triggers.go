@@ -113,12 +113,15 @@ func runWorkflowEventTriggersPass(
 		}
 		return
 	}
-	if !leader {
+	if leader == nil {
 		// Another worker is the leader; skip this pass.
 		return
 	}
+	// Unlock on the same pinned session that took the session-level lock.
 	defer func() {
-		_ = repository.ReleaseWorkflowEventTriggerLeadership(ctx, db)
+		if err := leader.Release(ctx); err != nil && logger != nil {
+			logger.Warn("workflow_event_triggers: release leader lock failed", zap.Error(err))
+		}
 	}()
 
 	// Load the event-trigger workflows once per pass.

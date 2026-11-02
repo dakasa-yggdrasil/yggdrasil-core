@@ -574,3 +574,35 @@ naming the job. Scope names outside printable ASCII, or containing `<`, `>` or
 `&`, are refused so that the Go and SQL scope-lock keys stay identical.
 `POST /api/v1/ops/workflows/{runId}/abort` now answers 409 for any run a
 capacity dispatch job references and when no row changed. See ADR-0089.
+
+## Finalization-lost started capacity dispatch disposition
+
+`POST /api/v1/ops/capacity/finalization-lost-dispatch-dispositions` and
+`GET /api/v1/ops/capacity/finalization-lost-dispatch-dispositions/{jobId}` use
+the same authenticated god-mode operator gate, CSRF middleware and closed
+bounded body as the abandoned-dispatch lane. The body carries the same six
+compare-and-swap expectations plus `finalization_evidence`, opaque UTF-8 text of
+at most 8 KiB that Core stores verbatim with its SHA-256 and never treats as
+authority; reads return only its hash and size. Core derives the lease age (at
+least 15 minutes), the running original run, the effect scan and the executor
+barrier.
+
+Migration 84 adds the terminal job state `finalization_lost_disposed`, which
+keeps `returned_at`, `return_status` and `finalization_ack_at` NULL, and the
+immutable receipt `capacity_dispatch_finalization_lost_dispositions` with
+`historical_return='unknown'`. The original run is closed administratively as
+`failed` with the fixed error `finalization_lost_disposed: return observed but
+not recorded; historical outcome unknown`. The scan
+`finalization_lost_dispatch_effect_scan_v1` is the ADR-0089 scan in which every
+counter must be zero except at most one row-proved unleased hold rewrite of the
+intent that moved no generation, fence or phase (counted as
+`pure_assessment_intent_updates`; other intent fields are not compared) and
+row-proved slot observation refreshes. Nothing is re-dispatched, no intent fence
+moves and no provider is read.
+
+Capacity dispatch finalization now retries its first commit with a per-attempt
+budget and server-side lock/statement timeouts until the lease plus two
+minutes, keeps an exhausted observed return in the owning process for retry,
+and bounds the owner wait at the lease plus 30 seconds without inventing a
+return. The plan step may reach an already requested failed-installed disposal
+claim without Guest reporting coverage. See ADR-0090.
