@@ -354,7 +354,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleCollaboratorCreate",
-      "line": 2113,
+      "line": 2115,
       "type_expressions": [
         "repository.EventTypeCollaboratorCreated"
       ]
@@ -365,7 +365,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamCreate",
-      "line": 2355,
+      "line": 2357,
       "type_expressions": [
         "repository.EventTypeTeamCreated"
       ]
@@ -376,7 +376,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamUpdate",
-      "line": 2450,
+      "line": 2452,
       "type_expressions": [
         "repository.EventTypeTeamUpdated"
       ]
@@ -387,7 +387,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamDelete",
-      "line": 2539,
+      "line": 2541,
       "type_expressions": [
         "repository.EventTypeTeamDeleted"
       ]
@@ -398,7 +398,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantCreate",
-      "line": 2603,
+      "line": 2605,
       "type_expressions": [
         "repository.EventTypeTeamGrantAdded",
         "model.ActorTypeAPI"
@@ -410,7 +410,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantDelete",
-      "line": 2640,
+      "line": 2642,
       "type_expressions": [
         "repository.EventTypeTeamGrantRevoked",
         "model.ActorTypeAPI"
@@ -422,7 +422,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2747,
+      "line": 2749,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded"
       ]
@@ -433,7 +433,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2772,
+      "line": 2774,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved"
       ]
