@@ -121,7 +121,11 @@ CREATE TABLE public.capacity_dispatch_finalization_lost_dispositions (
  historical_return text NOT NULL CHECK(historical_return='unknown'),
  run_status text NOT NULL CHECK(run_status='failed'),
  run_error text NOT NULL CHECK(run_error='finalization_lost_disposed: return observed but not recorded; historical outcome unknown'),
- operator_evidence text NOT NULL CHECK(octet_length(operator_evidence) BETWEEN 1 AND 8192 AND position(chr(0) IN operator_evidence)=0),
+ -- PostgreSQL text can never hold NUL (and chr(0) itself raises 54000, so it
+ -- cannot appear in a CHECK); the remaining controls the Go validator refuses
+ -- (everything below 0x20 except tab, LF and CR, plus DEL) are refused here.
+ operator_evidence text NOT NULL CHECK(octet_length(operator_evidence) BETWEEN 1 AND 8192
+  AND operator_evidence !~ '[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]'),
  operator_evidence_sha256 text NOT NULL CHECK(operator_evidence_sha256=encode(sha256(convert_to(operator_evidence,'UTF8')),'hex')),
  provider_mutation_evidence jsonb NOT NULL CHECK(public.finalization_lost_dispatch_effect_scan_tolerable(provider_mutation_evidence)),
  CHECK(started_at < lease_expires_at),
