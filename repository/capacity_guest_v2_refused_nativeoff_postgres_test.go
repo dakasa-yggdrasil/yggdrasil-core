@@ -17,7 +17,7 @@ import (
 // ADR-0092 storage histories shaped like production disposal 8ef5f76c
 // (Hetzner gen8, fence 21, retirement intent fc853776: nonce + possible_start,
 // one closed caller 409 without a retained body, no native poweroff read).
-// Explicitly isolated Unix-socket database (schema87). The rows are synthetic
+// Explicitly isolated Unix-socket database (schema88). The rows are synthetic
 // SQL operands, never a signed Guest record, a real caller, a provider read or
 // a compiled production approval; no provider or Guest call is exercised.
 // The positive acceptance is proven at the migration86 guards; the Go path is
@@ -295,8 +295,8 @@ func (f v2RefusedFixture) nativeReadRows(t *testing.T) int {
 func v2RefusedSchema86(t *testing.T, db *sql.DB) {
 	t.Helper()
 	var schema int64
-	if err := db.QueryRow(`SELECT max(version_id) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema != 87 {
-		t.Fatal("owning schema87 required", schema, err)
+	if err := db.QueryRow(`SELECT max(version_id) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema != 88 {
+		t.Fatal("owning schema88 required", schema, err)
 	}
 }
 
