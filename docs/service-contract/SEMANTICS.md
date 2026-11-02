@@ -664,3 +664,28 @@ that evidence, and a disposal guard that lets an admitted disposal reach
 lane accepts that lineage in place of the Guest five-row/caller-200 proof and
 keeps the native OFF read join. No Guest request, poweroff or DELETE is ever
 sent, and no writer quiescence is claimed. See ADR-0092.
+
+## Failed installed expansion tail (ADR-0095)
+
+The existing IDs-only failed-installed disposal request also admits the one
+newly installed V2 tail of an expansion from N−1 to N. Core derives N from the
+original intent and joins it to the preregistration, confirmed create and
+installed tuple; the original baseline must contain N−1 members. The failed
+member has no accepted useful read, the generation has never been useful, and
+all other live slots form the exact previously read prefix. The scheduled
+claim observes all N installed members, keeps the generation, increments the
+fence, and drains toward N−1. Its workflow plan selects only that derived tail.
+
+The historical first-member exception stays limited to slot 1. Later slots
+retain ordinary physical and useful retirement floors. Only their surviving
+members can receive the two existing retirement-floor canary usages under the
+authenticated claim, including a fresh read issued after the caller ACK.
+The failed member receives no new canary. Completed V2 and refused-V2 native
+OFF joins bind the same admitted tail. Exact-lifetime native and auxiliary
+absence tombstones only that slot and reports N−1 surviving physical members;
+the generation remains unpromoted and the existing replacement gate remains.
+No ledger schema, HTTP body, provider endpoint or Guest wire protocol changes.
+The `recoveryfixture` build exercises these repository transactions with
+declared synthetic signing keys and ordinary PostgreSQL constraints; it is
+excluded from production and native-qualification builds and claims no live
+Guest, provider custody or business effect.
