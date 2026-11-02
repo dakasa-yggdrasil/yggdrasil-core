@@ -61,7 +61,7 @@
       "callee": "EmitEvent",
       "file": "addons/workflow_event_triggers.go",
       "function": "emitWorkflowEventMatched",
-      "line": 517,
+      "line": 520,
       "type_expressions": [
         "\"workflow.event.matched\"",
         "\"system\""
@@ -354,7 +354,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleCollaboratorCreate",
-      "line": 2107,
+      "line": 2109,
       "type_expressions": [
         "repository.EventTypeCollaboratorCreated"
       ]
@@ -365,7 +365,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamCreate",
-      "line": 2349,
+      "line": 2351,
       "type_expressions": [
         "repository.EventTypeTeamCreated"
       ]
@@ -376,7 +376,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamUpdate",
-      "line": 2444,
+      "line": 2446,
       "type_expressions": [
         "repository.EventTypeTeamUpdated"
       ]
@@ -387,7 +387,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamDelete",
-      "line": 2533,
+      "line": 2535,
       "type_expressions": [
         "repository.EventTypeTeamDeleted"
       ]
@@ -398,7 +398,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantCreate",
-      "line": 2597,
+      "line": 2599,
       "type_expressions": [
         "repository.EventTypeTeamGrantAdded",
         "model.ActorTypeAPI"
@@ -410,7 +410,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantDelete",
-      "line": 2634,
+      "line": 2636,
       "type_expressions": [
         "repository.EventTypeTeamGrantRevoked",
         "model.ActorTypeAPI"
@@ -422,7 +422,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2741,
+      "line": 2743,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded"
       ]
@@ -433,7 +433,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2766,
+      "line": 2768,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved"
       ]

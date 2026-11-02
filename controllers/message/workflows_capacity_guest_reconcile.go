@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"reflect"
 	"time"
@@ -200,6 +201,13 @@ func originalGuestNextSlot(p model.CapacityPolicySpec, inv model.CapacityVMFleet
 	return "", 0, "", errOriginalGuestStep
 }
 
+// Only the plan operation may defer an incomplete reporting-membership proof,
+// and only to attempt an already requested failed-installed disposal claim.
+// Every other refusal, and every other operation, stays strict.
+func originalGuestPlanCoverageMayDefer(operation string, err error) bool {
+	return operation == capacity.PlanOriginalGuestOperation && errors.Is(err, capacity.ErrOriginalGuestReportingIncomplete)
+}
+
 func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connection, db *sql.DB, wfRef model.ManifestReference, step model.WorkflowStepSpec, result model.WorkflowRunStepResult, input map[string]any) model.WorkflowRunStepResult {
 	parent, stopOwner := withOriginalGuestReconcileDeadline(parent)
 	defer stopOwner()
@@ -294,6 +302,23 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	} else {
 		err = collect(ctx)
 	}
+	// A failed-installed disposal exists to remove a Guest that is often dead,
+	// so that Guest cannot prove complete reporting membership. Only the plan
+	// step, and only when the intent already carries a requested disposal, may
+	// continue with the fully validated inventory, snapshot and demand reads to
+	// the claim. Resume and ordinary assessment never run without coverage, and
+	// every other operation keeps the strict gate. A gate that cannot answer
+	// fails this stage with its own cause instead of hiding behind coverage.
+	var coverageErr error
+	if err != nil && originalGuestPlanCoverageMayDefer(step.Use.Operation, err) {
+		requested, requestedErr := store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv, reporting).FailedInstalledGuestDisposalRequested(ctx, policy)
+		if requestedErr != nil {
+			return fail(errors.Join(err, requestedErr))
+		}
+		if requested {
+			coverageErr, err = err, nil
+		}
+	}
 	if err != nil {
 		return fail(err)
 	}
@@ -303,6 +328,10 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	if err != nil {
 		return fail(err)
 	}
+	if coverageErr != nil && pending {
+		stage = "source_assessment"
+		return fail(coverageErr)
+	}
 	var output any
 	if step.Use.Operation == capacity.PlanOriginalGuestOperation {
 		plan := originalGuestReconcilePlan{Mode: "hold", Reason: "outstanding_original_authority"}
@@ -311,6 +340,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			disposed, preID, disposalEligible, disposalErr := store.TryClaimFailedInstalledGuestDisposal(ctx, policy, assessment)
 			if disposalErr != nil {
 				return fail(disposalErr)
+			}
+			if coverageErr != nil && !disposalEligible {
+				// No claim: the coverage refusal stands. The members read above
+				// has already committed the enrolled slots' observation refresh.
+				stage = "source_assessment"
+				return fail(coverageErr)
 			}
 			var resumed model.CapacityIntent
 			eligible := false

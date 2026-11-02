@@ -314,8 +314,61 @@ func persistFailedInstalledDisposalIntentTx(ctx context.Context, tx *sql.Tx, old
 	return err
 }
 
+// FailedInstalledGuestDisposalRequested reports, without writing, whether the
+// current intent carries an operator-requested failed-installed disposal that
+// the plan step may try to claim. It is only a routing gate for the plan-time
+// coverage exception: TryClaimFailedInstalledGuestDisposal re-proves every fact
+// under the scope lock and never reads the reporting observation. The Source
+// proof takes FOR SHARE row locks, which PostgreSQL refuses in a read-only
+// transaction, so the gate opens a writable transaction like
+// FailedInstalledGuestDisposalWaiting and always rolls it back.
+func (s CapacityStore) FailedInstalledGuestDisposalRequested(ctx context.Context, policy model.Manifest) (bool, error) {
+	if s.DB == nil || s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.PlanOriginalGuestOperation || !guestReconcileLive(ctx) {
+		return false, ErrCapacityConflict
+	}
+	p, err := parseCapacityPolicy(policy)
+	if err != nil {
+		return false, err
+	}
+	tx, err := beginFailedInstalledDisposalGateTx(ctx, s.DB, policy.Metadata.Namespace, p)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	if err = s.guestReconcileSourceTx(ctx, tx, policy, p); err != nil {
+		return false, err
+	}
+	return failedInstalledDisposalRequestedTx(ctx, tx, policy.Metadata.Namespace, p)
+}
+
+// beginFailedInstalledDisposalGateTx opens the gate's writable transaction
+// under the mutation scope lock. It is never committed by the gate.
+func beginFailedInstalledDisposalGateTx(ctx context.Context, db *sql.DB, namespace string, p model.CapacityPolicySpec) (*sql.Tx, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err = lockMutationScope(ctx, tx, namespace, p); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
+}
+
+func failedInstalledDisposalRequestedTx(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec) (bool, error) {
+	current, err := loadCapacityIntent(ctx, tx, namespace, p, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return current.FailedInstalledDisposal != nil && current.FailedInstalledDisposal.Stage == "requested", nil
+}
+
 // Only the existing scheduled plan can claim the requested disposal. No API
 // supplies a lease, reduced floor, provider grant or a synthetic assessment.
+
 func (s CapacityStore) TryClaimFailedInstalledGuestDisposal(ctx context.Context, policy model.Manifest, assessment model.CapacityAssessment) (model.CapacityIntent, string, bool, error) {
 	var empty model.CapacityIntent
 	if s.DB == nil || s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.PlanOriginalGuestOperation || s.OriginalRunID == uuid.Nil || !validCapacityExecutor(s.ExecutorID) || !guestReconcileLive(ctx) {

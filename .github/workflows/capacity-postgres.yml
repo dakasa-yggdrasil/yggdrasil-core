@@ -307,6 +307,7 @@ jobs:
               'TestOriginalGuestReconcileWorkflowOperationsAreClosed',
               'TestOriginalGuestReconcileSelectsOneOwnedSlot',
               'TestOriginalGuestReconcileStepFailsBeforeAnyTransportWithoutOwner',
+              'TestOriginalGuestReconcilePlanCoverageDefersOnlyIncompleteReportingInPlan',
               'TestOriginalGuestDispatchDoesNotTranslateHPAIntoVMAuthority',
           }
           runs = [e['Test'] for e in events if e.get('Action') == 'run' and e.get('Test')]

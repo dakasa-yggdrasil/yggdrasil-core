@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -11,11 +13,11 @@ import (
 // scheduled workflow trigger. The scheduler loop queries this table to find
 // workflows that are due to run now.
 type WorkflowScheduleState struct {
-	WorkflowManifestID   string
-	LastFiredAt          time.Time
-	NextFireAt           time.Time
-	ConsecutiveFailures  int
-	UpdatedAt            time.Time
+	WorkflowManifestID  string
+	LastFiredAt         time.Time
+	NextFireAt          time.Time
+	ConsecutiveFailures int
+	UpdatedAt           time.Time
 }
 
 // UpsertWorkflowScheduleState records the last fire time + computed next
@@ -108,27 +110,68 @@ func SaveWorkflowEventTriggerCursor(ctx context.Context, db *sql.DB, cursor stri
 
 // TryAcquireWorkflowEventTriggerLeadership attempts a session-level advisory
 // lock. Only one worker holds the lock at a time; others should skip the
-// event trigger pass and try again next tick. The lock is released when
-// the session ends or ReleaseWorkflowEventTriggerLeadership is called.
+// event trigger pass and try again next tick.
+//
+// A session-level advisory lock belongs to one PostgreSQL session. The lock
+// and its unlock therefore run on the same pinned *sql.Conn: through the
+// *sql.DB pool they could land on different connections, the unlock would
+// warn "you don't own a lock of type ExclusiveLock", and the lock would leak
+// on an idle pooled connection.
 const workflowEventTriggerLeaderLockID = 42 // arbitrary int for pg_try_advisory_lock
 
-func TryAcquireWorkflowEventTriggerLeadership(ctx context.Context, db *sql.DB) (bool, error) {
-	var acquired bool
-	err := db.QueryRowContext(ctx, `SELECT pg_try_advisory_lock($1)`, workflowEventTriggerLeaderLockID).Scan(&acquired)
-	if err != nil {
-		return false, fmt.Errorf("try advisory lock: %w", err)
-	}
-	return acquired, nil
+// WorkflowEventTriggerLeadership is the pinned session that holds the leader
+// lock. Release must be called exactly once.
+type WorkflowEventTriggerLeadership struct {
+	conn *sql.Conn
 }
 
-// ReleaseWorkflowEventTriggerLeadership releases the advisory lock held by
-// TryAcquireWorkflowEventTriggerLeadership.
-func ReleaseWorkflowEventTriggerLeadership(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `SELECT pg_advisory_unlock($1)`, workflowEventTriggerLeaderLockID)
+// TryAcquireWorkflowEventTriggerLeadership returns a held leadership when the
+// lock was acquired, and nil (no session kept) otherwise.
+func TryAcquireWorkflowEventTriggerLeadership(ctx context.Context, db *sql.DB) (*WorkflowEventTriggerLeadership, error) {
+	conn, err := db.Conn(ctx)
 	if err != nil {
+		return nil, fmt.Errorf("try advisory lock: %w", err)
+	}
+	var acquired bool
+	if err = conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock($1)`, workflowEventTriggerLeaderLockID).Scan(&acquired); err != nil {
+		// The lock outcome is unknown: discard the session rather than pool it.
+		discardWorkflowEventTriggerConn(conn)
+		return nil, fmt.Errorf("try advisory lock: %w", err)
+	}
+	if !acquired {
+		_ = conn.Close()
+		return nil, nil
+	}
+	return &WorkflowEventTriggerLeadership{conn: conn}, nil
+}
+
+// Release unlocks on the same session that took the lock. A cancelled caller
+// context does not skip the unlock. If the unlock cannot be confirmed, the
+// session is discarded instead of being returned to the pool still holding it.
+func (l *WorkflowEventTriggerLeadership) Release(ctx context.Context) error {
+	if l == nil || l.conn == nil {
+		return nil
+	}
+	conn := l.conn
+	l.conn = nil
+	unlockCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	var released bool
+	if err := conn.QueryRowContext(unlockCtx, `SELECT pg_advisory_unlock($1)`, workflowEventTriggerLeaderLockID).Scan(&released); err != nil || !released {
+		discardWorkflowEventTriggerConn(conn)
+		if err == nil {
+			err = errors.New("leader lock was not held by this session")
+		}
 		return fmt.Errorf("release advisory lock: %w", err)
 	}
-	return nil
+	return conn.Close()
+}
+
+// A driver.ErrBadConn from Raw marks the connection bad, so Close discards
+// it (ending its PostgreSQL session and any session lock) instead of pooling.
+func discardWorkflowEventTriggerConn(conn *sql.Conn) {
+	_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	_ = conn.Close()
 }
 
 // HasWorkflowEventMatched reports whether a workflow.event.matched record

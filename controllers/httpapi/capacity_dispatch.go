@@ -67,7 +67,139 @@ func dispatchContext(ctx context.Context) error {
 // This service is registered in existing app resources, never in an HTTP/RPC
 // route. Only the persisted operator binding supplies delegation. Its worker
 // and scheduler use the same service as the remote native qualification.
-type CapacityDispatchService struct{ server *Server }
+type CapacityDispatchService struct {
+	server *Server
+	// Observed returns whose first finalization commit is still unwritten,
+	// and secret-free finalization events for the addon logger (ADR-0090).
+	mu      sync.Mutex
+	pending []*capacityDispatchPendingFinalization
+	events  []CapacityDispatchEvent
+}
+
+// CapacityDispatchEvent is a secret-free finalization category with the job
+// identity. It carries no envelope, input, response or provider data.
+type CapacityDispatchEvent struct {
+	Category string
+	JobID    uuid.UUID
+}
+
+const (
+	capacityDispatchExecutorOverdue   = "executor_overdue"
+	capacityDispatchExecutorPanicked  = "executor_panicked"
+	capacityDispatchPendingDropped    = "finish_pending_dropped"
+	capacityDispatchPendingRecorded   = "finish_pending_recorded"
+	capacityDispatchPendingRefused    = "finish_pending_refused"
+	capacityDispatchPendingRetained   = "finish_pending_retained"
+	maxCapacityDispatchPendingReturns = 64
+	maxCapacityDispatchEvents         = 256
+	// RunOne waits for the original executor until the claim lease plus this
+	// grace, then releases its owner slot without inventing a return.
+	capacityDispatchOwnerGrace = 30 * time.Second
+)
+
+// An actual original return observed by this process whose first finalization
+// commit is not yet written. ctx is the original dispatch context, so a later
+// retry still sees the original deadline/cancellation and records 'unknown'.
+type capacityDispatchPendingFinalization struct {
+	ctx        context.Context
+	job        repository.CapacityDispatchJob
+	response   model.RunWorkflowResponse
+	returnedAt time.Time
+	runErr     error
+	fence      func(context.Context) error
+	next       time.Time
+	attempts   int
+}
+
+func (s *CapacityDispatchService) record(category string, jobID uuid.UUID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.events) < maxCapacityDispatchEvents {
+		s.events = append(s.events, CapacityDispatchEvent{Category: category, JobID: jobID})
+	}
+}
+
+// DrainEvents returns and clears the recorded finalization events.
+func (s *CapacityDispatchService) DrainEvents() []CapacityDispatchEvent {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	events := s.events
+	s.events = nil
+	return events
+}
+
+func (s *CapacityDispatchService) deferFinalization(p *capacityDispatchPendingFinalization) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.pending) >= maxCapacityDispatchPendingReturns {
+		// The row stays 'started' (an honest hold); only the in-memory retry
+		// is lost, never a fabricated outcome.
+		if len(s.events) < maxCapacityDispatchEvents {
+			s.events = append(s.events, CapacityDispatchEvent{Category: capacityDispatchPendingDropped, JobID: p.job.JobID})
+		}
+		return
+	}
+	p.next = time.Now().Add(time.Second)
+	s.pending = append(s.pending, p)
+}
+
+// retryPendingFinalizations makes one bounded first-commit attempt for every
+// due observed return before RunPass claims new work. A committed or no longer
+// started row leaves the list; a still transient one is kept with backoff.
+func (s *CapacityDispatchService) retryPendingFinalizations(ctx context.Context) error {
+	s.mu.Lock()
+	now := time.Now()
+	var due, kept []*capacityDispatchPendingFinalization
+	for _, p := range s.pending {
+		if now.Before(p.next) {
+			kept = append(kept, p)
+		} else {
+			due = append(due, p)
+		}
+	}
+	s.pending = kept
+	s.mu.Unlock()
+	var causes []error
+	for _, p := range due {
+		if err := dispatchContext(ctx); err != nil {
+			s.mu.Lock()
+			s.pending = append(s.pending, p)
+			s.mu.Unlock()
+			continue
+		}
+		observe := func(category string) { s.record(category, p.job.JobID) }
+		// ctx is the addon lifecycle: shutdown ends the retry; p.ctx keeps the
+		// original dispatch deadline for the honesty rules.
+		err := repository.RetryCapacityDispatchFinalization(p.ctx, s.server.db, p.job, p.response, p.returnedAt, p.runErr, observe, ctx.Done(), p.fence)
+		if errors.Is(err, repository.ErrCapacityDispatchFinalizationPending) {
+			p.attempts++
+			wait := time.Duration(p.attempts) * time.Second
+			if wait > 30*time.Second {
+				wait = 30 * time.Second
+			}
+			p.next = time.Now().Add(wait)
+			s.mu.Lock()
+			s.pending = append(s.pending, p)
+			s.mu.Unlock()
+			s.record(capacityDispatchPendingRetained, p.job.JobID)
+			continue
+		}
+		if errors.Is(err, repository.ErrCapacityDispatchClaim) {
+			// Nothing was written: the row was already disposed (ADR-0089 or
+			// ADR-0090) or is no longer this started claim.
+			s.record(capacityDispatchPendingRefused, p.job.JobID)
+			continue
+		}
+		s.record(capacityDispatchPendingRecorded, p.job.JobID)
+		if err != nil {
+			causes = append(causes, err)
+		}
+	}
+	return dispatchOpaque(errors.Join(causes...))
+}
 
 func WithCapacityDispatchServiceReceiver(receive func(*CapacityDispatchService)) ServerOption {
 	return func(s *Server) {
@@ -441,15 +573,69 @@ func (s *CapacityDispatchService) RunOne(parent context.Context, realm, environm
 	}()
 	req := model.RunWorkflowRequest{Workflow: model.ManifestSelector{ManifestID: job.Workflow.ID.String()}, Inputs: job.Inputs, Metadata: job.Metadata}
 	ran = true
-	response, runErr := messagecontroller.RunWorkflow(ctx, s.server.brokerConnection(), s.server.db, req)
-	actualReturnedAt := time.Now().UTC()
-	ownerErr := guard(ctx, true)
-	joined := errors.Join(runErr, ownerErr, dispatchContext(ctx), dispatchContext(parent))
-	finishErr := repository.FinishCapacityDispatch(ctx, s.server.db, job, response, actualReturnedAt, dispatchOpaque(joined), func(owner context.Context) error {
-		_, _, err := s.authorizeEnvelope(owner, job.CapacityDispatchEnvelope)
-		return errors.Join(err, dispatchContext(owner), dispatchContext(parent))
+	// The original executor runs in its own goroutine and reports exactly once
+	// on a buffered channel, so it never blocks when nobody is waiting.
+	returns := make(chan capacityDispatchOwnedReturn, 1)
+	goroutine.SafeGo("capacity_dispatch_original_executor", func() {
+		defer func() {
+			if recover() != nil {
+				returns <- capacityDispatchOwnedReturn{panicked: true}
+			}
+		}()
+		response, runErr := messagecontroller.RunWorkflow(ctx, s.server.brokerConnection(), s.server.db, req)
+		returns <- capacityDispatchOwnedReturn{response: response, runErr: runErr, returnedAt: time.Now().UTC()}
 	})
-	return ran, dispatchOpaque(errors.Join(joined, finishErr, dispatchContext(ctx), dispatchContext(parent)))
+	finish := func(r capacityDispatchOwnedReturn) error {
+		if r.panicked {
+			// Not a return: the row stays 'started' for operator resolution.
+			s.record(capacityDispatchExecutorPanicked, job.JobID)
+			return errCapacityDispatch
+		}
+		ownerErr := guard(ctx, true)
+		joined := errors.Join(r.runErr, ownerErr, dispatchContext(ctx), dispatchContext(parent))
+		fence := func(owner context.Context) error {
+			_, _, err := s.authorizeEnvelope(owner, job.CapacityDispatchEnvelope)
+			return errors.Join(err, dispatchContext(owner), dispatchContext(parent))
+		}
+		observe := func(category string) { s.record(category, job.JobID) }
+		// parent is the addon lifecycle: its shutdown stops the retry loop
+		// between attempts, while ctx keeps the original deadline.
+		finishErr := repository.FinishCapacityDispatchObserved(ctx, s.server.db, job, r.response, r.returnedAt, dispatchOpaque(joined), observe, parent.Done(), fence)
+		if errors.Is(finishErr, repository.ErrCapacityDispatchFinalizationPending) {
+			s.deferFinalization(&capacityDispatchPendingFinalization{ctx: ctx, job: job, response: r.response, returnedAt: r.returnedAt, runErr: dispatchOpaque(joined), fence: fence})
+		}
+		return errors.Join(joined, finishErr, dispatchContext(ctx), dispatchContext(parent))
+	}
+	owned, overdue := awaitCapacityDispatchReturn(returns, job.LeaseExpiresAt.Add(capacityDispatchOwnerGrace))
+	if overdue {
+		// Bounded owner: release this RunPass slot without inventing a return.
+		// The row stays 'started'; the goroutine keeps ownership of a late
+		// return and finalizes it through the same honest Finish loop.
+		s.record(capacityDispatchExecutorOverdue, job.JobID)
+		goroutine.SafeGo("capacity_dispatch_overdue_finalization", func() { _ = finish(<-returns) })
+		return ran, errCapacityDispatch
+	}
+	return ran, dispatchOpaque(finish(owned))
+}
+
+type capacityDispatchOwnedReturn struct {
+	response   model.RunWorkflowResponse
+	runErr     error
+	returnedAt time.Time
+	panicked   bool
+}
+
+// awaitCapacityDispatchReturn waits for the executor's single report or the
+// owner bound, whichever comes first. It never fabricates a report.
+func awaitCapacityDispatchReturn(returns <-chan capacityDispatchOwnedReturn, bound time.Time) (capacityDispatchOwnedReturn, bool) {
+	timer := time.NewTimer(time.Until(bound))
+	defer timer.Stop()
+	select {
+	case r := <-returns:
+		return r, false
+	case <-timer.C:
+		return capacityDispatchOwnedReturn{}, true
+	}
 }
 
 // The factory belongs to this actual original RunOne/SAME Server. Preparing
@@ -551,10 +737,13 @@ func (s *CapacityDispatchService) RunPass(ctx context.Context) (returnedErr erro
 	if err := dispatchContext(ctx); err != nil {
 		return dispatchOpaque(err)
 	}
+	// Observed returns whose first finalization write is still pending are
+	// retried before any new claim (ADR-0090).
+	pendingErr := s.retryPendingFinalizations(ctx)
 	// Retain refused demand without starving independently authorized queued
 	// work. Only RunOne can start a job; the scan never invokes the executor.
 	demandErr := s.runDemandPass(ctx)
-	defer func() { returnedErr = dispatchOpaque(errors.Join(returnedErr, demandErr)) }()
+	defer func() { returnedErr = dispatchOpaque(errors.Join(returnedErr, pendingErr, demandErr)) }()
 	rows, err := s.server.db.QueryContext(ctx, `SELECT DISTINCT realm,environment FROM public.capacity_dispatch_jobs WHERE protocol=$1 AND state='queued' AND started_at IS NULL ORDER BY realm,environment LIMIT 65`, repository.CapacityDispatchProtocol)
 	if err != nil {
 		return dispatchOpaque(err)

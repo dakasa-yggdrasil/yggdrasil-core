@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -288,31 +289,219 @@ func StartCapacityDispatch(ctx context.Context, db *sql.DB, job CapacityDispatch
 	return current, nil
 }
 
+// Finalization durability (ADR-0090). The first commit of an observed return
+// is atomic and guarded by state='started' and status='running', so a failed
+// attempt rolled back whole and may be retried without writing twice. Each
+// attempt has its own budget and server-side lock/statement timeouts, and the
+// retry loop is bounded by the claim lease plus a fixed grace. The tuning is a
+// package variable only so Postgres tests can shorten it.
+var capacityDispatchFinishTuning = struct {
+	attempt, lockTimeout, statementTimeout, grace time.Duration
+	minimumAttempts                               int
+	backoff                                       []time.Duration
+}{
+	attempt: 15 * time.Second, lockTimeout: 10 * time.Second, statementTimeout: 12 * time.Second,
+	grace: 2 * time.Minute, minimumAttempts: 3,
+	backoff: []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second},
+}
+
+// Test-only seam for a lost commit acknowledgment: when set and it returns
+// true after a successful first Commit, the attempt treats that Commit as if
+// its reply had been lost. It is nil in every production process.
+var capacityDispatchFinishAfterCommit func() bool
+
+// ErrCapacityDispatchFinalizationPending means the original RunWorkflow really
+// returned but its first finalization commit could not be written within the
+// bounded retry budget. The row stays 'started' (an honest hold); the owning
+// process keeps the observed return in memory and retries it.
+var ErrCapacityDispatchFinalizationPending = errors.New("capacity dispatch actual return observed but not yet recorded")
+
+var errCapacityDispatchFinishTransient = errors.New("capacity dispatch finalization attempt did not commit")
+
+// Secret-free finalization categories reported to the optional observer.
+const (
+	CapacityDispatchFinishWriteRetry     = "finish_write_retry"
+	CapacityDispatchFinishWriteExhausted = "finish_write_exhausted"
+	CapacityDispatchFinishCommitAckLost  = "finish_commit_ack_lost"
+)
+
 // FinishCapacityDispatch is called only after the original RunWorkflow really
 // returned. Cancellation, late return, changed pins or typed unknown keeps the
 // active dimension blocked. A cleanup context can record uncertainty, but can
 // never turn a cancelled original context into a successful finalization.
 func FinishCapacityDispatch(ctx context.Context, db *sql.DB, job CapacityDispatchJob, response model.RunWorkflowResponse, actualReturnedAt time.Time, runErr error, beforeRelease ...func(context.Context) error) error {
+	return FinishCapacityDispatchObserved(ctx, db, job, response, actualReturnedAt, runErr, nil, nil, beforeRelease...)
+}
+
+// FinishCapacityDispatchObserved is FinishCapacityDispatch with a secret-free
+// category observer. A first commit that is still not written after
+// lease_expires_at plus the grace returns ErrCapacityDispatchFinalizationPending.
+// shutdown is the owning process lifecycle, separate from ctx (which keeps the
+// original deadline for the honesty rules): once it closes, the loop stops
+// waiting between attempts and returns ErrCapacityDispatchFinalizationPending,
+// so the row stays an honest 'started' hold. A nil shutdown never fires.
+func FinishCapacityDispatchObserved(ctx context.Context, db *sql.DB, job CapacityDispatchJob, response model.RunWorkflowResponse, actualReturnedAt time.Time, runErr error, observe func(string), shutdown <-chan struct{}, beforeRelease ...func(context.Context) error) error {
+	stop := time.Now().Add(capacityDispatchFinishTuning.grace)
+	if job.LeaseExpiresAt != nil {
+		stop = job.LeaseExpiresAt.Add(capacityDispatchFinishTuning.grace)
+	}
+	return finishCapacityDispatch(ctx, db, job, response, actualReturnedAt, runErr, observe, shutdown, stop, capacityDispatchFinishTuning.minimumAttempts, beforeRelease)
+}
+
+// RetryCapacityDispatchFinalization makes exactly one more first-commit
+// attempt for a return observed earlier by this process. It never invents a
+// return: it writes the same response and actual return time, and the same
+// honesty rules turn a write after the lease into 'unknown'.
+func RetryCapacityDispatchFinalization(ctx context.Context, db *sql.DB, job CapacityDispatchJob, response model.RunWorkflowResponse, actualReturnedAt time.Time, runErr error, observe func(string), shutdown <-chan struct{}, beforeRelease ...func(context.Context) error) error {
+	return finishCapacityDispatch(ctx, db, job, response, actualReturnedAt, runErr, observe, shutdown, time.Time{}, 1, beforeRelease)
+}
+
+type capacityDispatchFirstCommit struct {
+	current   CapacityDispatchJob
+	uncertain bool
+	// ackLost: the commit landed, but this process did not observe its
+	// acknowledgment; it was proved only by re-reading the row.
+	ackLost bool
+	state   string
+}
+
+func finishCapacityDispatch(ctx context.Context, db *sql.DB, job CapacityDispatchJob, response model.RunWorkflowResponse, actualReturnedAt time.Time, runErr error, observe func(string), shutdown <-chan struct{}, stop time.Time, minimumAttempts int, beforeRelease []func(context.Context) error) error {
 	if db == nil {
 		return ErrCapacityDispatchClaim
 	}
+	if observe == nil {
+		observe = func(string) {}
+	}
+	// PostgreSQL stores microseconds; capture the actual return once at that
+	// precision so a re-read can recognise an earlier landed commit exactly.
+	actualReturnedAt = actualReturnedAt.Truncate(time.Microsecond)
 	originalContextErr := capacityDispatchContextFailure(ctx)
-	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	tx, err := db.BeginTx(writeCtx, nil)
+	var first capacityDispatchFirstCommit
+	var err error
+	for attempt := 1; ; attempt++ {
+		first, err = finishCapacityDispatchFirstCommitOnce(ctx, db, job, response, actualReturnedAt, runErr, originalContextErr)
+		if !errors.Is(err, errCapacityDispatchFinishTransient) {
+			break
+		}
+		observe(CapacityDispatchFinishWriteRetry)
+		if attempt >= minimumAttempts && !time.Now().Before(stop) {
+			observe(CapacityDispatchFinishWriteExhausted)
+			return errors.Join(ErrCapacityDispatchFinalizationPending, runErr)
+		}
+		backoff := capacityDispatchFinishTuning.backoff
+		wait := backoff[len(backoff)-1]
+		if attempt-1 < len(backoff) {
+			wait = backoff[attempt-1]
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-shutdown:
+			// Process shutdown: stop retrying instead of racing a closing
+			// *sql.DB. Nothing was written; the row stays 'started'.
+			timer.Stop()
+			return errors.Join(ErrCapacityDispatchFinalizationPending, runErr)
+		}
+	}
 	if err != nil {
-		return ErrCapacityDispatchClaim
+		return err
+	}
+	postCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	current := first.current
+	if first.ackLost {
+		// The first commit landed without an observed acknowledgment. It is
+		// never acknowledged now; a returned row is downgraded to unknown so it
+		// cannot sit as returned-without-ack.
+		observe(CapacityDispatchFinishCommitAckLost)
+		var markErr error
+		if first.state == "returned" {
+			markErr = markCapacityDispatchFinalizationUnknown(postCtx, db, current, capacityDispatchReturnError(nil, context.DeadlineExceeded, true))
+		}
+		return errors.Join(ErrCapacityDispatchUnknown, runErr, markErr)
+	}
+	uncertain := first.uncertain
+	// returned WITHOUT an acknowledgment stays active in the unique dimension
+	// index and admission query. Only this actual first Commit return, checked
+	// under the original owner, permits the separate acknowledgment recording.
+	// It is never proof of the worker's caller or product SDK return.
+	ackErr := capacityDispatchContextFailure(ctx)
+	var acknowledgedLive bool
+	if clockErr := db.QueryRowContext(postCtx, `SELECT clock_timestamp() < $1`, *current.LeaseExpiresAt).Scan(&acknowledgedLive); clockErr != nil || !acknowledgedLive {
+		ackErr = errors.Join(ackErr, context.DeadlineExceeded)
+	}
+	if ackErr != nil {
+		if markErr := markCapacityDispatchFinalizationUnknown(postCtx, db, current, capacityDispatchReturnError(nil, ackErr, true)); markErr != nil {
+			return errors.Join(ErrCapacityDispatchUnknown, ackErr, markErr)
+		}
+		return errors.Join(ErrCapacityDispatchUnknown, runErr, ackErr)
+	}
+	if uncertain {
+		return errors.Join(ErrCapacityDispatchUnknown, runErr, originalContextErr)
+	}
+	for _, fence := range beforeRelease {
+		if fence == nil {
+			ackErr = ErrCapacityDispatchClaim
+		} else {
+			ackErr = errors.Join(ackErr, fence(ctx))
+		}
+	}
+	ackErr = errors.Join(ackErr, capacityDispatchContextFailure(ctx))
+	if ackErr != nil {
+		markErr := markCapacityDispatchFinalizationUnknown(postCtx, db, current, capacityDispatchReturnError(nil, ackErr, true))
+		return errors.Join(ErrCapacityDispatchUnknown, runErr, ackErr, markErr)
+	}
+	ackErr = acknowledgeCapacityDispatchFinalization(ctx, db, current)
+	return errors.Join(runErr, ackErr)
+}
+
+// finishCapacityDispatchFirstCommitOnce runs one whole first-commit
+// transaction. It returns errCapacityDispatchFinishTransient only when the
+// attempt rolled back before a confirmed Commit while the row is still the
+// same started claim; ErrCapacityDispatchClaim when the row is no longer this
+// started claim (for example disposed), which is never overwritten.
+func finishCapacityDispatchFirstCommitOnce(ctx context.Context, db *sql.DB, job CapacityDispatchJob, response model.RunWorkflowResponse, actualReturnedAt time.Time, runErr, originalContextErr error) (capacityDispatchFirstCommit, error) {
+	var out capacityDispatchFirstCommit
+	attemptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), capacityDispatchFinishTuning.attempt)
+	defer cancel()
+	tx, err := db.BeginTx(attemptCtx, nil)
+	if err != nil {
+		return out, errCapacityDispatchFinishTransient
 	}
 	defer tx.Rollback()
-	current, err := readCapacityDispatchJob(writeCtx, tx, job.JobID, true)
-	if err != nil || !sameCapacityDispatchClaim(current, job) || current.State != "started" || current.StartedAt == nil || actualReturnedAt.IsZero() {
-		return ErrCapacityDispatchClaim
+	// Server-side bounds fail a slow wait inside PostgreSQL with a classified
+	// error before the client budget cancels the statement.
+	if _, err = tx.ExecContext(attemptCtx, fmt.Sprintf(`SET LOCAL lock_timeout = '%dms'`, capacityDispatchFinishTuning.lockTimeout.Milliseconds())); err != nil {
+		return out, errCapacityDispatchFinishTransient
+	}
+	if _, err = tx.ExecContext(attemptCtx, fmt.Sprintf(`SET LOCAL statement_timeout = '%dms'`, capacityDispatchFinishTuning.statementTimeout.Milliseconds())); err != nil {
+		return out, errCapacityDispatchFinishTransient
+	}
+	current, err := readCapacityDispatchJob(attemptCtx, tx, job.JobID, true)
+	if errors.Is(err, ErrCapacityDispatchEnvelope) {
+		return out, ErrCapacityDispatchClaim
+	}
+	if err != nil {
+		return out, errCapacityDispatchFinishTransient
+	}
+	if !sameCapacityDispatchClaim(current, job) || actualReturnedAt.IsZero() {
+		return out, ErrCapacityDispatchClaim
+	}
+	if current.State != "started" {
+		// An earlier attempt may have committed although its reply was lost.
+		if capacityDispatchFirstCommitLanded(current, actualReturnedAt) {
+			return capacityDispatchFirstCommit{current: current, ackLost: true, state: current.State}, nil
+		}
+		return out, ErrCapacityDispatchClaim
+	}
+	if current.StartedAt == nil {
+		return out, ErrCapacityDispatchClaim
 	}
 	var now time.Time
-	if err = tx.QueryRowContext(writeCtx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
-		return ErrCapacityDispatchClaim
+	if err = tx.QueryRowContext(attemptCtx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+		return out, errCapacityDispatchFinishTransient
 	}
-	uncertain := originalContextErr != nil || capacityDispatchContextFailure(ctx) != nil || !liveCapacityDispatchClaim(current, now, true) || checkCapacityDispatchOriginal(writeCtx, tx, current) != nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded)
+	uncertain := originalContextErr != nil || capacityDispatchContextFailure(ctx) != nil || !liveCapacityDispatchClaim(current, now, true) || checkCapacityDispatchOriginal(attemptCtx, tx, current) != nil || errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded)
 	status := strings.ToLower(strings.TrimSpace(response.Status))
 	if response.Workflow.ID != current.Workflow.ID || response.Workflow.Namespace != current.Workflow.Namespace || response.Workflow.Name != current.Workflow.Name || response.Workflow.Version != current.Workflow.Version || response.Workflow.Kind != "workflow" {
 		uncertain = true
@@ -330,7 +519,7 @@ func FinishCapacityDispatch(ctx context.Context, db *sql.DB, job CapacityDispatc
 	}
 	resultJSON, err := json.Marshal(response)
 	if err != nil {
-		return ErrCapacityDispatchUnknown
+		return out, ErrCapacityDispatchUnknown
 	}
 	// The row is locked and the original tuple is unchanged. The absolute
 	// deadline is checked again in the final mutation, so lock waits cannot
@@ -340,15 +529,15 @@ func FinishCapacityDispatch(ctx context.Context, db *sql.DB, job CapacityDispatc
 		if originalContextErr = capacityDispatchContextFailure(ctx); originalContextErr != nil {
 			uncertain = true
 		}
-		if err = tx.QueryRowContext(writeCtx, `SELECT clock_timestamp() < $1`, *current.LeaseExpiresAt).Scan(&live); err != nil || !live || uncertain {
+		if err = tx.QueryRowContext(attemptCtx, `SELECT clock_timestamp() < $1`, *current.LeaseExpiresAt).Scan(&live); err != nil || !live || uncertain {
 			uncertain, state, runStatus = true, "unknown", "failed"
 			if errMessage == "" {
 				errMessage = ErrCapacityDispatchUnknown.Error()
 			}
 		}
 	}
-	if err = tx.QueryRowContext(writeCtx, `WITH final_clock AS MATERIALIZED (SELECT clock_timestamp() AS at) UPDATE public.capacity_dispatch_jobs SET state=CASE WHEN $2='returned' AND final_clock.at >= lease_expires_at THEN 'unknown' ELSE $2 END,returned_at=$3,return_status=$4,return_error=CASE WHEN $2='returned' AND final_clock.at >= lease_expires_at THEN $6 ELSE NULLIF($5,'') END,updated_at=final_clock.at FROM final_clock WHERE id=$1 RETURNING state`, job.JobID, state, actualReturnedAt, status, errMessage, ErrCapacityDispatchUnknown.Error()).Scan(&state); err != nil {
-		return ErrCapacityDispatchClaim
+	if err = tx.QueryRowContext(attemptCtx, `WITH final_clock AS MATERIALIZED (SELECT clock_timestamp() AS at) UPDATE public.capacity_dispatch_jobs SET state=CASE WHEN $2='returned' AND final_clock.at >= lease_expires_at THEN 'unknown' ELSE $2 END,returned_at=$3,return_status=$4,return_error=CASE WHEN $2='returned' AND final_clock.at >= lease_expires_at THEN $6 ELSE NULLIF($5,'') END,updated_at=final_clock.at FROM final_clock WHERE id=$1 AND state='started' RETURNING state`, job.JobID, state, actualReturnedAt, status, errMessage, ErrCapacityDispatchUnknown.Error()).Scan(&state); err != nil {
+		return out, errCapacityDispatchFinishTransient
 	}
 	if state == "unknown" {
 		uncertain, runStatus = true, "failed"
@@ -356,49 +545,50 @@ func FinishCapacityDispatch(ctx context.Context, db *sql.DB, job CapacityDispatc
 			errMessage = ErrCapacityDispatchUnknown.Error()
 		}
 	}
-	result, err := tx.ExecContext(writeCtx, `UPDATE public.workflow_runs SET status=$2,result=$3::jsonb,error=NULLIF($4,''),finished_at=$5,updated_at=clock_timestamp() WHERE id=$1 AND (status='running' OR ($7 AND status='cancelled')) AND started_at=$6`, job.RunID, runStatus, string(resultJSON), errMessage, actualReturnedAt, *current.StartedAt, uncertain)
+	result, err := tx.ExecContext(attemptCtx, `UPDATE public.workflow_runs SET status=$2,result=$3::jsonb,error=NULLIF($4,''),finished_at=$5,updated_at=clock_timestamp() WHERE id=$1 AND (status='running' OR ($7 AND status='cancelled')) AND started_at=$6`, job.RunID, runStatus, string(resultJSON), errMessage, actualReturnedAt, *current.StartedAt, uncertain)
 	if err != nil {
-		return ErrCapacityDispatchClaim
+		return out, errCapacityDispatchFinishTransient
 	}
 	n, err := result.RowsAffected()
-	if err != nil || n != 1 {
-		return ErrCapacityDispatchClaim
+	if err != nil {
+		return out, errCapacityDispatchFinishTransient
 	}
-	if err = tx.Commit(); err != nil {
-		return ErrCapacityDispatchClaim
+	if n != 1 {
+		// The original run is no longer the running original: permanent.
+		return out, ErrCapacityDispatchClaim
 	}
-	// returned WITHOUT an acknowledgment stays active in the unique dimension
-	// index and admission query. Only this actual first Commit return, checked
-	// under the original owner, permits the separate acknowledgment recording.
-	// It is never proof of the worker's caller or product SDK return.
-	ackErr := capacityDispatchContextFailure(ctx)
-	var acknowledgedLive bool
-	if clockErr := db.QueryRowContext(writeCtx, `SELECT clock_timestamp() < $1`, *current.LeaseExpiresAt).Scan(&acknowledgedLive); clockErr != nil || !acknowledgedLive {
-		ackErr = errors.Join(ackErr, context.DeadlineExceeded)
+	out = capacityDispatchFirstCommit{current: current, uncertain: uncertain, state: state}
+	commitErr := tx.Commit()
+	if commitErr == nil && capacityDispatchFinishAfterCommit != nil && capacityDispatchFinishAfterCommit() {
+		commitErr = errCapacityDispatchFinishTransient
 	}
-	if ackErr != nil {
-		if markErr := markCapacityDispatchFinalizationUnknown(writeCtx, db, current, capacityDispatchReturnError(nil, ackErr, true)); markErr != nil {
-			return errors.Join(ErrCapacityDispatchUnknown, ackErr, markErr)
+	if commitErr != nil {
+		// The Commit outcome is unknown. Re-read once: a landed row is
+		// finalized without an observed acknowledgment; a still-started row is
+		// retried; anything else is no longer this claim.
+		readCtx, readCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer readCancel()
+		reread, readErr := readCapacityDispatchJob(readCtx, db, job.JobID, false)
+		switch {
+		case readErr != nil:
+			return capacityDispatchFirstCommit{}, errCapacityDispatchFinishTransient
+		case !sameCapacityDispatchClaim(reread, job):
+			return capacityDispatchFirstCommit{}, ErrCapacityDispatchClaim
+		case reread.State == "started" && reread.ReturnedAt == nil:
+			return capacityDispatchFirstCommit{}, errCapacityDispatchFinishTransient
+		case capacityDispatchFirstCommitLanded(reread, actualReturnedAt):
+			return capacityDispatchFirstCommit{current: reread, ackLost: true, state: reread.State}, nil
+		default:
+			return capacityDispatchFirstCommit{}, ErrCapacityDispatchClaim
 		}
-		return errors.Join(ErrCapacityDispatchUnknown, runErr, ackErr)
 	}
-	if uncertain {
-		return errors.Join(ErrCapacityDispatchUnknown, runErr, originalContextErr)
-	}
-	for _, fence := range beforeRelease {
-		if fence == nil {
-			ackErr = ErrCapacityDispatchClaim
-		} else {
-			ackErr = errors.Join(ackErr, fence(ctx))
-		}
-	}
-	ackErr = errors.Join(ackErr, capacityDispatchContextFailure(ctx))
-	if ackErr != nil {
-		markErr := markCapacityDispatchFinalizationUnknown(writeCtx, db, current, capacityDispatchReturnError(nil, ackErr, true))
-		return errors.Join(ErrCapacityDispatchUnknown, runErr, ackErr, markErr)
-	}
-	ackErr = acknowledgeCapacityDispatchFinalization(ctx, db, current)
-	return errors.Join(runErr, ackErr)
+	return out, nil
+}
+
+// A landed first commit carries this process's exact actual return time on
+// the same claim, with no acknowledgment yet. Nothing else matches it.
+func capacityDispatchFirstCommitLanded(current CapacityDispatchJob, actualReturnedAt time.Time) bool {
+	return (current.State == "returned" || current.State == "unknown") && current.ReturnedAt != nil && current.ReturnedAt.Equal(actualReturnedAt) && current.FinalizationAckAt == nil
 }
 
 func acknowledgeCapacityDispatchFinalization(ctx context.Context, db *sql.DB, job CapacityDispatchJob) error {

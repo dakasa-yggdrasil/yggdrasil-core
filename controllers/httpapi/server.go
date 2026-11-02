@@ -595,6 +595,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/ops/capacity/dispatch-prestart-rejections/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejectionRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/abandoned-dispatch-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsAbandonedDispatchDisposition))
 	mux.HandleFunc("GET /api/v1/ops/capacity/abandoned-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsAbandonedDispatchDispositionRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/finalization-lost-dispatch-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFinalizationLostDispatchDisposition))
+	mux.HandleFunc("GET /api/v1/ops/capacity/finalization-lost-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFinalizationLostDispatchDispositionRead))
 	mux.HandleFunc("GET /api/v1/ops/workflows", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowsList))
 	mux.HandleFunc("GET /api/v1/ops/workflows/{runId}", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowDetail))
 	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/retry", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowRetry))
