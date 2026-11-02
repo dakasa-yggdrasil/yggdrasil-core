@@ -1,10 +1,12 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -176,6 +178,51 @@ func insertFailedServingTx(ctx context.Context, tx *sql.Tx, r FailedServingGuest
 	_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_failed_serving_disposals(row_id,admission_id,stage,namespace,environment,domain,dimension,preregistration_id,original_wire,original_record,record_sha256,recorded_at,quiescent_row_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)`, r.RecordID, r.ID, r.Stage, r.Namespace, r.Environment, r.Domain, r.Dimension, r.PreregistrationID, raw, string(raw), capacity.BusinessCreationSHA256(raw), r.RecordedAt, offID)
 	return err
 }
+
+// CapacityIntent is internal sparse storage, not a signed Guest protocol DTO.
+// PostgreSQL renders JSONB in its own order and nullable containers are legal;
+// retain the original wire separately for the exact SHA and CAS comparisons.
+func decodeFailedServingIntent(raw []byte, out *model.CapacityIntent) error {
+	if out == nil || len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' {
+		return ErrCapacityConflict
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	var next model.CapacityIntent
+	if err := d.Decode(&next); err != nil {
+		return err
+	}
+	if d.Decode(new(any)) != io.EOF {
+		return ErrCapacityConflict
+	}
+	*out = next
+	return nil
+}
+
+// These immutable records contain manifests and raw historical JSON as well
+// as sparse internal intent bytes. Require the exact encoding emitted by this
+// store; native Guest authenticity remains in its original typed validators.
+func decodeFailedServingDisposal(raw []byte, out *FailedServingGuestDisposal) error {
+	if out == nil || len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' {
+		return ErrCapacityConflict
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	var next FailedServingGuestDisposal
+	if err := d.Decode(&next); err != nil {
+		return err
+	}
+	if d.Decode(new(any)) != io.EOF {
+		return ErrCapacityConflict
+	}
+	canonical, err := json.Marshal(next)
+	if err != nil || !bytes.Equal(canonical, raw) {
+		return ErrCapacityConflict
+	}
+	*out = next
+	return nil
+}
+
 func loadFailedServingTx(ctx context.Context, tx *sql.Tx, id, stage string) (FailedServingGuestDisposal, error) {
 	var out FailedServingGuestDisposal
 	var raw []byte
@@ -185,7 +232,7 @@ func loadFailedServingTx(ctx context.Context, tx *sql.Tx, id, stage string) (Fai
 	if err != nil {
 		return out, err
 	}
-	if !same || capacity.BusinessCreationSHA256(raw) != hash || capacity.DecodeGuestLifecycle(raw, &out) != nil || out.Schema != failedServingSchema || out.ID != id || out.Stage != stage || !originalDispositionHex(out.ActualCoreSource, 40) || !out.BusinessEffectsPreserved || out.CoreOrGuestNativeWriteSent || out.GuestWriterDrainClaimed {
+	if !same || capacity.BusinessCreationSHA256(raw) != hash || decodeFailedServingDisposal(raw, &out) != nil || out.Schema != failedServingSchema || out.ID != id || out.Stage != stage || !originalDispositionHex(out.ActualCoreSource, 40) || !out.BusinessEffectsPreserved || out.CoreOrGuestNativeWriteSent || out.GuestWriterDrainClaimed {
 		return out, ErrCapacityConflict
 	}
 	return out, nil
@@ -265,7 +312,7 @@ func failedServingSnapshotTx(ctx context.Context, tx *sql.Tx, req model.Capacity
 	if err = tx.QueryRowContext(ctx, `SELECT intent::text FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 FOR UPDATE`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&out.intentWire); err != nil {
 		return out, err
 	}
-	if capacity.DecodeGuestLifecycle(out.intentWire, &out.intent) != nil {
+	if decodeFailedServingIntent(out.intentWire, &out.intent) != nil {
 		return out, ErrCapacityConflict
 	}
 	current := out.intent
@@ -356,7 +403,7 @@ func failedServingSnapshotTx(ctx context.Context, tx *sql.Tx, req model.Capacity
 		return out, ErrCapacityConflict
 	}
 	stable := current
-	if id != "" && capacity.DecodeGuestLifecycle(out.record.OriginalIntentWire, &stable) != nil {
+	if id != "" && decodeFailedServingIntent(out.record.OriginalIntentWire, &stable) != nil {
 		return out, ErrCapacityConflict
 	}
 	var stableEventSHA string
@@ -557,7 +604,7 @@ func (s CapacityStore) BeginFailedServingGuestObservation(ctx context.Context, p
 		return nil, ErrCapacityConflict
 	}
 	var original model.CapacityIntent
-	if capacity.DecodeGuestLifecycle(r.OriginalIntentWire, &original) != nil || capacity.BusinessCreationSHA256(r.OriginalIntentWire) != r.OriginalIntentSHA256 {
+	if decodeFailedServingIntent(r.OriginalIntentWire, &original) != nil || capacity.BusinessCreationSHA256(r.OriginalIntentWire) != r.OriginalIntentSHA256 {
 		return nil, ErrCapacityConflict
 	}
 	req := model.CapacityFailedServingGuestDisposalRequest{PreregistrationID: preID, PolicyID: original.PolicyID.String(), PolicyChecksum: original.PolicyChecksum, Generation: original.Generation, FencingToken: original.FencingToken, IntentSHA256: r.OriginalIntentSHA256}
@@ -705,7 +752,7 @@ func (s CapacityStore) ReadFailedServingGuestDisposals(ctx context.Context, preI
 		var raw []byte
 		var sha string
 		var r FailedServingGuestDisposal
-		if rows.Scan(&raw, &sha) != nil || capacity.BusinessCreationSHA256(raw) != sha || capacity.DecodeGuestLifecycle(raw, &r) != nil || r.Schema != failedServingSchema || r.PreregistrationID != preID || !originalDispositionHex(r.ActualCoreSource, 40) || !r.BusinessEffectsPreserved || r.CoreOrGuestNativeWriteSent || r.GuestWriterDrainClaimed {
+		if rows.Scan(&raw, &sha) != nil || capacity.BusinessCreationSHA256(raw) != sha || decodeFailedServingDisposal(raw, &r) != nil || r.Schema != failedServingSchema || r.PreregistrationID != preID || !originalDispositionHex(r.ActualCoreSource, 40) || !r.BusinessEffectsPreserved || r.CoreOrGuestNativeWriteSent || r.GuestWriterDrainClaimed {
 			return nil, ErrCapacityConflict
 		}
 		out = append(out, r)

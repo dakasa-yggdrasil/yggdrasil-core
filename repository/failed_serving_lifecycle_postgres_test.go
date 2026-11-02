@@ -3,6 +3,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"reflect"
@@ -53,11 +54,16 @@ func failedServingOff(t *testing.T, f *failedServingFixture, admission string) F
 }
 
 func TestFailedServingQuarantineLifecyclePostgres(t *testing.T) {
+	t.Run("storage_decoder_contract", failedServingStorageDecoderCases)
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
 			f := newFailedServingFixture(t, provider)
 			ctx := failedServingContext(t)
 			before, originals := f.rawIntent(t), f.preserved(t)
+			var sparse map[string]json.RawMessage
+			if json.Unmarshal(before, &sparse) != nil || string(bytes.TrimSpace(sparse["native_pod_baseline"])) != "null" {
+				t.Fatal("ordinary sparse intent fixture was normalized to hide a storage decoder defect")
+			}
 			request := f.request(t)
 			owner, err := f.store.BeginFailedServingGuestQuarantine(ctx, request, failedServingIssuerForTest())
 			if err != nil {
@@ -69,6 +75,10 @@ func TestFailedServingQuarantineLifecyclePostgres(t *testing.T) {
 			r, err := f.store.CompleteFailedServingGuestQuarantine(ctx, owner, f.inventory(t, false))
 			if err != nil || r.Stage != "quarantined" || !reflect.DeepEqual(r.OriginalIntentWire, before) || r.OriginalIntentSHA256 != capacity.BusinessCreationSHA256(before) {
 				t.Fatal("quarantine lost the complete original frame", err)
+			}
+			var originalPolicyObject map[string]json.RawMessage
+			if json.Unmarshal(r.Candidate.OriginalPolicy.Spec, &originalPolicyObject) != nil || originalPolicyObject == nil {
+				t.Fatal("retained original policy spec must remain a JSON object")
 			}
 			if _, err = f.store.CompleteFailedServingGuestQuarantine(ctx, owner, f.inventory(t, false)); err == nil {
 				t.Fatal("one private observation owner was consumed twice")
@@ -112,6 +122,72 @@ func TestFailedServingQuarantineLifecyclePostgres(t *testing.T) {
 			}
 			if pendingCapacityPhase(FailedServingGuestDisposedPhase) || !pendingCapacityPhase(FailedServingGuestQuarantinedPhase) {
 				t.Fatal("quarantine/terminal phase classification permits a bypass or deadlock")
+			}
+		})
+	}
+}
+
+// Internal PostgreSQL intents and ledger envelopes are storage models, not
+// signed Guest DTOs. The latter keep their existing stricter decoder/crypto.
+func failedServingStorageDecoderCases(t *testing.T) {
+	intent := model.CapacityIntent{Phase: "promoted", Generation: 2, FencingToken: 2, NativePodBaseline: nil}
+	wire := failedServingWire(t, intent)
+	if !bytes.Contains(wire, []byte(`"native_pod_baseline":null`)) {
+		t.Fatal("regression needs the normal nil container from json.Marshal")
+	}
+	var spaced bytes.Buffer
+	if json.Indent(&spaced, wire, "", "  ") != nil {
+		t.Fatal("PG-style intent formatting")
+	}
+	target := model.CapacityIntent{Phase: FailedServingGuestQuarantinedPhase, FailedServingDisposal: &model.CapacityFailedServingDisposal{ID: uuid.NewString(), Stage: "quarantined"}}
+	input := append([]byte(nil), spaced.Bytes()...)
+	if err := decodeFailedServingIntent(input, &target); err != nil || target.Phase != "promoted" || target.NativePodBaseline != nil || target.FailedServingDisposal != nil || !bytes.Equal(input, spaced.Bytes()) {
+		t.Fatal("sparse original must clear stale optional fields without normalizing its raw CAS", err)
+	}
+	if err := capacity.DecodeGuestLifecycle(wire, new(model.CapacityIntent)); err == nil {
+		t.Fatal("Guest DTO decoder was widened for an internal storage model")
+	}
+	for name, bad := range map[string][]byte{
+		"null": []byte(`null`), "array": []byte(`[]`), "trailing": append(append([]byte(nil), wire...), []byte(` {}`)...),
+		"unknown_after_known_fields": []byte(`{"phase":"changed","failed_serving_disposal":{"id":"tampered"},"unrecognized_storage_authority":true}`),
+		"wrong_field_type":           []byte(`{"phase":"changed","generation":"2"}`),
+	} {
+		t.Run("intent_"+name, func(t *testing.T) {
+			old := model.CapacityIntent{Phase: FailedServingGuestQuarantinedPhase, Generation: 99, FailedServingDisposal: &model.CapacityFailedServingDisposal{ID: uuid.NewString(), Stage: "quarantined"}}
+			before := failedServingWire(t, old)
+			if err := decodeFailedServingIntent(bad, &old); err == nil || !bytes.Equal(failedServingWire(t, old), before) {
+				t.Fatal("failed intent decode changed its caller or accepted an open envelope", err)
+			}
+		})
+	}
+	r := FailedServingGuestDisposal{Schema: failedServingSchema, ID: uuid.NewString(), RecordID: uuid.NewString(), PreregistrationID: uuid.NewString(), Stage: "quarantined", OriginalIntentWire: wire, BusinessEffectsPreserved: true, HistoricalUnknowns: json.RawMessage(`[]`), HistoricalCanaries: json.RawMessage(`[]`)}
+	r.Candidate.OriginalPolicy.Spec = json.RawMessage(`{"retained_policy":{"optional":null}}`)
+	r.Workflow.Spec = json.RawMessage(`{"steps":[],"optional":null}`)
+	recordWire := failedServingWire(t, r)
+	retained := r
+	retained.Stage = "terminal"
+	retained.Inventory = &model.CapacityVMFleetInventory{}
+	retained.NativeOff = &model.CapacityVMFleetPlan{}
+	retained.Absence = &model.CapacityOriginalCreateDispositionObservation{}
+	retained.NativeOffRecordID = uuid.NewString()
+	retained.TerminalIntentSHA256 = strings.Repeat("f", 64)
+	if err := decodeFailedServingDisposal(recordWire, &retained); err != nil || retained.Stage != "quarantined" || retained.Inventory != nil || retained.NativeOff != nil || retained.Absence != nil || retained.NativeOffRecordID != "" || retained.TerminalIntentSHA256 != "" || !bytes.Equal(retained.Candidate.OriginalPolicy.Spec, r.Candidate.OriginalPolicy.Spec) {
+		t.Fatal("closed record lost RawMessage objects or kept stale optional proof", err)
+	}
+	missingFalse := bytes.Replace(recordWire, []byte(`,"Core_or_Guest_native_write_sent":false`), nil, 1)
+	if bytes.Equal(missingFalse, recordWire) || !json.Valid(missingFalse) {
+		t.Fatal("required false regression did not remove the exact field")
+	}
+	duplicate := append(append([]byte(nil), recordWire[:len(recordWire)-1]...), []byte(`,"Core_or_Guest_native_write_sent":false}`)...)
+	unknown := append(append([]byte(nil), recordWire[:len(recordWire)-1]...), []byte(`,"unrecognized_storage_authority":false}`)...)
+	for name, bad := range map[string][]byte{"null": []byte(`null`), "array": []byte(`[]`), "trailing": append(append([]byte(nil), recordWire...), []byte(` {}`)...), "unknown": unknown, "duplicate": duplicate, "missing_required_false": missingFalse, "noncanonical_whitespace": append([]byte(" \n"), recordWire...)} {
+		t.Run("record_"+name, func(t *testing.T) {
+			old := failedServingClone(t, r)
+			old.Stage = "terminal"
+			old.Absence = &model.CapacityOriginalCreateDispositionObservation{ResourceID: "preserve-existing"}
+			before := failedServingWire(t, old)
+			if err := decodeFailedServingDisposal(bad, &old); err == nil || !bytes.Equal(failedServingWire(t, old), before) {
+				t.Fatal("failed record decode changed its caller or accepted ambiguous/missing evidence", err)
 			}
 		})
 	}
