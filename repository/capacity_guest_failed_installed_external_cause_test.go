@@ -13,11 +13,18 @@ import (
 // that exact disposal and the compiled approval of the binding.
 func TestFailedInstalledExternalCauseBindingAdmittedIsExact(t *testing.T) {
 	r := FailedInstalledGuestDisposal{BlockedGuestSource: strings.Repeat("b", 40), BlockedProfileSHA256: strings.Repeat("c", 64), RetirementMode: failedInstalledV2Mode}
+	// The stored binding_wire is closed Guest lifecycle JSON: arrays are never
+	// null, so the minimal profile manifest carries an empty writer list.
 	b := model.CapacityGuestRetirementBinding{GuestSourceCommit: r.BlockedGuestSource, ProfileManifestSHA256: r.BlockedProfileSHA256, CoreAuthoritySourceCommit: strings.Repeat("4", 40),
-		Members: []model.CapacityGuestRetirementMemberBinding{{Name: "notify-hetzner-1", Slot: 1}}}
+		ProfileManifest: model.CapacityGuestProtectedProfileManifest{Writers: []model.CapacityGuestProtectedWriterDefinition{}},
+		Members:         []model.CapacityGuestRetirementMemberBinding{{Name: "notify-hetzner-1", Slot: 1}}}
 	wire, err := json.Marshal(b)
 	if err != nil {
 		t.Fatal(err)
+	}
+	var decoded model.CapacityGuestRetirementBinding
+	if err = capacity.DecodeGuestLifecycle(wire, &decoded); err != nil {
+		t.Fatal("fixture binding is not closed Guest lifecycle JSON", err)
 	}
 	admitted := originalDispositionDigest(wire)
 	if admitted != capacity.GuestRetirementSHA(b) {
