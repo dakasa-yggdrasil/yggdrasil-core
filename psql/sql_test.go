@@ -67,3 +67,32 @@ func TestLoadPoolConfig_InvalidFallsBackToDefault(t *testing.T) {
 		t.Errorf("MaxConnIdleTime=%v, want default %v", cfg.MaxConnIdleTime, DefaultMaxConnIdleTime)
 	}
 }
+
+// The idle cap must stay at ten connections (it replaced two, which made
+// the single Core pod reconnect ~110 times a minute) and below the open cap.
+func TestPoolDefaultKeepsTenWarmConnections(t *testing.T) {
+	if DefaultMinOpenConns != 10 {
+		t.Fatalf("DefaultMinOpenConns=%d, want 10", DefaultMinOpenConns)
+	}
+	if DefaultMaxOpenConns != 25 || DefaultMinOpenConns > DefaultMaxOpenConns {
+		t.Fatalf("idle pool %d must stay within the open cap %d (want 25)", DefaultMinOpenConns, DefaultMaxOpenConns)
+	}
+	t.Setenv("YGGDRASIL_PG_MIN_CONNS", "")
+	if got := LoadPoolConfig().MinOpenConns; got != 10 {
+		t.Fatalf("unset YGGDRASIL_PG_MIN_CONNS loaded %d, want 10", got)
+	}
+	t.Setenv("YGGDRASIL_PG_MIN_CONNS", "3")
+	if got := LoadPoolConfig().MinOpenConns; got != 3 {
+		t.Fatalf("YGGDRASIL_PG_MIN_CONNS=3 loaded %d, want the override", got)
+	}
+}
+
+// The idle cap logged at startup is what database/sql applies: an open cap
+// below the idle default lowers it.
+func TestPoolEffectiveIdleConnsFollowsTheOpenCap(t *testing.T) {
+	for _, c := range []struct{ open, idle, want int }{{25, 10, 10}, {5, 10, 5}, {10, 10, 10}, {0, 10, 10}} {
+		if got := (PoolConfig{MaxOpenConns: c.open, MinOpenConns: c.idle}).EffectiveIdleConns(); got != c.want {
+			t.Fatalf("open=%d idle=%d effective=%d, want %d", c.open, c.idle, got, c.want)
+		}
+	}
+}

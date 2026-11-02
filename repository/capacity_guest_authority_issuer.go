@@ -62,7 +62,15 @@ func (s CapacityStore) recordGuestAuthorityIssueTx(ctx context.Context, tx *sql.
 // Historical C11 contexts remain their original C11 facts. A successor context
 // must carry the separately atomic actual-issuer record; it never rewrites the
 // legacy signed authority field or treats that field as a new build identity.
-func verifyGuestAuthorityIssuerTx(ctx context.Context, tx *sql.Tx, kind, id, actual string, binding model.CapacityGuestRetirementBinding, pre model.CapacityGuestOriginalProvisioningPreregistration) error {
+//
+// The issue row is keyed by the capacity_policy the issue was RECORDED under
+// (issuePolicyID/issuePolicyChecksum: the retirement intent's or canary
+// challenge's own policy), which after a republish can be a later version than
+// the member's preregistration policy (ADR-0094). That issue policy must then
+// be a continuous successor of the preregistration's policy (same
+// namespace/name, older prior, byte-identical Guest contract), and the
+// compatibility map is checked against the issue policy's spec.
+func verifyGuestAuthorityIssuerTx(ctx context.Context, tx *sql.Tx, kind, id, actual string, binding model.CapacityGuestRetirementBinding, pre model.CapacityGuestOriginalProvisioningPreregistration, issuePolicyID, issuePolicyChecksum string) error {
 	if actual == binding.CoreAuthoritySourceCommit {
 		return nil
 	}
@@ -70,16 +78,15 @@ func verifyGuestAuthorityIssuerTx(ctx context.Context, tx *sql.Tx, kind, id, act
 		return ErrCapacityConflict
 	}
 	var compatibility string
-	err := tx.QueryRowContext(ctx, `SELECT compatibility_map_sha256 FROM public.capacity_guest_authority_issues WHERE issue_kind=$1 AND issue_id=$2 AND issuer_actual_source_commit=$3 AND protocol_authority_source_commit=$4 AND profile=$5 AND policy_id=$6 AND workflow_id=$7`, kind, id, actual, binding.CoreAuthoritySourceCommit, binding.ProfileManifest.Profile, pre.PolicyID, pre.WorkflowID).Scan(&compatibility)
+	err := tx.QueryRowContext(ctx, `SELECT compatibility_map_sha256 FROM public.capacity_guest_authority_issues WHERE issue_kind=$1 AND issue_id=$2 AND issuer_actual_source_commit=$3 AND protocol_authority_source_commit=$4 AND profile=$5 AND policy_id=$6 AND workflow_id=$7`, kind, id, actual, binding.CoreAuthoritySourceCommit, binding.ProfileManifest.Profile, issuePolicyID, pre.WorkflowID).Scan(&compatibility)
 	if err != nil {
 		return err
 	}
-	var raw []byte
-	if err = tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND kind='capacity_policy' AND checksum=$2 FOR SHARE`, pre.PolicyID, pre.PolicyChecksum).Scan(&raw); err != nil {
+	p, err := guestIssuePolicyContinuityTx(ctx, tx, issuePolicyID, issuePolicyChecksum, pre)
+	if err != nil {
 		return err
 	}
-	var p model.CapacityPolicySpec
-	if capacity.DecodeNativeCapacity(json.RawMessage(raw), &p) != nil || !capacity.GuestBindingApprovedByCompatibilityMap(p, binding, actual, compatibility) {
+	if !capacity.GuestBindingApprovedByCompatibilityMap(p, binding, actual, compatibility) {
 		return ErrCapacityConflict
 	}
 	return nil

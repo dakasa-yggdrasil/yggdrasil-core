@@ -29,8 +29,8 @@ func bootstrapPostgres(ctx context.Context, app *runtime.ServiceApp) error {
 	cfg := psql.LoadPoolConfig()
 	fmt.Fprintf(
 		os.Stderr,
-		"addon=postgres pg_pool max_open=%d min_idle=%d max_lifetime=%s max_idle_time=%s\n",
-		cfg.MaxOpenConns, cfg.MinOpenConns, cfg.MaxConnLifetime, cfg.MaxConnIdleTime,
+		"addon=postgres pg_pool max_open=%d max_idle=%d max_lifetime=%s max_idle_time=%s\n",
+		cfg.MaxOpenConns, cfg.EffectiveIdleConns(), cfg.MaxConnLifetime, cfg.MaxConnIdleTime,
 	)
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)

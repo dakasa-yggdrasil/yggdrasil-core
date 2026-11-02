@@ -59,12 +59,14 @@ func loadFreshGuestNotifyBusinessTx(ctx context.Context, tx *sql.Tx, policy mode
 
 func guestNotifyMemberReceiptTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, member model.CapacityGuestRetirementMemberBinding, slot capacityResourceSlot) (model.CapacityGuestOriginalProvisioningReceipt, error) {
 	var empty model.CapacityGuestOriginalProvisioningReceipt
-	var id string
-	if err := tx.QueryRowContext(ctx, `SELECT e.preregistration_id::text FROM public.capacity_vm_original_enrollments e JOIN public.capacity_vm_provisioning_preregistrations p ON p.id=e.preregistration_id WHERE p.preregistration_record->>'policy_id'=$1 AND p.preregistration_record->>'policy_checksum'=$2 AND (p.preregistration_record->>'slot')::integer=$3 AND e.enrollment_record->'statement'->'tuple'->>'resource_id'=$4 AND e.enrollment_record->'statement'->'tuple'->>'resource_created_at'=$5`, policy.ID.String(), policy.Checksum, member.Slot, slot.ResourceID, slot.ResourceCreatedAt).Scan(&id); err != nil {
+	// ADR-0094: the enrollment may belong to this policy revision or to a
+	// prior version of the same policy with a byte-identical Guest contract.
+	id, err := guestMemberPreregistrationTx(ctx, tx, policy, p, member.Slot, slot.ResourceID, slot.ResourceCreatedAt)
+	if err != nil {
 		return empty, err
 	}
 	stored, err := loadGuestOriginalTx(ctx, tx, id)
-	if err != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || stored.member != member || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) {
+	if err != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || stored.member != member || stored.pre.Slot != member.Slot || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || guestPolicyContinuityTx(ctx, tx, policy, p, stored.pre.PolicyID, stored.pre.PolicyChecksum) != nil {
 		return empty, ErrCapacityConflict
 	}
 	receipt, _, err := loadGuestReceiptTx(ctx, tx, id)

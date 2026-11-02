@@ -163,7 +163,7 @@ func loadGuestRetirementTx(ctx context.Context, tx *sql.Tx, id string) (GuestRet
 		return result, ErrCapacityConflict
 	}
 	var actualSource string
-	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&result.ExecutorID, &actualSource); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actualSource, result.Binding, result.Preregistration) != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&result.ExecutorID, &actualSource); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actualSource, result.Binding, result.Preregistration, result.Request.Intent.PolicyID, result.Request.Intent.PolicyChecksum) != nil {
 		return result, ErrCapacityConflict
 	}
 	return result, nil

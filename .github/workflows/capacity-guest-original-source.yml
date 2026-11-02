@@ -155,6 +155,21 @@ jobs:
           assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==3
           print(f'All {len(roots)} ADR-0093 owner/validation/diagnostic source roots passed')
           PY
+      - name: Installed Guest members keep their contract across capacity_policy versions (ADR-0094)
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity ./repository ./psql -run '^(TestGuestPolicyContinuityKeepsMembersAcrossSchedulingOnlyChanges|TestGuestPolicyContinuityRefusesAChangedGuestContract|TestGuestStableEpochPolicyAdmitsOnlyTheAdmittedRevision|TestPoolDefaultKeepsTenWarmConnections|TestGuestPolicyContinuityRefusesAChangedValidCanaryBinding|TestPoolEffectiveIdleConnsFollowsTheOpenCap)$' | tee original-policy-continuity-source.jsonl
+          python3 - <<'PY'
+          import collections,json
+          rows=[json.loads(line) for line in open('original-policy-continuity-source.jsonl') if line.strip()]
+          roots={'TestGuestPolicyContinuityKeepsMembersAcrossSchedulingOnlyChanges','TestGuestPolicyContinuityRefusesAChangedGuestContract','TestGuestStableEpochPolicyAdmitsOnlyTheAdmittedRevision','TestPoolDefaultKeepsTenWarmConnections','TestGuestPolicyContinuityRefusesAChangedValidCanaryBinding','TestPoolEffectiveIdleConnsFollowsTheOpenCap'}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          passed=collections.Counter(r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test') and '/' not in r['Test'])
+          assert set(passed)==roots and all(v==1 for v in passed.values()), f'ADR-0094 roots: {sorted(roots-set(passed))}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==3
+          print(f'All {len(roots)} ADR-0094 continuity and pool source roots passed; no PostgreSQL claimed')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -166,6 +181,7 @@ jobs:
             original-notify-canary-source.jsonl
             original-notify-maintenance-source.jsonl
             original-notify-owner-source.jsonl
+            original-policy-continuity-source.jsonl
             original-retirement-v2-source.jsonl
             original-provisioning-v2-source.jsonl
   original-http-transport:
@@ -308,6 +324,25 @@ jobs:
           assert subs<=passed, f'missing budget cases: {sorted(subs-passed)}'
           assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
           print('Actual migrated PostgreSQL publication budget query only; FK parents skipped in a rolled-back transaction, no canary authority')
+          PY
+      - name: Installed member lookup accepts only a continuous prior policy version in PostgreSQL (ADR-0094)
+        env:
+          REQUIRE_GUEST_NOTIFY_CANARY_DB_TEST: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=120s -json ./repository -run '^TestGuestPolicyContinuityPostgres$' | tee "$RUNNER_TEMP/original-policy-continuity-pg.jsonl"
+          python3 - <<'PY'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-policy-continuity-pg.jsonl').read_text().splitlines() if line.strip()]
+          case='TestGuestPolicyContinuityPostgres'
+          subs={case+'/'+n for n in ('same_revision_is_found','prior_version_with_identical_contract_is_found','several_identical_versions_keep_the_member','changed_contract_is_refused','changed_intermediate_contract_is_refused','other_policy_name_is_refused','other_namespace_is_refused','newer_version_is_refused','inactive_current_is_refused','unstored_prior_checksum_is_refused','ambiguous_tuple_is_refused')}
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert subs<=passed, f'missing continuity cases: {sorted(subs-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Actual migrated PostgreSQL member lookup and continuity queries only; FK parents skipped in a rolled-back transaction, no Guest authority')
           PY
       - name: Actual production V2 absent-original PostgreSQL authority refusals
         env:

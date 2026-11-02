@@ -18,15 +18,30 @@ import (
 // Override via env:
 //
 //	YGGDRASIL_PG_MAX_CONNS         (default 25)
-//	YGGDRASIL_PG_MIN_CONNS         (default 2)
+//	YGGDRASIL_PG_MIN_CONNS         (default 10)
 //	YGGDRASIL_PG_MAX_CONN_LIFETIME (default 30m)
 //	YGGDRASIL_PG_MAX_IDLE_TIME     (default 5m)
 //
 // All values are parsed once at process start; subsequent edits require a
 // pod restart (the addon bootstrap path runs exactly once).
+//
+// DefaultMinOpenConns is an idle CAP, not a minimum: it becomes
+// SetMaxIdleConns, so up to this many connections returned to the pool are
+// kept for reuse instead of being closed. With the old value of 2 the single
+// Core pod closed every returned connection above two, so the steady
+// reconcile, maintenance-canary and HTTP traffic opened about 110 new Postgres
+// connections per minute, each paying a ~220 ms SCRAM handshake on a
+// CPU-starved 2-vCPU Brain. Ten reusable idle connections cover that steady
+// concurrency while staying well inside DefaultMaxOpenConns (25) and the
+// server's max_connections budget. database/sql never pre-opens or holds a
+// floor: every idle connection is still closed after DefaultMaxConnIdleTime
+// (5m) and every connection after DefaultMaxConnLifetime (30m), so the pool
+// still reconnects after a quiet period and as connections age out. When
+// YGGDRASIL_PG_MAX_CONNS is below this value, database/sql lowers the idle cap
+// to the open cap (PoolConfig.EffectiveIdleConns).
 const (
 	DefaultMaxOpenConns    = 25
-	DefaultMinOpenConns    = 2
+	DefaultMinOpenConns    = 10
 	DefaultMaxConnLifetime = 30 * time.Minute
 	DefaultMaxConnIdleTime = 5 * time.Minute
 )
@@ -37,6 +52,15 @@ type PoolConfig struct {
 	MinOpenConns    int
 	MaxConnLifetime time.Duration
 	MaxConnIdleTime time.Duration
+}
+
+// EffectiveIdleConns is the idle cap database/sql actually applies:
+// MinOpenConns, lowered to MaxOpenConns when that limit is smaller.
+func (c PoolConfig) EffectiveIdleConns() int {
+	if c.MaxOpenConns > 0 && c.MinOpenConns > c.MaxOpenConns {
+		return c.MaxOpenConns
+	}
+	return c.MinOpenConns
 }
 
 // LoadPoolConfig reads pool tunables from the environment, applying the
@@ -67,11 +91,11 @@ func Open() (*sql.DB, error) {
 // Exposed so scripts/* binaries (bootstrap, goose, …) can reuse the same
 // defaults without re-deriving them.
 //
-// MinConns is implemented as the warm-up target for `SetMaxIdleConns`
-// (database/sql does not expose a true min, but keeping at least N idle
-// connections approximates the same behaviour: the pool will eagerly fill
-// up to MaxIdleConns on demand and not shrink below that without the
-// idle timeout kicking in).
+// MinOpenConns is applied as `SetMaxIdleConns`. database/sql has no true
+// minimum: this only caps how many returned connections are kept idle for
+// reuse (never pre-opened), each still subject to ConnMaxIdleTime and
+// ConnMaxLifetime, and database/sql lowers it to MaxOpenConns when that is
+// smaller.
 func ApplyPoolConfig(db *sql.DB, cfg PoolConfig) {
 	if cfg.MaxOpenConns > 0 {
 		db.SetMaxOpenConns(cfg.MaxOpenConns)

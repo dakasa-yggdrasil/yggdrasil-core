@@ -62,6 +62,10 @@ through the existing maintenance challenge/send ledger, with no provider grant.
 Its canary lease owner is a domain-separated UUIDv5 of the executor that the
 Guest admits; failed nonce attempts do not spend the hourly publication budget
 but back off exponentially to a 15-minute gap (ADR-0093).
+An installed member enrolled under an older version of the same policy stays
+listed, canaried and retirable when every version since has a byte-identical
+Guest production contract, and an unleased stable epoch survives such a
+publish; a leased intent is still pinned to its exact revision (ADR-0094).
 Pending originals permit observation/HOLD only, including after lease expiry.
 
 The five-second Notify canary budget covers the original publication/read chain,

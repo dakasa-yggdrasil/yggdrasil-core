@@ -149,16 +149,16 @@ func TestHistoricalUnknownReadPostgresB509Compatibility(t *testing.T) {
 	issueWire, _ := json.Marshal(issue)
 	must(`INSERT INTO public.capacity_guest_authority_issues(issue_kind,issue_id,issuer_actual_source_commit,protocol_authority_source_commit,compatibility_map_sha256,profile,policy_id,workflow_id,executor_id,issued_wire_sha256,original_wire,original_record) VALUES('canary_challenge',$1,$2,$3,$4,$5,$6,$7,'unit-executor',$8,$9,$10::jsonb)`, issueID, originalReadCoreSource, capacity.GuestD11ProtocolAuthority, compat, binding.ProfileManifest.Profile, policyID, workflowID, sha, issueWire, string(issueWire))
 	pre := model.CapacityGuestOriginalProvisioningPreregistration{PolicyID: policyID, PolicyChecksum: checksum, WorkflowID: workflowID}
-	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", issueID, originalReadCoreSource, binding, pre); err != nil {
+	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", issueID, originalReadCoreSource, binding, pre, policyID, checksum); err != nil {
 		t.Fatal("actual historical B509 compatibility rejected", err)
 	}
 	changed := binding
 	changed.IntentSigningKeyRef += "-foreign"
-	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", issueID, originalReadCoreSource, changed, pre); err == nil {
+	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", issueID, originalReadCoreSource, changed, pre, policyID, checksum); err == nil {
 		t.Fatal("changed original binding accepted")
 	}
 	pre.PolicyChecksum = strings.Repeat("f", 64)
-	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", issueID, originalReadCoreSource, binding, pre); err == nil {
+	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", issueID, originalReadCoreSource, binding, pre, policyID, checksum); err == nil {
 		t.Fatal("foreign policy checksum accepted")
 	}
 }

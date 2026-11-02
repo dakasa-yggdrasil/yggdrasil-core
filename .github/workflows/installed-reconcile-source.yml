@@ -170,6 +170,11 @@ jobs:
               assert runs==passed==collections.Counter(roots), name+' missing, duplicate or unexpected roots'
               assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1, name+' incomplete package'
               summary[name]={'package':packages[name],'roots':roots,'passed':len(roots),'skipped':0}
+          # ADR-0094: the actual-issuer proof for an issue recorded under a successor policy version.
+          rows=[json.loads(line) for line in (p/'repository.stdout').read_text().splitlines()]
+          successor='TestD12AuthorityLedgerPostgresRequiresClosedIdentity/issue_policy_successor_version/'
+          want={successor+pv+'/'+c for pv in ('aws','hetzner') for c in ('issue_under_successor','issue_looked_up_under_preregistration_policy','successor_changed_contract','preregistration_newer_than_issue','successor_other_policy_name')}
+          assert want<={r['Test'] for r in rows if r['Action']=='pass' and 'Test' in r}, 'ADR-0094 successor issuer cases missing'
           actual_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           assert actual_head==os.environ['SOURCE_COMMIT'], 'Source checkout identity changed'
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all']), 'Source worktree became dirty'
