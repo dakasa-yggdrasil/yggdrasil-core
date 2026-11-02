@@ -15,6 +15,7 @@ import (
 )
 
 func TestFailedServingMigration88RejectsForgedLineageAndReplayPostgres(t *testing.T) {
+	t.Run("workflow_busy_index89", failedServingWorkflowBusyIndex89)
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
 			f := newFailedServingFixture(t, provider)
