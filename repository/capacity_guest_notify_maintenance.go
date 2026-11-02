@@ -24,12 +24,34 @@ func (s CapacityStore) guestNotifyMaintenanceOrigin() bool {
 	return o != nil && (o.step.Use.Operation == GuestNotifyMaintenanceOperation || s.guestReconcile != nil && s.guestReconcile.mode == "refresh" && o.step.Use.Operation == capacity.CompleteOriginalGuestOperation && reflect.DeepEqual(o.step, s.guestReconcile.step))
 }
 
+// The fixed RFC 4122 name-space of stable-maintenance canary owners
+// (ADR-0093): the UUIDv5 of guestNotifyMaintenanceOwnerDomain under the RFC
+// 4122 URL name-space, 04321c5b-fb9b-5087-9636-068fa7072abd. The owner domain
+// is therefore separated from every other UUIDv5 that Core or a Guest derives.
+// Changing the domain changes every maintenance owner; it is a protocol
+// constant, pinned by a known-answer test.
+const guestNotifyMaintenanceOwnerDomain = "https://yggdrasil.dakasa.me/capacity/guest-notify-maintenance-owner/v1"
+
+var guestNotifyMaintenanceOwnerNamespace = uuid.NewSHA1(uuid.NameSpaceURL, []byte(guestNotifyMaintenanceOwnerDomain))
+
 // A domain-separated invocation identifier, not a VM lease or provider grant.
+// The Guest admits a canary challenge only when its lease_owner is a 36-byte
+// UUID (Guest bootstrap.BootIdentity), so the owner is the deterministic
+// UUIDv5 of the canonical executor UUID under the fixed maintenance
+// name-space. A VM lease owner is a random UUIDv4 (uuid.NewString), so the
+// version nibble alone keeps the two owner classes apart; steady usage is
+// further gated on a stable epoch whose intent has no lease owner at all.
+//
+// ADR-0093: the earlier "notify-maintenance:<sha256hex>" form was never
+// admitted by any Guest, so it never produced a nonce, send or return and no
+// stored authority depends on it. The owner is per invocation, never stored
+// on the intent, so every tick after the rollout derives the new form.
 func GuestNotifyMaintenanceOwner(executor string) string {
 	if !validCapacityExecutor(executor) {
 		return ""
 	}
-	return "notify-maintenance:" + capacity.BusinessCreationSHA256([]byte(executor))
+	id := uuid.MustParse(executor)
+	return uuid.NewSHA1(guestNotifyMaintenanceOwnerNamespace, id[:]).String()
 }
 
 func guestNotifyStableEpoch(current model.CapacityIntent) bool {

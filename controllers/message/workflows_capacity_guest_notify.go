@@ -86,7 +86,7 @@ func originalGuestNotifyCall(ctx context.Context, db *sql.DB, store repository.C
 	}
 	finalized, nonceReturn, err := capacity.AcquireGuestNotifyCanaryNonce(original, client, key, c, enrollment)
 	if err != nil {
-		return empty, guestNotifyProbeHeld("nonce_acquire", err)
+		return empty, guestNotifyNonceHeld(nonceReturn, err)
 	}
 	if err = store.FinalizeGuestNotifyCanaryNonce(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, finalized, nonceReturn); err != nil {
 		return empty, guestNotifyProbeHeld("nonce_finalize", err)

@@ -221,6 +221,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		if n := originalGuestNotifyProbeStage(err); n != "" {
 			result.Metadata["original_guest_notify_refusal_stage"] = n
 		}
+		if d, ok := originalGuestNotifyNonceDiagnostic(err); ok {
+			result.Metadata["original_guest_notify_nonce_http_status"] = d.Status
+			if d.Code != "" {
+				result.Metadata["original_guest_notify_nonce_problem_code"] = d.Code
+			}
+		}
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}

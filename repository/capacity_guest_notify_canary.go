@@ -133,13 +133,8 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		if recordID == "" {
 			phase, schema, purpose = "publish", capacity.GuestNotifyCanaryPublicationChallengeSchema, capacity.GuestNotifyCanaryPublicationPurpose
 			recordID = id
-			var count int
-			var latest sql.NullTime
-			if err = tx.QueryRowContext(ctx, `SELECT count(*),max(recorded_at) FROM public.capacity_guest_notify_canary_challenges WHERE preregistration_id=$1 AND phase='publish' AND recorded_at>$2`, preID, now.Add(-time.Hour)).Scan(&count, &latest); err != nil {
+			if err = guestNotifyPublicationAdmittedTx(ctx, tx, preID, *p.GuestNotifyCanaryBinding, now); err != nil {
 				return err
-			}
-			if count >= p.GuestNotifyCanaryBinding.MaximumPublicationsPerHour || latest.Valid && now.Sub(latest.Time) < time.Duration(p.GuestNotifyCanaryBinding.MinimumPublicationIntervalSeconds)*time.Second {
-				return ErrCapacityConflict
 			}
 		} else {
 			var parentWire []byte
@@ -192,6 +187,60 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		return err
 	})
 	return result, err
+}
+
+// The publication budget of one preregistration (ADR-0093). The hourly
+// maximum counts only publications that can have reached the Guest broker:
+// those with a possible-send row, plus those still inside their own original
+// five-second window (they may yet be reserved and sent). An attempt refused
+// before reserve_send, for example at the Guest nonce GET, and now past its
+// signed deadline can never be sent (ReserveGuestNotifyCanarySend revalidates
+// the deadline), so it does not spend the declared publication maximum.
+//
+// Refused attempts are still bounded on their own, because each one is a
+// Guest nonce GET and an immutable challenge row on a maintenance epoch whose
+// generation and fence never move (installed reconcile reads every row of
+// that fence and refuses at 256). The gap required after the latest attempt
+// doubles with every consecutive refused attempt in the hour since the last
+// live one: minimum_publication_interval_seconds times 2^streak, capped at
+// guestNotifyRefusedBackoffCeiling (never below the declared interval). A
+// Guest that keeps refusing therefore costs at most about
+// 1 + log2(3600/interval) + 3600/ceiling attempts per hour (about 14 at the
+// 5 s floor), against 120 per hour before ADR-0093. Every attempt in the hour,
+// live or refused, also stays under the fixed guestNotifyPublicationAttemptCeiling,
+// which is the former all-attempt ceiling (the policy maximum's upper bound).
+const (
+	guestNotifyRefusedBackoffCeiling     = 15 * time.Minute
+	guestNotifyPublicationAttemptCeiling = 120
+)
+
+const guestNotifyPublicationBudgetQuery = `WITH w AS (SELECT c.recorded_at,(EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_sends s WHERE s.challenge_id=c.id) OR c.original_deadline>$2) AS live FROM public.capacity_guest_notify_canary_challenges c WHERE c.preregistration_id=$1 AND c.phase='publish' AND c.recorded_at>$3) SELECT count(*) FILTER(WHERE live),count(*),max(recorded_at),count(*) FILTER(WHERE NOT live AND recorded_at>COALESCE((SELECT max(l.recorded_at) FROM w l WHERE l.live),'-infinity'::timestamptz)) FROM w`
+
+func guestNotifyPublicationAdmittedTx(ctx context.Context, tx *sql.Tx, preID string, b model.CapacityGuestNotifyCanaryBinding, now time.Time) error {
+	var spent, attempts, refusedStreak int
+	var latest sql.NullTime
+	if err := tx.QueryRowContext(ctx, guestNotifyPublicationBudgetQuery, preID, now, now.Add(-time.Hour)).Scan(&spent, &attempts, &latest, &refusedStreak); err != nil {
+		return err
+	}
+	if spent >= b.MaximumPublicationsPerHour || attempts >= guestNotifyPublicationAttemptCeiling || latest.Valid && now.Sub(latest.Time) < guestNotifyPublicationGap(b.MinimumPublicationIntervalSeconds, refusedStreak) {
+		return ErrCapacityConflict
+	}
+	return nil
+}
+
+// guestNotifyPublicationGap is the minimum gap after the latest publish
+// attempt: the declared interval doubled once per consecutive refused attempt,
+// capped at guestNotifyRefusedBackoffCeiling but never below the interval.
+func guestNotifyPublicationGap(intervalSeconds, refusedStreak int) time.Duration {
+	interval := time.Duration(intervalSeconds) * time.Second
+	if interval >= guestNotifyRefusedBackoffCeiling {
+		return interval
+	}
+	gap := interval
+	for i := 0; i < refusedStreak && gap < guestNotifyRefusedBackoffCeiling; i++ {
+		gap *= 2
+	}
+	return min(gap, guestNotifyRefusedBackoffCeiling)
 }
 
 func loadGuestNotifyPreflightTx(ctx context.Context, tx *sql.Tx, id string) (model.CapacityGuestNotifyCanaryChallenge, error) {
