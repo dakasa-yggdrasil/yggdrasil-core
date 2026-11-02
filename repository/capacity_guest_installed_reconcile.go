@@ -116,8 +116,7 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 	if err = s.installedGuestDispatchRunTx(ctx, tx, policy, p, s.OriginalRunID, nil); err != nil {
 		return old, false, ErrCapacityConflict
 	}
-	var pending int
-	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND enrolled_failed_disposition_id IS NULL AND NOT(grant_record ? 'authority_kind') AND state IN('issued','redeemed','settled','compensating')`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending); err != nil || pending != 0 {
+	if pending, err := countUnresolvedCapacityGrantsTx(ctx, tx, policy.Metadata.Namespace, p); err != nil || pending != 0 {
 		return old, false, ErrCapacityConflict
 	}
 	members, err := s.guestReconcileMembersTx(ctx, tx, policy, p, now, true)
