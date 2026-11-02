@@ -148,9 +148,34 @@ func (s *Server) handleOpsWorkflowAbort(w http.ResponseWriter, r *http.Request) 
 	// workflow_runs.status CHECK only allows pending|running|succeeded|failed|
 	// cancelled (see 00018_workflow_runs.sql); use 'cancelled' here and let
 	// the ops surface display "aborted" via toOpsWorkflowStatus.
-	_, _ = s.db.ExecContext(r.Context(),
+	//
+	// A capacity dispatch run is never aborted generically (ADR-0089): its
+	// job keeps its own started/unknown/terminal lifecycle, a cancelled
+	// original run would strand a started job outside the abandoned-dispatch
+	// disposition lane, and a disposed run is immutable. This mirrors the
+	// stale_workflow_runs_cleaner exclusion.
+	var dispatchRun bool
+	if err := s.db.QueryRowContext(r.Context(),
+		`SELECT EXISTS (SELECT 1 FROM public.capacity_dispatch_jobs WHERE run_id=$1)`, runID).Scan(&dispatchRun); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "abort failed")
+		return
+	}
+	if dispatchRun {
+		writeJSONError(w, http.StatusConflict, "capacity dispatch runs cannot be aborted; use the capacity dispatch disposition lanes")
+		return
+	}
+	result, err := s.db.ExecContext(r.Context(),
 		`UPDATE public.workflow_runs SET status='cancelled', finished_at=NOW()
-		 WHERE id=$1 AND status IN ('pending','running')`, runID)
+		 WHERE id=$1 AND status IN ('pending','running')
+		   AND NOT EXISTS (SELECT 1 FROM public.capacity_dispatch_jobs d WHERE d.run_id=workflow_runs.id)`, runID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "abort failed")
+		return
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+		writeJSONError(w, http.StatusConflict, "run is not pending or running")
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"run_id": runID, "status": "aborted"})
 }
 
