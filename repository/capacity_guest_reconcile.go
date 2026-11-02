@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"time"
 
@@ -199,6 +200,10 @@ func (s CapacityStore) AssessOriginalGuest(ctx context.Context, policy model.Man
 	if s.DB == nil || s.guestReconcile == nil || !guestReconcileLive(ctx) {
 		return model.CapacityIntent{}, ErrCapacityConflict
 	}
+	continuity, err := s.guestStableEpochContinuity(ctx, policy)
+	if err != nil {
+		return model.CapacityIntent{}, err
+	}
 	return s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
 		if s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.PlanOriginalGuestOperation {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
@@ -229,11 +234,53 @@ func (s CapacityStore) AssessOriginalGuest(ctx context.Context, policy model.Man
 				generation++
 			}
 			phase = "proposed"
-		} else if old != nil && guestNotifyStableEpoch(*old) && old.PolicyID == policy.ID && old.PolicyChecksum == policy.Checksum && sameCapacityResourceIdentity(old.Assessment.Snapshot, a.Snapshot) && old.Decision.Units == a.Snapshot.Units && old.Decision.Profile == a.Snapshot.Profile {
+		} else if old != nil && guestNotifyStableEpoch(*old) && (old.PolicyID == policy.ID && old.PolicyChecksum == policy.Checksum || continuity.admits(*old)) && sameCapacityResourceIdentity(old.Assessment.Snapshot, a.Snapshot) && old.Decision.Units == a.Snapshot.Units && old.Decision.Profile == a.Snapshot.Profile {
+			// ADR-0094: a new version of the same policy with a byte-identical
+			// Guest contract keeps the unleased useful epoch, so maintenance
+			// canaries continue. Hysteresis clocks still restart above.
 			phase = old.Phase
 		}
 		return model.CapacityIntent{Namespace: policy.Metadata.Namespace, PolicyName: policy.Metadata.Name, PolicyID: policy.ID, PolicyChecksum: policy.Checksum, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension, Generation: generation, FencingToken: fence, Phase: phase, Decision: decision, Assessment: a, UpdatedAt: now}, "", nil
 	})
+}
+
+// guestStableEpochPolicy is the prior policy revision of a stable epoch that
+// ADR-0094 continuity admitted for the current policy, read before the
+// locking transaction. Manifest spec/checksum rows are immutable; the
+// transaction itself rechecks that the current policy is still active.
+type guestStableEpochPolicy struct {
+	id       string
+	checksum string
+}
+
+func (c guestStableEpochPolicy) admits(old model.CapacityIntent) bool {
+	return c.id != "" && old.PolicyID.String() == c.id && old.PolicyChecksum == c.checksum
+}
+
+func (s CapacityStore) guestStableEpochContinuity(ctx context.Context, policy model.Manifest) (guestStableEpochPolicy, error) {
+	var none guestStableEpochPolicy
+	p, err := parseCapacityPolicy(policy)
+	if err != nil {
+		return none, err
+	}
+	old, err := loadCapacityIntent(ctx, s.DB, policy.Metadata.Namespace, p, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		return none, nil
+	}
+	if err != nil {
+		return none, err
+	}
+	if !guestNotifyStableEpoch(old) || old.PolicyName != policy.Metadata.Name || old.PolicyID == policy.ID && old.PolicyChecksum == policy.Checksum {
+		return none, nil
+	}
+	err = guestPolicyContinuityTx(ctx, s.DB, policy, p, old.PolicyID.String(), old.PolicyChecksum)
+	if errors.Is(err, ErrCapacityConflict) {
+		return none, nil
+	}
+	if err != nil {
+		return none, err
+	}
+	return guestStableEpochPolicy{id: old.PolicyID.String(), checksum: old.PolicyChecksum}, nil
 }
 
 // This source-only phase API deliberately has no healthy/inflight/proof input.

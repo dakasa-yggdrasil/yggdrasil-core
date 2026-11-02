@@ -34,8 +34,13 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 	}
 	origin := s.guestNotifyOrigin
 	reconcile := origin != nil && origin.step.Use.Operation == capacity.CompleteOriginalGuestOperation && s.guestReconcile != nil && reflect.DeepEqual(origin.step, s.guestReconcile.step) && s.guestReconcileSourceTx(ctx, tx, policy, p) == nil
-	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || (!reconcile && origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
+	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || (!reconcile && origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
 		return stored, empty, ErrCapacityConflict
+	}
+	// ADR-0094: an installed member enrolled under a prior version of this
+	// policy with a byte-identical Guest contract stays canaried and managed.
+	if err = guestPolicyContinuityTx(ctx, tx, policy, p, stored.pre.PolicyID, stored.pre.PolicyChecksum); err != nil {
+		return stored, empty, err
 	}
 	if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
 		return stored, empty, err

@@ -50,7 +50,7 @@ func (s CapacityStore) verifyHistoricalUnknownReadTx(ctx context.Context, tx *sq
 	if err = tx.QueryRowContext(ctx, `SELECT c.executor_id,a.issuer_actual_source_commit,a.issued_wire_sha256,c.challenge_sha256 FROM public.capacity_guest_notify_canary_challenges c JOIN public.capacity_guest_authority_issues a ON a.issue_kind='canary_challenge' AND a.issue_id=c.id AND a.policy_id=c.policy_id AND a.workflow_id=c.workflow_id AND a.executor_id=c.executor_id WHERE c.id=$1`, id).Scan(&executor, &issuer, &issuedSHA, &challengeSHA); err != nil || executor != old.LeaseExecutorID || issuer != originalReadCoreSource || issuedSHA != challengeSHA {
 		return ErrCapacityConflict
 	}
-	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", id, issuer, stored.binding, stored.pre); err != nil {
+	if err = verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", id, issuer, stored.binding, stored.pre, challenge.PolicyID, challenge.PolicyChecksum); err != nil {
 		return ErrCapacityConflict
 	}
 	var sendSHA string

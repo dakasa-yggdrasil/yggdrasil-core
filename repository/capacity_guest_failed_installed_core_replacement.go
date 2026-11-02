@@ -123,7 +123,7 @@ func failedInstalledOriginalCanaryIssuerTx(ctx context.Context, tx *sql.Tx, p mo
 			c.WorkflowID != pre.WorkflowID || c.WorkflowChecksum != pre.WorkflowChecksum || c.Generation != uint64(pre.Generation) || c.Fence != uint64(pre.Fence) ||
 			c.ProfileManifestSHA256 != stored.binding.ProfileManifestSHA256 || c.Tuple != stored.witness.Tuple ||
 			capacity.ValidateGuestNotifyCanaryPreflight(c, receipt.Enrollment, c.IssuedAt) != nil ||
-			verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", c.ChallengeID, v.source, stored.binding, pre) != nil {
+			verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", c.ChallengeID, v.source, stored.binding, pre, c.PolicyID, c.PolicyChecksum) != nil {
 			return "", ErrCapacityConflict
 		}
 	}

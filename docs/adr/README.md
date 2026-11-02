@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**91 decisions.**
+**92 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -133,3 +133,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0091](0091-admit-a-same-build-replacement-after-an-external-cause-failed-installed-disposal.md) | Admit a same-build replacement after an external-cause failed-installed disposal, proven by a promoted peer Guest of the same build | Proposed | 2026-11-02 | yggdrasil-core / capacity failed-installed Guest disposal replacement gate and operator resolution |
 | [0092](0092-quiesce-a-v2-failed-installed-disposal-whose-guest-refused-the-retirement-from-a-native-off-read.md) | Quiesce a V2 failed-installed disposal whose Guest refused the retirement, from a native OFF read | Proposed | 2026-11-02 | yggdrasil-core / capacity failed-installed Guest disposal (`original_production_v2`) operator resolution |
 | [0093](0093-sign-steady-notify-canaries-with-a-guest-admissible-uuid-owner.md) | Sign steady Notify canaries with a Guest-admissible UUID owner, and spend the publication budget only on sendable publications | Proposed | 2026-11-02 | yggdrasil-core / original Guest Notify canary (stable-epoch maintenance owner, challenge validation, publication budget, nonce hold diagnostics) |
+| [0094](0094-keep-installed-guest-members-across-capacity-policy-versions-with-an-unchanged-guest-contract.md) | Keep installed Guest members across capacity_policy versions with an unchanged Guest contract | Proposed | 2026-11-02 | yggdrasil-core / original Guest reconcile installed member lookup, canary and retirement admission, stable-epoch carry-over; Core PostgreSQL pool default |

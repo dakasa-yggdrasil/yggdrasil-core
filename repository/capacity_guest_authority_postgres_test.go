@@ -65,6 +65,7 @@ func TestD12AuthorityLedgerPostgresRequiresClosedIdentity(t *testing.T) {
 	db, policy := d12AuthorityLocalFixture(t)
 	ctx := context.Background()
 	t.Run("historical_compatibility_map", func(t *testing.T) { testGuestAuthorityHistoricalMapPostgres(t, db, policy) })
+	t.Run("issue_policy_successor_version", func(t *testing.T) { testGuestAuthorityIssuePolicySuccessorPostgres(t, db, policy) })
 	t.Run("retirement_V2_drained_CAS", func(t *testing.T) { testGuestRetirementDrainedV2Postgres(t, db, policy) })
 	for _, name := range []string{"exact", "empty", "missing_issuer", "missing_schema", "unknown_key", "null_issuer"} {
 		t.Run(name, func(t *testing.T) {
@@ -169,7 +170,7 @@ func testGuestAuthorityHistoricalMapPostgres(t *testing.T, db *sql.DB, fixture m
 				case "wrong_policy_checksum":
 					pre.PolicyChecksum = strings.Repeat("c", 64)
 				}
-				err = verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actual, *p.GuestRetirementBinding, pre)
+				err = verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actual, *p.GuestRetirementBinding, pre, policyID, checksum)
 				accepted := name == "exact_historical" || name == "current_map_transaction_rollback" || name == "actual_prior_D13_same_current_map"
 				if (err == nil) != accepted {
 					t.Fatalf("historical issuer/map scope accepted=%v, error=%v", accepted, err)
@@ -388,5 +389,78 @@ func TestD12AuthorityLedgerInstalledMarkerClosedPayload(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ADR-0094: after a republish the retirement intent / canary challenge, and so
+// its authority issue row, is recorded under the CURRENT policy version B while
+// the member's preregistration stays under version A. With an actual issuer
+// build different from the binding's authority commit, the issuer proof must
+// find the row under B and accept only when B continues A's Guest contract.
+func testGuestAuthorityIssuePolicySuccessorPostgres(t *testing.T, db *sql.DB, fixture model.Manifest) {
+	t.Helper()
+	ctx := context.Background()
+	for _, provider := range []string{"aws", "hetzner"} {
+		for _, name := range []string{"issue_under_successor", "issue_looked_up_under_preregistration_policy", "successor_changed_contract", "preregistration_newer_than_issue", "successor_other_policy_name"} {
+			t.Run(provider+"/"+name, func(t *testing.T) {
+				raw, err := os.ReadFile(filepath.Join("..", "internal", "capacity", "testdata", "original-notify-"+provider+"-production-contract.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				read := func() model.CapacityPolicySpec {
+					var p model.CapacityPolicySpec
+					if capacity.DecodeNativeCapacity(json.RawMessage(raw), &p) != nil {
+						t.Fatal("original complete public contract fixture")
+					}
+					p.GuestRetirementBinding.CoreAuthoritySourceCommit = capacity.GuestD11ProtocolAuthority
+					return p
+				}
+				a, b := read(), read()
+				b.MinSamples = 60
+				if name == "successor_changed_contract" {
+					b.GuestNotifyCanaryBinding.MaximumPublicationsPerHour--
+				}
+				aWire, _ := json.Marshal(a)
+				bWire, _ := json.Marshal(b)
+				aID, bID, id, actual, executor := uuid.NewString(), uuid.NewString(), uuid.NewString(), strings.Repeat("a", 40), uuid.NewString()
+				aSum, bSum := capacity.BusinessCreationSHA256(aWire), capacity.BusinessCreationSHA256(bWire)
+				policyName, bName := "successor-"+id, "successor-"+id
+				if name == "successor_other_policy_name" {
+					bName = "other-" + id
+				}
+				aVersion, bVersion := 1, 2
+				if name == "preregistration_newer_than_issue" {
+					aVersion, bVersion = 2, 1
+				}
+				tx, err := db.BeginTx(ctx, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tx.Rollback()
+				insert := `INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,spec,checksum,active)VALUES($1,'v1','capacity_policy',$2,$3,$4,$5::jsonb,$6,$7)`
+				if _, err = tx.ExecContext(ctx, insert, aID, fixture.Metadata.Namespace, policyName, aVersion, string(aWire), aSum, false); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = tx.ExecContext(ctx, insert, bID, fixture.Metadata.Namespace, bName, bVersion, string(bWire), bSum, false); err != nil {
+					t.Fatal(err)
+				}
+				compatibility := capacity.GuestD12ProtocolCompatibilityMapSHA256
+				wireSHA := strings.Repeat("b", 64)
+				record := map[string]any{"schema": "guest_authority_issue_v1", "issue_kind": "retirement_intent", "issue_id": id, "issuer_actual_source_commit": actual, "protocol_authority_source_commit": capacity.GuestD11ProtocolAuthority, "compatibility_map_sha256": compatibility, "profile": b.GuestRetirementBinding.ProfileManifest.Profile, "policy_id": bID, "workflow_id": fixture.ID.String(), "executor_id": executor, "issued_wire_sha256": wireSHA}
+				recordWire, _ := json.Marshal(record)
+				if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_authority_issues(issue_kind,issue_id,issuer_actual_source_commit,protocol_authority_source_commit,compatibility_map_sha256,profile,policy_id,workflow_id,executor_id,issued_wire_sha256,original_wire,original_record)VALUES('retirement_intent',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`, id, actual, capacity.GuestD11ProtocolAuthority, compatibility, b.GuestRetirementBinding.ProfileManifest.Profile, bID, fixture.ID, executor, wireSHA, recordWire, string(recordWire)); err != nil {
+					t.Fatal(err)
+				}
+				pre := model.CapacityGuestOriginalProvisioningPreregistration{PolicyID: aID, PolicyChecksum: aSum, WorkflowID: fixture.ID.String()}
+				issueID, issueSum := bID, bSum
+				if name == "issue_looked_up_under_preregistration_policy" {
+					issueID, issueSum = aID, aSum
+				}
+				err = verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actual, *a.GuestRetirementBinding, pre, issueID, issueSum)
+				if accepted := name == "issue_under_successor"; (err == nil) != accepted {
+					t.Fatalf("successor issue policy accepted=%v, error=%v", accepted, err)
+				}
+			})
+		}
 	}
 }
