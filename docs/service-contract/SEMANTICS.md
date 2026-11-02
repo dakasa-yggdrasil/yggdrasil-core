@@ -606,3 +606,31 @@ minutes, keeps an exhausted observed return in the owning process for retry,
 and bounds the owner wait at the lease plus 30 seconds without inventing a
 return. The plan step may reach an already requested failed-installed disposal
 claim without Guest reporting coverage. See ADR-0090.
+
+## External-cause same-build replacement admission
+
+`POST /api/v1/ops/capacity/failed-installed-guest-disposals/external-cause-replacements`
+and `GET /api/v1/ops/capacity/failed-installed-guest-disposals/external-cause-replacements/{preregistrationId}`
+use the same authenticated god-mode operator gate and CSRF middleware as the
+other failed-installed disposal lanes. The closed body (at most 64 KiB) carries
+exactly `preregistration_id` (the disposed Guest), `peer_preregistration_id`
+and `cause_evidence`, opaque UTF-8 text of at most 8 KiB that Core stores
+verbatim with its SHA-256 and never treats as authority; reads return only its
+hash and size.
+
+Core admits only a terminal disposal without `replacement_mode` that has no
+admission yet and that the scope's current intent still names. The current
+policy binding of that dimension must equal the disposed Guest's blocked
+binding exactly and pass the compiled approval. The peer must be a different
+dimension's Guest of the same Guest source, with an accepted canary read whose
+challenge and return were recorded strictly after the disposed Guest's original
+failed run finished, and still a current member (non-tombstone slot, no
+retirement, no disposal) of a `promoted` intent. Migration 85 adds the
+immutable table `capacity_guest_failed_installed_external_cause_admissions`
+(one row per disposal) whose insert guard re-derives these facts under the
+scope lock, including the admitted binding digest (SHA-256 of the disposed
+Guest's stored `binding_wire`) and the single active policy revision of the
+disposal's scope with the recorded checksum. The replacement gate then also
+accepts, for that disposal only, the binding equal to that stored wire; every other disposal of the
+dimension and the compiled approval are still checked. No provider is read and
+no intent, fence, grant or slot moves. See ADR-0091.

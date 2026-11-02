@@ -553,7 +553,14 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 // Every original requested marker must have its own terminal V2/native-absence
 // chain before a replacement. Historical markers keep the original both-changed
 // barrier. A newly admitted Core-bound marker has an exact replacement build.
+// A historical marker with an ADR-0091 external-cause admission additionally
+// accepts exactly the unchanged admitted binding; every other marker of the
+// dimension is still checked on its own, and the compiled approval stays.
 func requireFailedInstalledReplacementTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec) error {
+	return requireFailedInstalledReplacementWithAuthorityTx(ctx, tx, policy, p, capacity.CurrentGuestCoreSource(), capacity.GuestBindingAuthorityCurrent)
+}
+
+func requireFailedInstalledReplacementWithAuthorityTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, currentCore string, authority guestBindingAuthority) error {
 	if p.GuestNotifyReconcileBinding == nil {
 		return nil
 	}
@@ -591,8 +598,17 @@ func requireFailedInstalledReplacementTx(ctx context.Context, tx *sql.Tx, policy
 		} else {
 			terminal++
 		}
-		if !failedInstalledReplacementPermitted(p.GuestRetirementBinding, r, capacity.CurrentGuestCoreSource()) ||
-			!capacity.GuestBindingAuthorityCurrent(p, *p.GuestRetirementBinding) {
+		permitted := failedInstalledReplacementPermitted(p.GuestRetirementBinding, r, currentCore)
+		if !permitted {
+			// Both the requested and the terminal row of one disposal share its
+			// id; an admission references the terminal row, so neither row of a
+			// non-terminal disposal can be admitted (and the count check below
+			// still refuses a requested row without its terminal).
+			if permitted, err = failedInstalledExternalCauseAdmittedTx(ctx, tx, r, p.GuestRetirementBinding); err != nil {
+				return err
+			}
+		}
+		if !permitted || p.GuestRetirementBinding == nil || authority == nil || !authority(p, *p.GuestRetirementBinding) {
 			return ErrCapacityConflict
 		}
 	}
