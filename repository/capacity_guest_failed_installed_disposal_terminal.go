@@ -241,8 +241,18 @@ func loadFailedInstalledQuiescentTx(ctx context.Context, tx *sql.Tx, preID, id, 
 		if i.PreregistrationID != preID || i.Tuple.Slot != 1 || i.PolicyID != policy.ID.String() || i.PolicyChecksum != policy.Checksum || i.Generation != uint64(current.Generation) || i.Fence != uint64(current.FencingToken) || i.LeaseOwner != r.ClaimedIntent.LeaseOwner {
 			return r, policy, p, ErrCapacityConflict
 		}
-		if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {
+		// ADR-0092: a quiescent row written by the V2 refused-retirement lane is
+		// validated by its own qualified lineage and the same refused evidence,
+		// never by the normal five-row/caller-200 proof. The native OFF read
+		// join below is unchanged for both.
+		refused, err := v2RefusedNativeOffQualifiedTx(ctx, tx, r, stored)
+		if err != nil {
 			return r, policy, p, err
+		}
+		if !refused {
+			if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {
+				return r, policy, p, err
+			}
 		}
 		var raw []byte
 		var consistent bool
