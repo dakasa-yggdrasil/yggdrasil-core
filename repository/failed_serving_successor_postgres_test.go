@@ -63,6 +63,31 @@ func TestFailedServingStableSurvivorBirthAndCurrentEpochPostgres(t *testing.T) {
 func TestFailedServingEligibilityAndCrossRealmAuthorityPostgres(t *testing.T) {
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
+			// Finish each state fixture (including its registry-mutex cleanup)
+			// before constructing the shared stable-epoch fixture below.
+			for _, state := range []string{"issued", "redeemed", "settled", "compensating"} {
+				t.Run("same_physical_profile_other_realm_"+state, func(t *testing.T) {
+					// Grant history is append-only. Each committed negative lives in
+					// its own disposable database; an uncommitted grant in another
+					// transaction would be invisible to the public Begin API.
+					f := newFailedServingFixture(t, provider)
+					ctx := failedServingContext(t)
+					request, before := f.request(t), f.rawIntent(t)
+					if _, err := f.store.BeginFailedServingGuestQuarantine(ctx, request, failedServingIssuerForTest()); err != nil {
+						t.Fatal("baseline without foreign-realm authority must be eligible", err)
+					}
+					id := uuid.New()
+					b := f.p.MutationBindings[0]
+					f.exec(t, `INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,'another-env','another-domain','another-dimension',1,$3,$4,$5,2,$6,'{}'::jsonb,clock_timestamp()-interval '1 hour')`, id, "other-realm-"+uuid.NewString(), b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, state)
+					if _, err := f.store.BeginFailedServingGuestQuarantine(ctx, request, failedServingIssuerForTest()); err == nil {
+						t.Fatal("expired unresolved same-native-profile authority escaped through another realm/slot")
+					}
+					var retainedState string
+					if err := f.db.QueryRowContext(ctx, `SELECT state FROM public.capacity_mutation_grants WHERE id=$1`, id).Scan(&retainedState); err != nil || retainedState != state || !reflect.DeepEqual(f.rawIntent(t), before) {
+						t.Fatal("refused admission changed the committed authority or intent", err)
+					}
+				})
+			}
 			f := newFailedServingFixture(t, provider)
 			ctx := failedServingContext(t)
 			baseline := f.intent
@@ -104,17 +129,6 @@ func TestFailedServingEligibilityAndCrossRealmAuthorityPostgres(t *testing.T) {
 						t.Fatal("unfinished current workflow admitted")
 					}
 					f.exec(t, `DELETE FROM public.workflow_runs WHERE id=$1`, id)
-				})
-			}
-			for _, state := range []string{"issued", "redeemed", "settled", "compensating"} {
-				t.Run("same_physical_profile_other_realm_"+state, func(t *testing.T) {
-					id := uuid.New()
-					b := f.p.MutationBindings[0]
-					f.exec(t, `INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,'another-env','another-domain','another-dimension',1,$3,$4,$5,2,$6,'{}'::jsonb,clock_timestamp()-interval '1 hour')`, id, "other-realm-"+uuid.NewString(), b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, state)
-					if _, err := f.store.BeginFailedServingGuestQuarantine(ctx, f.request(t), failedServingIssuerForTest()); err == nil {
-						t.Fatal("expired unresolved same-native-profile authority escaped through another realm/slot")
-					}
-					f.exec(t, `DELETE FROM public.capacity_mutation_grants WHERE id=$1`, id)
 				})
 			}
 			// Any original retirement lineage remains excluded. Expired time is
