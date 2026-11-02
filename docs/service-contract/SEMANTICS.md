@@ -543,3 +543,34 @@ provider VM/AUX absence, zero-use, ACK, lease, fencing and FIFO terminal chain.
 Migration 82 adds three optional all-or-none fields without retrofilling old
 rows. A fresh signed canary remains required, and the old failure's cause is not
 asserted. See Proposed ADR-0084.
+
+## Abandoned started capacity dispatch disposition
+
+`POST /api/v1/ops/capacity/abandoned-dispatch-dispositions` and
+`GET /api/v1/ops/capacity/abandoned-dispatch-dispositions/{jobId}` use the same
+authenticated god-mode operator gate, CSRF middleware and closed bounded body
+as the other disposition lanes. The body carries only compare-and-swap
+expectations: `job_id`, `expected_run_id`, `expected_envelope_sha256`,
+`expected_fencing_token`, `expected_lease_owner` and
+`expected_pending_wake_count`. Core derives the lease age (at least 15
+minutes), the running original run, the zero in-scope effect scan and the
+executor barrier (its own process start, hostname, PID and build source).
+
+Migration 83 adds the terminal job state `abandoned_disposed`, which keeps
+`returned_at`, `return_status` and `finalization_ack_at` NULL, and the immutable
+receipt `capacity_dispatch_abandoned_dispositions` with
+`historical_return='unknown'`. The original run is closed administratively as
+`failed` with the fixed error `abandoned_started_dispatch_disposed: historical
+outcome unknown` and `finished_at` equal to the disposal time; that is not the
+original return. Nothing is re-dispatched, no intent fence moves, no provider is
+read and no provider quiescence is asserted. Grant history becomes
+non-deletable. The next ordinary tick needs fresh current admission.
+
+The effect scan (`abandoned_started_dispatch_effect_scan_v2`) reads an
+enumerated set of Core ledgers for the scope, not every Core table, from 30
+seconds before the database `started_at` (`clock_skew_margin_seconds=30`). It
+also counts, with no time bound, any `original_notify_window` intent marker
+naming the job. Scope names outside printable ASCII, or containing `<`, `>` or
+`&`, are refused so that the Go and SQL scope-lock keys stay identical.
+`POST /api/v1/ops/workflows/{runId}/abort` now answers 409 for any run a
+capacity dispatch job references and when no row changed. See ADR-0089.

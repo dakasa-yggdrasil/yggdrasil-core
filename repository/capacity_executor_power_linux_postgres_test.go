@@ -42,11 +42,9 @@ func TestExecutorPowerRealPostgresLedger(t *testing.T) {
 	defer cancel()
 	ns := "power-sql-" + uuid.NewString()
 	t.Cleanup(func() {
-		_, e := db.Exec(`DELETE FROM public.capacity_mutation_grants WHERE namespace=$1`, ns)
-		if e != nil {
-			t.Error(e)
-		}
-		_, e = db.Exec(`DELETE FROM public.capacity_resource_slots WHERE namespace=$1`, ns)
+		// Migration83 forbids deleting grant history; the dedicated lab DB keeps
+		// this namespace's grants. Slots carry no such guard.
+		_, e := db.Exec(`DELETE FROM public.capacity_resource_slots WHERE namespace=$1`, ns)
 		if e != nil {
 			t.Error(e)
 		}

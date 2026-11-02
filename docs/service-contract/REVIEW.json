@@ -1,6 +1,14 @@
 {
   "accepted_at": "2026-10-25T17:55:53.066551+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
+  "abandoned_started_dispatch_disposition_review_20261102": {
+    "source_commit": "341f3fc545f5bff8b8922bebcc60a8c7f1fda233",
+    "source_inventory_sha256": "c7c5f54720148db91c1edfb5ebdb80d40ada2b0245c644f5f6baeb159dc5e78e",
+    "scope": "Migration83 adds the terminal capacity dispatch state abandoned_disposed (started -> abandoned_disposed only, returned_at/return/ACK stay NULL), the immutable receipt capacity_dispatch_abandoned_dispositions with historical_return unknown, an administrative run close (failed, fixed error, finished_at = disposal time) and a DELETE guard on capacity_mutation_grants. The receipt and its guard bind the zero effect scan abandoned_started_dispatch_effect_scan_v2 over an enumerated set of Core ledgers (including the job's own original_notify_window intent marker with no time bound) from started_at minus a fixed 30-second clock-skew margin, and refuse scope names whose Go and SQL scope-lock keys could differ. POST /api/v1/ops/workflows/{runId}/abort now answers 409 for runs referenced by capacity_dispatch_jobs and when no row changed. New god-mode, CSRF-gated routes POST /api/v1/ops/capacity/abandoned-dispatch-dispositions and GET /api/v1/ops/capacity/abandoned-dispatch-dispositions/{jobId} with a closed six-field CAS body. No event, queue, egress, provider call, re-dispatch or intent fence change (ADR-0089).",
+    "independent_review": "A three-lens adversarial review (safety/invariants, state-handling completeness, migration and CI correctness) of the implementing change found one blocker, three major and six minor defects; all were fixed before commit (fixture schema target, effect-scan coverage including the job's notify-window marker and executor activity, refusal-test snapshots, ops abort exclusion for dispatch runs). A read-only production run of the scan for job 54136edb returned zero on every counter.",
+    "validation": "Static checks only locally (gofmt, go build, go vet, git diff --check, inventory --verify). Postgres and HTTP tests are wired into the disposition Source workflow and require exact integrated CI.",
+    "production_or_native_qualification": false
+  },
   "disposed_grant_predicate_review_20261102": {
     "source_commit": "dd91b52dd20908ea4658ebd5b7ce5703680059ba",
     "source_inventory_sha256": "3a58896f779446841a982c1ad65e7cfa5c2c40e738ee26c43852c57934373740",

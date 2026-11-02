@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**86 decisions.**
+**87 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -128,3 +128,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0086](0086-compute-tartaro-effective-actions-with-one-predicate-god-mode-and-wildcard-expansion.md) | Compute Tartaro effective actions with one predicate, a god-mode verdict and wildcard expansion | Accepted | 2026-10-29 | yggdrasil-core / Tartaro effective actions (console and directory machine variants) |
 | [0087](0087-terminate-every-session-when-a-collaborator-can-no-longer-sign-in.md) | Terminate every session when a collaborator can no longer sign in | Accepted | 2026-10-29 | yggdrasil-core / collaborator sessions, SSO session reuse, OIDC token issuance and collaborator status writers |
 | [0088](0088-remove-the-body-asserted-third-party-identity-exchange.md) | Remove the body-asserted third-party identity exchange | Accepted | 2026-10-29 | yggdrasil-core / third-party authentication (`/api/v1/auth/third-party/*`) |
+| [0089](0089-dispose-an-abandoned-started-capacity-dispatch-without-fabricating-its-return.md) | Dispose an abandoned started capacity dispatch without fabricating its return | Accepted | 2026-11-02 | yggdrasil-core / capacity dispatch (`capacity_dispatch_prestart_v1`) operator resolution |
