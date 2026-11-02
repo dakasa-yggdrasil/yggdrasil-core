@@ -85,14 +85,14 @@ func (m *SecretMaterializer) reconcileSecretList(ctx context.Context, target Kub
 		existing, err := target.Client.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
 		if k8serrors.IsNotFound(err) {
 			if mErr := m.createSecret(ctx, target, secret, ns, name); mErr != nil {
-				result.Errors++
+				result.recordError(stageCreate, mErr)
 			} else {
 				result.Created++
 			}
 			continue
 		}
 		if err != nil {
-			result.Errors++
+			result.recordError(stageGet, err)
 			continue
 		}
 
@@ -104,7 +104,7 @@ func (m *SecretMaterializer) reconcileSecretList(ctx context.Context, target Kub
 		}
 
 		if mErr := m.updateSecret(ctx, target, secret, existing); mErr != nil {
-			result.Errors++
+			result.recordError(stageUpdate, mErr)
 		} else {
 			result.Updated++
 		}
