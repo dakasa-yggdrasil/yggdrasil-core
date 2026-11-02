@@ -634,3 +634,33 @@ disposal's scope with the recorded checksum. The replacement gate then also
 accepts, for that disposal only, the binding equal to that stored wire; every other disposal of the
 dimension and the compiled approval are still checked. No provider is read and
 no intent, fence, grant or slot moves. See ADR-0091.
+
+## V2 refused-retirement native OFF quiescence
+
+`POST /api/v1/ops/capacity/failed-installed-guest-disposals/v2-refused-native-off`
+and `GET /api/v1/ops/capacity/failed-installed-guest-disposals/v2-refused-native-off/{preregistrationId}`
+use the same authenticated god-mode operator gate and CSRF middleware as the
+other failed-installed disposal lanes. The closed body (at most 4 KiB) carries
+exactly three distinct canonical UUIDs: `preregistration_id`, `admission_id`
+(the disposal) and `retirement_request_id`.
+
+Core admits only a claimed `original_production_v2` disposal whose current
+intent still equals its claimed intent with an expired lease and no 79/80
+recovery, whose claim run failed at `retire-original-guest` after a plan that
+retired exactly that epoch, and whose single expired V2 retirement intent has
+exactly the nonce and an authentic `possible_start` journal (no writer
+quiescence, no poweroff), one closed caller return with a 4xx/5xx status and no
+retained body, no poweroff authority read, no delete binding and no 79/80/81
+row. It then commits one native read challenge bound to that refused caller
+return and makes one bounded (at most 5 seconds) read-only observe GET of the
+intent's tuple through the existing V2 supplier transport; the return is always
+retained. Only a timely exact OFF (or stopped) plan qualifies, and in one
+transaction Core writes the immutable lineage, the disposal `quiescent` row and
+the cleanup-pending intent with the lease cleared. At most five reads per
+admission. Migration 86 adds the immutable table
+`capacity_guest_v2_refused_nativeoff_quiescences` whose insert guards re-derive
+that evidence, and a disposal guard that lets an admitted disposal reach
+`quiescent` or `terminal` only through its own qualified lineage. The terminal
+lane accepts that lineage in place of the Guest five-row/caller-200 proof and
+keeps the native OFF read join. No Guest request, poweroff or DELETE is ever
+sent, and no writer quiescence is claimed. See ADR-0092.

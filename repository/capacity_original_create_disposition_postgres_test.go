@@ -43,11 +43,11 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 		t.Fatal("isolated DB identity", name, local, err)
 	}
 	// This fixture now exercises the full production schema, including immutable
-	// originals and schema85. Root/CI must migrate the disposable Unix DB first.
+	// originals and schema86. Root/CI must migrate the disposable Unix DB first.
 	// It never creates a reduced schema or relaxes a production constraint.
 	var schema int64
-	if err = db.QueryRow(`SELECT coalesce(max(version_id),0) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema < 85 {
-		t.Fatal("fully migrated isolated schema85 database required", schema, err)
+	if err = db.QueryRow(`SELECT coalesce(max(version_id),0) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema < 86 {
+		t.Fatal("fully migrated isolated schema86 database required", schema, err)
 	}
 
 	return db
