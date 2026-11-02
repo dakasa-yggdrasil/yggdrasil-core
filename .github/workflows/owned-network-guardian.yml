@@ -1,0 +1,38 @@
+name: Owned Network Guardian
+
+on:
+  pull_request:
+    paths:
+      - 'ops/network-guardian/**'
+      - '.github/workflows/owned-network-guardian.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/network-guardian/**'
+      - '.github/workflows/owned-network-guardian.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-source-and-historical-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact operational package
+        working-directory: ops/network-guardian/g6pair-boot-v2
+        run: sha256sum --check SHA256SUMS
+      - name: Replay original PUBLIC proof and refuse invalid authority
+        run: python3 -I -B -m unittest discover -s ops/network-guardian/tests -p 'test_*.py' -v
+      - name: Retain reviewed exact source, units and fixture
+        uses: actions/upload-artifact@v4
+        with:
+          name: owned-network-guardian-${{ github.sha }}
+          path: ops/network-guardian/
+          if-no-files-found: error
+          retention-days: 30
