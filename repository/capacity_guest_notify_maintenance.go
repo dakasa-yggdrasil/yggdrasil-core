@@ -84,8 +84,9 @@ func (s CapacityStore) guestNotifyMaintenanceTransaction(ctx context.Context, po
 	if !guestNotifyStableEpoch(current) || current.PolicyID != policy.ID || current.PolicyChecksum != policy.Checksum || !discover && (current.Generation != generation || current.FencingToken != fence || owner != s.guestNotifyMaintenanceOwner()) {
 		return ErrCapacityConflict
 	}
+	// A disposed original stays 'settled' but holds no provider authority.
 	var unresolved int
-	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT(grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
+	if unresolved, err = countUnresolvedCapacityGrantsTx(ctx, tx, policy.Metadata.Namespace, p); err != nil {
 		return err
 	}
 	if unresolved != 0 {

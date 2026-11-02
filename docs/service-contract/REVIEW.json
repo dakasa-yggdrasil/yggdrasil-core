@@ -1,6 +1,14 @@
 {
   "accepted_at": "2026-10-25T17:55:53.066551+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
+  "disposed_grant_predicate_review_20261102": {
+    "source_commit": "dd91b52dd20908ea4658ebd5b7ce5703680059ba",
+    "source_inventory_sha256": "3a58896f779446841a982c1ad65e7cfa5c2c40e738ee26c43852c57934373740",
+    "scope": "Guest notify maintenance excludes grants carrying any of the four disposition pointers from its unresolved-authority count; existing correct call sites share one predicate with identical SQL. No route, event, queue or egress change.",
+    "independent_review": "An adversarial multi-agent review of the diff found no defect in the change; its one confirmed finding (Postgres regression not run by CI) was fixed by adding the test to the disposition Source workflow roster.",
+    "validation": "Static checks only locally (gofmt, go build, go vet). Exact integrated CI remains required.",
+    "production_or_native_qualification": false
+  },
   "sanitized_full_reconcile_diagnostics_review_20261101": {
     "source_commit": "04d2fadfc4da4fd7c8b44c0b23c442594a4347f7",
     "source_inventory_sha256": "275d30099f6578f4c0b491849b4c22a122ced649a9fa669cbc3afe1f522b7ff7",
