@@ -76,7 +76,12 @@ def main():
   target=x.out/(name+'.json')
   # Keep the complete growing Source map within the published doctor's 128KiB bound.
   options={'separators':(',',':')} if name=='sources' else {'indent':2}
-  raw=json.dumps({'schema':'core_source_interface_census_v1','scope':'source facts; no deployed endpoint or runtime authority claimed','records':data},sort_keys=True,**options)+'\n'
+  envelope={'schema':'core_source_interface_census_v1','records':data}
+  # The owning closed census ABI does not validate its optional descriptive
+  # scope. Omit only that metadata from sources so every complete source fact
+  # remains inside the same bounded read; other evidence envelopes keep it.
+  if name!='sources':envelope['scope']='source facts; no deployed endpoint or runtime authority claimed'
+  raw=json.dumps(envelope,sort_keys=True,**options)+'\n'
   if x.verify:
    if not target.is_file() or target.read_text()!=raw:failures.append(target.name)
   else:target.write_text(raw)
