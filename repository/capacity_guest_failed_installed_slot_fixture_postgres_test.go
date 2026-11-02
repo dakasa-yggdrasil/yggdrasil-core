@@ -165,7 +165,11 @@ func (f *failedTailFixture) canary(t *testing.T, usage string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	store := f.store.WithOriginalGuestNotifyCanary(f.steps[4], capacity.CurrentGuestCoreSource())
+	step := f.steps[3]
+	if usage == "after_retirement_floor" {
+		step = f.steps[4]
+	}
+	store := f.store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
 	core := ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32)))
 	e := f.receipt[0].Enrollment
 	probe := func(c model.CapacityGuestNotifyCanaryChallenge, pub *capacity.GuestNotifyPublicationReply) *capacity.GuestNotifyPublicationReply {
@@ -262,7 +266,7 @@ func (f *failedTailFixture) retire(t *testing.T, refused bool) model.CapacityGue
 		t.Fatal(err)
 	}
 	defer owner.Close()
-	store := f.store.WithOriginalGuestNotifyCanary(f.steps[4], capacity.CurrentGuestCoreSource()).WithOriginalGuestRetirement(f.steps[4], capacity.CurrentGuestCoreSource())
+	store := f.store.WithOriginalGuestNotifyCanary(f.steps[3], capacity.CurrentGuestCoreSource()).WithOriginalGuestRetirement(f.steps[3], capacity.CurrentGuestCoreSource())
 	core := ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32)))
 	preflight, err := store.IssueGuestRetirementV2(owner, f.policy, 2, 3, f.intent.LeaseOwner, f.pre[1].PreregistrationID, capacity.BusinessCreationSHA256([]byte(uuid.NewString())), core)
 	if err != nil {
@@ -350,6 +354,17 @@ func (f *failedTailFixture) offReturn(t *testing.T, challenge GuestNativePowerof
 	plan := capacity.RecoveryFixtureNativeOffPlan(t, f.p, f.pre[1], f.receipt[1].Enrollment.Statement.Tuple)
 	started := time.Now().UTC()
 	return GuestNativePoweroffReturnV2{Schema: v2NativePoweroffReturnSchema, Challenge: challenge, Status: "observed", Plan: &plan, StartedAtCore: started, OriginalReturnedAtCore: started.Add(time.Millisecond)}
+}
+
+func (f *failedTailFixture) retirementFloor(usage, ack string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	tx, err := f.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	return f.store.guestNotifyRetirementFloorTx(ctx, tx, f.policy, f.p, f.intent, 2, time.Now().UTC(), usage, ack)
 }
 
 func (f *failedTailFixture) completeAbsence(t *testing.T) {
@@ -442,8 +457,14 @@ func TestRecoveryFixtureFailedExpansionTailV2TerminalPostgres(t *testing.T) {
 					t.Fatal("real refused tail native OFF qualification", disposal.Stage, err)
 				}
 			} else {
+				if err := f.retirementFloor("after_retirement_floor", request.Intent.RequestID); err == nil {
+					t.Fatal("pre-withdrawal useful read replaced the required new post-ACK floor canary")
+				}
 				time.Sleep(5 * time.Second)
 				f.canary(t, "after_retirement_floor")
+				if err := f.retirementFloor("after_retirement_floor", request.Intent.RequestID); err != nil {
+					t.Fatal("fresh original floor read after the caller ACK was refused", err)
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				challenge, err := f.store.PrepareGuestNativePoweroffReadV2(ctx, request.Intent.RequestID)
@@ -453,7 +474,7 @@ func TestRecoveryFixtureFailedExpansionTailV2TerminalPostgres(t *testing.T) {
 				if err = f.store.RecordGuestNativePoweroffV2(ctx, f.offReturn(t, challenge)); err != nil {
 					t.Fatal("real tail native OFF return", err)
 				}
-				store := f.store.WithOriginalGuestNotifyCanary(f.steps[5], capacity.CurrentGuestCoreSource())
+				store := f.store.WithOriginalGuestNotifyCanary(f.steps[4], capacity.CurrentGuestCoreSource())
 				disposal, handled, err := store.PrepareFailedInstalledGuestNativeCleanup(ctx, f.policy, 2, 3, f.intent.LeaseOwner, request.Intent.RequestID)
 				if err != nil || !handled || disposal.Stage != "quiescent" {
 					t.Fatal("real V2 tail cleanup transition", disposal.Stage, handled, err)
