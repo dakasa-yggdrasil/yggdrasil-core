@@ -24,6 +24,8 @@ PYTHON_REQUIRED = {
         'test_closed_owner_and_receipt_pass',
         'test_live_owner_refuses_even_with_receipt',
         'test_missing_receipt_or_remaining_pg_preserves_evidence',
+        'test_proc_disappearance_still_requires_receipt_and_no_remaining_pg',
+        'test_proc_uncertainty_and_live_or_invalid_identity_preserve_evidence',
     )
 } | {
     'capacity_fixture_source_equivalence_test.CompilerInputEquivalence.' + name for name in (
