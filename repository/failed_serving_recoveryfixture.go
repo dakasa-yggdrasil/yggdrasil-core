@@ -113,8 +113,8 @@ func failedServingDB(t *testing.T) *sql.DB {
 		t.Fatal("production migrations", err)
 	}
 	version, err := goose.GetDBVersion(db)
-	if err != nil || version != 88 {
-		t.Fatal("exact schema88 fixture required", version, err)
+	if err != nil || version != 89 {
+		t.Fatal("exact schema89 fixture required", version, err)
 	}
 	return db
 }
