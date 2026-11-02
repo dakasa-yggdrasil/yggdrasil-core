@@ -194,7 +194,7 @@ def main():
         migrator = owner / "migrate.go"
         migrator.write_text('''package main
 import("context";"database/sql";"os";"time";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
-func mustMajor()int{if os.Getenv("CAPACITY_TEST_PG_MAJOR")=="16"{return 16};if os.Getenv("CAPACITY_TEST_PG_MAJOR")=="17"{return 17};panic("bad PostgreSQL major")};func main(){ctx,cancel:=context.WithTimeout(context.Background(),90*time.Second);defer cancel();db,e:=sql.Open("postgres",os.Getenv("CAPACITY_TEST_OWNED_DSN"));if e!=nil{panic(e)};defer db.Close();var name,dir,id,listen string;var sock bool;var version int;e=db.QueryRowContext(ctx,"SELECT current_database(),current_setting('data_directory'),system_identifier::text,current_setting('listen_addresses'),inet_server_addr() IS NULL,current_setting('server_version_num')::int FROM pg_control_system()").Scan(&name,&dir,&id,&listen,&sock,&version);if e!=nil||name!="ci_capacity_original_grant"||dir!=os.Getenv("CAPACITY_TEST_PGDATA")||id!=os.Getenv("CAPACITY_TEST_PG_SYSTEM_ID")||listen!=""||!sock||version/10000!=mustMajor(){panic("unowned PostgreSQL refused")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpToContext(ctx,db,"db/migrations",84);e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=84{panic("schema 84 required")}}
+func mustMajor()int{if os.Getenv("CAPACITY_TEST_PG_MAJOR")=="16"{return 16};if os.Getenv("CAPACITY_TEST_PG_MAJOR")=="17"{return 17};panic("bad PostgreSQL major")};func main(){ctx,cancel:=context.WithTimeout(context.Background(),90*time.Second);defer cancel();db,e:=sql.Open("postgres",os.Getenv("CAPACITY_TEST_OWNED_DSN"));if e!=nil{panic(e)};defer db.Close();var name,dir,id,listen string;var sock bool;var version int;e=db.QueryRowContext(ctx,"SELECT current_database(),current_setting('data_directory'),system_identifier::text,current_setting('listen_addresses'),inet_server_addr() IS NULL,current_setting('server_version_num')::int FROM pg_control_system()").Scan(&name,&dir,&id,&listen,&sock,&version);if e!=nil||name!="ci_capacity_original_grant"||dir!=os.Getenv("CAPACITY_TEST_PGDATA")||id!=os.Getenv("CAPACITY_TEST_PG_SYSTEM_ID")||listen!=""||!sock||version/10000!=mustMajor(){panic("unowned PostgreSQL refused")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpToContext(ctx,db,"db/migrations",85);e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=85{panic("schema 85 required")}}
 ''')
         run([GO, "run", "-mod=readonly", migrator], env=env, timeout=120)
         if args.run_grants or args.run_repository:
@@ -210,7 +210,7 @@ func mustMajor()int{if os.Getenv("CAPACITY_TEST_PG_MAJOR")=="16"{return 16};if o
                 raise RuntimeError("unexpected synthetic result scope")
             print(json.dumps(result, sort_keys=True))
         else:
-            print(json.dumps({"schema": f"owned_pg{major}_fixture_preflight_v1", "schema_version": 84, "postgres_major": int(major), "unix_socket_only": True, "owned_identity_verified": True, "grant_test_run": False, "production_used": False}))
+            print(json.dumps({"schema": f"owned_pg{major}_fixture_preflight_v1", "schema_version": 85, "postgres_major": int(major), "unix_socket_only": True, "owned_identity_verified": True, "grant_test_run": False, "production_used": False}))
     finally:
         # Finish bounded shutdown even if another ordinary termination signal
         # arrives. Never remove the cluster on uncertain shutdown.

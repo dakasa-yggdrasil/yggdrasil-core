@@ -15,7 +15,7 @@ import (
 )
 
 // ADR-0090 finalization durability against the explicitly isolated Unix-socket
-// database of the disposition Source workflow (schema84). Each test owns a
+// database of the disposition Source workflow (schema85). Each test owns a
 // fresh realm; no provider, Guest or workflow execution is exercised.
 
 // Shorter per-attempt bounds so CI can hold a row lock past several attempts.
