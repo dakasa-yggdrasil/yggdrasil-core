@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -94,7 +95,7 @@ func unknownMaintenancePGFixture(t *testing.T, db *sql.DB) unknownMaintenanceFix
 		t.Fatal(err)
 	}
 	out := unknownMaintenanceFixture{f, ret, pre}
-	out.abandonedDispatchFixture.jobSnapshot, out.abandonedDispatchFixture.runSnapshot = out.snapshot(t)
+	out.jobSnapshot, out.runSnapshot = out.snapshot(t)
 	return out
 }
 
@@ -371,6 +372,24 @@ func TestUnknownMaintenanceDispatchPostgresCASBarrierAndConcurrency(t *testing.T
 
 func TestUnknownMaintenanceDispatchMigration87Guards(t *testing.T) {
 	db := originalDispositionPG(t)
+	// Reapply the exact forward DDL inside a rolled-back CI-only transaction.
+	// Existing guards/links stay in force; no schema version row is fabricated.
+	raw, err := os.ReadFile("../db/migrations/00087_unknown_maintenance_dispatch_disposition.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = replay.Exec(strings.SplitN(string(raw), "-- +goose Down", 2)[0]); err != nil {
+		replay.Rollback()
+		t.Fatal("migration87 Up is not idempotent", err)
+	}
+	if err = replay.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+
 	f := unknownMaintenancePGFixture(t, db)
 	r := f.requestNow(t)
 	// Direct terminal creation and a lone receipt cannot cross the boundary.
