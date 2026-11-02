@@ -125,7 +125,8 @@ func v2RefusedPGFixture(t *testing.T, db *sql.DB, o v2RefusedOptions) v2RefusedF
 	must(`INSERT INTO public.capacity_vm_retirement_intents(id,preregistration_id,attempt_id,nonce_sha256,intent_sha256,intent_record,original_deadline,created_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8)`, f.retirement, f.pre, f.attempt, externalCauseHex(64), f.intentSHA, string(intentRecord), f.deadline, issued)
 
 	// Journal: production_clock_nonce_v2 then an unquiesced possible_start.
-	nonce := []byte(`{"schema":"original_core_guest_retirement_nonce_return_v2","storage_only":true}`)
+	// return_sha256 is globally unique, so each fixture's nonce bytes name its own retirement.
+	nonce := []byte(`{"schema":"original_core_guest_retirement_nonce_return_v2","storage_only":true,"request_id":"` + f.retirement + `"}`)
 	f.returns[0] = capacity.BusinessCreationSHA256(nonce)
 	must(`INSERT INTO public.capacity_vm_retirement_original_returns(intent_id,sequence,kind,previous_sha256,return_sha256,original_return_record,recorded_at,original_wire) VALUES($1,1,'production_clock_nonce_v2','',$2,$3::jsonb,$4,$5)`, f.retirement, f.returns[0], string(nonce), issued.Add(time.Second), nonce)
 	observed := model.CapacityGuestRetirementObservationV2{Schema: capacity.GuestRetirementV2ObservationSchema, JournalComplete: true, HoldReasons: []string{}, ObservedAt: issued.Add(3 * time.Second), Record: model.CapacityGuestRetirementRecordV2{Schema: capacity.GuestRetirementV2RecordSchema, Sequence: 1, State: "possible_start", WriterQuiescenceEvidence: o.writerQuiescent, WriterQuiescenceScope: "enrolled_roster_only"}}
