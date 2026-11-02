@@ -64,9 +64,15 @@ func ValidateGuestNotifyCanaryBinding(p model.CapacityPolicySpec) error {
 func GuestNotifyCanaryPublication(c model.CapacityGuestNotifyCanaryChallenge) bool {
 	return c.Schema == GuestNotifyCanaryPublicationChallengeSchema && c.Purpose == GuestNotifyCanaryPublicationPurpose && c.RecordChallengeID == c.ChallengeID
 }
+
+// Every identifier the Guest checks with bootstrap.BootIdentity (a 36-byte
+// UUID) is checked here as a canonical, non-nil UUID too: challenge, record,
+// preregistration, policy, workflow and lease owner (ADR-0093). A challenge
+// the Guest would refuse is then refused at issue time, before its publish
+// row is committed, instead of failing at the Guest nonce GET.
 func validateGuestNotifyCanaryChallengeBase(c model.CapacityGuestNotifyCanaryChallenge, e model.CapacityGuestRetirementEnrollment, now time.Time) error {
 	publish := GuestNotifyCanaryPublication(c)
-	if (!publish && (c.Schema != GuestNotifyCanaryChallengeSchema || c.Purpose != GuestNotifyCanaryReadPurpose)) || !guestUUID(c.ChallengeID) || !guestUUID(c.RecordChallengeID) || !ValidDigest(c.NonceSHA256) || !GuestNotifyCanaryUsage(c.UsageClass) || c.BindingName != e.Statement.BindingName || c.Slot != e.Statement.Tuple.Slot || !guestUUID(c.PreregistrationID) || !ValidDigest(c.PreregistrationNonceSHA256) || !ValidDigest(c.OriginalRegistrationSHA256) || !ValidDigest(c.OriginalCreateWitnessSHA256) || c.EnrollmentSHA256 != GuestRetirementSHA(e) || !ValidDigest(c.ProfileManifestSHA256) || c.Tuple != e.Statement.Tuple || (c.Tuple.Provider != "aws" && c.Tuple.Provider != "hetzner") || !guestUUID(c.PolicyID) || !ValidDigest(c.PolicyChecksum) || !guestUUID(c.WorkflowID) || !ValidDigest(c.WorkflowChecksum) || c.Generation == 0 || c.Fence == 0 || c.LeaseOwner == "" || c.CoreSourceCommit != e.Statement.CoreAuthoritySourceCommit || !businessSource.MatchString(c.CoreSourceCommit) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || !c.OriginalDeadline.After(c.IssuedAt) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second {
+	if (!publish && (c.Schema != GuestNotifyCanaryChallengeSchema || c.Purpose != GuestNotifyCanaryReadPurpose)) || !guestUUID(c.ChallengeID) || !guestUUID(c.RecordChallengeID) || !ValidDigest(c.NonceSHA256) || !GuestNotifyCanaryUsage(c.UsageClass) || c.BindingName != e.Statement.BindingName || c.Slot != e.Statement.Tuple.Slot || !guestUUID(c.PreregistrationID) || !ValidDigest(c.PreregistrationNonceSHA256) || !ValidDigest(c.OriginalRegistrationSHA256) || !ValidDigest(c.OriginalCreateWitnessSHA256) || c.EnrollmentSHA256 != GuestRetirementSHA(e) || !ValidDigest(c.ProfileManifestSHA256) || c.Tuple != e.Statement.Tuple || (c.Tuple.Provider != "aws" && c.Tuple.Provider != "hetzner") || !guestUUID(c.PolicyID) || !ValidDigest(c.PolicyChecksum) || !guestUUID(c.WorkflowID) || !ValidDigest(c.WorkflowChecksum) || c.Generation == 0 || c.Fence == 0 || !guestUUID(c.LeaseOwner) || c.CoreSourceCommit != e.Statement.CoreAuthoritySourceCommit || !businessSource.MatchString(c.CoreSourceCommit) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || !c.OriginalDeadline.After(c.IssuedAt) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second {
 		return fmt.Errorf("scoped one-use original Guest Notify challenge required")
 	}
 	sig := c.Signature

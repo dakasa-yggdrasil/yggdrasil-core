@@ -59,6 +59,9 @@ completion joins the full original V2 quiescence chain, actual caller HTTP
 acknowledgement, exact confirmed destroy grant, native absence and fresh
 surviving useful floor. A stable unchanged epoch refreshes useful membership
 through the existing maintenance challenge/send ledger, with no provider grant.
+Its canary lease owner is a domain-separated UUIDv5 of the executor that the
+Guest admits; failed nonce attempts do not spend the hourly publication budget
+but back off exponentially to a 15-minute gap (ADR-0093).
 Pending originals permit observation/HOLD only, including after lease expiry.
 
 The five-second Notify canary budget covers the original publication/read chain,

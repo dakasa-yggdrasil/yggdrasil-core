@@ -92,7 +92,7 @@ jobs:
           python3 - <<'PY'
           import json
           rows=[json.loads(line) for line in open('original-notify-canary-source.jsonl') if line.strip()]
-          roots={'TestGuestProductionRegistryExactContract','TestGuestProductionRegistryPinsIndependentHetznerSource','TestGuestProductionRegistryDigestDoesNotMutateOrApprove','TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology','TestGuestProductionRegistryNotifyRootCgroupIsExact','TestGuestNotifyOriginalNonceScopeAndClockDomains','TestGuestNotifyDeclarativeQueueIdentity','TestGuestOriginalHTTPLateCloseCannotRenewBudget','TestGuestOriginalHTTPOnlyClosedCanaryRoutes','TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope','TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire','TestGuestNotifyCausalPairCannotRenewPublication','TestGuestNotifyFreshnessKeepsClockDomainsAndOriginalBudget','TestGuestNotifyExpiredPreflightCannotMintOrSign','TestGuestSlotBootstrapSelectsOnlyExactPrivateTemplate','TestGuestSlotBootstrapPinsFullMemberAndSourceContract','TestGuestSlotBootstrapKeepsLegacyWireAndPayload'}
+          roots={'TestGuestProductionRegistryExactContract','TestGuestProductionRegistryPinsIndependentHetznerSource','TestGuestProductionRegistryDigestDoesNotMutateOrApprove','TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology','TestGuestProductionRegistryNotifyRootCgroupIsExact','TestGuestNotifyOriginalNonceScopeAndClockDomains','TestGuestNotifyDeclarativeQueueIdentity','TestGuestOriginalHTTPLateCloseCannotRenewBudget','TestGuestOriginalHTTPOnlyClosedCanaryRoutes','TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope','TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire','TestGuestNotifyCausalPairCannotRenewPublication','TestGuestNotifyFreshnessKeepsClockDomainsAndOriginalBudget','TestGuestNotifyExpiredPreflightCannotMintOrSign','TestGuestNotifyCanaryChallengeRequiresGuestUUIDOwner','TestGuestNotifyNonceDiagnosticKeepsOnlyClosedStatusAndCode','TestGuestSlotBootstrapSelectsOnlyExactPrivateTemplate','TestGuestSlotBootstrapPinsFullMemberAndSourceContract','TestGuestSlotBootstrapKeepsLegacyWireAndPayload'}
           passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
           if roots-passed or any(r.get('Action')=='skip' for r in rows):raise SystemExit('Original Notify canary source roots missing or skipped')
           print(f'All {len(roots)} original Notify canary source roots passed; no PostgreSQL/broker/native pass claimed')
@@ -140,6 +140,21 @@ jobs:
           assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
           assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
           PY
+      - name: Steady canary owner is a Guest-admissible UUID and nonce holds stay closed (ADR-0093)
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity ./repository ./controllers/message -run '^(TestGuestNotifyMaintenanceOwnerIsDomainSeparatedUUID|TestGuestNotifyCanaryChallengeRequiresGuestUUIDOwner|TestGuestNotifyNonceDiagnosticKeepsOnlyClosedStatusAndCode|TestGuestNotifyNonceHoldCarriesOnlyClosedDiagnostic|TestGuestNotifyClosedDiagnosticNeverExposesPrivateCause|TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope)$' | tee original-notify-owner-source.jsonl
+          python3 - <<'PY'
+          import collections,json
+          rows=[json.loads(line) for line in open('original-notify-owner-source.jsonl') if line.strip()]
+          roots={'TestGuestNotifyMaintenanceOwnerIsDomainSeparatedUUID','TestGuestNotifyCanaryChallengeRequiresGuestUUIDOwner','TestGuestNotifyNonceDiagnosticKeepsOnlyClosedStatusAndCode','TestGuestNotifyNonceHoldCarriesOnlyClosedDiagnostic','TestGuestNotifyClosedDiagnosticNeverExposesPrivateCause','TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope'}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          passed=collections.Counter(r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test') and '/' not in r['Test'])
+          assert set(passed)==roots and all(v==1 for v in passed.values()), f'ADR-0093 roots: {sorted(roots-set(passed))}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==3
+          print(f'All {len(roots)} ADR-0093 owner/validation/diagnostic source roots passed')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -150,6 +165,7 @@ jobs:
             original-provider-naming-source.jsonl
             original-notify-canary-source.jsonl
             original-notify-maintenance-source.jsonl
+            original-notify-owner-source.jsonl
             original-retirement-v2-source.jsonl
             original-provisioning-v2-source.jsonl
   original-http-transport:
@@ -273,6 +289,25 @@ jobs:
           assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
           assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
           print('Actual migrated PostgreSQL FK/immutable schema negatives; no positive enrollment or capacity qualification')
+          PY
+      - name: Publication budget counts only sent or in-flight publications in PostgreSQL (ADR-0093)
+        env:
+          REQUIRE_GUEST_NOTIFY_CANARY_DB_TEST: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=120s -json ./repository -run '^TestGuestNotifyPublicationBudgetPostgres$' | tee "$RUNNER_TEMP/original-notify-budget-pg.jsonl"
+          python3 - <<'PY'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-notify-budget-pg.jsonl').read_text().splitlines() if line.strip()]
+          case='TestGuestNotifyPublicationBudgetPostgres'
+          subs={case+'/'+n for n in ('legacy_owner_orphans_do_not_spend_the_hour','sent_publications_spend_the_hour','sent_publications_older_than_one_hour_are_free','in_flight_unsent_publication_still_counts','minimum_interval_spaces_every_attempt','refused_attempts_back_off_exponentially','a_live_publication_resets_the_refused_streak','a_refusing_guest_costs_a_bounded_number_of_attempts_per_hour','every_attempt_stays_under_the_fixed_ceiling','reads_and_other_members_are_ignored')}
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert subs<=passed, f'missing budget cases: {sorted(subs-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Actual migrated PostgreSQL publication budget query only; FK parents skipped in a rolled-back transaction, no canary authority')
           PY
       - name: Actual production V2 absent-original PostgreSQL authority refusals
         env:
