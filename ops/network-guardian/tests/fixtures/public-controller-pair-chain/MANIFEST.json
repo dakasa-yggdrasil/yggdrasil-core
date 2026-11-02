@@ -1,0 +1,52 @@
+{
+  "schema": "exact_public_controller_pair_chain_ci_fixture_v1",
+  "purpose": "Exact historical/public configuration data only. No native execution, current network health or mutation authority.",
+  "source_readonly_ssm": "85fdf1dd-d5b4-417f-b8b6-ff6b2041f9ee",
+  "files": {
+    "controller.r42-cold-unknown184014.production.json": {
+      "bytes": 4330,
+      "sha256": "0f4631320e7319cf4da3c37586bbee2ae977eb338831fb0e991ed735cb9113c3",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink.production.json": {
+      "bytes": 4037,
+      "sha256": "460b0fd49191248fecffa7009636a82391815a64fc23db11e039b7ee9f5d928a",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink-f5pair.production.json": {
+      "bytes": 4013,
+      "sha256": "ed797c474d71a064f4e9dfe99a4c2ddc6530b49ae712eb78033b75967c2b6621",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink-g2pair.production.json": {
+      "bytes": 4156,
+      "sha256": "9168e9c661a40a9f1761e0938deb7fda44a4ce3a0a3e852f8cab281bdb71e48b",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink-g3pair.production.json": {
+      "bytes": 4219,
+      "sha256": "7b452ccca85f722e59c3748dc127f0cccda3e54bbcecc9f74c9b4c6cbc589068",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink-g4pair.production.json": {
+      "bytes": 4186,
+      "sha256": "431a42ee4caba690a6a479e1ca19d842835dc23d8acccb3bc63a05bee7ea663b",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink-g5pair.production.json": {
+      "bytes": 4164,
+      "sha256": "1b38e2cb050b9c98fc6edf07d867edaed1758aba1bdb496ad4566f13e5fb6a45",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink-g6pair.production.json": {
+      "bytes": 4291,
+      "sha256": "8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e",
+      "closed_public_8_keys": true
+    },
+    "controller.r13-netlink-g7pair.production.json": {
+      "bytes": 5175,
+      "sha256": "d68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf",
+      "closed_public_8_keys": true
+    }
+  }
+}

@@ -24,7 +24,10 @@ def live(identity, boot_id):
         raise RuntimeError("invalid owner identity")
     try:
         value = Path("/proc", str(identity["pid"]), "stat").read_text()
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
+        # A proc fd whose process exits between open and read can return
+        # ESRCH as well as ENOENT. Neither certifies cleanup: verify still
+        # requires the original receipt and absence of owned PG directories.
         return False
     close = value.rfind(")")
     tail = value[close + 2:].split()

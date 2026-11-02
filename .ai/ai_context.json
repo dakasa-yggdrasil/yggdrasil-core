@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-30T17:46:30-03:00",
+  "generated_at": "2026-11-02T19:04:55-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1398,
-    ".json": 178,
-    ".py": 16,
-    ".sql": 82,
+    ".go": 1461,
+    ".json": 193,
+    ".py": 42,
+    ".sql": 88,
     ".yaml": 11,
-    ".yml": 34
+    ".yml": 36
   },
   "provenance": {
-    "commit": "0dd8f8e889cfb23336cd97973a45b61166b8bf78",
+    "commit": "bfe645857c666333e44ccf2d6c0b6038007ac1e0",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "10b7f9e6ddc27824af4b5e265446784a2609fd9b5c40a24592ed7e0efe859a82"
+        "sha256": "a22da2fea21af1756f39cf462e7b578fdac678e649a9255bec88ca0e59d470de"
       },
       {
         "path": "AGENTS.md",
@@ -28,7 +28,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "e210806d3d36acb96ffca4f3a3ea118f4137b9117a83606e9b19727608ac68d3"
+        "sha256": "241cdf4fe3be0c043f12e2c00cbf24074c081f035e7540c766c934058ded8416"
       },
       {
         "path": "README.md",
@@ -65,33 +65,33 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 319,
-      "kb": 3958
+      "files": 349,
+      "kb": 4516
     },
     {
       "path": "controllers/httpapi",
-      "files": 236,
-      "kb": 2396
+      "files": 249,
+      "kb": 2515
     },
     {
       "path": "controllers/message",
-      "files": 180,
-      "kb": 1572
+      "files": 189,
+      "kb": 1615
     },
     {
       "path": "internal/capacity",
-      "files": 117,
-      "kb": 1330
-    },
-    {
-      "path": "model",
-      "files": 85,
-      "kb": 476
+      "files": 124,
+      "kb": 1367
     },
     {
       "path": "db/migrations",
-      "files": 81,
-      "kb": 482
+      "files": 87,
+      "kb": 615
+    },
+    {
+      "path": "model",
+      "files": 86,
+      "kb": 477
     },
     {
       "path": "manifest",
@@ -101,7 +101,7 @@
     {
       "path": "addons",
       "files": 50,
-      "kb": 288
+      "kb": 289
     },
     {
       "path": "internal/capacitynativeqemu",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 81,
+    "migrations": 87,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 18,
-    "k8s_manifests": 18
+    "config_files": 35,
+    "k8s_manifests": 22
   }
 }
