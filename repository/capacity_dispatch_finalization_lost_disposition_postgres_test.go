@@ -15,7 +15,7 @@ import (
 // (AWS original_notify_aws_vm_members): the executor returned, the plan step
 // wrote one hold assessment and the refresh step one slot observation, then
 // the finalization write was lost. Explicitly isolated Unix-socket database
-// (schema86); no provider, Guest or workflow execution is exercised.
+// (schema87); no provider, Guest or workflow execution is exercised.
 
 const finalizationLostEvidence = "2026-11-02 08:04:17.377 UTC [177447] ERROR:  canceling statement due to user request\n" +
 	"2026-11-02 08:04:17.377 UTC [177447] STATEMENT:  UPDATE public.workflow_runs SET status=$2,result=$3::jsonb,error=NULLIF($4,''),finished_at=$5,updated_at=clock_timestamp() WHERE id=$1 AND (status='running' OR ($7 AND status='cancelled')) AND started_at=$6"
@@ -320,8 +320,8 @@ func TestFinalizationLostDispatchMigration84Guards(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var schema int
-	if err := db.QueryRow(`SELECT max(version_id) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema != 86 {
-		t.Fatal("owning schema86 required", schema, err)
+	if err := db.QueryRow(`SELECT max(version_id) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema != 87 {
+		t.Fatal("owning schema87 required", schema, err)
 	}
 	f := abandonedDispatchPGFixture(t, db, abandonedDispatchFixtureOptions{})
 	f.tolerated(t, finalizationLostEffects{})
