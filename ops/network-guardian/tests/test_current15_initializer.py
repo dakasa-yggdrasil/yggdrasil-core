@@ -245,7 +245,10 @@ class InitializerTests(unittest.TestCase):
                             return
                     raise AssertionError('Actual fixture must retain the original adoption')
                 replay.replace_journal('original_prefix_ref', corrupt)
-                with self.assertRaises(RuntimeError):
+                guard = ('SOURCE_COMPILED_47_READ_ADOPTION_AST'
+                         if field == 'compiled_native_ast_sha256'
+                         else 'HONEST_READ_ADOPTION_ZERO_MUTATIONS_ZERO_COVERAGE')
+                with self.assertRaisesRegex(coverage.Held, '^' + guard + '$'):
                     replay.extract()
 
     def test_unchanged_native_kernel_rejects_foreign_handles_AST_and_echo_alias(self):
