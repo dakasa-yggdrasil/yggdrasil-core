@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"os"
 	"path/filepath"
@@ -20,6 +21,10 @@ var recoveryFixturePolicyRaw []byte
 
 // Test-only declared operands; never real provider, runtime or readiness proof.
 func recoveryClockFixture(t *testing.T, offset time.Duration) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestProductionProvisioningClockV2, ed25519.PrivateKey, ed25519.PrivateKey) {
+	return recoveryClockFixtureSlot(t, offset, 1)
+}
+
+func recoveryClockFixtureSlot(t *testing.T, offset time.Duration, selectedSlot int) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestProductionProvisioningClockV2, ed25519.PrivateKey, ed25519.PrivateKey) {
 	t.Helper()
 	var p model.CapacityPolicySpec
 	if DecodeNativeCapacity(json.RawMessage(recoveryFixturePolicyRaw), &p) != nil || p.GuestRetirementBinding == nil {
@@ -38,8 +43,11 @@ func recoveryClockFixture(t *testing.T, offset time.Duration) (model.CapacityPol
 	// The test recipients and approval map are deliberately synthetic.
 	p.GuestNotifyCanaryBinding.RecipientSHA256 = BusinessRecipientSHA256([]string{"77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888"})
 	mutation := p.MutationBindings[0]
-	member := b.Members[0]
-	spec := mutation.Slots[0].DesiredSpec
+	if selectedSlot < 1 || selectedSlot > len(b.Members) {
+		t.Fatal("fixture slot")
+	}
+	member := b.Members[selectedSlot-1]
+	spec := mutation.Slots[selectedSlot-1].DesiredSpec
 	uid := "10000000-0000-4000-8000-000000000001"
 	policyID := "10000000-0000-4000-8000-000000000002"
 	workflowID := "10000000-0000-4000-8000-000000000003"
@@ -47,13 +55,26 @@ func recoveryClockFixture(t *testing.T, offset time.Duration) (model.CapacityPol
 	attemptID := "10000000-0000-4000-8000-000000000005"
 	leaseOwner := "10000000-0000-4000-8000-000000000006"
 	executorID := "10000000-0000-4000-8000-000000000007"
+	if selectedSlot != 1 {
+		uid = fmt.Sprintf("10000000-0000-4000-8000-%012d", selectedSlot*100+1)
+		grantID = fmt.Sprintf("10000000-0000-4000-8000-%012d", selectedSlot*100+4)
+		attemptID = fmt.Sprintf("10000000-0000-4000-8000-%012d", selectedSlot*100+5)
+	}
 	now := time.Now().UTC().Add(-60 * time.Second).Truncate(time.Microsecond)
 	pre := model.CapacityGuestOriginalProvisioningPreregistration{Schema: GuestPreregistrationSchema, PreregistrationID: uid, BindingName: member.Name, OriginalCreateGrantID: grantID, OriginalCreateRequestSHA256: strings.Repeat("a", 64), NonceSHA256: strings.Repeat("b", 64), ProfileManifestSHA256: b.ProfileManifestSHA256, PolicyID: policyID, PolicyChecksum: strings.Repeat("c", 64), WorkflowID: workflowID, WorkflowChecksum: strings.Repeat("d", 64), OriginalWorkflowStepID: b.ProfileManifest.OriginalProvisioningStepID, OriginalWorkflowStepTimeoutSeconds: 420, OriginalWorkflowContextDeadline: now.Add(420 * time.Second), CoreSourceCommit: b.CoreAuthoritySourceCommit, Generation: 1, Fence: 1, LeaseOwner: leaseOwner, ExecutorID: executorID, Slot: 1, ReservedAt: now, OriginalDeadline: now.Add(420 * time.Second)}
+	pre.Slot, pre.Generation, pre.Fence = selectedSlot, int64(selectedSlot), int64(selectedSlot)
+	if selectedSlot != 1 {
+		pre.NonceSHA256 = BusinessCreationSHA256([]byte("fixture-preregistration:" + uid))
+	}
 	tuple := model.CapacityGuestNativeTuple{Provider: "hetzner", InstanceID: mutation.IntegrationInstanceID, InstanceChecksum: mutation.IntegrationChecksum, TypeID: mutation.IntegrationTypeID, TypeChecksum: mutation.IntegrationTypeChecksum, ScopeChecksum: mutation.ScopeChecksum, ProfileChecksum: spec.ProfileChecksum, Profile: mutation.ProfileName, Slot: 1, ResourceID: "123", CreatedAt: now.Format(time.RFC3339Nano)}
+	tuple.Slot = selectedSlot
+	tuple.ResourceID = fmt.Sprint(122 + selectedSlot)
 	w := model.CapacityGuestOriginalCreateWitness{Schema: GuestCreateWitnessSchema, BindingName: pre.BindingName, PreregistrationID: uid, PreregistrationNonceSHA256: pre.NonceSHA256, OriginalCreateGrantID: grantID, OriginalCreateAttemptID: attemptID, OriginalCreateRequestSHA256: pre.OriginalCreateRequestSHA256, OriginalCreateSettlementSHA256: strings.Repeat("e", 64), ProfileManifestSHA256: b.ProfileManifestSHA256, BootstrapSHA256: GuestProfileBootstrapSHA(b.ProfileManifest, 1), CoreSourceCommit: b.CoreAuthoritySourceCommit, OriginalCreateReturnedAt: now.Add(time.Second), ObservedAt: now.Add(2 * time.Second), OriginalDeadline: pre.OriginalDeadline, Tuple: tuple}
-	w.ProviderNativeIdentity = &model.CapacityGuestProviderNativeIdentity{Schema: GuestProviderNativeIdentitySchema, Provider: "hetzner", ResourceID: "123", ResourceCreatedAt: tuple.CreatedAt, Region: "us-east", Location: "ash", TypeID: "22", ImageID: "33", Hostname: "unit-guest", ObservedAt: w.ObservedAt, AdapterSourceCommit: mutation.OriginalProviderSourceCommit}
+	w.BootstrapSHA256 = GuestProfileBootstrapSHA(b.ProfileManifest, selectedSlot)
+	w.ProviderNativeIdentity = &model.CapacityGuestProviderNativeIdentity{Schema: GuestProviderNativeIdentitySchema, Provider: "hetzner", ResourceID: tuple.ResourceID, ResourceCreatedAt: tuple.CreatedAt, Region: "us-east", Location: "ash", TypeID: "22", ImageID: "33", Hostname: "unit-guest", ObservedAt: w.ObservedAt, AdapterSourceCommit: mutation.OriginalProviderSourceCommit}
 	w.Signature, _ = GuestLifecycleSignature(core, w)
 	a := model.CapacityGuestOriginalProfileAuthorityV2{Schema: GuestProfileAuthorityV2Schema, BindingName: pre.BindingName, Slot: 1, GuestBootID: uid, RequestNonceSHA256: strings.Repeat("f", 64), Profile: b.ProfileManifest, Preregistration: pre, CreateWitness: w, RemainingNS: int64(417 * time.Second), ObservedAt: now.Add(3 * time.Second)}
+	a.Slot = selectedSlot
 	a.Signature, _ = GuestLifecycleSignature(core, a)
 	guest := now.Add(offset)
 	c := model.CapacityGuestProductionProvisioningClockV2{Schema: GuestProvisioningClockV2Schema, Authority: a, BootstrapOwnerPID: 123, BootstrapOwnerStartTicks: 456, AcquisitionStartedMonotonicNS: int64(100 * time.Second), AcquisitionExpiresMonotonicNS: int64(520 * time.Second), OriginalReadStartedAt: guest, OriginalReadReturnedAt: guest.Add(time.Second), OriginalReadStartedMonotonicNS: int64(101 * time.Second), OriginalReadReturnedMonotonicNS: int64(102 * time.Second), AcceptedExpiresMonotonicNS: int64(518 * time.Second), OriginalResultReturnedMonotonicNS: int64(110 * time.Second)}
@@ -64,8 +85,12 @@ func recoveryClockFixture(t *testing.T, offset time.Duration) (model.CapacityPol
 }
 
 func recoveryRegistrationFixture(t *testing.T, offset time.Duration) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestOriginalProvisioningRegistration, ed25519.PrivateKey) {
+	return recoveryRegistrationFixtureSlot(t, offset, 1)
+}
+
+func recoveryRegistrationFixtureSlot(t *testing.T, offset time.Duration, slot int) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestOriginalProvisioningRegistration, ed25519.PrivateKey) {
 	t.Helper()
-	p, b, c, core, producer := recoveryClockFixture(t, offset)
+	p, b, c, core, producer := recoveryClockFixtureSlot(t, offset, slot)
 	w, profile := c.Authority.CreateWitness, b.ProfileManifest
 	guest := c.OriginalReadReturnedAt
 	at := func(n int) time.Time { return guest.Add(time.Duration(n) * time.Second) }
@@ -81,6 +106,7 @@ func recoveryRegistrationFixture(t *testing.T, offset time.Duration) (model.Capa
 	census := model.CapacityGuestRetirementProtectedCensus{Schema: "guest_retirement_protected_cgroup_v1", Scope: "fixed_protected_cgroup_v2", SourceCommit: runtime.SourceCommit, Processes: []model.CapacityGuestRetirementNativeProcess{{PID: writer.Lifetime.PID, StartTicks: writer.Lifetime.StartTicks}}, RawCensusSHA256: strings.Repeat("4", 64), ObservedAt: at(7)}
 	op := model.CapacityGuestRetirementOperationReturn{StartedAt: at(6), PID: 400, StartTicks: 401, WaitReturnedAt: at(8), BodyJoined: true, CloseReturned: true, Outcome: "returned"}
 	r := model.CapacityGuestOriginalProvisioningResult{Schema: GuestProvisioningV2Schema, BindingName: b.Members[0].Name, SourceClass: b.EvidenceClass, ProvisionerSourceCommit: b.ProvisionerSourceCommit, OriginalCreateGrantID: w.OriginalCreateGrantID, OriginalCreateAttemptID: w.OriginalCreateAttemptID, OriginalCreateSettlementSHA256: w.OriginalCreateSettlementSHA256, PreregistrationID: w.PreregistrationID, PreregistrationNonceSHA256: w.PreregistrationNonceSHA256, Tuple: w.Tuple, ProfileManifestSHA256: b.ProfileManifestSHA256, Actor: actor, Runtime: runtime, Writers: []model.CapacityGuestRetirementWriter{writer}, ProtectedCensus: census, PlacementOperation: op, BootstrapOriginalJournal: j, BootstrapOriginalObservation: o, OriginalReturnedAt: at(9), ProductionClock: &c}
+	r.BindingName = b.Members[slot-1].Name
 	// Allocate the anonymous wire entry, then explicitly populate every fact.
 	if json.Unmarshal([]byte(`[{}]`), &r.WriterPlacements) != nil {
 		t.Fatal("fixture allocation")
@@ -102,8 +128,12 @@ func recoveryRegistrationFixture(t *testing.T, offset time.Duration) (model.Capa
 }
 
 func recoveryInstalledFixture(t *testing.T) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestOriginalProvisioningRegistration, model.CapacityGuestOriginalProvisioningReceipt, model.CapacityGuestOriginalInstallationConfirmation) {
+	return recoveryInstalledFixtureSlot(t, 1)
+}
+
+func recoveryInstalledFixtureSlot(t *testing.T, slot int) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestOriginalProvisioningRegistration, model.CapacityGuestOriginalProvisioningReceipt, model.CapacityGuestOriginalInstallationConfirmation) {
 	t.Helper()
-	p, b, reg, producer := recoveryRegistrationFixture(t, 0)
+	p, b, reg, producer := recoveryRegistrationFixtureSlot(t, 0, slot)
 	clock := reg.Result.ProductionClock
 	pre := clock.Authority.Preregistration
 	issuer := ed25519.NewKeyFromSeed([]byte(strings.Repeat("i", 32)))
@@ -114,10 +144,10 @@ func recoveryInstalledFixture(t *testing.T) (model.CapacityPolicySpec, model.Cap
 	ownerClock := &model.CapacityGuestProductionInstallationClockV2{Schema: GuestInstallationClockV2Schema, OriginalProvisioningClockSHA256: GuestRetirementSHA(*clock), OriginalReceiptReadStartedMonotonicNS: int64(111 * time.Second), OriginalReceiptReadReturnedMonotonicNS: int64(112 * time.Second), OriginalReceiptReadReturnedAt: guest, InstalledMonotonicNS: int64(113 * time.Second), AdmittedMonotonicNS: int64(114 * time.Second), OriginalConfirmationPreparedMonotonicNS: int64(115 * time.Second)}
 	confirmation := model.CapacityGuestOriginalInstallationConfirmation{Schema: GuestInstallationV2Schema, PreregistrationID: pre.PreregistrationID, OriginalReceiptSHA256: GuestRetirementSHA(receipt), EnrollmentSHA256: GuestRetirementSHA(enrollment), InstalledAt: guest.Add(time.Second), AdmittedAt: guest.Add(2 * time.Second), ProductionClock: ownerClock}
 	confirmation.Signature, _ = GuestLifecycleSignature(producer, confirmation)
-	if err := GuestRetirementEnrollment(p, b, b.Members[0], enrollment, receipt.RecordedAt); err != nil {
+	if err := GuestRetirementEnrollment(p, b, b.Members[slot-1], enrollment, receipt.RecordedAt); err != nil {
 		t.Fatal("fixture enrollment", err)
 	}
-	if err := GuestOriginalRegistration(p, b, b.Members[0], clock.Authority.CreateWitness, reg, receipt.RecordedAt); err != nil {
+	if err := GuestOriginalRegistration(p, b, b.Members[slot-1], clock.Authority.CreateWitness, reg, receipt.RecordedAt); err != nil {
 		t.Fatal("fixture registration", err)
 	}
 	if err := GuestOriginalInstallationV2(pre, receipt, confirmation, b.ProvisionerPublicKey, *clock, receipt.RecordedAt.Add(time.Second)); err != nil {
@@ -128,10 +158,16 @@ func recoveryInstalledFixture(t *testing.T) (model.CapacityPolicySpec, model.Cap
 
 // RecoveryFixtureInstalled is available only in the explicit test build.
 func RecoveryFixtureInstalled(t *testing.T) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestOriginalProvisioningRegistration, model.CapacityGuestOriginalProvisioningReceipt, model.CapacityGuestOriginalInstallationConfirmation) {
+	return RecoveryFixtureInstalledSlot(t, 1)
+}
+
+// RecoveryFixtureInstalledSlot signs a distinct declared test member under the
+// same test-only policy and workflow. It never enters the production registry.
+func RecoveryFixtureInstalledSlot(t *testing.T, slot int) (model.CapacityPolicySpec, model.CapacityGuestRetirementBinding, model.CapacityGuestOriginalProvisioningRegistration, model.CapacityGuestOriginalProvisioningReceipt, model.CapacityGuestOriginalInstallationConfirmation) {
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		t.Fatal("recovery fixture is test-only")
 	}
-	return recoveryInstalledFixture(t)
+	return recoveryInstalledFixtureSlot(t, slot)
 }
 
 // RecoveryFixtureInventory is a declared source-test operand, not a provider
