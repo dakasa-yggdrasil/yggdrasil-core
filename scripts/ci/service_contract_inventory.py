@@ -24,8 +24,10 @@ def generate(root):
   rel=p.relative_to(root).as_posix()
   if not source_path(rel):continue
   if p.is_symlink():raise ValueError('source symlink refused: '+rel)
-  text=p.read_text();ts=tokens(text);sha=hashlib.sha256(p.read_bytes()).hexdigest();tag=re.search(r'^//go:build (.*)$',text,re.M);tag=tag.group(1) if tag else 'default'
-  sources[rel]={'sha256':sha,'build_constraint':tag,'bytes':len(p.read_bytes())}
+  text=p.read_text();ts=tokens(text);sha=hashlib.sha256(p.read_bytes()).hexdigest();build_match=re.search(r'^//go:build (.*)$',text,re.M)
+  tag=build_match.group(1) if build_match else 'default'
+  source_tag=build_match.group(1) if build_match else ''
+  sources[rel]={'sha256':sha,'build_constraint':source_tag,'bytes':len(p.read_bytes())}
   functions=[];declarations=set()
   for k,(word,pos,_) in enumerate(ts):
    if word!='func' or k+1>=len(ts):continue

@@ -58,19 +58,19 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleRequest",
-      "line": 1182
+      "line": 1186
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "mfaEnrollmentExemptPath",
-      "line": 1232
+      "line": 1236
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleAPI",
-      "line": 1259
+      "line": 1263
     },
     {
       "build_constraint": "default",
