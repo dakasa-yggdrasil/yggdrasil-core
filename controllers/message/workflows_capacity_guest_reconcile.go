@@ -367,7 +367,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 				if e != nil || captureOriginalGuestReconcileDeadline(ctx, deadline) != nil {
 					return fail(errOriginalGuestStep)
 				}
-				plan.Mode, plan.Reason, plan.Slot, plan.PreregistrationID = "retire", "failed_installed_disposal", 1, preID
+				plan.Mode, plan.Reason, plan.Slot, plan.PreregistrationID = "retire", "failed_installed_disposal", repository.FailedInstalledDisposalClaimSlot(disposed), preID
 				plan.Generation, plan.FencingToken, plan.LeaseOwner = disposed.Generation, disposed.FencingToken, disposed.LeaseOwner
 			} else if eligible {
 				deadline, e := store.OriginalGuestReconcileLeaseDeadline(ctx, policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner)

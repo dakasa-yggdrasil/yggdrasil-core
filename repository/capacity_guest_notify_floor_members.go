@@ -27,7 +27,9 @@ func (s CapacityStore) GuestNotifyFloorMembers(ctx context.Context, policy model
 			if err != nil || !valid {
 				return ErrCapacityConflict
 			}
-			return nil
+			if excludedSlot == 1 {
+				return nil
+			}
 		}
 		r := *p.GuestRetirementBinding
 		b, err := capacity.VMObservationBinding(p, r.MutationBindingName)

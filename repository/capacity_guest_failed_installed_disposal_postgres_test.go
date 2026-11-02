@@ -18,6 +18,9 @@ import (
 func testFailedInstalledDisposalPostgres(t *testing.T) {
 	db, policy := d12AuthorityLocalFixture(t)
 	ctx := context.Background()
+	t.Run("later_slot_surviving_prefix_accounting", func(t *testing.T) {
+		testFailedInstalledLaterSlotAccountingPostgres(t, db, policy.Metadata.Namespace)
+	})
 	t.Run("append_only_closed_ledger_and_preserved_originals", func(t *testing.T) {
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {

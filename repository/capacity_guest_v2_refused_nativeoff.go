@@ -181,7 +181,7 @@ func v2RefusedClaimRunSteps(steps []model.WorkflowRunStepResult, current model.C
 	if err != nil || json.Unmarshal(raw, &out) != nil {
 		return false
 	}
-	return out.Mode == "retire" && out.Reason == "failed_installed_disposal" && out.Slot == 1 && out.Generation == current.Generation && out.FencingToken == current.FencingToken && out.LeaseOwner != "" && out.LeaseOwner == current.LeaseOwner && out.PreregistrationID == preID
+	return out.Mode == "retire" && out.Reason == "failed_installed_disposal" && out.Slot == FailedInstalledDisposalClaimSlot(current) && out.Generation == current.Generation && out.FencingToken == current.FencingToken && out.LeaseOwner != "" && out.LeaseOwner == current.LeaseOwner && out.PreregistrationID == preID
 }
 
 // v2RefusedEvidenceTx re-derives the append-only refused retirement history.
@@ -328,7 +328,7 @@ func v2RefusedNativeOffContextTx(ctx context.Context, tx *sql.Tx, preID, admissi
 		return o, ErrCapacityConflict
 	}
 	i := o.stored.Request.Intent
-	if i.Schema != capacity.GuestRetirementV2IntentSchema || i.RequestID != retID || i.PreregistrationID != preID || i.Slot != 1 || i.Tuple.Slot != 1 || i.PolicyID != o.policy.ID.String() || i.PolicyChecksum != o.policy.Checksum || i.Generation != uint64(o.current.Generation) || i.Fence != uint64(o.current.FencingToken) || i.LeaseOwner != o.current.LeaseOwner || o.stored.ExecutorID != o.current.LeaseExecutorID || failedInstalledRetirementMode(o.spec, o.stored.Binding) != failedInstalledV2Mode {
+	if i.Schema != capacity.GuestRetirementV2IntentSchema || i.RequestID != retID || i.PreregistrationID != preID || i.Slot != failedInstalledDisposalSlot(r) || i.Tuple.Slot != i.Slot || i.PolicyID != o.policy.ID.String() || i.PolicyChecksum != o.policy.Checksum || i.Generation != uint64(o.current.Generation) || i.Fence != uint64(o.current.FencingToken) || i.LeaseOwner != o.current.LeaseOwner || o.stored.ExecutorID != o.current.LeaseExecutorID || failedInstalledRetirementMode(o.spec, o.stored.Binding) != failedInstalledV2Mode {
 		return o, ErrCapacityConflict
 	}
 	workflowID, e := uuid.Parse(i.WorkflowID)
@@ -336,7 +336,7 @@ func v2RefusedNativeOffContextTx(ctx context.Context, tx *sql.Tx, preID, admissi
 		return o, ErrCapacityConflict
 	}
 	scoped := CapacityStore{WorkflowID: workflowID, ExecutorID: o.stored.ExecutorID}
-	valid, err := scoped.failedInstalledDisposalActiveTx(ctx, tx, o.policy, o.spec, o.current, 1, now)
+	valid, err := scoped.failedInstalledDisposalActiveTx(ctx, tx, o.policy, o.spec, o.current, i.Slot, now)
 	if err != nil || !valid {
 		return o, ErrCapacityConflict
 	}

@@ -15,6 +15,7 @@ import (
 )
 
 func testFailedInstalledDisposalBoundaries(t *testing.T) {
+	t.Run("later_slot_boundaries", testFailedInstalledLaterSlotBoundaries)
 	t.Run("legacy548_exact_original_contract_only", testFailedInstalledLegacyV1Scope)
 	t.Run("scheduled_terminal_handoff", testFailedInstalledDisposalTerminalHandoff)
 	now := time.Now().UTC()

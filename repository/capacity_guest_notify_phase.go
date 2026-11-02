@@ -42,7 +42,9 @@ func (s CapacityStore) guestNotifyRetirementFloorTx(ctx context.Context, tx *sql
 		if err != nil || !valid {
 			return ErrCapacityConflict
 		}
-		return nil
+		if slot == 1 {
+			return nil
+		}
 	}
 	if p.GuestNotifyCanaryBinding == nil {
 		return nil

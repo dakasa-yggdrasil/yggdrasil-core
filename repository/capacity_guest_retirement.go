@@ -248,7 +248,9 @@ func (s CapacityStore) guestRetirementFloorTx(ctx context.Context, tx *sql.Tx, n
 		if err != nil || !valid {
 			return ErrCapacityConflict
 		}
-		return nil
+		if slot == 1 {
+			return nil
+		}
 	}
 	if slot <= b.ProtectedSlots || !capacityIntentReduction(current) || current.Decision.Units < p.Floor {
 		return ErrCapacityConflict
