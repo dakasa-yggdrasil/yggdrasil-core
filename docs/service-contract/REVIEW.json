@@ -1,6 +1,32 @@
 {
   "accepted_at": "2026-10-25T17:55:53.066551+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
+  "failed_expansion_tail_disposal_review_20261102": {
+    "source_commit": "45e2c6f5fb80529485e771907073f27065151a35",
+    "production_implementation_commit": "5b013857f4fc845bda52b3ccc0bf8e76e5a2d3ac",
+    "source_inventory_sha256": "8b880682d07bb4ce03b64eed206a655210e78c9c50ae5595389da1a9811a0b0a",
+    "scope": "ADR-0095: extend failed-installed disposal only to the single new V2 tail of a one-member expansion N-1 to N. Derive the target from the immutable original intent and preregistration; require the exact enrolled surviving prefix with accepted history. Claim baseline N, drain target N-1, same generation and one new fence. Later slots retain ordinary physical and fresh useful retirement floors; only survivors receive before/after-retirement-floor canaries under the reauthenticated claim. The failed tail receives no new canary. Carry the same admitted target through workflow plan, normal and refused V2 retirement, native OFF and exact-lifetime absence; tombstone only the target and retain N-1 physical members in an unpromoted disposed generation. Guest548 and all replacement gates remain unchanged. No new schema, HTTP body or provider endpoint.",
+    "independent_review": "Independent peer /root/release_audit reviewed the production disposal/admission/claim/active/terminal files, tail helpers, floor discovery, useful and physical floor guards, canary exception, V2 refused joins, workflow plan and ADR-0095. It then read the integrated tests and checked GitHub run 41467639394. No functional finding remains open. This is source acceptance by an independent agent, not human signoff or provider/Guest production qualification.",
+    "validation": {
+      "local": "No tests executed locally. Formatting, diff review and deterministic source inventory generation only.",
+      "ci_head": "45e2c6f5fb80529485e771907073f27065151a35",
+      "ci_run": "https://github.com/dakasa-yggdrasil/yggdrasil-core/actions/runs/41467639394",
+      "jobs": [
+        "signed-postgres-recovery: success",
+        "synthetic-resume-transaction: success"
+      ],
+      "integrated_cases": [
+        "Request and scheduled slot-2 claim; real survivor publication/read issue, finalize nonce, reserve send and record return",
+        "Normal V2 nonce, four signed Guest journal rows and closed caller 200, fresh post-ACK survivor floor, native OFF, quiescent and absence terminal",
+        "V2 nonce, authentic possible_start and closed caller refusal, expired original lease, refused-native-OFF admission and absence terminal",
+        "Missing new floor read, stale native observation, foreign native lifetime, survivor selected as target, target canaries, non-floor survivor canaries and foreign absence slot/lifetime refused",
+        "Slot 1 record byte-identical at terminal; only slot 2 tombstoned; N-1 physical units, original generation/fence retained, no promotion, terminal marker preserved"
+      ],
+      "fixture_boundary": "Declared synthetic signing keys and test-only approval registry under recoveryfixture && !nativequalification; normal PostgreSQL FK and triggers enabled; no production custody or effect asserted.",
+      "remaining_gate": "Exact final-head CI and parent-owned combined release/integration/E2E gates remain required."
+    },
+    "production_or_native_qualification": false
+  },
   "policy_continuity_and_pool_review_20261102": {
     "source_commit": "25bda6a99abd5bfb9cb54a35fc4f8b1beac46dee",
     "source_inventory_sha256": "a500ef4aab8627070fd346275ea7300fa87680d8d7883345a341c1a5c15c9ee3",

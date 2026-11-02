@@ -26,7 +26,8 @@ func (s CapacityStore) PrepareFailedInstalledGuestNativeCleanup(ctx context.Cont
 		if s.guestNotifyOrigin == nil || s.guestNotifyOrigin.source != capacity.CurrentGuestCoreSource() || s.guestNotifyOrigin.step.Use.Operation != "capacity.finish_original_guest_retirement" {
 			return ErrCapacityConflict
 		}
-		valid, err := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, 1, now)
+		targetSlot := FailedInstalledDisposalClaimSlot(current)
+		valid, err := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, targetSlot, now)
 		if err != nil || !valid {
 			return ErrCapacityConflict
 		}
@@ -35,7 +36,7 @@ func (s CapacityStore) PrepareFailedInstalledGuestNativeCleanup(ctx context.Cont
 			return err
 		}
 		i := stored.Request.Intent
-		if i.PolicyID != policy.ID.String() || i.PolicyChecksum != policy.Checksum || i.WorkflowID != s.WorkflowID.String() || i.PreregistrationID != current.FailedInstalledDisposal.PreregistrationID || i.Generation != uint64(generation) || i.Fence != uint64(fence) || i.LeaseOwner != owner || stored.ExecutorID != s.ExecutorID || i.Slot != 1 {
+		if i.PolicyID != policy.ID.String() || i.PolicyChecksum != policy.Checksum || i.WorkflowID != s.WorkflowID.String() || i.PreregistrationID != current.FailedInstalledDisposal.PreregistrationID || i.Generation != uint64(generation) || i.Fence != uint64(fence) || i.LeaseOwner != owner || stored.ExecutorID != s.ExecutorID || i.Slot != targetSlot {
 			return ErrCapacityConflict
 		}
 		if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {
@@ -238,7 +239,7 @@ func loadFailedInstalledQuiescentTx(ctx context.Context, tx *sql.Tx, preID, id, 
 			return r, policy, p, err
 		}
 		i := stored.Request.Intent
-		if i.PreregistrationID != preID || i.Tuple.Slot != 1 || i.PolicyID != policy.ID.String() || i.PolicyChecksum != policy.Checksum || i.Generation != uint64(current.Generation) || i.Fence != uint64(current.FencingToken) || i.LeaseOwner != r.ClaimedIntent.LeaseOwner {
+		if i.PreregistrationID != preID || i.Slot != failedInstalledDisposalSlot(r) || i.Tuple.Slot != i.Slot || i.PolicyID != policy.ID.String() || i.PolicyChecksum != policy.Checksum || i.Generation != uint64(current.Generation) || i.Fence != uint64(current.FencingToken) || i.LeaseOwner != r.ClaimedIntent.LeaseOwner {
 			return r, policy, p, ErrCapacityConflict
 		}
 		// ADR-0092: a quiescent row written by the V2 refused-retirement lane is
@@ -331,12 +332,15 @@ func failedInstalledAbsenceCandidateTx(ctx context.Context, tx *sql.Tx, preID, i
 	if err != nil || !reflect.DeepEqual(b, created.Binding) || checkMutationIntegration(ctx, tx, b) != nil {
 		return c, "", ErrCapacityConflict
 	}
-	slot, exists, err := loadMutationSlot(ctx, tx, r.Namespace, p, b, 1)
+	if stored.pre.Slot != failedInstalledDisposalSlot(r) {
+		return c, "", ErrCapacityConflict
+	}
+	slot, exists, err := loadMutationSlot(ctx, tx, r.Namespace, p, b, stored.pre.Slot)
 	if err != nil || !exists || slot.Tombstone || slot.ResourceID != stored.witness.Tuple.ResourceID || slot.ResourceCreatedAt != stored.witness.Tuple.CreatedAt {
 		return c, "", ErrCapacityConflict
 	}
 	x := created.Settlement
-	c = model.CapacityOriginalCreateDispositionCandidate{OriginalPolicy: policy, Binding: b, Preregistration: stored.pre, Receipt: guestMutationReceiptV2(created), Request: model.CapacityOriginalCreateDispositionReadRequest{OriginalAuxiliaryInventoryComplete: x.AuxiliaryInventoryComplete, Profile: b.ProfileName, Slot: 1, GrantID: created.Grant.GrantID, AttemptID: created.AttemptID, RequestSHA256: created.Grant.RequestSHA256, ExpectedResourceID: x.ResourceID, ExpectedResourceCreatedAt: x.ResourceCreatedAt, OriginalAdapterSourceCommit: b.OriginalProviderSourceCommit, AuxiliaryResources: append([]model.CapacityMutationAuxiliaryResource{}, x.AuxiliaryResources...)}, OriginalGrantSHA256: capacity.BusinessCreationSHA256(raw), Generation: r.OriginalIntent.Generation, FencingToken: r.ClaimedIntent.FencingToken}
+	c = model.CapacityOriginalCreateDispositionCandidate{OriginalPolicy: policy, Binding: b, Preregistration: stored.pre, Receipt: guestMutationReceiptV2(created), Request: model.CapacityOriginalCreateDispositionReadRequest{OriginalAuxiliaryInventoryComplete: x.AuxiliaryInventoryComplete, Profile: b.ProfileName, Slot: stored.pre.Slot, GrantID: created.Grant.GrantID, AttemptID: created.AttemptID, RequestSHA256: created.Grant.RequestSHA256, ExpectedResourceID: x.ResourceID, ExpectedResourceCreatedAt: x.ResourceCreatedAt, OriginalAdapterSourceCommit: b.OriginalProviderSourceCommit, AuxiliaryResources: append([]model.CapacityMutationAuxiliaryResource{}, x.AuxiliaryResources...)}, OriginalGrantSHA256: capacity.BusinessCreationSHA256(raw), Generation: r.OriginalIntent.Generation, FencingToken: r.ClaimedIntent.FencingToken}
 	if !x.AuxiliaryInventoryComplete {
 		c.Request.OriginalCreateActionID = x.ActionID
 	}
@@ -416,7 +420,7 @@ func (s CapacityStore) CompleteFailedInstalledGuestAbsence(ctx context.Context, 
 	if err != nil {
 		return out, err
 	}
-	slot, exists, err := loadMutationSlot(ctx, tx, out.Namespace, p, c.Binding, 1)
+	slot, exists, err := loadMutationSlot(ctx, tx, out.Namespace, p, c.Binding, c.Request.Slot)
 	if err != nil || !exists || slot.ResourceID != c.Request.ExpectedResourceID || slot.ResourceCreatedAt != c.Request.ExpectedResourceCreatedAt {
 		return out, ErrCapacityConflict
 	}
@@ -424,7 +428,7 @@ func (s CapacityStore) CompleteFailedInstalledGuestAbsence(ctx context.Context, 
 	slot.Tombstone = true
 	slot.ObservedAt = now
 	slot.ReceiptRef = "failed-installed-native-absence:" + out.ID + ":" + out.ObservationSHA256
-	if err = saveMutationSlot(ctx, tx, out.Namespace, p, c.Binding, 1, slot); err != nil {
+	if err = saveMutationSlot(ctx, tx, out.Namespace, p, c.Binding, c.Request.Slot, slot); err != nil {
 		return out, err
 	}
 	next := current
@@ -433,9 +437,12 @@ func (s CapacityStore) CompleteFailedInstalledGuestAbsence(ctx context.Context, 
 	next.FailedInstalledDisposal = &marker
 	next.Phase = "disposed_failed_installed"
 	next.Decision.Action = "hold"
-	next.Decision.Units = 0
+	next.Decision.Units = c.Request.Slot - 1
 	next.Decision.Reason = "failed_installed_native_disposal_completed_replacement_required"
-	next.Assessment.Snapshot.Units = 0
+	if c.Request.Slot > 1 {
+		next.Decision.Reason = "failed_installed_native_disposal_completed_surviving_members_unpromoted"
+	}
+	next.Assessment.Snapshot.Units = next.Decision.Units
 	next.Assessment.Snapshot.ObservedAt = now
 	next.Assessment.Snapshot.ResourceVersion = "failed-installed-native-absence:" + out.ObservationSHA256
 	next.UpdatedAt = now

@@ -111,12 +111,25 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 	var result model.CapacityGuestNotifyCanaryChallenge
 	err := s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
 		maintenance := s.guestNotifyMaintenanceOrigin()
-		if s.guestNotifyOrigin == nil || current.FailedInstalledDisposal != nil || current.RecoveryOnly || !capacity.GuestNotifyCanaryUsage(usage) || (usage == "steady_useful_membership") != maintenance || !maintenance && !capacityProfileCurrent(p, current.Decision, now) {
+		if s.guestNotifyOrigin == nil || current.RecoveryOnly || !capacity.GuestNotifyCanaryUsage(usage) || (usage == "steady_useful_membership") != maintenance || !maintenance && !capacityProfileCurrent(p, current.Decision, now) {
 			return ErrCapacityConflict
 		}
 		stored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, preID)
 		if err != nil {
 			return err
+		}
+		if current.FailedInstalledDisposal != nil {
+			// ADR-0095: the failed member never receives another canary.
+			// Only the unchanged retirement-floor protocol may probe survivors
+			// of an authenticated later-slot disposal under its owning lease.
+			target := FailedInstalledDisposalClaimSlot(current)
+			if maintenance || target <= 1 || stored.pre.Slot >= target || preID == current.FailedInstalledDisposal.PreregistrationID || (usage != "before_retirement_floor" && usage != "after_retirement_floor") {
+				return ErrCapacityConflict
+			}
+			valid, err := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, target, now)
+			if err != nil || !valid {
+				return ErrCapacityConflict
+			}
 		}
 		if !capacity.GuestLifecycleKeyMatches(key, receipt.Enrollment.Statement.CoreIntentPublicKey) {
 			return ErrCapacityConflict

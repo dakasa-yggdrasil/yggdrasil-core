@@ -112,7 +112,7 @@ func loadFailedInstalledRetirementReadTx(ctx context.Context, tx *sql.Tx, id, pr
 			return out, err
 		}
 		i := out.Original.Request.Intent
-		if i.PreregistrationID != preID || i.PolicyID != out.Policy.ID.String() || i.PolicyChecksum != out.Policy.Checksum || i.Generation != uint64(out.Current.Generation) || i.Fence != uint64(out.Current.FencingToken) || i.LeaseOwner != out.Current.LeaseOwner || out.Original.ExecutorID != out.Current.LeaseExecutorID {
+		if i.PreregistrationID != preID || i.Slot != failedInstalledDisposalSlot(r) || i.Tuple.Slot != i.Slot || i.PolicyID != out.Policy.ID.String() || i.PolicyChecksum != out.Policy.Checksum || i.Generation != uint64(out.Current.Generation) || i.Fence != uint64(out.Current.FencingToken) || i.LeaseOwner != out.Current.LeaseOwner || out.Original.ExecutorID != out.Current.LeaseExecutorID {
 			return out, ErrCapacityConflict
 		}
 		workflow, executor = i.WorkflowID, out.Original.ExecutorID
@@ -121,7 +121,7 @@ func loadFailedInstalledRetirementReadTx(ctx context.Context, tx *sql.Tx, id, pr
 		}
 	}
 	store := CapacityStore{WorkflowID: uuid.MustParse(workflow), ExecutorID: executor}
-	valid, err := store.failedInstalledDisposalActiveTx(ctx, tx, out.Policy, out.Spec, out.Current, 1, now)
+	valid, err := store.failedInstalledDisposalActiveTx(ctx, tx, out.Policy, out.Spec, out.Current, failedInstalledDisposalSlot(r), now)
 	if err != nil || !valid {
 		return out, ErrCapacityConflict
 	}

@@ -72,6 +72,21 @@ func TestV2RefusedNativeOffClaimRunPattern(t *testing.T) {
 	if !v2RefusedClaimRunSteps(v2RefusedRunFixture(current, pre), current, pre) {
 		t.Fatal("production claim run 0b482d82 shape refused")
 	}
+	t.Run("later_slot_must_match_the_immutable_claim_baseline", func(t *testing.T) {
+		for _, slot := range []int{2, 8} {
+			later := current
+			later.BaselineSnapshot.Units = slot
+			steps := v2RefusedRunFixture(later, pre)
+			steps[0].Metadata["slot"] = float64(slot)
+			if !v2RefusedClaimRunSteps(steps, later, pre) {
+				t.Fatal("exact later-slot claim refused", slot)
+			}
+			steps[0].Metadata["slot"] = float64(1)
+			if v2RefusedClaimRunSteps(steps, later, pre) {
+				t.Fatal("first member substituted for failed expansion tail", slot)
+			}
+		}
+	})
 	set := func(steps []model.WorkflowRunStepResult, id, status string) []model.WorkflowRunStepResult {
 		for n := range steps {
 			if steps[n].ID == id {

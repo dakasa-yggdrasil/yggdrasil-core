@@ -15,8 +15,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Only the single failed first native is in scope. This ledger never states
-// that a possible publication had no business effect. Actual withdrawal,
+// Only the single failed newly installed native is in scope. This ledger never
+// states that a possible publication had no business effect. Actual withdrawal,
 // original writer drain and native absence are still required by V2.
 type FailedInstalledGuestDisposal struct {
 	ReplacementMode                string                                              `json:"replacement_mode,omitempty"`
@@ -52,10 +52,22 @@ type FailedInstalledGuestDisposal struct {
 }
 
 func failedInstalledDisposalCandidate(old model.CapacityIntent, p model.CapacityPolicySpec, policy model.Manifest, now time.Time) bool {
-	return old.FailedInstalledDisposal == nil && !old.RecoveryOnly && !old.FloorDegraded &&
+	eligible := old.FailedInstalledDisposal == nil && !old.RecoveryOnly && !old.FloorDegraded &&
 		(old.Phase == "preparing" || old.Phase == "prepared" || old.Phase == "canary") && old.PolicyID == policy.ID && old.PolicyChecksum == policy.Checksum &&
 		old.Generation > 0 && old.FencingToken > 0 && old.FencingToken < maxCapacityGeneration && old.LeaseExpiresAt != nil && !old.LeaseExpiresAt.After(now) &&
-		p.Floor == 1 && old.Decision.Units == 1 && old.Assessment.Snapshot.Units == 1 && p.GuestNotifyReconcileBinding != nil && p.GuestRetirementBinding != nil && p.GuestRetirementBinding.EvidenceClass == "owned_provisioner_original"
+		p.Floor == 1 && p.GuestNotifyReconcileBinding != nil && p.GuestRetirementBinding != nil && p.GuestRetirementBinding.EvidenceClass == "owned_provisioner_original"
+	if !eligible {
+		return false
+	}
+	if old.Decision.Units == 1 {
+		return old.Assessment.Snapshot.Units == 1
+	}
+	// ADR-0095: only a one-member expansion, with its original survivor
+	// baseline retained, can dispose a later slot. Guest548 stays first-only.
+	n := old.Decision.Units
+	return n > 1 && n <= p.Ceiling && old.Decision.Action == "expand" && old.BaselineSnapshot.Units == n-1 &&
+		old.Assessment.Snapshot.Units >= n-1 && old.Assessment.Snapshot.Units <= n &&
+		p.GuestRetirementBinding.GuestSourceCommit != "548734eef627404f10b5117e0ec7f27582ae9048"
 }
 
 func insertFailedInstalledDisposalTx(ctx context.Context, tx *sql.Tx, r FailedInstalledGuestDisposal) (string, error) {
@@ -83,18 +95,25 @@ func loadFailedInstalledDisposalTx(ctx context.Context, tx *sql.Tx, id, stage st
 	return r, sha, nil
 }
 
-// Capacity credit is zero independently of an operator's requested action.
+// The failed member's capacity credit is zero independently of an operator's
+// requested action.
 // Unknown/held publications and their effects are retained; only an accepted
-// useful read or a prior useful phase makes this narrow disposal ineligible.
+// useful read by that member or a prior useful phase of this generation makes
+// this narrow disposal ineligible. An expansion must retain its exact prefix
+// of enrolled members with an accepted read; their fresh floor proofs remain
+// mandatory in the ordinary retirement protocol.
 func failedInstalledZeroUsefulTx(ctx context.Context, tx *sql.Tx, r FailedInstalledGuestDisposal, now time.Time, exceptRun string) error {
 	var useful, liveOther, active, openCanary, pending int
 	err := tx.QueryRowContext(ctx, `SELECT
  (SELECT count(*) FROM public.capacity_guest_notify_canary_challenges c JOIN public.capacity_guest_notify_canary_returns x ON x.challenge_id=c.id WHERE c.preregistration_id=$1 AND c.phase='read' AND x.outcome='accepted')+
  (SELECT count(*) FROM public.capacity_intent_events WHERE namespace=$2 AND environment=$3 AND domain=$4 AND dimension=$5 AND generation=$6 AND phase IN('promoted','reconciled','reconciled_partial')),
- (SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$2 AND environment=$3 AND domain=$4 AND dimension=$5 AND resource_id<>'' AND slot<>1),
+ (SELECT CASE WHEN count(*)=$9-1 AND count(*) FILTER(WHERE s.slot BETWEEN 1 AND $9-1 AND NOT(s.slot_record ? 'authority_kind') AND COALESCE(s.slot_record->>'tombstone','false')='false' AND EXISTS(
+   SELECT 1 FROM public.capacity_guest_notify_canary_challenges c JOIN public.capacity_guest_notify_canary_returns x ON x.challenge_id=c.id
+   WHERE c.phase='read' AND x.outcome='accepted' AND c.original_record#>>'{tuple,integration_instance_id}'=s.integration_instance_id::text AND c.original_record#>>'{tuple,scope_checksum}'=s.scope_checksum AND c.original_record#>>'{tuple,profile}'=s.profile_name AND c.original_record#>>'{tuple,resource_id}'=s.resource_id AND c.original_record#>>'{tuple,resource_created_at}'=s.slot_record->>'resource_created_at' AND (c.original_record#>>'{tuple,slot}')::integer=s.slot))=$9-1 THEN 0 ELSE 1 END
+   FROM public.capacity_resource_slots s WHERE s.namespace=$2 AND s.environment=$3 AND s.domain=$4 AND s.dimension=$5 AND s.resource_id<>'' AND s.slot<>$9),
  (SELECT count(*) FROM public.capacity_dispatch_jobs WHERE realm=$2 AND environment=$3 AND domain=$4 AND dimension=$5 AND run_id::text<>$7 AND (state IN('started','unknown') OR (state='returned' AND finalization_ack_at IS NULL))),
  (SELECT count(*) FROM public.capacity_guest_notify_canary_challenges WHERE preregistration_id=$1 AND original_deadline>$8),
- (SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$2 AND environment=$3 AND domain=$4 AND dimension=$5 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND enrolled_failed_disposition_id IS NULL AND state IN('issued','redeemed','settled','compensating') AND NOT(grant_record ? 'authority_kind'))`, r.PreregistrationID, r.Namespace, r.Environment, r.Domain, r.Dimension, r.OriginalIntent.Generation, exceptRun, now).Scan(&useful, &liveOther, &active, &openCanary, &pending)
+ (SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$2 AND environment=$3 AND domain=$4 AND dimension=$5 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND enrolled_failed_disposition_id IS NULL AND state IN('issued','redeemed','settled','compensating') AND NOT(grant_record ? 'authority_kind'))`, r.PreregistrationID, r.Namespace, r.Environment, r.Domain, r.Dimension, r.OriginalIntent.Generation, exceptRun, now, failedInstalledDisposalSlot(r)).Scan(&useful, &liveOther, &active, &openCanary, &pending)
 	if err != nil {
 		return err
 	}
@@ -186,7 +205,7 @@ func (s CapacityStore) requestFailedInstalledGuestDisposal(ctx context.Context, 
 		return out, err
 	}
 	old, err := loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true)
-	if err != nil || !failedInstalledDisposalCandidate(old, p, policy, now) || stored.pre.Generation != old.Generation || stored.pre.Slot != 1 {
+	if err != nil || !failedInstalledDisposalCandidate(old, p, policy, now) || stored.pre.Generation != old.Generation || stored.pre.Slot != old.Decision.Units {
 		return out, ErrCapacityConflict
 	}
 	if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
@@ -204,7 +223,7 @@ func (s CapacityStore) requestFailedInstalledGuestDisposal(ctx context.Context, 
 	if err != nil || checkMutationIntegration(ctx, tx, b) != nil {
 		return out, ErrCapacityConflict
 	}
-	slot, exists, err := loadMutationSlot(ctx, tx, policy.Metadata.Namespace, p, b, 1)
+	slot, exists, err := loadMutationSlot(ctx, tx, policy.Metadata.Namespace, p, b, stored.pre.Slot)
 	if err != nil || !exists || slot.Tombstone || slot.ResourceID != stored.witness.Tuple.ResourceID || slot.ResourceCreatedAt != stored.witness.Tuple.CreatedAt {
 		return out, ErrCapacityConflict
 	}
@@ -437,7 +456,7 @@ func (s CapacityStore) TryClaimFailedInstalledGuestDisposal(ctx context.Context,
 	}
 	unmarked := old
 	unmarked.FailedInstalledDisposal = nil
-	if !reflect.DeepEqual(unmarked, r.OriginalIntent) || !failedInstalledDisposalCandidate(unmarked, p, policy, now) || !sameCapacityResourceIdentity(old.Assessment.Snapshot, assessment.Snapshot) || assessment.Snapshot.Units != 1 || assessment.Snapshot.Profile != old.Decision.Profile || !capacityProfileCurrent(p, old.Decision, now) || s.installedGuestDispatchRunTx(ctx, tx, policy, p, s.OriginalRunID, nil) != nil {
+	if !reflect.DeepEqual(unmarked, r.OriginalIntent) || !failedInstalledDisposalCandidate(unmarked, p, policy, now) || !sameCapacityResourceIdentity(old.Assessment.Snapshot, assessment.Snapshot) || assessment.Snapshot.Units != failedInstalledDisposalSlot(r) || assessment.Snapshot.Profile != old.Decision.Profile || !capacityProfileCurrent(p, old.Decision, now) || s.installedGuestDispatchRunTx(ctx, tx, policy, p, s.OriginalRunID, nil) != nil {
 		return old, "", false, ErrCapacityConflict
 	}
 	if err = failedInstalledZeroUsefulTx(ctx, tx, r, now, s.OriginalRunID.String()); err != nil {
@@ -447,7 +466,7 @@ func (s CapacityStore) TryClaimFailedInstalledGuestDisposal(ctx context.Context,
 		return old, "", false, err
 	}
 	members, err := s.guestReconcileMembersTx(ctx, tx, policy, p, now, true)
-	if err != nil || len(members) != 1 || members[0].Slot != 1 || members[0].PreregistrationID != r.PreregistrationID {
+	if err != nil || !failedInstalledDisposalMembersMatch(r, members) {
 		return old, "", false, ErrCapacityConflict
 	}
 	next := old
@@ -457,6 +476,7 @@ func (s CapacityStore) TryClaimFailedInstalledGuestDisposal(ctx context.Context,
 	next.BaselineSnapshot = assessment.Snapshot
 	next.Decision.Action = "drain"
 	next.Decision.Reason = "failed_installed_disposal"
+	next.Decision.Units = failedInstalledDisposalTargetUnits(failedInstalledDisposalSlot(r))
 	next.LeaseOwner = uuid.NewString()
 	next.LeaseExecutorID = s.ExecutorID
 	expiry := now.Add(time.Duration(p.LeaseSeconds) * time.Second)
@@ -483,13 +503,14 @@ func (s CapacityStore) TryClaimFailedInstalledGuestDisposal(ctx context.Context,
 
 // All floor exceptions converge here. A marker or caller boolean alone cannot
 // bypass an ordinary protected slot. The immutable claim, full original
-// enrollment/installation and zero useful credit must still agree in this TX.
+// enrollment/installation and zero useful credit of the target must still
+// agree in this TX. Later-slot survivors retain their normal floor checks.
 func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, slot int, now time.Time) (bool, error) {
 	m := current.FailedInstalledDisposal
 	if m == nil {
 		return false, nil
 	}
-	if m.Stage != "claimed" || slot != 1 || current.Generation < 1 || current.FencingToken != m.Fence || current.Decision.Reason != "failed_installed_disposal" || current.Decision.Action != "drain" || current.Decision.Units != 1 || (current.Phase != "draining" && current.Phase != "drained") || current.PolicyID != policy.ID || current.PolicyChecksum != policy.Checksum {
+	if m.Stage != "claimed" || slot < 1 || slot != FailedInstalledDisposalClaimSlot(current) || current.Generation < 1 || current.FencingToken != m.Fence || current.Decision.Reason != "failed_installed_disposal" || current.Decision.Action != "drain" || current.Decision.Units != failedInstalledDisposalTargetUnits(slot) || (current.Phase != "draining" && current.Phase != "drained") || current.PolicyID != policy.ID || current.PolicyChecksum != policy.Checksum {
 		return false, ErrCapacityConflict
 	}
 	// Adapter callbacks legitimately carry a minimal policy reference. Resolve
@@ -510,7 +531,7 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 	if err == nil {
 		r, err = effectiveFailedInstalledClaimTx(ctx, tx, r, current)
 	}
-	if err != nil || r.AdmissionSHA256 != m.AdmissionSHA256 || r.PreregistrationID != m.PreregistrationID || r.ClaimedIntent == nil || !reflect.DeepEqual(*r.ClaimedIntent, current) {
+	if err != nil || failedInstalledDisposalSlot(r) != slot || r.AdmissionSHA256 != m.AdmissionSHA256 || r.PreregistrationID != m.PreregistrationID || r.ClaimedIntent == nil || !reflect.DeepEqual(*r.ClaimedIntent, current) {
 		return false, ErrCapacityConflict
 	}
 	admission, sha, err := loadFailedInstalledDisposalTx(ctx, tx, m.ID, "requested")
@@ -518,7 +539,7 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 		return false, ErrCapacityConflict
 	}
 	stored, err := loadGuestOriginalTx(ctx, tx, m.PreregistrationID)
-	if err != nil || r.RetirementMode != failedInstalledRetirementMode(p, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.Generation != current.Generation || stored.pre.Slot != 1 || p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) {
+	if err != nil || r.RetirementMode != failedInstalledRetirementMode(p, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.Generation != current.Generation || stored.pre.Slot != slot || p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) {
 		return false, ErrCapacityConflict
 	}
 	if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
