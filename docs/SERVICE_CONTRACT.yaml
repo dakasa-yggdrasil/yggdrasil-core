@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "33ba8519eef860014d6e8c9d995a88d2d06829dee001aeae91759c46077b160e"
+      "sha256": "f94786c1b4fb9a7583b597da33d4d90d811acdf8ca36305e19bbaa81b94b8851"
     }
   ],
   "callsREST": [
