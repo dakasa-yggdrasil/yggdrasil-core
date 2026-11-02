@@ -35,27 +35,25 @@ type v2RefusedOptions struct {
 	priorNativeRead   bool
 	poweroffAuthority bool
 	deadlineOpen      bool
-	recoveryOwned     bool
 }
 
 type v2RefusedFixture struct {
-	db          *sql.DB
-	ns          string
-	scope       model.CapacityPolicySpec
-	pre         string
-	retirement  string
-	attempt     string
-	intentSHA   string
-	callerSHA   string
-	returns     [2]string
-	source      string
-	claimed     FailedInstalledGuestDisposal
-	claimSHA    string
-	current     model.CapacityIntent
-	runWire     string
-	tuple       model.CapacityGuestNativeTuple
-	deadline    time.Time
-	nativeReads int
+	db         *sql.DB
+	ns         string
+	scope      model.CapacityPolicySpec
+	pre        string
+	retirement string
+	attempt    string
+	intentSHA  string
+	callerSHA  string
+	returns    [2]string
+	source     string
+	claimed    FailedInstalledGuestDisposal
+	claimSHA   string
+	current    model.CapacityIntent
+	runWire    string
+	tuple      model.CapacityGuestNativeTuple
+	deadline   time.Time
 }
 
 func v2RefusedPGFixture(t *testing.T, db *sql.DB, o v2RefusedOptions) v2RefusedFixture {
