@@ -40,3 +40,14 @@ hash, native handle/AST, echo/adoption and current15-expiry refusals. Native I/O
 is simulated at the explicit test boundary; CI never invokes host operations.
 
 See [ADR-0097](../../docs/adr/0097-bind-current15-to-an-authenticated-current-lifetime-initializer.md).
+
+`g7pair` appends the actual next Core image pair while retaining canonical G6
+and boot-v2 as two dedicated historical authorities over config8b74. Its
+current config is fixed separately at d689. All seven helpers,31 original
+Owner bodies, old records and per-boot budgets remain intact; the new
+controller needs its own actual120, daemon-own current15 and independent live
+closure. Its manifest distinguishes the intentionally expanded image-pair
+chain from the unchanged f5..g5 standing prefix. Operational adoption remains
+separate from Core image provenance and source CI. See the
+[G7 package](g7pair/README.md) and
+[ADR-0099](../../docs/adr/0099-retain-canonical-and-boot-v2-guardian-authorities-across-a-new-core-pair.md).
