@@ -9,6 +9,14 @@
     "validation": "Focused reconciler tests and go vet passed locally. Exact integrated CI remains required.",
     "production_or_native_qualification": false
   },
+  "secret_materializer_ownership_review_20261101": {
+    "source_base_commit": "d1a19e1f091995025f4dc2bd41cbd7d4ed3d6a5a",
+    "source_inventory_sha256": "dda5895f04bfe36f8b9132baa6d5c9f7c37d3c1d471ca5c9503ec275d346a47d",
+    "scope": "Enforce ADR-0002 managed-by label ownership before existing Secret version skips, updates or lifecycle marks; refuse implicit adoption with a fixed error and without mutating the returned object. Naming, placement and status JSON are unchanged.",
+    "independent_review": "Root and ownership_contract_review reviewed the functional source and regression tests and found no concrete defect. Initial discovery GETs remain necessary; update-stage ownership errors do not imply an API write attempt.",
+    "validation": "Focused reconciler tests and go vet passed locally. Exact owning CI remains required.",
+    "production_or_native_qualification": false
+  },
   "checker": {
     "actual_binary_clean_VCS": true,
     "actual_binary_sha256": "ac6a58a0a98e2bcfbdd3f0571d55b495e4f48ccb7fee4b66295c273f4f211f2f",
