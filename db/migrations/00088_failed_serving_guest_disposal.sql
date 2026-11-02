@@ -16,14 +16,14 @@ CREATE TABLE IF NOT EXISTS public.capacity_guest_failed_serving_disposals (
     record_sha256 text NOT NULL CHECK (record_sha256 = encode(sha256(original_wire),'hex')),
     recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     CHECK (original_record = convert_from(original_wire,'UTF8')::jsonb),
-    CHECK (original_record->>'id' = admission_id::text),
-    CHECK (original_record->>'record_id' = row_id::text),
-    CHECK (original_record->>'stage' = stage),
-    CHECK (original_record->>'preregistration_id' = preregistration_id::text),
+    CHECK ((original_record->>'id' = admission_id::text) IS TRUE),
+    CHECK ((original_record->>'record_id' = row_id::text) IS TRUE),
+    CHECK ((original_record->>'stage' = stage) IS TRUE),
+    CHECK ((original_record->>'preregistration_id' = preregistration_id::text) IS TRUE),
     CHECK ((stage='quarantined') = (row_id=admission_id)),
     CHECK ((stage='terminal') = (quiescent_row_id IS NOT NULL)),
-    CHECK (original_record->>'namespace'=namespace AND original_record->>'environment'=environment
-           AND original_record->>'domain'=domain AND original_record->>'dimension'=dimension)
+    CHECK ((original_record->>'namespace'=namespace AND original_record->>'environment'=environment
+           AND original_record->>'domain'=domain AND original_record->>'dimension'=dimension) IS TRUE)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS capacity_failed_serving_unique_terminal
 ON public.capacity_guest_failed_serving_disposals(admission_id,stage);

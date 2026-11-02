@@ -4,6 +4,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -81,6 +83,7 @@ func TestFailedServingMigration88RejectsForgedLineageAndReplayPostgres(t *testin
 					}
 				})
 			}
+			failedServingNullableIdentityChecks(t, f, off)
 			// The trigger acquires its own advisory locks; the refusal cases
 			// above concern lineage/content, never a claimed caller-lock seam.
 			realOff := failedServingOff(t, f, q.ID)
@@ -122,5 +125,95 @@ func TestFailedServingMigration88RejectsForgedLineageAndReplayPostgres(t *testin
 				t.Fatal("second active identity admitted in another realm")
 			}
 		})
+	}
+}
+
+// Full INSERT refusals keep every production trigger and FK enabled. A forged
+// read may be refused by the lineage trigger before CHECK evaluation, so also
+// evaluate each ACTUAL catalog CHECK on a baseline-valid row and its missing/
+// null variant. SQL FALSE is required: SQL NULL would silently pass a CHECK.
+func failedServingNullableIdentityChecks(t *testing.T, f *failedServingFixture, r FailedServingGuestDisposal) {
+	t.Helper()
+	ctx := failedServingContext(t)
+	rows, err := f.db.QueryContext(ctx, `SELECT pg_get_expr(conbin,conrelid) FROM pg_constraint WHERE conrelid='public.capacity_guest_failed_serving_disposals'::regclass AND contype='c'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expressions := []string{}
+	for rows.Next() {
+		var expr string
+		if err = rows.Scan(&expr); err != nil {
+			t.Fatal(err)
+		}
+		expressions = append(expressions, expr)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err = rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	baseline := failedServingWire(t, r)
+	before, originals := f.rawIntent(t), f.preserved(t)
+	for _, key := range []string{"id", "record_id", "stage", "preregistration_id", "namespace", "environment", "domain", "dimension"} {
+		expr := ""
+		for _, candidate := range expressions {
+			if strings.Contains(candidate, "original_record") && strings.Contains(candidate, "'"+key+"'") {
+				if expr != "" {
+					t.Fatal("ambiguous identity/scope CHECK", key)
+				}
+				expr = candidate
+			}
+		}
+		if expr == "" {
+			t.Fatal("missing native ledger identity/scope CHECK", key)
+		}
+		// The only interpolated SQL is pg_get_expr output from this newly
+		// migrated local database catalog. All fixture values remain parameters.
+		checkQuery := `SELECT (` + expr + `) FROM (SELECT $1::jsonb original_record,$2::uuid admission_id,$3::uuid row_id,$4::text stage,$5::uuid preregistration_id,$6::text namespace,$7::text environment,$8::text domain,$9::text dimension) AS candidate`
+		evaluate := func(raw []byte) sql.NullBool {
+			t.Helper()
+			var value sql.NullBool
+			if e := f.db.QueryRowContext(ctx, checkQuery, string(raw), r.ID, r.RecordID, r.Stage, r.PreregistrationID, r.Namespace, r.Environment, r.Domain, r.Dimension).Scan(&value); e != nil {
+				t.Fatal("native CHECK expression", key, e)
+			}
+			return value
+		}
+		if value := evaluate(baseline); !value.Valid || !value.Bool {
+			t.Fatal("identity CHECK baseline is not valid", key)
+		}
+		for _, kind := range []string{"absent", "null"} {
+			t.Run(key+"_"+kind, func(t *testing.T) {
+				var changed map[string]json.RawMessage
+				if json.Unmarshal(baseline, &changed) != nil {
+					t.Fatal("baseline raw ledger")
+				}
+				if kind == "absent" {
+					delete(changed, key)
+				} else {
+					changed[key] = json.RawMessage(`null`)
+				}
+				raw := failedServingWire(t, changed)
+				if value := evaluate(raw); !value.Valid || value.Bool {
+					t.Fatal("missing/null JSON identity yields CHECK acceptance or SQL NULL", key, kind)
+				}
+				tx, e := f.db.BeginTx(ctx, nil)
+				if e != nil {
+					t.Fatal(e)
+				}
+				_, e = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_failed_serving_disposals(row_id,admission_id,stage,namespace,environment,domain,dimension,preregistration_id,original_wire,original_record,record_sha256,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)`, r.RecordID, r.ID, r.Stage, r.Namespace, r.Environment, r.Domain, r.Dimension, r.PreregistrationID, raw, string(raw), capacity.BusinessCreationSHA256(raw), r.RecordedAt)
+				if e == nil {
+					e = tx.Commit()
+				} else {
+					_ = tx.Rollback()
+				}
+				if e == nil {
+					t.Fatal("missing/null identity or scope committed", key, kind)
+				}
+				if failedServingCount(t, f) != 1 || !reflect.DeepEqual(f.rawIntent(t), before) || !reflect.DeepEqual(f.preserved(t), originals) {
+					t.Fatal("missing/null refusal changed original lineage")
+				}
+			})
+		}
 	}
 }

@@ -27,7 +27,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// One fixture owns all process-scoped test registry/source overrides until TB
+// One fixture owns all process-scoped test registry changes until TB
 // cleanup. Focused tests do not run fixtures in parallel or leak this process
 // to the production/default/nativequalification builds.
 var failedServingFixtureMutex sync.Mutex
@@ -189,12 +189,13 @@ func newFailedServingFixtureHistory(t *testing.T, provider string, historical bo
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		t.Fatal("explicit test process and fixture gate required")
 	}
+	actualSource := capacity.CurrentGuestCoreSource()
+	if len(actualSource) != 40 || actualSource != os.Getenv("SOURCE_COMMIT") {
+		t.Fatal("exact clean native test build metadata required; CI must use -buildvcs=true")
+	}
 	failedServingFixtureMutex.Lock()
 	t.Cleanup(failedServingFixtureMutex.Unlock)
 	capacity.RecoveryFixtureApprovalScope(t)
-	oldSource := failedServingCurrentSource
-	failedServingCurrentSource = func() string { return strings.Repeat("a", 40) }
-	t.Cleanup(func() { failedServingCurrentSource = oldSource })
 	p, binding, reg, receipt, installed, settlement := failedServingOperands(t, provider)
 	f := &failedServingFixture{db: failedServingDB(t), p: p, reg: reg, receipt: receipt, installed: installed}
 	f.pre = reg.Result.ProductionClock.Authority.Preregistration

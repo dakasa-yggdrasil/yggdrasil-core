@@ -168,6 +168,9 @@ func TestFailedServingTerminalBeginsNewOrdinaryFloorGenerationPostgres(t *testin
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
 			f := newFailedServingFixture(t, provider)
+			if f.p.MinSamples != 61 {
+				t.Fatal("ordinary floor repair must keep the actual demand hold policy at61")
+			}
 			ctx := failedServingContext(t)
 			originals := f.preserved(t)
 			q := failedServingQuarantine(t, f)
@@ -207,6 +210,10 @@ func TestFailedServingTerminalBeginsNewOrdinaryFloorGenerationPostgres(t *testin
 				t.Fatal("same-name replacement adopted old enrollment")
 			}
 			failedServingCompleteOrdinaryReplacement(t, f, next)
+			var minSamples int
+			if err = f.db.QueryRow(`SELECT (spec->>'min_samples')::int FROM public.manifests WHERE id=$1`, f.policy.ID).Scan(&minSamples); err != nil || minSamples != 61 {
+				t.Fatal("replacement changed demand policy to obtain promotion", minSamples, err)
+			}
 			rows, err := f.store.ReadFailedServingGuestDisposals(ctx, f.pre.PreregistrationID)
 			if err != nil || len(rows) != 3 || rows[2].RecordID != terminal.RecordID || !reflect.DeepEqual(f.preserved(t), originals) {
 				t.Fatal("new ordinary decision rewrote serving/disposal originals", err)

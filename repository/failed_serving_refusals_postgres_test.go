@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
 

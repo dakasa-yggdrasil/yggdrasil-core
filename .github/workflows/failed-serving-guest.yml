@@ -85,9 +85,11 @@ jobs:
           # Retain every package's original failure; fail before the passing
           # census if any native go command failed. No output replaces its exit.
           failed=0
-          record repository go test -tags=recoveryfixture -p=1 -race -count=1 -timeout=8m -json ./repository -run '^TestFailedServing' || failed=1
-          record message go test -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^TestFailedServing' || failed=1
-          record http go test -p=1 -race -count=1 -timeout=3m -json ./controllers/httpapi -run '^TestFailedServing' || failed=1
+          # Go's default buildvcs=auto omits test-binary VCS metadata. The
+          # source-owned registry requires the real exact clean issuer build.
+          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=8m -json ./repository -run '^TestFailedServing' || failed=1
+          record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^TestFailedServing' || failed=1
+          record http go test -buildvcs=true -p=1 -race -count=1 -timeout=3m -json ./controllers/httpapi -run '^TestFailedServing' || failed=1
           [[ "$failed" == 0 ]]
           python3 - <<'PY'
           import collections,json,os,pathlib,subprocess
