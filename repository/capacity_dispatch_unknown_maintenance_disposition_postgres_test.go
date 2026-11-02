@@ -101,7 +101,7 @@ func unknownMaintenancePGFixture(t *testing.T, db *sql.DB) unknownMaintenanceFix
 func (f unknownMaintenanceFixture) requestNow(t *testing.T) CapacityDispatchUnknownMaintenanceDispositionRequest {
 	t.Helper()
 	r := CapacityDispatchUnknownMaintenanceDispositionRequest{CapacityDispatchAbandonedDispositionRequest: f.request, ExpectedReturnedAt: f.returned}
-	if err := f.db.QueryRow(`SELECT encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex'),public.unknown_maintenance_dispatch_effect_scan(j.id)->>'current_members_sha256' FROM capacity_dispatch_jobs j JOIN workflow_runs w ON w.id=j.run_id WHERE j.id=$1`, f.envelope.JobID).Scan(&r.ExpectedRunSHA256, &r.ExpectedMembersSHA256); err != nil {
+	if err := f.db.QueryRow(`SELECT encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex'),public.unknown_maintenance_dispatch_effect_scan(j.id)->>'current_members_sha256',j.returned_at FROM capacity_dispatch_jobs j JOIN workflow_runs w ON w.id=j.run_id WHERE j.id=$1`, f.envelope.JobID).Scan(&r.ExpectedRunSHA256, &r.ExpectedMembersSHA256, &r.ExpectedReturnedAt); err != nil {
 		t.Fatal(err)
 	}
 	return r
@@ -184,6 +184,7 @@ func TestUnknownMaintenanceDispatchPostgresWholeLifecycle(t *testing.T) {
 		next.Metadata[k] = v
 	}
 	next.Metadata["scheduled_for"] = next.SourceTick
+	next.InputsSHA256, next.MetadataSHA256, _ = CapacityDispatchEnvelopeHashes(next)
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +255,7 @@ func TestUnknownMaintenanceDispatchPostgresRefusals(t *testing.T) {
 			case "return_after_lease":
 				f.mutate(t, `UPDATE capacity_dispatch_jobs SET returned_at=lease_expires_at+interval '1 second' WHERE id=$1`, j)
 			case "ack_present":
-				f.mutate(t, `UPDATE capacity_dispatch_jobs SET finalization_ack_at=clock_timestamp() WHERE id=$1`, j)
+				f.mutate(t, `UPDATE capacity_dispatch_jobs SET state='returned',finalization_ack_at=clock_timestamp() WHERE id=$1`, j)
 			case "finalization_error":
 				f.mutate(t, `UPDATE capacity_dispatch_jobs SET finalization_error='lost' WHERE id=$1`, j)
 			case "current_source_pin_changed":
@@ -272,7 +273,7 @@ func TestUnknownMaintenanceDispatchPostgresRefusals(t *testing.T) {
 
 func TestUnknownMaintenanceDispatchPostgresCASBarrierAndConcurrency(t *testing.T) {
 	db := originalDispositionPG(t)
-	for _, name := range []string{"run_sha", "members_sha", "returned_at", "wake_count", "old_process", "young_lease", "operator_revoked"} {
+	for _, name := range []string{"run_sha", "members_sha", "returned_at", "wake_count", "old_process", "young_lease", "operator_revoked", "operator_revoked_at_commit"} {
 		t.Run(name, func(t *testing.T) {
 			f := unknownMaintenancePGFixture(t, db)
 			r := f.requestNow(t)
@@ -293,6 +294,15 @@ func TestUnknownMaintenanceDispatchPostgresCASBarrierAndConcurrency(t *testing.T
 				f.mutate(t, `UPDATE capacity_dispatch_jobs SET lease_expires_at=clock_timestamp() WHERE id=$1`, f.envelope.JobID)
 			case "operator_revoked":
 				allow = func(context.Context) error { return errors.New("revoked") }
+			case "operator_revoked_at_commit":
+				calls := 0
+				allow = func(context.Context) error {
+					calls++
+					if calls == 2 {
+						return errors.New("revoked at commit")
+					}
+					return nil
+				}
 			}
 			j, w := f.snapshot(t)
 			if _, err := DisposeUnknownMaintenanceDispatch(context.Background(), db, r, b, allow); err == nil {

@@ -664,3 +664,27 @@ that evidence, and a disposal guard that lets an admitted disposal reach
 lane accepts that lineage in place of the Guest five-row/caller-200 proof and
 keeps the native OFF read join. No Guest request, poweroff or DELETE is ever
 sent, and no writer quiescence is claimed. See ADR-0092.
+
+
+## Recorded unknown maintenance dispatch disposition (ADR-0096)
+
+The distinct god-mode and CSRF-gated
+`POST /api/v1/ops/capacity/unknown-maintenance-dispatch-dispositions` and receipt
+GET `/{jobId}` accept only a closed nine-field CAS body. Migration 87's
+`unknown_maintenance_disposed` terminal retains the real failed return,
+NULL acknowledgment and entire original workflow row; only the job's state,
+receipt pointer and update timestamp change. Scope/job/run locks and ordered
+share locks on original catalog pins, current intent, slots and grants remain
+held through both operator rechecks. The immutable receipt and deferred link
+guard cannot invent success or replay an original workflow.
+
+The original result must be the exact ordinary hold/refresh path at
+`signal_evidence_unavailable`, with no provision/retire step executed, and a
+failed canary at `nonce_finalize` or `reserve_send`. A later Core process,
+a lease expired for fifteen minutes, exact current policy/epoch, one-to-one
+confirmed original installed membership and zero native mutation ledgers are
+required. Only closed steady-useful canaries for those same members and epoch
+are tolerated alongside the existing pure-assessment/observation effects.
+Stored membership hashes are not fresh native presence, useful capacity or
+quiescence; the next independent tick proves those again. Source review and
+declared PostgreSQL fixtures do not qualify a production Guest or provider.

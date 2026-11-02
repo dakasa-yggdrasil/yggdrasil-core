@@ -1009,5 +1009,13 @@
     "linux_race_test_ssm": "56cc8169-f8be-4fa2-be92-b6e18df57c6f",
     "production_broker_credential_presence_verified": false,
     "candidate_ci_and_release_qualification_pending": true
+  },
+  "unknown_failed_maintenance_dispatch_disposition_review_20261102": {
+    "source_commit": "fbefa0fc1ed39ed1d218377f8f4edb95d0ff0a18",
+    "source_inventory_sha256": "cfc6cda52b140b51578c2a0cc9018fc2d631f16d6887cedd864f7bd8626b979e",
+    "scope": "ADR-0096 and migration87 add a separate immutable administrative disposition for an exactly pinned unknown dispatch with a persisted failed ordinary maintenance result. Preserve all job return fields and NULL acknowledgment, preserve the complete finished workflow row, prove unchanged stable policy/epoch and confirmed original installed membership, retain closed steady canaries and require zero native mutation ledgers. Nine-field god-mode/CSRF CAS routes never dispatch or call a provider. Ordered FOR SHARE locks fence catalog/member changes through both operator checks; terminal job, receipt and original workflow are immutable with deferred same-commit links. The existing migration84 job-guard body is byte-identical below the new first branch.",
+    "independent_review": "The release_audit peer reviewed the complete source and migration. One functional finding, catalog publication racing the second operator check, was fixed with transaction-duration catalog/intent/slot/grant locks in Go and the SQL guard and an explicit 55P03 regression case. No unresolved functional source finding remains. Full read-only inline scan of the actual new SQL is compatible with both original production jobs: exact current epoch and failed refresh, one confirmed stored member, zero invalid canaries and tolerable=true. This proves compatibility of stored shapes, not new native readiness or production qualification.",
+    "validation": "Production go build and static source-census verification passed locally. No local tests were run. Seven additional CI-only PostgreSQL/HTTP roots cover real-schema87 transaction/immutable links, refusals, stale CAS, process barrier, concurrency, operator revocation and closed authentication boundaries; declared historical fixture rows are not native or signed-provider qualification. Exact-head CI and rollout/E2E remain required. Earlier CI correctly found four old exact-schema86 assertions and missing source-evidence hash rebinding, updated for the new complete schema87 and reviewed census.",
+    "production_or_native_qualification": false
   }
 }
