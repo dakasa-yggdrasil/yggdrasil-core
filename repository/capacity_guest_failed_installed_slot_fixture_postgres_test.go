@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -31,6 +32,7 @@ type failedTailFixture struct {
 	intent           model.CapacityIntent
 	requested        FailedInstalledGuestDisposal
 	claimJob         CapacityDispatchJob
+	claimEnvelope    CapacityDispatchEnvelope
 	rbac             CapacityDispatchManifestPin
 	tick             int
 }
@@ -98,6 +100,7 @@ func newFailedTailFixture(t *testing.T) *failedTailFixture {
 		}
 		providerReturn := &model.CapacityOriginalProviderCreateReturn{Schema: "hetzner_original_create_server_return_v1", Provider: "hetzner", AdapterSourceCommit: mutation.OriginalProviderSourceCommit, GrantID: pre.OriginalCreateGrantID, AttemptID: witness.OriginalCreateAttemptID, RequestSHA256: pre.OriginalCreateRequestSHA256, ResourceID: witness.Tuple.ResourceID, ResourceCreatedAt: witness.Tuple.CreatedAt, NextActionIDs: []string{}, CalledAt: pre.ReservedAt.Format(time.RFC3339Nano), ReturnedAt: witness.OriginalCreateReturnedAt.Format(time.RFC3339Nano), ContextDeadline: pre.OriginalDeadline.Format(time.RFC3339Nano), ResponseStatus: 201, ResponseBodySHA256: strings.Repeat("a", 64), ResponseBytes: 2}
 		created := capacityMutationRecord{PolicyID: f.policy.ID, PolicyChecksum: f.policy.Checksum, WorkflowID: f.workflow.ID, Binding: mutation, Generation: pre.Generation, FencingToken: pre.Fence, ExecutorID: pre.ExecutorID, LeaseOwner: pre.LeaseOwner, AttemptID: witness.OriginalCreateAttemptID, Grant: model.CapacityMutationGrant{GrantID: pre.OriginalCreateGrantID, BindingName: mutation.Name, IntegrationInstanceID: mutation.IntegrationInstanceID, ScopeChecksum: mutation.ScopeChecksum, ProfileName: mutation.ProfileName, Slot: pre.Slot, Capability: mutation.EnsureCapability, RequestSHA256: pre.OriginalCreateRequestSHA256, State: "confirmed"}, Settlement: &model.CapacityMutationSettleRequest{GrantID: pre.OriginalCreateGrantID, AttemptID: witness.OriginalCreateAttemptID, RequestSHA256: pre.OriginalCreateRequestSHA256, Outcome: "accepted", TransportCompleted: true, ResourceID: witness.Tuple.ResourceID, ResourceCreatedAt: witness.Tuple.CreatedAt, NextActionIDs: []string{}, AuxiliaryResources: []model.CapacityMutationAuxiliaryResource{}, AuxiliaryInventoryComplete: true, OriginalProviderCreateReturn: providerReturn}, Proof: &model.CapacityMutationProof{Slot: pre.Slot, ResourceID: witness.Tuple.ResourceID, ResourceCreatedAt: witness.Tuple.CreatedAt}}
+		created.Settlement.AuxiliaryResources = []model.CapacityMutationAuxiliaryResource{{Kind: "ssh_key", ID: "signed-fixture-key-" + pre.PreregistrationID, RequiresAbsence: true}}
 		f.exec(t, `UPDATE public.capacity_mutation_grants SET namespace=$2,environment=$3,domain=$4,dimension=$5,generation=$6,integration_instance_id=$7,scope_checksum=$8,profile_name=$9,slot=$10,state='confirmed',grant_record=$11::jsonb WHERE id=$1`, pre.OriginalCreateGrantID, f.policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, pre.Generation, mutation.IntegrationInstanceID, mutation.ScopeChecksum, mutation.ProfileName, pre.Slot, string(tailFixtureWire(t, created)))
 		f.exec(t, `INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_create_attempt_id,resource_tuple_sha256,witness_sha256,original_wire,original_record,recorded_at)VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)`, pre.PreregistrationID, witness.OriginalCreateAttemptID, capacity.GuestRetirementSHA(witness.Tuple), capacity.GuestRetirementSHA(witness), tailFixtureWire(t, witness), string(tailFixtureWire(t, witness)), witness.ObservedAt)
 		f.exec(t, `INSERT INTO public.capacity_vm_original_enrollments(preregistration_id,resource_tuple_sha256,enrollment_sha256,original_provisioning_sha256,enrollment_record,recorded_at,registration_wire,receipt_wire)VALUES($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`, pre.PreregistrationID, capacity.GuestRetirementSHA(receipt.Enrollment.Statement.Tuple), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.OriginalProvisioningSHA256, string(tailFixtureWire(t, receipt.Enrollment)), receipt.RecordedAt, tailFixtureWire(t, reg), tailFixtureWire(t, receipt))
@@ -223,6 +226,7 @@ func (f *failedTailFixture) requestAndClaim(t *testing.T) {
 	f.requested = requested
 	claimEnvelope, claimJob := f.dispatch(t)
 	f.claimJob = claimJob
+	f.claimEnvelope = claimEnvelope
 	f.store.OriginalRunID = claimEnvelope.RunID
 	inv := capacity.RecoveryFixtureInventory(t, f.p, f.reg[0], time.Now().UTC())
 	member := inv.Members[0]
@@ -247,6 +251,218 @@ func (f *failedTailFixture) requestAndClaim(t *testing.T) {
 		t.Fatal("real tail claim must retain survivor", next, pre, claimed, err)
 	}
 	f.intent = next
+}
+
+func (f *failedTailFixture) retire(t *testing.T, refused bool) model.CapacityGuestRetirementRequestV2 {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	owner, err := capacity.NewGuestRetirementV2OriginalOwner(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	store := f.store.WithOriginalGuestNotifyCanary(f.steps[4], capacity.CurrentGuestCoreSource()).WithOriginalGuestRetirement(f.steps[4], capacity.CurrentGuestCoreSource())
+	core := ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32)))
+	preflight, err := store.IssueGuestRetirementV2(owner, f.policy, 2, 3, f.intent.LeaseOwner, f.pre[1].PreregistrationID, capacity.BusinessCreationSHA256([]byte(uuid.NewString())), core)
+	if err != nil {
+		t.Fatal("real tail V2 issue", err)
+	}
+	client := capacity.RecoveryFixtureRetirementNonceClient(t, preflight, f.receipt[1].Enrollment)
+	if err = owner.AcquireNonce(client, core, preflight, f.receipt[1].Enrollment); err != nil {
+		t.Fatal("real original V2 nonce exchange", err)
+	}
+	if err = store.FinalizeGuestRetirementV2Nonce(owner); err != nil {
+		t.Fatal("real V2 nonce ledger", err)
+	}
+	if err = store.ReserveGuestCallerV2(owner); err != nil {
+		t.Fatal("real V2 possible send", err)
+	}
+	request, _, _, err := owner.NonceExchange()
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal := capacity.RecoveryFixtureRetirementJournal(t, request.Intent, f.receipt[1].Enrollment)
+	limit := len(journal)
+	if refused {
+		limit = 1
+	}
+	for _, observed := range journal[:limit] {
+		if err = store.RecordGuestObservationV2(owner.Context(), request.Intent.RequestID, observed); err != nil {
+			t.Fatal("real V2 journal custody", err)
+		}
+	}
+	start := time.Now().UTC()
+	body := tailFixtureWire(t, journal[3])
+	status, persisted := 200, true
+	if refused {
+		body = []byte(`{"held":true}`)
+		status, persisted = 409, false
+	}
+	sha := capacity.BusinessCreationSHA256(body)
+	caller := GuestOriginalCallerReturn{RequestID: request.Intent.RequestID, AttemptID: request.Intent.AttemptID, StartedAt: start, DoStartedAt: start.Add(time.Millisecond), DoReturnedAt: start.Add(80 * time.Millisecond), ReadReturnedAt: start.Add(81 * time.Millisecond), CloseReturnedAt: start.Add(82 * time.Millisecond), DriverReturnedAt: start.Add(83 * time.Millisecond), OriginalDeadline: request.Intent.OriginalDeadline, Status: status, BodyPersisted: persisted, ReceivedBodyBytes: len(body), ResponseBodyScope: capacity.GuestOriginalBodyCompleteRead, ResponseSHA256: sha, RetainedPrefixBytes: len(body), RetainedPrefixSHA256: sha}
+	if persisted {
+		caller.Body = body
+	} else {
+		caller.Body = []byte{}
+	}
+	time.Sleep(time.Until(caller.DriverReturnedAt) + time.Millisecond)
+	if err = store.RecordGuestCallerReturnV2(owner.Context(), caller); err != nil {
+		t.Fatal("real closed V2 caller", err)
+	}
+	return request
+}
+
+func (f *failedTailFixture) finishDispatch(t *testing.T, request model.CapacityGuestRetirementRequestV2, refused bool) {
+	t.Helper()
+	status := "succeeded"
+	if refused {
+		status = "failed"
+	}
+	r := capacityDispatchResponse(f.claimEnvelope, status)
+	for _, step := range f.steps {
+		s := model.WorkflowRunStepResult{ID: step.ID, Status: "skipped"}
+		if step.ID == "plan-original-guest" {
+			s.Status = "succeeded"
+			s.Metadata = map[string]any{"mode": "retire", "reason": "failed_installed_disposal", "slot": float64(2), "generation": float64(2), "fencing_token": float64(3), "lease_owner": f.intent.LeaseOwner, "preregistration_id": f.pre[1].PreregistrationID}
+		}
+		if step.ID == "retire-original-guest" {
+			s.Status = "succeeded"
+			s.Metadata = map[string]any{"request_id": request.Intent.RequestID}
+			if refused {
+				s.Status = "failed"
+				s.Error = v2RefusedRetireStepError
+				s.Metadata = map[string]any{"original_guest_refusal_predicate": v2RefusedRetireStepPredicate}
+			}
+		}
+		if !refused && (step.ID == "finish-original-retirement" || step.ID == "complete-original-retirement") {
+			s.Status = "succeeded"
+		}
+		r.Steps = append(r.Steps, s)
+	}
+	if err := FinishCapacityDispatch(context.Background(), f.db, f.claimJob, r, time.Now().UTC(), nil); err != nil {
+		t.Fatal("real disposal dispatch finalization", err)
+	}
+}
+
+func (f *failedTailFixture) offReturn(t *testing.T, challenge GuestNativePoweroffReadV2) GuestNativePoweroffReturnV2 {
+	t.Helper()
+	plan := capacity.RecoveryFixtureNativeOffPlan(t, f.p, f.pre[1], f.receipt[1].Enrollment.Statement.Tuple)
+	started := time.Now().UTC()
+	return GuestNativePoweroffReturnV2{Schema: v2NativePoweroffReturnSchema, Challenge: challenge, Status: "observed", Plan: &plan, StartedAtCore: started, OriginalReturnedAtCore: started.Add(time.Millisecond)}
+}
+
+func (f *failedTailFixture) completeAbsence(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var survivorBefore string
+	if err := f.db.QueryRow(`SELECT slot_record::text FROM public.capacity_resource_slots WHERE namespace=$1 AND slot=1`, f.policy.Metadata.Namespace).Scan(&survivorBefore); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"foreign_slot", "foreign_lifetime", "exact"} {
+		owner, err := f.store.BeginFailedInstalledGuestAbsence(ctx, f.pre[1].PreregistrationID, f.requested.ID, "collaborator:"+uuid.NewString())
+		if err != nil {
+			t.Fatal("real tail absence begin", err)
+		}
+		c := owner.Candidate()
+		r := c.Request
+		now := time.Now().UTC()
+		o := model.CapacityOriginalCreateDispositionObservation{InventoryBasis: "original_accepted_auxiliary_inventory_v1", Schema: model.OriginalCreateDispositionObservationSchema, Provider: "hetzner", Profile: r.Profile, Slot: r.Slot, GrantID: r.GrantID, AttemptID: r.AttemptID, RequestSHA256: r.RequestSHA256, ResourceID: r.ExpectedResourceID, ResourceCreatedAt: r.ExpectedResourceCreatedAt, OriginalAdapterSourceCommit: r.OriginalAdapterSourceCommit, AdapterSourceCommit: enrolledFailedHetznerCreator, ResourceState: "absent", ResourceAbsenceComplete: true, AuxiliaryInventoryComplete: true, SharedResourcesPreserved: true, AuxiliaryResources: []model.CapacityVMAuxiliaryObservation{}, NativeReads: []model.CapacityOriginalCreateDispositionNativeRead{}, ObservationStartedAt: now, ObservedAt: now.Add(5 * time.Millisecond)}
+		resources := []model.CapacityMutationAuxiliaryResource{{Kind: "server", ID: r.ExpectedResourceID}}
+		resources = append(resources, r.AuxiliaryResources...)
+		for i, a := range resources {
+			wire := []byte(`{"error":"not_found"}`)
+			called := now.Add(time.Duration(i) * time.Millisecond)
+			returned := called.Add(time.Microsecond)
+			o.NativeReads = append(o.NativeReads, model.CapacityOriginalCreateDispositionNativeRead{Operation: "GetExactOriginal", ResourceKind: a.Kind, ResourceID: a.ID, Status: 404, ResponseSHA256: capacity.BusinessCreationSHA256(wire), ResponseBytes: int64(len(wire)), ResponseBodyBase64: base64.StdEncoding.EncodeToString(wire), ResponseRepresentation: "raw_http_body_v1", CalledAt: called, ReturnedAt: returned})
+			if i > 0 {
+				o.AuxiliaryResources = append(o.AuxiliaryResources, model.CapacityVMAuxiliaryObservation{Kind: a.Kind, ID: a.ID, Absent: true, ObservedAt: returned.Format(time.RFC3339Nano)})
+			}
+		}
+		if mode == "foreign_slot" {
+			o.Slot = 1
+		}
+		if mode == "foreign_lifetime" {
+			o.ResourceCreatedAt = now.Add(-time.Hour).Format(time.RFC3339Nano)
+		}
+		disposed, err := f.store.CompleteFailedInstalledGuestAbsence(ctx, owner, o)
+		if mode != "exact" {
+			if err == nil {
+				t.Fatal("foreign native absence accepted", mode)
+			}
+			continue
+		}
+		if err != nil || disposed.Stage != "terminal" {
+			t.Fatal("real tail absence terminal", disposed.Stage, err)
+		}
+	}
+	var survivorAfter string
+	var target capacityResourceSlot
+	var raw []byte
+	if err := f.db.QueryRow(`SELECT slot_record::text FROM public.capacity_resource_slots WHERE namespace=$1 AND slot=1`, f.policy.Metadata.Namespace).Scan(&survivorAfter); err != nil || survivorBefore != survivorAfter {
+		t.Fatal("disposal changed surviving slot", err)
+	}
+	if err := f.db.QueryRow(`SELECT slot_record FROM public.capacity_resource_slots WHERE namespace=$1 AND slot=2`, f.policy.Metadata.Namespace).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if json.Unmarshal(raw, &target) != nil || !target.Tombstone || target.ResourceID != "" {
+		t.Fatal("only failed tail must be tombstoned")
+	}
+	if err := f.db.QueryRow(`SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND dimension=$2`, f.policy.Metadata.Namespace, f.p.Dimension).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var current model.CapacityIntent
+	if json.Unmarshal(raw, &current) != nil || current.Phase != "disposed_failed_installed" || current.Decision.Units != 1 || current.Assessment.Snapshot.Units != 1 || current.Generation != 2 || current.FencingToken != 3 || current.LeaseExpiresAt != nil || current.FailedInstalledDisposal == nil || current.FailedInstalledDisposal.Stage != "terminal" {
+		t.Fatal("failed expansion reset the surviving fleet or promoted the failed generation", current)
+	}
+}
+
+func TestRecoveryFixtureFailedExpansionTailV2TerminalPostgres(t *testing.T) {
+	for _, mode := range []string{"complete_v2", "refused_v2_native_off"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFailedTailFixture(t)
+			f.canary(t, "initial_useful_membership")
+			f.requestAndClaim(t)
+			time.Sleep(5 * time.Second)
+			f.canary(t, "before_retirement_floor")
+			refused := mode == "refused_v2_native_off"
+			request := f.retire(t, refused)
+			if refused {
+				f.finishDispatch(t, request, true)
+				time.Sleep(time.Until(*f.intent.LeaseExpiresAt) + time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				owner, err := f.store.PrepareFailedInstalledV2RefusedNativeOffRead(ctx, f.pre[1].PreregistrationID, f.requested.ID, request.Intent.RequestID, "collaborator:"+uuid.NewString())
+				if err != nil {
+					t.Fatal("real refused tail admission", err)
+				}
+				_, disposal, err := f.store.RecordFailedInstalledV2RefusedNativeOffRead(ctx, owner, f.offReturn(t, owner.Challenge()))
+				if err != nil || disposal.Stage != "quiescent" {
+					t.Fatal("real refused tail native OFF qualification", disposal.Stage, err)
+				}
+			} else {
+				time.Sleep(5 * time.Second)
+				f.canary(t, "after_retirement_floor")
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				challenge, err := f.store.PrepareGuestNativePoweroffReadV2(ctx, request.Intent.RequestID)
+				if err != nil {
+					t.Fatal("real tail native OFF prepare", err)
+				}
+				if err = f.store.RecordGuestNativePoweroffV2(ctx, f.offReturn(t, challenge)); err != nil {
+					t.Fatal("real tail native OFF return", err)
+				}
+				store := f.store.WithOriginalGuestNotifyCanary(f.steps[5], capacity.CurrentGuestCoreSource())
+				disposal, handled, err := store.PrepareFailedInstalledGuestNativeCleanup(ctx, f.policy, 2, 3, f.intent.LeaseOwner, request.Intent.RequestID)
+				if err != nil || !handled || disposal.Stage != "quiescent" {
+					t.Fatal("real V2 tail cleanup transition", disposal.Stage, handled, err)
+				}
+				f.finishDispatch(t, request, false)
+			}
+			f.completeAbsence(t)
+		})
+	}
 }
 
 func TestRecoveryFixtureFailedExpansionTailRequestClaimAndCanariesPostgres(t *testing.T) {

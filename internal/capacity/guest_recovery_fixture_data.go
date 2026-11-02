@@ -65,6 +65,7 @@ func recoveryClockFixtureSlot(t *testing.T, offset time.Duration, selectedSlot i
 	pre.Slot, pre.Generation, pre.Fence = selectedSlot, int64(selectedSlot), int64(selectedSlot)
 	if selectedSlot != 1 {
 		pre.NonceSHA256 = BusinessCreationSHA256([]byte("fixture-preregistration:" + uid))
+		pre.OriginalCreateRequestSHA256 = mutation.Slots[selectedSlot-1].DesiredSpecSHA256
 	}
 	tuple := model.CapacityGuestNativeTuple{Provider: "hetzner", InstanceID: mutation.IntegrationInstanceID, InstanceChecksum: mutation.IntegrationChecksum, TypeID: mutation.IntegrationTypeID, TypeChecksum: mutation.IntegrationTypeChecksum, ScopeChecksum: mutation.ScopeChecksum, ProfileChecksum: spec.ProfileChecksum, Profile: mutation.ProfileName, Slot: 1, ResourceID: "123", CreatedAt: now.Format(time.RFC3339Nano)}
 	tuple.Slot = selectedSlot
