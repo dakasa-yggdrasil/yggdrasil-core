@@ -1692,5 +1692,37 @@
     "local_functional_execution": false,
     "operational_package_stage_swap_or_Core_CAS_performed": false,
     "native_recovery_main_or_AB_acceptance": false
+  },
+  "G9_discovery_error_retention_review_20261103": {
+    "schema": "G9_exact_census_original_discovery_error_retention_Source_review_v1",
+    "reviewed_Source_commit": "f3205f7e28a5d960d60de9e4ea89c139f93d2957",
+    "previous_complete_review_sha256": "02d384b4e2abe819e21e27aca3c7a029a91275b50e392f3e5941104968c6df8b",
+    "previous_top_level_nodes": 17,
+    "actual_failed_head": "21f870e03d33f0f73727195e38c7e21765eca25c",
+    "actual_failed_run": 41613602440,
+    "actual_failed_job": 125841385987,
+    "original_refusal_sha256": "736091a683fabdac3cf78cef2301259d3d79043b5b0b93dcfccc9e020e409619",
+    "actual_counts": {
+      "expected": 153,
+      "discovered": 124,
+      "failed_loader_placeholders": 1,
+      "missing_G9_CAS_methods": 30,
+      "tests_executed": 0
+    },
+    "cause_limit": "The original runner preserved the census refusal but omitted the underlying module-import exception. Static Source review did not establish its cause; no runtime predicate change or import-cause claim is made.",
+    "correction": "In the existing mismatch branch only, retain unittest.defaultTestLoader.errors in the refusal artifact and print those original strings before the unchanged RuntimeError. Preserve the default loader, discovery arguments and order, both rosters, all counters, clean-source checks and refusal before any test execution.",
+    "changed_Source": {
+      "path": "ops/network-guardian/tests/run_exact_ci.py",
+      "sha256": "b6c6705bb6441d23765945e050cbf8eb127b4a49e82298ce59c7673d7b2fa127",
+      "bytes": 4258
+    },
+    "Root_full_diff_and_entire_file_reverse_check": true,
+    "independent_Source_peer_sha256": "53ebffbdff4bbc2d00141e680165cce753458fa0d76ea29cdf830c194b8ccfe0",
+    "runtime_Guardian_tools_CAS_and_Go_Source_changed": false,
+    "historical106_plus_new47_criteria_unchanged": true,
+    "all_prior_Source_review_nodes_preserved": true,
+    "local_functional_execution": false,
+    "new_exact_head18_workflows37_jobs_required": true,
+    "CI_or_native_or_AB_acceptance_claimed": false
   }
 }
