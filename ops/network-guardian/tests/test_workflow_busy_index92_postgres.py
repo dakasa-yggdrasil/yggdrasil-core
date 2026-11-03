@@ -133,10 +133,11 @@ class WorkflowBusyIndex92PostgresTests(unittest.TestCase):
         self.add_run(1)
         self.add_run(2)
         failed = base.REAL_RUN(['docker','exec','-i',self.container,'psql','-X','-q','-v','ON_ERROR_STOP=1',
+            '-v','VERBOSITY=verbose',
             '-U','guardian_ci','-d','yggdrasil','-At'], input=('CREATE UNIQUE INDEX CONCURRENTLY ' + INDEX
             + ' ON public.workflow_runs(workflow_namespace,workflow_name);').encode(), capture_output=True, timeout=12)
-        self.assertNotEqual(failed.returncode, 0)
-        self.assertIn(b'duplicate key', failed.stderr)
+        self.assertEqual(failed.returncode, 3)
+        self.assertRegex(failed.stderr, rb'(?m)^ERROR:\s+23505:')
         before = self.index_facts()
         self.assertFalse(before['valid'])
         self.pg(migration_section(M92, 'Up'))

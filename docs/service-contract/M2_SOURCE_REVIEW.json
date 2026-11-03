@@ -2569,5 +2569,36 @@
       "production_migration92_Core_rollout_retirement_cycles_main_or_completion_claimed": false,
       "new_exact_head_CI_and_independent_native_acceptance_required": true
     }
+  },
+  "workflow_busy_index92_CI_unique_violation_fixture_correction_20261103": {
+    "schema": "workflow_busy_index92_CI_expected_SQLSTATE_fixture_correction_v1",
+    "failed_Source": "6ff3983362a8283210f7ceaa07c08f4043aa366a",
+    "original_Owned_CI": {
+      "run_id": 41724308646,
+      "job_id": 126224939104,
+      "attempt": 1,
+      "artifact_id": 13273059859,
+      "artifact_SHA256": "6f5dfcd0754da22d557252e9b742ab278bf56271b7a37b8d04069ac8b94a7557",
+      "stderr_SHA256": "f55935e9e868481fac31cbc873150b45f5ce742a32fc7d8b90e45ff8db00bf16",
+      "executed": 180,
+      "passed": 179,
+      "failures": 1,
+      "errors": 0,
+      "skips": 0,
+      "clean_Source": true,
+      "qualified": false
+    },
+    "failure": "The invalid-index test expected the English substring duplicate key, but PostgreSQL16 concurrent index creation returned could not create unique index with detail is duplicated. The test stopped before the remaining invalid-index and reapplication assertions.",
+    "correction": "Only this test requests verbose psql errors, requires the exact ON_ERROR_STOP SQL-error exit3, and checks the unique_violation SQLSTATE23505 error prefix. Actual failed concurrent index creation, invalid catalog state, unchanged reapplication and strict helper refusal assertions remain. Every existing test ID, production Source, migration, CAS, runtime package, timing bound and roster is unchanged.",
+    "file": {
+      "path": "ops/network-guardian/tests/test_workflow_busy_index92_postgres.py",
+      "bytes": 12820,
+      "sha256": "08694c559b141ccaa5bd4b868a2ceb32bcf195027a8fb243d34ae0fb90acee84"
+    },
+    "CI_applicability": "This PR changes no CLAUDE.md, AGENTS.md or docs/adr path, so Context Freshness is not triggered. The complete applicable cohort is18 events/38 jobs. No missing event is dispatched or labelled a pass. Installed G9 and historical Goose91 retain their separately qualified19/39 cohorts.",
+    "preserved_prior_M2_values": 26,
+    "current_successor_CI_status": "pending_new_exact_head_no_old_outcome_transfer",
+    "local_functional_test_import_SQL_build_or_Native_execution": false,
+    "production_schema92_Core_retirement_AB_main_or_completion_claimed": false
   }
 }
