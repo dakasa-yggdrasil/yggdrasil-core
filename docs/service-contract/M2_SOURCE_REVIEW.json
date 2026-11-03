@@ -1496,5 +1496,201 @@
     "exact_new_head_CI_required": true,
     "exact_new_head_CI_pass_claimed": false,
     "native_AB_or_main_acceptance": false
+  },
+  "held_original_network_G9_Source_review_20261103": {
+    "schema": "ADR0102_bound_G9_and_held_original_image_only_Source_review_v1",
+    "reviewed_Source_commit": "28fab4289057494a966a752cf4fd3ea657b6731b",
+    "normal_merge_of_qualified_Core_R": "da3598658d6f51d6f72283fe84509e336dca8927",
+    "qualified_Core_R": "ed76cef2d66d7f5368b96b41aaa22fc80a2233c4",
+    "qualified_AMD64_D": "68518595394601e92320f1ff074c1a85b8685ff6a810ddabab3bd649afd4de69",
+    "Root_accepted_controller_C": "bd7707a1a1cc0fd9a59ae567493ccb19023c9310a7d5e6840e10355618f7f338",
+    "Guardian_S": "c5d6a86f0741686382e10257ce880734d65b38da6b2c96fea35444ee6ccbf6eb",
+    "scope": "Preserve canonical G6, boot-v2, G7 and exact G8 authorities, helpers, original records and recovery limits while admitting only the independently qualified R5 platform image. Keep a separate image-only CAS for one fixed held original, with stable closed late-input custody and fresh native OFF/running evidence. The original failed caller and intent are unchanged; this operation grants no retirement authority. ADR0101 still requires its own fresh survivor business proofs before DELETE.",
+    "files": {
+      ".github/workflows/owned-network-guardian.yml": {
+        "sha256": "1dfe7c3b489ae21a922f3389cd81d9da4caece86ddc96b39e14282e7e009c2c6",
+        "bytes": 3076
+      },
+      "docs/adr/0102-preserve-g8-authority-for-a-held-original-core-image-rollout.md": {
+        "sha256": "0b124cbe11285f880cdbaab974c119e2feb40cd2ddb4d7d02e4489a5deb142ef",
+        "bytes": 7244
+      },
+      "docs/adr/README.md": {
+        "sha256": "81672a7c9012bf39fbc97c756841e530150168034722fb6eb96fd5cc4e8eda73",
+        "bytes": 26309
+      },
+      "ops/network-guardian/g9pair/PACKAGE.json": {
+        "sha256": "d66e0ecdd0ddc47e6ee1ca4a1a1b858657d6822492a9487d8cd3f5cbdcd25ca3",
+        "bytes": 8114
+      },
+      "ops/network-guardian/g9pair/SHA256SUMS": {
+        "sha256": "4e4c7bf501033f81efb608fddd64e739ee64a7dec652576032def39a27543b73",
+        "bytes": 1089
+      },
+      "ops/network-guardian/g9pair/source/coverage.py": {
+        "sha256": "eb7ed1fcbcc665cdc3603812a10103b4e19dd0b66693b99dc8cfeb15adceeb88",
+        "bytes": 16776
+      },
+      "ops/network-guardian/g9pair/source/current15_bounded_reader.py": {
+        "sha256": "1124dfbfbd57c60decc4fdcb0233c03253e87a941f50c8fa5b6aad3e28ae30cd",
+        "bytes": 4713
+      },
+      "ops/network-guardian/g9pair/source/current15_bounded_tail_contract.py": {
+        "sha256": "c18809987960f9aea524240f7ea6886a1ed782e5c4001e68edac875bbbe3431d",
+        "bytes": 4477
+      },
+      "ops/network-guardian/g9pair/source/initial_boot_Cold_read_adoption.py": {
+        "sha256": "0e690f4b74303da774aa7d5a651444e7f74c8445428af38002192bf1079b5799",
+        "bytes": 7381
+      },
+      "ops/network-guardian/g9pair/source/journal_contract.py": {
+        "sha256": "b0c153b69cc8275e1e330cb3c584b498c1685c1b999c4b5c7b972f164c96db6c",
+        "bytes": 6588
+      },
+      "ops/network-guardian/g9pair/source/network_guardian.py": {
+        "sha256": "c5d6a86f0741686382e10257ce880734d65b38da6b2c96fea35444ee6ccbf6eb",
+        "bytes": 114213
+      },
+      "ops/network-guardian/g9pair/source/proof_cache.py": {
+        "sha256": "c2e0b981a2843c15dd5907cc186e4c23a7d844a78c1ce4f7e2e3578704eb5b4b",
+        "bytes": 6061
+      },
+      "ops/network-guardian/g9pair/source/qualification_initializer.py": {
+        "sha256": "d73ade12564ba7b672a4dbdf8225e99af13a64a9b8aff4a41fb1a0225bef9ec8",
+        "bytes": 7571
+      },
+      "ops/network-guardian/g9pair/tools/SHA256SUMS": {
+        "sha256": "bd39b834112fda5dd643a0ee83109f83d57a05b470f1063e7cf66bd27e7555e5",
+        "bytes": 358
+      },
+      "ops/network-guardian/g9pair/tools/derive_g9pair_controller_config.py": {
+        "sha256": "967f7d8c01aad882a6158a38bfbdb04a24161a0b9b5400be0a2d70d4c8bafa7c",
+        "bytes": 16679
+      },
+      "ops/network-guardian/g9pair/tools/derive_standing_config.py": {
+        "sha256": "f151cff807091fd205fdd24f67bccfa9ca9557209176c4e187ffeafafc7821c9",
+        "bytes": 9746
+      },
+      "ops/network-guardian/g9pair/tools/g9cut.py": {
+        "sha256": "9cf7995b2a63e6b395c71ef46f574d90872404b3dcd815c53bc45a19daa91dec",
+        "bytes": 56269
+      },
+      "ops/network-guardian/g9pair/tools/pair_change_contract.py": {
+        "sha256": "0ef83ad2d4bbb28ad3d2319193bf3d9434ff04abbcf5c9b77c5993644f605a0a",
+        "bytes": 28662
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-cold-transport.service": {
+        "sha256": "074fe0a9024ba1bb91206600b5f975c2181b03eab0290546b96d0b7d765f502d",
+        "bytes": 815
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-guardian.service": {
+        "sha256": "66b0eecf531f31cd4a656321299f62e003a1dc0064cb1a44b79f09f55cea35fe",
+        "bytes": 725
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "sha256": "ad993f5a9a190984f67752a615fdd391db78384841bf02463250eab80de6010c",
+        "bytes": 184
+      },
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "sha256": "56bd498fbce7428c84852978d42f56571c4932db208e78021f74a56b664c8321",
+        "bytes": 85238
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-G9.json": {
+        "sha256": "992dceefa6833858ba41fa8737823d0b97322ff9dc9dbc5437041821a6528627",
+        "bytes": 5170
+      },
+      "ops/network-guardian/tests/fixtures/held-original-g9/identity.PUBLIC.json": {
+        "sha256": "950ff4a5a22145bafd7ceb6b8644c3075a9def04806d9a39a8e0582d3cb8b3cb",
+        "bytes": 5841
+      },
+      "ops/network-guardian/tests/fixtures/historical-standing-g8/ROOT-READ-CUSTODY.PUBLIC.json": {
+        "sha256": "b9d126cb4088aa67cf0cef4588ef367525b6816c0dbafcc0f42bb5bb0da3a3a7",
+        "bytes": 987
+      },
+      "ops/network-guardian/tests/fixtures/historical-standing-g8/g8pair.PUBLIC.json": {
+        "sha256": "a02690f5e7a8c000478ceca6c4f4715e7b589814bf93fc5cbefe3bd9126e08d3",
+        "bytes": 7853
+      },
+      "ops/network-guardian/tests/run_exact_ci.py": {
+        "sha256": "005f04f6b763f2eed80d769d37b1786ec0debaab74f4f5d2463f7a0adb74a96d",
+        "bytes": 4048
+      },
+      "ops/network-guardian/tests/test_g9pair_core_cas.py": {
+        "sha256": "33be7bd6bc772570b062c51167dadc822e7617a02930f8753edce29bf96e8e8e",
+        "bytes": 54203
+      },
+      "ops/network-guardian/tests/test_g9pair_cutover.py": {
+        "sha256": "4b0fb1ff0b5a730aef0edbdea9bae3ddfb5be8fe11397621fc2e2d16790ff2de",
+        "bytes": 7494
+      },
+      "ops/network-guardian/tests/test_g9pair_source.py": {
+        "sha256": "cb12b65c01d65bc6e4e6e8c2556aa8c7ec5d49461e8b2986175b1461892c5878",
+        "bytes": 10818
+      },
+      "ops/network-guardian/tests/test_g9pair_tools.py": {
+        "sha256": "9a1d2e75e1f8e8e06481a704220b224f8c42e6d0e90bdd922f4de875d02ded84",
+        "bytes": 9529
+      }
+    },
+    "complete_Go_Source_census": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "06538fe916e60a3266315f7aa6a66c4dd52da5693692a27bd560affc57abe958",
+      "records": 797,
+      "bytes": 130225,
+      "all_SHA_bytes_and_explicit_build_constraints_rechecked": true,
+      "all_records_unchanged_from_qualified_R5": true
+    },
+    "preserved_reviews": {
+      "previous_complete_review_sha256": "3f4c1e9cd453c9b8ffe9ee4fb5d976fdb0d904dc0c0c9d25eaba95ce6185b211",
+      "previous_top_level_nodes": 16,
+      "runtime_Root_review_sha256": "9fa38ae0087e7fc21c809403970f6d7e563ed9839c9e5d63b9603d920b6aa54b",
+      "runtime_independent_peer_sha256": "4f73759b883a09a7b47a55e0fc81616b6a544e9240efa4d9a656aef8a59993f1",
+      "tools_CAS_Root_review_sha256": "c0b3025895bc1253a67fcc8e4b3acfb30fd271bd008ac051247a200b88f934cc",
+      "tools_CAS_independent_peer_sha256": "660361d402d519d7b0bf554a08a1e1b27f49042de2edd11d5b2bc7935b5f8947",
+      "final_tests_independent_peer_sha256": "adf10a5fc565479cab27f59a635c9d07d376b0d25bed7fe9398964972c7ba3de",
+      "Owned_integration_independent_peer_sha256": "92b20ae430af0555c5e1dadac997e41de881f3279b2f82ba9296154fad710084"
+    },
+    "static_review": {
+      "runtime_files": 10,
+      "runtime_integrity_rows_including_PACKAGE": 11,
+      "separate_tools": 4,
+      "Owner_methods_and_helpers_unchanged": [
+        31,
+        7
+      ],
+      "literal_historical_field_counts": [
+        19,
+        21,
+        23,
+        25
+      ],
+      "current_fields": 27,
+      "fixed_original_identity_keys": 23,
+      "original_G8_roster_and_all_old_test_files_preserved": true,
+      "late_loader_and_all_guard_function_bodies_byte_unchanged_during_binding": true,
+      "only_new_rollout_integrity_entry_appended": true
+    },
+    "required_exact_head_CI": {
+      "applicable_workflow_event_pairs": 18,
+      "Owned_historical106_and_new47": 153,
+      "Owned_real_PostgreSQL_held_cases": 20,
+      "ordinary_forward_roots_per_PG_major": 18,
+      "ordinary_forward_nodes_per_PG_major": 210,
+      "old_kernel_roots_and_nodes_per_PG_major": [
+        16,
+        310
+      ],
+      "index89_cases_per_PG_major": 9,
+      "native_roots_and_nodes": [
+        8,
+        114
+      ],
+      "production_Docker_build": true,
+      "all_required_counters_no_skips_or_failures_clean_Source": true,
+      "outcomes_pending": true
+    },
+    "local_functional_execution": false,
+    "operational_package_stage_swap_or_Core_CAS_performed": false,
+    "native_recovery_main_or_AB_acceptance": false
   }
 }
