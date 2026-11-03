@@ -173,13 +173,15 @@ func (e *Engine) runFullReconcile(ctx context.Context) {
 		e.lastResults[kind] = result
 		e.mu.Unlock()
 		if result.Created > 0 || result.Updated > 0 || result.Errors > 0 {
-			e.logger.Info("reconcile pass",
+			fields := []zap.Field{
 				zap.String("kind", kind),
 				zap.Int("created", result.Created),
 				zap.Int("updated", result.Updated),
 				zap.Int("skipped", result.Skipped),
 				zap.Int("errors", result.Errors),
-			)
+			}
+			fields = append(fields, result.diagnostics.fields()...)
+			e.logger.Info("reconcile pass", fields...)
 		}
 	}
 }

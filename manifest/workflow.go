@@ -37,6 +37,45 @@ var (
 		"control_plane.render",
 		"collaborator.reconcile_provider_state",
 		"oidc_client.verify_bootstrap_file",
+		"capacity.assess",
+		"capacity.observe",
+		"capacity.adopt_executor_power",
+		"capacity.grant_executor_power",
+		"capacity.confirm_executor_power",
+		"capacity.initialize_executor_activity",
+		"capacity.record_executor_activity",
+		"capacity.observe_executor_activity",
+		"capacity.reserve_executor_stop",
+		"capacity.prepare_executor_stop",
+		"capacity.claim",
+		"capacity.renew",
+		"capacity.advance",
+		"capacity.recover",
+		"capacity.renew_recovery",
+		"capacity.reconcile",
+		"capacity.grant_mutation",
+		"capacity.record_slot",
+		"capacity.confirm_mutation",
+		"capacity.grant_compensation",
+		"capacity.confirm_compensation",
+		"capacity.observe_vm_inventory",
+		"capacity.observe_vm_node_membership",
+		"capacity.observe_original_creation_canary",
+		"capacity.observe_failed_vm_creation",
+		"capacity.record_vm_inventory",
+		"capacity.confirm_native_mutation",
+		"capacity.observe_bound_assessment",
+		"capacity.assess_bound",
+		"capacity.execute_bound",
+		"capacity.admit_bound",
+		"capacity.provision_original_guest",
+		"capacity.plan_original_guest",
+		"capacity.complete_original_guest",
+		"capacity.qualify_original_guest_echo",
+		"capacity.qualify_original_guest_notify",
+		"capacity.refresh_original_guest_notify",
+		"capacity.retire_original_guest",
+		"capacity.finish_original_guest_retirement",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
@@ -139,6 +178,9 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 
 	stepNames := map[string]struct{}{}
 	for _, step := range spec.Steps {
+		if strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") && strings.HasPrefix(strings.ToLower(strings.TrimSpace(step.Use.Operation)), "capacity.") && spec.Authorization == nil {
+			return fmt.Errorf("capacity steps require workflow authorization")
+		}
 		id := normalizeIntegrationName(step.ID)
 		if id == "" {
 			return fmt.Errorf("workflow step id is required")

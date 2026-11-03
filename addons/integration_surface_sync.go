@@ -57,8 +57,9 @@ func (e *emitterFromDB) Emit(ctx context.Context, eventType, aggregateID string,
 // messagecontroller.ExecuteIntegration (the synchronous adapter-execute
 // path) and returns the Output verbatim.
 type surfaceQueryDispatcher struct {
-	conn *amqp.Connection
-	db   *sql.DB
+	conn       *amqp.Connection
+	connection func() *amqp.Connection
+	db         *sql.DB
 }
 
 func newSurfaceQueryDispatcher(conn *amqp.Connection, db *sql.DB) *surfaceQueryDispatcher {
@@ -70,10 +71,14 @@ func (d *surfaceQueryDispatcher) Execute(ctx context.Context, req model.ExecuteI
 	// panics on a nil receiver and errors on a closed one. Returning the
 	// "unavailable" error keeps the surface-query handler at a clean 503
 	// instead of letting a dead conn surface as a panic on the request path.
-	if !brokerLive(d.conn) {
+	conn := d.conn
+	if d.connection != nil {
+		conn = d.connection()
+	}
+	if !brokerLive(conn) {
 		return nil, fmt.Errorf("rabbitmq connection unavailable")
 	}
-	resp, err := messagecontroller.ExecuteIntegration(ctx, d.conn, d.db, req)
+	resp, err := messagecontroller.ExecuteIntegration(ctx, conn, d.db, req)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +104,9 @@ func bootstrapIntegrationSurfaceSync(_ context.Context, app *runtime.ServiceApp)
 	// Dispatcher is only useful when rabbitmq is up; surface-query handler
 	// returns 503 if the resource isn't there.
 	if conn, ok := RabbitMQ(app); ok {
-		app.SetResource("integration_surface_query_dispatcher", newSurfaceQueryDispatcher(conn, db))
+		dispatcher := newSurfaceQueryDispatcher(conn, db)
+		dispatcher.connection = func() *amqp.Connection { current, _ := RabbitMQ(app); return current }
+		app.SetResource("integration_surface_query_dispatcher", dispatcher)
 	}
 	return nil
 }

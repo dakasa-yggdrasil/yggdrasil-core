@@ -615,7 +615,8 @@ func ListCollaboratorsPaginated(
 	}
 	defer rows.Close()
 
-	collaborators := make([]model.Collaborator, 0, pagination.Limit)
+	// Use a small constant initial capacity independent of request input.
+	collaborators := make([]model.Collaborator, 0, 16)
 	for rows.Next() {
 		c, err := scanCollaborator(rows)
 		if err != nil {

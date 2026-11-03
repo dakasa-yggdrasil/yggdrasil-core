@@ -90,7 +90,7 @@ func (s *Server) handleIntegrationWebhook(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	resp, err := messagecontroller.ExecuteIntegration(r.Context(), s.rabbitmq, s.db, model.ExecuteIntegrationRequest{
+	resp, err := messagecontroller.ExecuteIntegration(r.Context(), s.brokerConnection(), s.db, model.ExecuteIntegrationRequest{
 		Integration: model.ManifestSelector{ManifestID: instanceID.String()},
 		Operation:   "on_webhook",
 		Capability:  "on_webhook",

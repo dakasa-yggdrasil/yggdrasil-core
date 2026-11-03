@@ -1,0 +1,29 @@
+//go:build linux && nativequalification
+package capacitynativeqemu
+import("context";"crypto/rand";"encoding/hex";"encoding/json";"path/filepath";"time";"github.com/google/uuid";"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity";"github.com/dakasa-yggdrasil/yggdrasil-core/model";"github.com/dakasa-yggdrasil/yggdrasil-core/repository")
+type CanonicalCleanupSession struct {Child model.CapacityMutationGrant;AttemptID string;Nonce string;StartedAt time.Time;RedeemReturnedAt time.Time;Redeem model.CapacityMutationRedeemResponse;Replay model.CapacityMutationRedeemResponse;Authority []byte;ActionID string}
+func(r *Realm) RedeemCanonicalSourceChild(ctx context.Context,store repository.CapacityStore,policy model.Manifest,child model.CapacityMutationGrant)(CanonicalCleanupSession,error){
+ var s CanonicalCleanupSession
+ if !CanonicalSourceCompensationCase(r.Request.NativeCase) || child.CompensationOf=="" || child.Slot!=SourceFailureSlot(r.Request.NativeCase) || child.State!="issued"{return s,ErrOriginalUnknown}
+ var entropy [32]byte;if _,err:=rand.Read(entropy[:]);err!=nil{return s,err};s.Nonce=hex.EncodeToString(entropy[:]);s.AttemptID=uuid.NewString();s.Child=child;s.StartedAt=time.Now().UTC()
+ request:=model.CapacityMutationRedeemRequest{GrantID:child.GrantID,AttemptID:s.AttemptID,SettlementTokenSHA256:capacity.BusinessCreationSHA256([]byte(s.Nonce)),Capability:child.Capability,IntegrationInstanceID:child.IntegrationInstanceID,ScopeChecksum:child.ScopeChecksum,ProfileName:child.ProfileName,Slot:child.Slot,RequestSHA256:child.RequestSHA256,ExpectedResourceID:child.ExpectedResourceID,ExpectedResourceCreatedAt:child.ExpectedResourceCreatedAt,CompensationOf:child.CompensationOf}
+ if err:=r.api(ctx,"/api/v1/capacity/mutations/redeem","",request,&s.Redeem);err!=nil || s.Redeem.Mode!="write_once" || s.Redeem.GrantID!=child.GrantID || s.Redeem.AttemptID!=s.AttemptID || s.Redeem.RequestSHA256!=child.RequestSHA256 || s.Redeem.CompensationOf!=child.CompensationOf{return s,ErrOriginalUnknown};s.RedeemReturnedAt=time.Now().UTC()
+ if err:=r.api(ctx,"/api/v1/capacity/mutations/redeem","",request,&s.Replay);err!=nil || s.Replay.Mode!="read_only" || s.Replay.GrantID!=child.GrantID || s.Replay.AttemptID!=s.AttemptID || s.Replay.RequestSHA256!=child.RequestSHA256 || s.Replay.CompensationOf!=child.CompensationOf{return s,ErrOriginalUnknown}
+ raw,err:=json.Marshal(s.Redeem);if err!=nil{return s,err};if _,err=PublishBytes(ctx,filepath.Join(r.PrivateDirectory,"canonical-source-redeem-return.json"),raw);err!=nil{return s,err};s.Authority,err=store.AuthorizeCanonicalSourceChild(ctx,policy,child.GrantID,s.AttemptID,capacity.BusinessCreationSHA256(raw));if err!=nil{return s,err};s.ActionID="canonical-original-cleanup:"+child.GrantID+":"+s.AttemptID
+ return s,nil
+}
+// SettleCanonicalSourceChild settles the child with the proof of the single
+// write-once absence read that the PG17 pre-settlement hook stored through
+// ObserveCanonicalSourceCompensation. It does not observe again (a second
+// Observe fails on the child_grant_id primary key) and takes no new pidfd/disk
+// read: its authority is the stored read, at most MaxEvidenceAgeSeconds old at
+// the database clock, and that stored read must exist before Settle runs.
+func(r *Realm) SettleCanonicalSourceChild(ctx context.Context,store repository.CapacityStore,policy model.Manifest,s CanonicalCleanupSession)(model.CapacityMutationProof,[]byte,error){
+ var proof model.CapacityMutationProof
+ observed,err:=store.CanonicalSourceCompensationObserved(ctx,policy,s.Child.GrantID);if err!=nil{return proof,nil,err}
+ settlement:=model.CapacityMutationSettleRequest{GrantID:s.Child.GrantID,AttemptID:s.AttemptID,RequestSHA256:s.Child.RequestSHA256,Outcome:"accepted",TransportCompleted:true,ResourceID:observed.ResourceID,ResourceCreatedAt:observed.ResourceCreatedAt,ActionID:s.ActionID,ObservedAt:observed.ObservedAt.UTC().Format(time.RFC3339Nano),AuxiliaryInventoryComplete:true}
+ var returned struct{GrantID string `json:"grant_id"`;AttemptID string `json:"attempt_id"`;RequestSHA256 string `json:"request_sha256"`;Status string `json:"status"`}
+ if err=r.api(ctx,"/api/v1/capacity/mutations/settle",s.Nonce,settlement,&returned);err!=nil || returned.Status!="settled" || returned.GrantID!=s.Child.GrantID || returned.AttemptID!=s.AttemptID || returned.RequestSHA256!=s.Child.RequestSHA256{return proof,nil,ErrOriginalUnknown}
+ wire,err:=Publish(ctx,filepath.Join(r.PrivateDirectory,"canonical-source-compensation-api-returns.json"),struct{Schema string `json:"schema"`;Scope string `json:"scope"`;ChildGrantID string `json:"child_grant_id"`;AttemptID string `json:"attempt_id"`;RequestSHA256 string `json:"request_sha256"`;ActionID string `json:"action_id"`;StartedAt time.Time `json:"started_at"`;RedeemReturnedAt time.Time `json:"redeem_returned_at"`;SettleReturnedAt time.Time `json:"settle_returned_at"`;Redeem model.CapacityMutationRedeemResponse `json:"redeem"`;Replay model.CapacityMutationRedeemResponse `json:"replay"`;Settlement model.CapacityMutationSettleRequest `json:"settlement"`;SettleResponse any `json:"settle_response"`}{"canonical_source_compensation_callbacks_v2","SAME_ORIGINAL_REALM_API_CHILD_OWNED_EFFECTS_NOT_RAW_HTTP",s.Child.GrantID,s.AttemptID,s.Child.RequestSHA256,s.ActionID,s.StartedAt,s.RedeemReturnedAt,time.Now().UTC(),s.Redeem,s.Replay,settlement,returned})
+ return observed,wire,err
+}

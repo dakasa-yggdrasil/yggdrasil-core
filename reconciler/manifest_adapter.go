@@ -123,7 +123,7 @@ func (m *ManifestMaterializer) Reconcile(ctx context.Context, target KubeTarget,
 			ActiveOnly: true,
 		})
 		if err != nil {
-			result.Errors++
+			result.recordError(stageList, err)
 			continue
 		}
 
@@ -134,14 +134,14 @@ func (m *ManifestMaterializer) Reconcile(ctx context.Context, target KubeTarget,
 			existing, err := target.Client.CoreV1().ConfigMaps(ns).Get(ctx, name, metav1.GetOptions{})
 			if k8serrors.IsNotFound(err) {
 				if mErr := m.Materialize(ctx, target, manifest); mErr != nil {
-					result.Errors++
+					result.recordError(stageApply, mErr)
 				} else {
 					result.Created++
 				}
 				continue
 			}
 			if err != nil {
-				result.Errors++
+				result.recordError(stageGet, err)
 				continue
 			}
 
@@ -151,7 +151,7 @@ func (m *ManifestMaterializer) Reconcile(ctx context.Context, target KubeTarget,
 			}
 
 			if mErr := m.Materialize(ctx, target, manifest); mErr != nil {
-				result.Errors++
+				result.recordError(stageApply, mErr)
 			} else {
 				result.Updated++
 			}

@@ -1,0 +1,60 @@
+name: Owned Network Guardian
+
+on:
+  pull_request:
+    paths:
+      - 'ops/network-guardian/**'
+      - '.github/workflows/owned-network-guardian.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/network-guardian/**'
+      - '.github/workflows/owned-network-guardian.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-source-and-historical-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify original G6 operational package
+        working-directory: ops/network-guardian/g6pair-boot-v2
+        run: sha256sum --check SHA256SUMS
+      - name: Verify exact G7 runtime package and separate real operational tools
+        run: |
+          cd ops/network-guardian/g7pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+      - name: Run exact G6 and G7 proof, derivation and once-only cutover census
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
+        run: |
+          mkdir -p "$GUARDIAN_CI_EVIDENCE"
+          set +e
+          python3 -I -B ops/network-guardian/tests/run_exact_ci.py > "$GUARDIAN_CI_EVIDENCE/unittest.stdout" 2> "$GUARDIAN_CI_EVIDENCE/unittest.stderr"
+          result=$?
+          printf '%s\n' "$result" > "$GUARDIAN_CI_EVIDENCE/unittest.exit"
+          cat "$GUARDIAN_CI_EVIDENCE/unittest.stdout"
+          cat "$GUARDIAN_CI_EVIDENCE/unittest.stderr"
+          exit "$result"
+      - name: Retain reviewed exact source, units and fixture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owned-network-guardian-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ops/network-guardian/
+            ${{ runner.temp }}/owned-network-guardian/
+          if-no-files-found: error
+          retention-days: 30

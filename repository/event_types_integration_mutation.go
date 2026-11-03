@@ -1,6 +1,10 @@
 package repository
 
-import "regexp"
+import (
+	"regexp"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/docs/contracts"
+)
 
 // IntegrationMutationEventTypeRegex is the canonical pattern adapters MUST
 // satisfy when emitting mutation events per INTEGRATION_CONTRACT §6.5:
@@ -32,11 +36,12 @@ var IntegrationMutationVerbs = []string{"ensured", "destroyed", "created"}
 var integrationMutationEventTypePattern = regexp.MustCompile(IntegrationMutationEventTypeRegex)
 
 // IsIntegrationMutationEvent reports whether the given event type conforms
-// to the §6.5 mutation event grammar. The materialiser uses this to decide
+// to the §6.5 mutation event grammar or the separately compiled, fixed native
+// qualification vocabulary. The materialiser uses this to decide
 // whether an event should fan out to integration_instances with matching
 // reactor declarations, in addition to the closed canon lifecycle set.
 func IsIntegrationMutationEvent(eventType string) bool {
-	return integrationMutationEventTypePattern.MatchString(eventType)
+	return integrationMutationEventTypePattern.MatchString(eventType) || contracts.IsNativeQualificationMutationEvent(eventType)
 }
 
 // ParseIntegrationMutationEventType splits the canonical form into
@@ -44,11 +49,11 @@ func IsIntegrationMutationEvent(eventType string) bool {
 // the grammar — call sites should treat that as an invalid event type
 // before persisting.
 func ParseIntegrationMutationEventType(eventType string) (provider, resource, verb string, ok bool) {
-	if !integrationMutationEventTypePattern.MatchString(eventType) {
+	if !IsIntegrationMutationEvent(eventType) {
 		return "", "", "", false
 	}
-	// We know there are exactly two dots given the regex; walk explicitly
-	// instead of pulling strings.SplitN here so we keep zero allocations
+	// The generic grammar and both fixed qualification types have two dots;
+	// walk explicitly instead of pulling strings.SplitN to keep zero allocations
 	// in the happy path.
 	firstDot := -1
 	lastDot := -1

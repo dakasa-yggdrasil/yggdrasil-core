@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/native_qualification/server_ensured.json",
+  "title": "native-qemu.server.ensured v1",
+  "description": "Fixed nativequalification event vocabulary. Payload validity does not establish native provisioning or production authority.",
+  "type": "object",
+  "required": ["provider", "resource", "verb", "resource_id", "instance_id"],
+  "properties": {
+    "provider": { "type": "string", "const": "native-qemu" },
+    "resource": { "type": "string", "const": "server" },
+    "verb": { "type": "string", "const": "ensured" },
+    "resource_id": { "type": "string", "minLength": 1 },
+    "instance_id": { "type": "string", "minLength": 1 },
+    "observed": { "type": "object", "additionalProperties": true },
+    "emitted_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

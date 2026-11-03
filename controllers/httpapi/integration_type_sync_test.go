@@ -90,7 +90,7 @@ func (f *fakeSyncDeps) InvokeDescribe(
 	return live, nil
 }
 
-func (f *fakeSyncDeps) ApplyManifestVersion(ctx context.Context, doc model.ManifestDocument) (model.Manifest, error) {
+func (f *fakeSyncDeps) ApplyManifestVersion(ctx context.Context, _ model.Manifest, doc model.ManifestDocument) (model.Manifest, error) {
 	return model.Manifest{
 		ID:      fakeTypeID,
 		Version: 4,

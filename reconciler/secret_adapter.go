@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -16,6 +17,17 @@ import (
 
 // SecretMaterializer converts model.ManagedSecret into Kubernetes Secrets.
 type SecretMaterializer struct{}
+
+var errSecretTargetNotManaged = errors.New("secret target is not managed by yggdrasil-core")
+
+// requireManagedSecret refuses implicit adoption of an existing Secret. Check
+// ownership before version comparisons or any mutation of the returned object.
+func requireManagedSecret(secret *corev1.Secret) error {
+	if secret == nil || secret.Labels[LabelManagedBy] != LabelManagedByValue {
+		return errSecretTargetNotManaged
+	}
+	return nil
+}
 
 // Owns returns the resource kind this materializer manages.
 func (m *SecretMaterializer) Owns() string {
@@ -43,6 +55,9 @@ func (m *SecretMaterializer) Materialize(ctx context.Context, target KubeTarget,
 	}
 	if err != nil {
 		return fmt.Errorf("get secret %s/%s: %w", ns, name, err)
+	}
+	if err := requireManagedSecret(existing); err != nil {
+		return err
 	}
 
 	// Skip if already up-to-date.
@@ -85,14 +100,18 @@ func (m *SecretMaterializer) reconcileSecretList(ctx context.Context, target Kub
 		existing, err := target.Client.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
 		if k8serrors.IsNotFound(err) {
 			if mErr := m.createSecret(ctx, target, secret, ns, name); mErr != nil {
-				result.Errors++
+				result.recordError(stageCreate, mErr)
 			} else {
 				result.Created++
 			}
 			continue
 		}
 		if err != nil {
-			result.Errors++
+			result.recordError(stageGet, err)
+			continue
+		}
+		if err := requireManagedSecret(existing); err != nil {
+			result.recordError(stageUpdate, err)
 			continue
 		}
 
@@ -104,7 +123,7 @@ func (m *SecretMaterializer) reconcileSecretList(ctx context.Context, target Kub
 		}
 
 		if mErr := m.updateSecret(ctx, target, secret, existing); mErr != nil {
-			result.Errors++
+			result.recordError(stageUpdate, mErr)
 		} else {
 			result.Updated++
 		}
@@ -135,6 +154,9 @@ func (m *SecretMaterializer) createSecret(ctx context.Context, target KubeTarget
 
 // updateSecret overwrites data and merges annotations on an existing K8s Secret.
 func (m *SecretMaterializer) updateSecret(ctx context.Context, target KubeTarget, secret model.ManagedSecret, existing *corev1.Secret) error {
+	if err := requireManagedSecret(existing); err != nil {
+		return err
+	}
 	existing.Data = toSecretData(secret.Data)
 
 	annotations := buildAnnotations(secret)
@@ -164,6 +186,9 @@ func (m *SecretMaterializer) markSecret(ctx context.Context, target KubeTarget, 
 	}
 	if err != nil {
 		return fmt.Errorf("get secret %s/%s for marking: %w", ns, name, err)
+	}
+	if err := requireManagedSecret(existing); err != nil {
+		return err
 	}
 
 	if existing.Annotations == nil {

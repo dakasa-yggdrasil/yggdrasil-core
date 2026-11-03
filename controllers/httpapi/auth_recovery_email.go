@@ -191,7 +191,7 @@ func (s *Server) dispatchPasswordResetEmail(cfg passwordResetEmailConfig, collab
 			input["from"] = cfg.from
 			input["from_email"] = cfg.from
 		}
-		if _, err := executeAuthEmailIntegration(ctx, s.rabbitmq, s.db, model.ExecuteIntegrationRequest{
+		if _, err := executeAuthEmailIntegration(ctx, s.brokerConnection(), s.db, model.ExecuteIntegrationRequest{
 			Integration: cfg.integration,
 			Operation:   "send_email",
 			Capability:  "send_email",

@@ -1,0 +1,27 @@
+{
+  "Core_source": "f89703cce8d8c228a4bd5983ad428780c514b885",
+  "files": {
+    "100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-CLOSING.JSONL": {
+      "bytes": 10824,
+      "gzip_bytes": 2497,
+      "gzip_sha256": "1c6128ea9f462b109d5504076e91b43411dbbd10e35cf40ffdbd99e13ac8f83a",
+      "sha256": "42b5834830c09b9c4b044171c69c7c2d9d4aabe68223c4bbbc887162d3b61991"
+    },
+    "100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-PREFIX.JSONL": {
+      "bytes": 706621,
+      "gzip_bytes": 80268,
+      "gzip_sha256": "c895cb6e59c2ef4dacb9dc4e3ae20cba712516b5be7bbadac6a6a3f27b744a88",
+      "sha256": "6240b7f21932747366be7ce5ce6778559b3a5b63594c6d521ba7c2ab293d55ca"
+    },
+    "100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-QUALIFIED.PUBLIC.json": {
+      "bytes": 242643,
+      "gzip_bytes": 13736,
+      "gzip_sha256": "e6be6ad7cb0b0b3b71eaba8174c2e3ff9b3fb88a9ff3d4b586c852e84cdb018b",
+      "sha256": "21e4697326aa0e74b1e169a897870b10e4668328ca04d497900a2f297bc99a31"
+    }
+  },
+  "guardian_source_sha256": "6c2cc19f1f962d9d8eaec0cd5e6f813bf49004f8ff6fef9c9fe9f8f0310d8f1b",
+  "purpose": "Immutable historical initializer/full120 recomputation only; never live current health or mutation authority. Exact PUBLIC bytes; no sanitization, reconstruction or relabel.",
+  "schema": "owned_network_guardian_historical_actual_newboot_fixture_v1",
+  "standing_config_sha256": "be5b25495056bd25e1512827b5ccbe7236f84928b4d20515f5000383771dcc79"
+}

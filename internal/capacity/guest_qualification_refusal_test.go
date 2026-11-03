@@ -1,0 +1,312 @@
+package capacity
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestGuestQualificationReadoptionClosedStages(t *testing.T) {
+	cause := errors.New("private details")
+	for stage, want := range map[string]string{"readoption_presence": "original-guest-step-47", "readoption_plan": "original-guest-step-48", "readoption_lease": "original-guest-step-49"} {
+		err := GuestQualificationRefusal(stage, cause)
+		if GuestQualificationPredicate(err) != want || !errors.Is(err, cause) || strings.Contains(err.Error(), "private details") {
+			t.Fatalf("wrong closed readoption stage: %s", stage)
+		}
+	}
+}
+
+func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
+	cause := errors.New("SECRET SQL HTTP credential body")
+	cases := []struct{ stage, predicate string }{
+		{"probe_http_config_held", "original-guest-step-50"},
+		{"probe_http_enrollment_held", "original-guest-step-51"},
+		{"probe_http_enrollment_read_held", "original-guest-step-52"},
+		{"probe_http_enrollment_decode_held", "original-guest-step-53"},
+		{"probe_http_enrollment_validate_held", "original-guest-step-54"},
+		{"probe_http_enrollment_command_held", "original-guest-step-55"},
+		{"native_finish_protected_spec", "original-guest-step-56"},
+		{"native_finish_protected_refusal", "original-guest-step-57"},
+		{"native_finish_burst_issue", "original-guest-step-58"},
+		{"observe", "original-guest-step-60"},
+		{"lease_missing", "original-guest-step-61"},
+		{"generation", "original-guest-step-62"},
+		{"fence", "original-guest-step-63"},
+		{"phase", "original-guest-step-64"},
+		{"binding", "original-guest-step-65"},
+		{"owned_slots", "original-guest-step-66"},
+		{"member", "original-guest-step-67"},
+		{"client", "original-guest-step-68"},
+		{"probe", "original-guest-step-69"},
+		{"fresh_native", "original-guest-step-70"},
+		{"projection", "original-guest-step-71"},
+		{"projection_encode", "original-guest-step-72"},
+		{"record_slot", "original-guest-step-73"},
+		{"advance_prepared", "original-guest-step-74"},
+		{"advance_canary", "original-guest-step-75"},
+		{"advance_promoted", "original-guest-step-76"},
+		{"realm_profile", "original-guest-step-77"},
+		{"enrollment", "original-guest-step-78"},
+		{"key_writers", "original-guest-step-79"},
+		{"deadline", "original-guest-step-80"},
+		{"nonce_preflight", "original-guest-step-59"},
+		{"nonce", "original-guest-step-81"},
+		{"signature", "original-guest-step-82"},
+		{"request_encode", "original-guest-step-83"},
+		{"reserve_probe", "original-guest-step-84"},
+		{"probe_http", "original-guest-step-85"},
+		{"probe_decode", "original-guest-step-86"},
+		{"probe_validate", "original-guest-step-87"},
+		{"finish_probe", "original-guest-step-88"},
+		{"publish_probe", "original-guest-step-89"},
+		{"probe_http_preflight", "original-guest-step-90"},
+		{"probe_http_context", "original-guest-step-91"},
+		{"probe_http_transport", "original-guest-step-92"},
+		{"probe_http_read", "original-guest-step-93"},
+		{"probe_http_close", "original-guest-step-94"},
+		{"probe_http_auth_status", "original-guest-step-95"},
+		{"probe_http_not_found", "original-guest-step-96"},
+		{"probe_http_client_status", "original-guest-step-97"},
+		{"probe_http_server_status", "original-guest-step-98"},
+		{"probe_http_other_status", "original-guest-step-99"},
+		{"arbitrary SECRET", "original-guest-step-17"},
+		{"probe_http\nSECRET", "original-guest-step-17"},
+		{"", "original-guest-step-17"},
+	}
+	for i, tc := range cases {
+		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {
+			err := GuestQualificationRefusal(tc.stage, cause)
+			if !errors.Is(err, cause) {
+				t.Fatal("cause identity lost")
+			}
+			if strings.Contains(err.Error(), "SECRET") {
+				t.Fatal("private text exposed")
+			}
+			if got := GuestQualificationPredicate(fmt.Errorf("outer: %w", err)); got != tc.predicate {
+				t.Fatalf("got %q", got)
+			}
+		})
+	}
+	if GuestQualificationRefusal("probe_http", nil) != nil {
+		t.Fatal("success changed")
+	}
+	for _, err := range []error{nil, cause, fmt.Errorf("original-guest-step-85: %w", cause)} {
+		if GuestQualificationPredicate(err) != "original-guest-step-17" {
+			t.Fatal("untyped error acquired stage")
+		}
+	}
+}
+
+func TestGuestQualificationHTTPRefusalClosedFacts(t *testing.T) {
+	cause := errors.New("SECRET URL header body transport")
+	cases := []struct {
+		name  string
+		facts GuestOriginalHTTPReturn
+		code  string
+	}{
+		{"preflight", GuestOriginalHTTPReturn{PreflightFailed: true}, "90"},
+		{"context_preflight", GuestOriginalHTTPReturn{OriginalContextFailed: true, PreflightFailed: true}, "91"},
+		{"context_transport", GuestOriginalHTTPReturn{OriginalContextFailed: true, DoFailed: true}, "91"},
+		{"transport", GuestOriginalHTTPReturn{DoFailed: true}, "92"},
+		{"read_close", GuestOriginalHTTPReturn{ReadFailed: true, CloseFailed: true}, "93"},
+		{"close_status", GuestOriginalHTTPReturn{CloseFailed: true, Status: 503}, "94"},
+		{"unauthorized", GuestOriginalHTTPReturn{Status: 401}, "95"},
+		{"forbidden", GuestOriginalHTTPReturn{Status: 403}, "95"},
+		{"not_found", GuestOriginalHTTPReturn{Status: 404}, "96"},
+		{"bad_request", GuestOriginalHTTPReturn{Status: 400}, "97"},
+		{"conflict", GuestOriginalHTTPReturn{Status: 409}, "97"},
+		{"server", GuestOriginalHTTPReturn{Status: 503}, "98"},
+		{"redirect", GuestOriginalHTTPReturn{Status: 302}, "99"},
+		{"no_status", GuestOriginalHTTPReturn{}, "99"},
+		{"unknown", GuestOriginalHTTPReturn{Status: 200}, "85"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.facts.Body = []byte("SECRET body")
+			err := GuestQualificationHTTPRefusal(tc.facts, cause)
+			if !errors.Is(err, cause) || strings.Contains(err.Error(), "SECRET") || GuestQualificationPredicate(err) != "original-guest-step-"+tc.code {
+				t.Fatal("closed original HTTP failure classification changed")
+			}
+			if GuestQualificationHTTPRefusal(tc.facts, nil) != nil {
+				t.Fatal("diagnostic turned success into refusal")
+			}
+		})
+	}
+}
+
+type qualificationHTTPRoundTrip func(*http.Request) (*http.Response, error)
+
+func (f qualificationHTTPRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+type qualificationHTTPBody struct {
+	readError  bool
+	closeError bool
+}
+
+func (b qualificationHTTPBody) Read(p []byte) (int, error) {
+	if b.readError {
+		return 0, errors.New("SECRET read")
+	}
+	return 0, io.EOF
+}
+func (b qualificationHTTPBody) Close() error {
+	if b.closeError {
+		return errors.New("SECRET close")
+	}
+	return nil
+}
+
+func TestGuestQualificationHTTPOriginalFailureFacts(t *testing.T) {
+	for _, mode := range []string{"transport", "read", "close", "status", "context"} {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		calls := 0
+		client := &GuestOriginalHTTPClient{origin: "https://example.invalid", client: &http.Client{Transport: qualificationHTTPRoundTrip(func(r *http.Request) (*http.Response, error) {
+			calls++
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/runtime-snapshot" {
+				t.Fatal("original request changed")
+			}
+			if mode == "context" {
+				cancel()
+			}
+			if mode == "transport" || mode == "context" {
+				return nil, errors.New("SECRET transport")
+			}
+			status := 200
+			if mode == "status" {
+				status = 409
+			}
+			return &http.Response{StatusCode: status, Body: qualificationHTTPBody{readError: mode == "read", closeError: mode == "close"}, Header: make(http.Header)}, nil
+		})}}
+		returned, err := client.Original(ctx, http.MethodGet, "/v1/runtime-snapshot", []byte("{}"))
+		cancel()
+		want := map[string]string{"transport": "92", "read": "93", "close": "94", "status": "97", "context": "91"}[mode]
+		if err == nil || calls != 1 || GuestQualificationPredicate(GuestQualificationHTTPRefusal(returned, err)) != "original-guest-step-"+want {
+			t.Fatalf("original %s return lost or retried", mode)
+		}
+	}
+}
+
+func TestGuestQualificationFixedServerProblems(t *testing.T) {
+	for _, code := range []string{"config_held", "enrollment_held", "enrollment_read_held", "enrollment_decode_held", "enrollment_validate_held", "enrollment_command_held"} {
+		body := []byte("{\"code\":\"guest_retirement." + code + "\",\"status\":503,\"title\":\"Guest retirement held\",\"detail\":\"The original Guest retirement requires its enrolled authority and complete original results.\"}\n")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		calls := 0
+		client := &GuestOriginalHTTPClient{origin: "https://example.invalid", client: &http.Client{Transport: qualificationHTTPRoundTrip(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
+		})}}
+		returned, err := client.Original(ctx, http.MethodGet, "/v1/runtime-snapshot", []byte("{}"))
+		cancel()
+		want := map[string]string{"config_held": "original-guest-step-50", "enrollment_held": "original-guest-step-51", "enrollment_read_held": "original-guest-step-52", "enrollment_decode_held": "original-guest-step-53", "enrollment_validate_held": "original-guest-step-54", "enrollment_command_held": "original-guest-step-55"}[code]
+		if err == nil || calls != 1 || GuestQualificationPredicate(GuestQualificationHTTPRefusal(returned, err)) != want {
+			t.Fatal("exact fixed native problem not classified")
+		}
+		mutations := []func(*GuestOriginalHTTPReturn){
+			func(r *GuestOriginalHTTPReturn) { r.Status = 500 },
+			func(r *GuestOriginalHTTPReturn) { r.Body = append([]byte("SECRET"), r.Body...) },
+			func(r *GuestOriginalHTTPReturn) { r.ResponseBodyScope = GuestOriginalBodyIncompleteRead },
+			func(r *GuestOriginalHTTPReturn) { r.RetainedPrefixSHA256 = strings.Repeat("0", 64) },
+		}
+		for _, mutate := range mutations {
+			changed := returned
+			mutate(&changed)
+			if GuestQualificationPredicate(GuestQualificationHTTPRefusal(changed, err)) != "original-guest-step-98" {
+				t.Fatal("nonexact or incomplete problem acquired a specific code")
+			}
+		}
+		returned.OriginalContextFailed = true
+		if GuestQualificationPredicate(GuestQualificationHTTPRefusal(returned, err)) != "original-guest-step-91" {
+			t.Fatal("body classification overrode original context failure")
+		}
+	}
+}
+
+func TestGuestQualificationUnrecognizedServerProblem(t *testing.T) {
+	valid := "{\"code\":\"guest_retirement.enrollment_held\",\"status\":503,\"title\":\"Guest retirement held\",\"detail\":\"The original Guest retirement requires its enrolled authority and complete original results.\"}\n"
+	bodies := []string{
+		strings.Replace(valid, "enrollment_held", "unknown_held", 1),
+		strings.Replace(valid, "Guest retirement held", "SECRET", 1),
+		strings.Replace(valid, "503", "500", 1),
+		strings.TrimSuffix(valid, "\n"),
+		" " + valid,
+		valid + valid,
+		strings.Replace(valid, "{", "{\"secret\":\"SECRET\",", 1),
+		strings.Replace(valid, "{", "{\"code\":\"guest_retirement.config_held\",", 1),
+	}
+	for _, body := range bodies {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		calls := 0
+		client := &GuestOriginalHTTPClient{origin: "https://example.invalid", client: &http.Client{Transport: qualificationHTTPRoundTrip(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+		})}}
+		returned, err := client.Original(ctx, http.MethodGet, "/v1/runtime-snapshot", []byte("{}"))
+		cancel()
+		projected := GuestQualificationHTTPRefusal(returned, err)
+		if err == nil || calls != 1 || GuestQualificationPredicate(projected) != "original-guest-step-98" || strings.Contains(projected.Error(), "SECRET") {
+			t.Fatal("unrecognized complete server problem was disclosed or promoted")
+		}
+	}
+}
+
+var guestRecoveryCleanupTestStages = []string{"scope", "preregistration", "observe", "epoch", "client", "case", "random", "challenge", "request-publish", "fresh-native", "http-transport", "http-status", "http-late", "return-publish", "failure-publish", "complete", "session", "nonce", "store", "challenge-tx", "policy", "lock", "parent-load", "parent-state", "prereg-id", "prereg-load", "prereg-binding", "clock", "intent-load", "intent-epoch", "intent-parent", "deadline", "lease", "lease-state", "challenge-encode", "challenge-insert", "challenge-commit"}
+
+func TestGuestQualificationRecoveryCleanupClosedStages(t *testing.T) {
+	cause := errors.New("SECRET owner executor SQL body")
+	seen := map[string]bool{}
+	for _, stage := range guestRecoveryCleanupTestStages {
+		t.Run(stage, func(t *testing.T) {
+			err := GuestQualificationRefusal("recovery-cleanup-"+stage, cause)
+			want := "original-recovery-cleanup-" + stage
+			if !errors.Is(err, cause) || strings.Contains(err.Error(), "SECRET") || GuestQualificationPredicate(fmt.Errorf("outer: %w", err)) != want || seen[want] {
+				t.Fatal("recovery cleanup stage not closed, distinct and private")
+			}
+			seen[want] = true
+		})
+	}
+	for _, stage := range []string{"recovery-cleanup-", "recovery-cleanup-unknown", "recovery-cleanup-lease\nSECRET", "recovery-cleanup-lease-extra", "recovery_cleanup_lease", "original-recovery-cleanup-lease", "lease"} {
+		if GuestQualificationPredicate(GuestQualificationRefusal(stage, cause)) != "original-guest-step-17" {
+			t.Fatalf("unknown recovery stage acquired a predicate: %q", stage)
+		}
+	}
+	// Existing underscore stages keep their numbered predicates.
+	for stage, want := range map[string]string{"observe": "original-guest-step-60", "client": "original-guest-step-68", "deadline": "original-guest-step-80", "nonce": "original-guest-step-81"} {
+		if GuestQualificationPredicate(GuestQualificationRefusal(stage, cause)) != want {
+			t.Fatalf("existing stage changed: %s", stage)
+		}
+	}
+}
+
+func TestGuestQualificationRecoveryCleanupDeepestStageWins(t *testing.T) {
+	cause := errors.New("SECRET")
+	deep := GuestQualificationRefusal("recovery-cleanup-intent-epoch", cause)
+	mid := GuestQualificationRefusal("recovery-cleanup-challenge", fmt.Errorf("store: %w", deep))
+	outer := fmt.Errorf("step: %w", mid)
+	if GuestQualificationPredicate(outer) != "original-recovery-cleanup-intent-epoch" || !errors.Is(outer, cause) || strings.Contains(outer.Error(), "SECRET") {
+		t.Fatal("outer recovery stage hid the deepest refusing owner")
+	}
+	if GuestQualificationPredicate(GuestQualificationRefusal("recovery-cleanup-challenge", cause)) != "original-recovery-cleanup-challenge" {
+		t.Fatal("untyped inner cause lost its outer fallback stage")
+	}
+	unknown := GuestQualificationRefusal("recovery-cleanup-complete", GuestQualificationRefusal("recovery-cleanup-unknown", cause))
+	if GuestQualificationPredicate(unknown) != "original-recovery-cleanup-complete" {
+		t.Fatal("unknown inner stage promoted")
+	}
+	foreign := GuestQualificationRefusal("recovery-cleanup-complete", GuestQualificationRefusal("probe_http", GuestQualificationRefusal("recovery-cleanup-lease", cause)))
+	if GuestQualificationPredicate(foreign) != "original-recovery-cleanup-lease" {
+		t.Fatal("deepest recovery stage not found through a foreign stage")
+	}
+	if GuestQualificationPredicate(GuestQualificationRefusal("observe", deep)) != "original-guest-step-60" {
+		t.Fatal("existing outermost-stage projection changed")
+	}
+	if GuestQualificationRefusal("recovery-cleanup-challenge-commit", nil) != nil {
+		t.Fatal("successful commit turned into refusal")
+	}
+}

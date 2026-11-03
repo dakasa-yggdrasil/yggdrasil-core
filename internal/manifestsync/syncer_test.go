@@ -44,7 +44,7 @@ func (f *fakeDeps) ListInstances(_ context.Context, _ uuid.UUID) ([]model.Manife
 func (f *fakeDeps) InvokeDescribe(_ context.Context, _ model.Manifest, _ model.Manifest, _ model.IntegrationInstanceManifestSpec, _ model.IntegrationTypeManifestSpec) (model.IntegrationTypeManifestSpec, error) {
 	return f.describeSpec, f.describeErr
 }
-func (f *fakeDeps) ApplyManifestVersion(_ context.Context, doc model.ManifestDocument) (model.Manifest, error) {
+func (f *fakeDeps) ApplyManifestVersion(_ context.Context, _ model.Manifest, doc model.ManifestDocument) (model.Manifest, error) {
 	f.appliedDoc = &doc
 	if f.applyErr != nil {
 		return model.Manifest{}, f.applyErr
@@ -94,6 +94,7 @@ func newFakeWithHappyPath() *fakeDeps {
 
 func TestSyncIntegrationType_HappyPath_AppliesAndEmitsSynced(t *testing.T) {
 	f := newFakeWithHappyPath()
+	f.typeManifest.Metadata.Labels = map[string]string{"owner": "platform"}
 	typeID := f.typeManifest.ID
 
 	err := SyncIntegrationType(context.Background(), f, typeID)
@@ -102,6 +103,9 @@ func TestSyncIntegrationType_HappyPath_AppliesAndEmitsSynced(t *testing.T) {
 	require.NotNil(t, f.appliedDoc, "expected new manifest version applied")
 	assert.Equal(t, "slack", f.appliedDoc.Metadata.Name)
 	assert.Equal(t, "Slack integration", f.appliedDoc.Metadata.Description, "description preserved")
+	assert.Equal(t, map[string]string{"owner": "platform"}, f.appliedDoc.Metadata.Labels, "operator labels preserved")
+	f.appliedDoc.Metadata.Labels["owner"] = "changed"
+	assert.Equal(t, "platform", f.typeManifest.Metadata.Labels["owner"], "labels are copied independently")
 	assert.Equal(t, "integration_type.synced", f.emittedType)
 	assert.EqualValues(t, 7, f.emittedPayload["from_version"])
 	assert.EqualValues(t, 8, f.emittedPayload["to_version"])
