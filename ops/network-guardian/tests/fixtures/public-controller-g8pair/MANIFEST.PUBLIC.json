@@ -1,0 +1,22 @@
+{
+  "schema": "public_g8_controller_config_fixture_v1",
+  "authority": "historical configuration bytes only; no current native health or production permission",
+  "files": {
+    "controller.r13-netlink-g8pair.production.json": {
+      "bytes": 5705,
+      "sha256": "42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5",
+      "closed_keys": [
+        "core_container_images",
+        "core_service_uid",
+        "eks_endpoint",
+        "eks_public_ca_base64",
+        "execute",
+        "root_review_attestation",
+        "schema",
+        "source_files_sha256"
+      ],
+      "source": "Root-reviewed literal controller-pair-change-g8/config42b9",
+      "inspection": "Exactly8public keys/types; Source SHA map; public X509 CA; no private-key body"
+    }
+  }
+}

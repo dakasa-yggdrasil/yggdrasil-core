@@ -51,3 +51,13 @@ chain from the unchanged f5..g5 standing prefix. Operational adoption remains
 separate from Core image provenance and source CI. See the
 [G7 package](g7pair/README.md) and
 [ADR-0099](../../docs/adr/0099-retain-canonical-and-boot-v2-guardian-authorities-across-a-new-core-pair.md).
+
+`g8pair` keeps G7/f809/configd689 as a third authenticated historical authority
+and admits the fixed next image pair through config42b9. Literal19/21/23-field
+historical rosters remain separate from current25-field standing authority;
+the same31 Owner methods, seven helpers and recovery budget keep their bytes.
+Its four package tools preserve the one-forward-attempt cutover; the separately
+versioned [typed Core CAS](rollout/README.md) remains outside that21-file package.
+Source/CI, native lifetime qualification, exact Core rollout and useful/E2E
+acceptance are separate gates. See the [G8 package](g8pair/README.md) and
+[ADR-0100](../../docs/adr/0100-preserve-g7-network-authority-before-a-scheduler-fix-core-rollout.md).

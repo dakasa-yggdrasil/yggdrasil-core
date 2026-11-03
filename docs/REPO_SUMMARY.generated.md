@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-02T19:04:55-03:00_
+_Generated from HEAD at: 2026-11-03T00:46:35-03:00_
 
 ## Languages
 
-- `.go`: 1461 files
-- `.json`: 193 files
-- `.py`: 42 files
-- `.sql`: 88 files
+- `.go`: 1463 files
+- `.json`: 203 files
+- `.py`: 59 files
+- `.sql`: 89 files
 - `.yaml`: 11 files
 - `.yml`: 36 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-11-02T19:04:55-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **87**  (db/migrations)
+- DB Migrations: **88**  (db/migrations)
 
 ## Docs
 
@@ -24,14 +24,14 @@ _Generated from HEAD at: 2026-11-02T19:04:55-03:00_
 
 ## Top Directories by File Count
 
-- repository: 349 files (4516.7 KB)
+- repository: 350 files (4530.0 KB)
 - controllers/httpapi: 249 files (2515.1 KB)
 - controllers/message: 189 files (1615.9 KB)
 - internal/capacity: 124 files (1367.8 KB)
-- db/migrations: 87 files (615.2 KB)
+- db/migrations: 88 files (616.1 KB)
 - model: 86 files (477.0 KB)
 - manifest: 65 files (397.9 KB)
-- addons: 50 files (289.4 KB)
+- addons: 51 files (307.6 KB)
 - internal/capacitynativeqemu: 47 files (298.1 KB)
 - cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
@@ -54,8 +54,8 @@ _Generated from HEAD at: 2026-11-02T19:04:55-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **35**
-- Manifests (k8s-ish): **22**
+- K8s/Config files scanned: **44**
+- Manifests (k8s-ish): **24**
 
 ## Dependencies
 

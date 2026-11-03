@@ -3,6 +3,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -21,6 +22,33 @@ func (f *failedServingFixture) setTestIntent(t *testing.T, current model.Capacit
 func (f *failedServingFixture) insertStableEvent(t *testing.T, current model.CapacityIntent) {
 	t.Helper()
 	f.exec(t, `INSERT INTO public.capacity_intent_events(namespace,environment,domain,dimension,generation,fencing_token,phase,receipt_ref) VALUES($1,$2,$3,$4,$5,$6,$7,'declared-source-stable-survivor')`, f.policy.Metadata.Namespace, f.p.Environment, f.p.Domain, f.p.Dimension, current.Generation, current.FencingToken, current.Phase)
+}
+
+func (f *failedServingFixture) waitPublicationInterval(t *testing.T) {
+	t.Helper()
+	if f.p.GuestNotifyCanaryBinding == nil || f.p.GuestNotifyCanaryBinding.MinimumPublicationIntervalSeconds < 1 || f.p.GuestNotifyCanaryBinding.MinimumPublicationIntervalSeconds > 5 {
+		t.Fatal("bounded fixture publication interval required")
+	}
+	interval := f.p.GuestNotifyCanaryBinding.MinimumPublicationIntervalSeconds
+	ctx, stop := context.WithTimeout(context.Background(), 6*time.Second)
+	defer stop()
+	for {
+		var remaining float64
+		err := f.db.QueryRowContext(ctx, `SELECT EXTRACT(EPOCH FROM (c.recorded_at + $2 * interval '1 second' - clock_timestamp())) FROM public.capacity_guest_notify_canary_challenges c WHERE c.preregistration_id=$1 AND c.phase='publish' ORDER BY c.recorded_at DESC,c.id DESC LIMIT 1`, f.pre.PreregistrationID, interval).Scan(&remaining)
+		if err != nil || !(remaining <= float64(interval)) {
+			t.Fatal("actual PostgreSQL publication gap unavailable or outside fixture bound", remaining, err)
+		}
+		if remaining <= 0 {
+			return
+		}
+		timer := time.NewTimer(time.Duration(remaining*float64(time.Second)) + time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			t.Fatal("actual PostgreSQL publication gap did not close within six seconds", ctx.Err())
+		case <-timer.C:
+		}
+	}
 }
 
 func TestFailedServingStableSurvivorBirthAndCurrentEpochPostgres(t *testing.T) {
@@ -143,6 +171,8 @@ func TestFailedServingEligibilityAndCrossRealmAuthorityPostgres(t *testing.T) {
 		})
 		t.Run(provider+"_live_canary_and_all_slot_guards", func(t *testing.T) {
 			f := newFailedServingFixture(t, provider)
+			// Expiring the prior challenge does not also close its publication gap.
+			f.waitPublicationInterval(t)
 			ctx := failedServingContext(t)
 			step := f.step(t, "refresh-original-membership")
 			canaries := f.store.WithOriginalGuestReconcile(f.workflow, step, capacity.CurrentGuestCoreSource(), "refresh", "", f.inventory(t, false), model.CapacityMetricRangeObservation{}).WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())

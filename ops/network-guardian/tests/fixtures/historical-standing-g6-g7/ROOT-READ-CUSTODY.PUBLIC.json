@@ -1,0 +1,32 @@
+{
+  "schema": "root_actual_public_standing_fixture_custody_v1",
+  "SSM_command_id": "43d7aa10-cf71-4226-a394-5147f0f9f493",
+  "original_SSM_response_path": "yggdrasil/yggdrasil-core/docs/superpowers/elastic-codex-20261102/evidence/codex-g8-three-standing-raw-readonly-v1-43d7aa10-cf71-4226-a394-5147f0f9f493.json",
+  "original_response_sha256": "78336850fd1918c23414b699c41910627ea2feb899eaeadd2b1ec80a5df35093",
+  "files": [
+    {
+      "name": "canonical-g6-standing.json",
+      "path": "/etc/dakasa/capacity-network/network-recovery.r13-g6pair.production.json",
+      "bytes": 5788,
+      "sha256": "be5b25495056bd25e1512827b5ccbe7236f84928b4d20515f5000383771dcc79",
+      "fields": 19
+    },
+    {
+      "name": "boot-v2-standing.json",
+      "path": "/etc/dakasa/capacity-network/network-recovery.r13-g6pair-boot-v2.production.json",
+      "bytes": 7058,
+      "sha256": "faa6b2cb3132ce2e0ee4304bd833d7f0f999850244014d355f1c33ed176ebb83",
+      "fields": 21
+    },
+    {
+      "name": "g7-standing.json",
+      "path": "/etc/dakasa/capacity-network/network-recovery.r13-g7pair.production.json",
+      "bytes": 7642,
+      "sha256": "dd7d449ea8fdba60a43d6badb138ea9496e1342572f90633e62d7b87d9b44866",
+      "fields": 23
+    }
+  ],
+  "public_closed_authority_metadata_and_path_hash_references_only": true,
+  "no_native_mutations": true,
+  "runtime_G8_qualification_claimed": false
+}

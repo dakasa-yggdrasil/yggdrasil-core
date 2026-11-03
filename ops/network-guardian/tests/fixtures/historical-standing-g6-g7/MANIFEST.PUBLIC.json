@@ -1,0 +1,92 @@
+{
+  "schema": "actual_public_historical_standings_fixture_v1",
+  "authority": "Historical authority/configuration bytes only; never current health, new epoch or Native G8 qualification.",
+  "source_receipt": "Root read-only SSM43d7aa10-cf71-4226-a394-5147f0f9f493",
+  "files": {
+    "canonical_g6": {
+      "path": "canonical-g6.PUBLIC.json",
+      "bytes": 5788,
+      "sha256": "be5b25495056bd25e1512827b5ccbe7236f84928b4d20515f5000383771dcc79",
+      "closed_keys": [
+        "Core262_context_ref",
+        "R43_proofs",
+        "Root_review",
+        "cold_unit_sha256",
+        "context_sources",
+        "controller_unit_sha256",
+        "guardian_source_sha256",
+        "guardian_unit_sha256",
+        "hub_boot_config_sha256",
+        "hub_source_sha256",
+        "hub_unit_sha256",
+        "new_controller_config_sha256",
+        "pair_predecessor_standing_configs",
+        "predecessor_guardian_source_sha256",
+        "predecessor_standing_config_sha256",
+        "proof_index_ref",
+        "r13_predecessor_guardian_source_sha256",
+        "r13_predecessor_standing_config_sha256",
+        "schema"
+      ]
+    },
+    "g6_boot_v2": {
+      "path": "g6-boot-v2.PUBLIC.json",
+      "bytes": 7058,
+      "sha256": "faa6b2cb3132ce2e0ee4304bd833d7f0f999850244014d355f1c33ed176ebb83",
+      "closed_keys": [
+        "Core262_context_ref",
+        "R43_proofs",
+        "Root_review",
+        "cold_unit_sha256",
+        "context_sources",
+        "controller_unit_sha256",
+        "g6_predecessor_guardian_source_sha256",
+        "g6_predecessor_standing_config_sha256",
+        "guardian_source_sha256",
+        "guardian_unit_sha256",
+        "hub_boot_config_sha256",
+        "hub_source_sha256",
+        "hub_unit_sha256",
+        "new_controller_config_sha256",
+        "pair_predecessor_standing_configs",
+        "predecessor_guardian_source_sha256",
+        "predecessor_standing_config_sha256",
+        "proof_index_ref",
+        "r13_predecessor_guardian_source_sha256",
+        "r13_predecessor_standing_config_sha256",
+        "schema"
+      ]
+    },
+    "g7pair": {
+      "path": "g7pair.PUBLIC.json",
+      "bytes": 7642,
+      "sha256": "dd7d449ea8fdba60a43d6badb138ea9496e1342572f90633e62d7b87d9b44866",
+      "closed_keys": [
+        "Core262_context_ref",
+        "R43_proofs",
+        "Root_review",
+        "cold_unit_sha256",
+        "context_sources",
+        "controller_unit_sha256",
+        "g6_boot_v2_predecessor_guardian_source_sha256",
+        "g6_boot_v2_predecessor_standing_config_sha256",
+        "g6_predecessor_guardian_source_sha256",
+        "g6_predecessor_standing_config_sha256",
+        "guardian_source_sha256",
+        "guardian_unit_sha256",
+        "hub_boot_config_sha256",
+        "hub_source_sha256",
+        "hub_unit_sha256",
+        "new_controller_config_sha256",
+        "pair_predecessor_standing_configs",
+        "predecessor_guardian_source_sha256",
+        "predecessor_standing_config_sha256",
+        "proof_index_ref",
+        "r13_predecessor_guardian_source_sha256",
+        "r13_predecessor_standing_config_sha256",
+        "schema"
+      ]
+    }
+  },
+  "custody_sha256": "aff4b4d71bd685446e28f11c33553042bda0dfa3154c46fd7a96bbde44d343ca"
+}
