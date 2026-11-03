@@ -1,0 +1,66 @@
+{
+  "prior_accepted_review": {
+    "historical_nodes_unchanged": 109,
+    "path": "docs/service-contract/REVIEW.json",
+    "sha256": "06bfa5c95c047e2f2aa70bf989d106563ad19a47df7b5127eda4e5205c55a56b"
+  },
+  "runtime_delta": {
+    "bytes": 20149,
+    "contract": "One common pre-admission selector coalesces skip/default to the latest actual cron occurrence <= now. Explicit catch_up keeps the oldest next occurrence. Timezone/DST, original initial/future cursor boundaries, current authority and the existing atomic cursor/admission transaction remain. No missed-tick ACK, direct state repair, counter reset, lease or native-write change.",
+    "path": "addons/workflow_scheduler.go",
+    "sha256": "c6e39fc3f88e1cd201a89dced02dfd716b03959aa9258bcb3e58836322c1d0ea"
+  },
+  "schema": "core_service_source_review_supplement_v1",
+  "scope": "Existing skip/default cron contract correction; Source review only. Runtime deployment, native qualification and business evidence remain separate.",
+  "source_baseline": {
+    "commit": "d06f2f9157fd2333032e6e4f8e687dd7352676da",
+    "source_inventory_sha256": "02241d59611f8179c006d8a4086e7ea52aeaea93d71e2c07a0d71760662cb047"
+  },
+  "source_inventory": {
+    "complete_source_count": 784,
+    "path": "docs/service-contract/source/sources.json",
+    "sha256": "6456e9fca2569124e390f75bc86f8637ff0f9e780cd0bba8d056b19b414481d1"
+  },
+  "source_review": {
+    "Brain_test_author_static_review_complete": true,
+    "Root_full_runtime_delta_test_and_workflow_review_complete": true,
+    "declared_CI_test_file": {
+      "children": 31,
+      "path": "addons/workflow_scheduler_skip_test.go",
+      "roots": 4,
+      "sha256": "f34c9969d919da38e9ca1fafec29343244a8ac39ce8df8298a2350f32c479062"
+    },
+    "independent_Release_helper_and_admission_peer_complete": true,
+    "only_followup_to_reviewed_runtime": "Root requested the mathematically precise non-decreasing comment; executable bytes are identical.",
+    "owning_kernel_workflow": {
+      "existing_job_bytes_preserved": true,
+      "path": ".github/workflows/capacity-postgres.yml",
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "sha256": "cbb39e49aa1d888e52833be501f222a7b3e8a769391a8aba2232a452dcc1ae43"
+    },
+    "reviewed_runtime_sha256_before_Root_requested_comment_precision": "685daf424e0dab6ecfb572b5daf3e01fc1eace55a672cd3a188c6bafae8f80ca"
+  },
+  "validation": {
+    "CI_or_native_pass_claimed": false,
+    "complete_static_census_generated": {
+      "authentication-dispatch": 13,
+      "event-and-queue-constants": 92,
+      "event-emissions": 70,
+      "event-schemas": 50,
+      "http-egress": 48,
+      "http-intercept-dispatch": 13,
+      "http-routes": 329,
+      "production-command-operations": 18,
+      "provider-sdk-operations": 4,
+      "rpc-consumers": 52,
+      "sources": 784
+    },
+    "local_functional_tests_builds_containers_Doctor_or_product_imports": false,
+    "owning_exact_head_CI_required": true,
+    "production_deployment_or_Guest_business_pass_claimed": false,
+    "static_gofmt_and_diff_check_only": true
+  }
+}
