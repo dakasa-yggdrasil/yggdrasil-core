@@ -1724,5 +1724,31 @@
     "local_functional_execution": false,
     "new_exact_head18_workflows37_jobs_required": true,
     "CI_or_native_or_AB_acceptance_claimed": false
+  },
+  "G9_exact_test_context_nesting_correction_20261103": {
+    "schema": "G9_identical_context_operands_ExitStack_Source_correction_v1",
+    "reviewed_Source_commit": "0565d6ac314b0ead863569ca3689cf94a282b0e5",
+    "previous_complete_review_sha256": "46f0203a34987b6acee5cd62ca28dec81699fb40c1ac5c45ad57b292226e4ef9",
+    "previous_top_level_nodes": 18,
+    "actual_failed_head": "39f5bd0542214fb2d726fac6081e5204d30595b2",
+    "actual_failed_run": 41614698183,
+    "actual_failed_job": 125845105042,
+    "original_refusal_sha256": "d62a9fc8e682d5296c75838eb25a8fe7f27671fcbc60a5c1c6725b0c44f03cd0",
+    "actual_cause": "Python3.12.15 compilation rejected too many statically nested blocks at the final context manager of the nineteen-manager fixture block. Discovery stopped with153 expected and124 discovered, including one failed-module placeholder; no tests ran. AST parsing alone had not exercised this compiler check.",
+    "correction": "Use one contextlib.ExitStack and enter the same nineteen existing managers in their original lexical order, preserving all six aliases and reverse cleanup semantics. Entire original with-body and surrounding bytes are unchanged. No test ID, assertion, validator, runtime operand, roster or success criterion changes.",
+    "changed_Source": {
+      "path": "ops/network-guardian/tests/test_g9pair_core_cas.py",
+      "sha256": "d04ee4fe63cbe8207b09db17a7ba476998b678549e409f9cd2bcbdae36014648",
+      "bytes": 54606
+    },
+    "Root_full_diff_and_ordered_AST_operand_alias_body_comparison": true,
+    "independent_Source_peer_sha256": "5227b198019f854643818ac92468cdb8030342934fd31134069b012233bc60bd",
+    "old106_plus_new47_method_IDs_unchanged": true,
+    "runtime_Guardian_tools_CAS_SQL_and_Go_Source_changed": false,
+    "original_failure_and_diagnostic_review_preserved": true,
+    "local_compile_import_test_or_functional_execution": false,
+    "compile_or_test_success_claimed": false,
+    "new_exact_head18_workflows37_jobs_and153_cases_required": true,
+    "native_main_or_AB_acceptance": false
   }
 }

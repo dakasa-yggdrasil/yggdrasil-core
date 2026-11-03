@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/M2_SOURCE_REVIEW.json",
-      "sha256": "46f0203a34987b6acee5cd62ca28dec81699fb40c1ac5c45ad57b292226e4ef9"
+      "sha256": "3c2df8c6f5afa7ea97ec5d5a0c252b25f1009129e5f2571b773489d5b59abc39"
     },
     {
       "id": "prior_accepted_source_review",
