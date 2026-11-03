@@ -2240,5 +2240,41 @@
     },
     "no_local_functional_tests_SQL_build_import_container_or_native_operation": true,
     "production_schema_rollout_Core_main_or_AB_qualified": false
+  },
+  "recorded_HTTP_R6_G9_declared_CI_fixture_roster_correction_20261103": {
+    "schema": "R6_G9_independent_declared_CI_roster_fixture_correction_v1",
+    "failed_owning_Source": "cfbd147062df4e029308e77e97acedd20bc06b42",
+    "actual_Owned_run_id": 41668402136,
+    "actual_Owned_job_id": 126029852627,
+    "actual_attempt": 1,
+    "actual_failure": "Declared G9 manifest inherited only18 G8 CI entries; unchanged production REQUIRED_CI correctly requires19. The positive test errored at ROOT_REVIEWED_EXACT_G9_CI before its outdated old18 equality assertion.",
+    "actual_failed_run_census": {
+      "executed": 165,
+      "passed": 164,
+      "errors": 1,
+      "failures": 0,
+      "skips": 0,
+      "actual_PostgreSQL_methods_passed": 25,
+      "clean_Source_before_and_after": true,
+      "qualified": false
+    },
+    "correction": "Only the declared G9 test operands append the independently fixed recorded HTTP maintenance workflow/event and unique simulated ID19 after retained original IDs1..18. The same test now strictly compares preserved old18 plus exact new event to the production19 set and additionally rejects the original18-only manifest. All prior refusal scenarios and every test ID remain. No runtime validator, gate, image binding, package, timer, CAS, SQL, historical fixture, required test roster or workflow is changed.",
+    "files": {
+      "ops/network-guardian/tests/test_g9pair_tools.py": {
+        "sha256": "3df11b34de947a64f9cea5f3747f7d3378abb8d0ebb018431663637f8ad41d99",
+        "bytes": 10417
+      }
+    },
+    "new_exact_current_head_CI": {
+      "workflow_events": 19,
+      "jobs": 39,
+      "Source_methods": 165,
+      "PostgreSQL_methods": 25,
+      "status": "pending_new_exact_head",
+      "failed_cohort_outcomes_transferred": false
+    },
+    "actual_qualified_Core_R_image_and_runtime_C_S_unchanged": true,
+    "no_local_functional_test_build_SQL_import_container_or_native_operation": true,
+    "production_schema_Core_G9_main_or_AB_qualified": false
   }
 }

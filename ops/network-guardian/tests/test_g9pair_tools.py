@@ -12,6 +12,11 @@ import test_g9pair_source as source
 
 
 TOOLS = source.NEW / 'tools'
+# Declared CI operands follow the reviewed workflow roster, independently of
+# the production validator's REQUIRED_CI. The preserved G8 roster stays exact.
+EXPECTED_CI = old.REQUIRED_CI | frozenset({
+    ('Recorded HTTP maintenance disposition Source and PostgreSQL', 'pull_request'),
+})
 
 
 def load_tool(name):
@@ -75,6 +80,10 @@ def declared_manifest():
                  controller_unit_sha256=source.digest(b'declared CI future controller unit'),
                  protected_refs=[{'path': path, 'sha256': pin} for path, pin in sorted(protected_refs().items())])
     value['ci_attestation'].update(schema='guardian_g9_exact_source_ci_v1')
+    value['ci_attestation']['runs'].append({
+        'id': 19, 'name': 'Recorded HTTP maintenance disposition Source and PostgreSQL',
+        'event': 'pull_request', 'head_sha': value['source_commit'],
+        'status': 'completed', 'conclusion': 'success', 'attempt': 1})
     return value
 
 
@@ -135,8 +144,10 @@ class G9ToolTests(unittest.TestCase):
         with declared_binding():
             value = declared_manifest()
             contract.validate_manifest(value)
-            self.assertEqual(contract.REQUIRED_CI, old.REQUIRED_CI)
-            for change in ('old39', 'duplicate-ref', 'wrong-head', 'failed-ci', 'missing-ci', 'foreign-axis-helper'):
+            self.assertEqual(len(old.REQUIRED_CI), 18)
+            self.assertEqual(len(EXPECTED_CI), 19)
+            self.assertEqual(contract.REQUIRED_CI, EXPECTED_CI)
+            for change in ('old39', 'duplicate-ref', 'wrong-head', 'failed-ci', 'missing-ci', 'old-ci18', 'foreign-axis-helper'):
                 value = declared_manifest()
                 if change == 'old39':
                     value['protected_refs'] = value['protected_refs'][:-2]
@@ -148,6 +159,9 @@ class G9ToolTests(unittest.TestCase):
                     value['ci_attestation']['runs'][0]['conclusion'] = 'failure'
                 elif change == 'missing-ci':
                     value['ci_attestation']['runs'].pop()
+                elif change == 'old-ci18':
+                    value['ci_attestation']['runs'] = [r for r in value['ci_attestation']['runs']
+                        if (r['name'], r['event']) in old.REQUIRED_CI]
                 else:
                     value['files']['source/coverage.py'] = '9' * 64
                 with self.subTest(change=change), self.assertRaises(contract.Hold):
