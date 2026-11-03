@@ -1,6 +1,6 @@
 # ADR-0100: Preserve G7 network authority before a scheduler-fix Core rollout
 
-Status: Proposed
+**Status:** Proposed
 
 Date: 2026-11-03
 
