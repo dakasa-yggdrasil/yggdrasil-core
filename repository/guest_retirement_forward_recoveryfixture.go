@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/base32"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -301,6 +303,14 @@ func (f *GuestRetirementForwardRecoveryFixture) PlanStore() CapacityStore {
 	return f.Store.WithOriginalGuestReconcile(f.Workflow, f.step("plan-original-guest"), capacity.CurrentGuestCoreSource(), "retire", f.Request.Intent.RequestID, f.Inventory(true), model.CapacityMetricRangeObservation{})
 }
 
+func forwardFixtureVMLabelDigest(digest string) string {
+	raw, err := hex.DecodeString(digest)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
+}
+
 func (f *GuestRetirementForwardRecoveryFixture) Inventory(targetPresent bool) model.CapacityVMFleetInventory {
 	t := f.t
 	inv := capacity.RecoveryFixtureInventory(t, f.Spec, f.private.reg, time.Now().UTC())
@@ -313,7 +323,7 @@ func (f *GuestRetirementForwardRecoveryFixture) Inventory(targetPresent bool) mo
 			continue
 		}
 		d := m.Slots[j]
-		labels := map[string]string{"yggdrasil.io/owner": f.Spec.Owner, "yggdrasil.io/scope": vmLabelDigest(m.ScopeChecksum), "yggdrasil.io/spec": vmLabelDigest(d.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": m.ProfileName, "yggdrasil.io/slot": strconv.Itoa(slot), "yggdrasil.io/intent": x.pre.OriginalCreateGrantID}
+		labels := map[string]string{"yggdrasil.io/owner": f.Spec.Owner, "yggdrasil.io/scope": forwardFixtureVMLabelDigest(m.ScopeChecksum), "yggdrasil.io/spec": forwardFixtureVMLabelDigest(d.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": m.ProfileName, "yggdrasil.io/slot": strconv.Itoa(slot), "yggdrasil.io/intent": x.pre.OriginalCreateGrantID}
 		server := model.CapacityVMServerObservation{CapacityVMNativeTuple: model.CapacityVMNativeTuple{ID: x.reg.Result.Tuple.ResourceID, CreatedAt: x.reg.Result.Tuple.CreatedAt}, Name: d.DesiredSpec.NativeName, Status: "running", PhysicalSpecVerified: true, ObservedAt: inv.ObservedAt, Labels: labels}
 		inv.Members = append(inv.Members, model.CapacityVMFleetInventoryMember{Slot: slot, Protected: slot <= m.ProtectedSlots, DesiredSpec: *d.DesiredSpec, RequestSHA256: d.DesiredSpecSHA256, Server: server})
 	}
