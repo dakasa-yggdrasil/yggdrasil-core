@@ -875,5 +875,242 @@
     "corrected_exact_head_CI_required": true,
     "exact_head_CI_pass_claimed": false,
     "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_integration_correction_source_review_20261103": {
+    "schema": "ADR0101_original_CI_integration_corrections_Source_review_v1",
+    "base_commit": "0d1578d53c71f1d323e9d97d017d3d16bd727606",
+    "preserved_previous_complete_review_sha256": "7f1ae6dc3da61e38ea0c009482d92fb6d5f595e590b0df7f951f6a49ffe6127a",
+    "scope": "Correct original CI failures while retaining all prior Source review nodes and exact historical outcomes.",
+    "original_CI_failed_head": "0d1578d53c71f1d323e9d97d017d3d16bd727606",
+    "original_CI_evidence_runs": [
+      41590109879,
+      41590109886,
+      41590109823,
+      41590109835,
+      41590109878
+    ],
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "5e8fc9d08b50beaab0db20e531a57a820eb3382cce895df83a0119f2a8349e44",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "changed_source_facts": {
+      "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
+        "before": {
+          "build_constraint": "!nativequalification",
+          "bytes": 21486,
+          "sha256": "0de175052e4c15291025edd1479c966222baf462bb27dd07f537024fbb15f7c3"
+        },
+        "after": {
+          "build_constraint": "!nativequalification",
+          "bytes": 21485,
+          "sha256": "16bc88aa6ec11c4e053b55a80ff0019ab18ea672945c8653c8ffae1b91440ea3"
+        }
+      },
+      "internal/capacity/guest_recovery_fixture_retirement.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 8004,
+          "sha256": "8655d1531f2fc29bf9d9a404b5aad45b515af77916e1bf4a0eee80ed1ea094fe"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 8459,
+          "sha256": "2a4b1bdbe9453909c6bfae5c877f79b62a9f6551618be134186addfcf3acdfda"
+        }
+      },
+      "internal/capacity/guest_retirement.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 9503,
+          "sha256": "3e4f84bd3ea640e6757362b59895f6762200722cbaed3ea13f77bbb44027fa4e"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 9765,
+          "sha256": "3b4febd741340dcc6191f0fc26d8ab074f0e9d4ee17061b12e1b57d3b29d437f"
+        }
+      },
+      "internal/capacity/guest_retirement_forward.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 1265,
+          "sha256": "5daa9f819cb7167b57c54107852c9a9cb98f93aeb930e0c84631577f71a220d2"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 1909,
+          "sha256": "636224a423fa901b3a707bdfe20a38be6fb63f470912f48eab35476d61412fbc"
+        }
+      },
+      "internal/capacity/guest_retirement_v2_observation.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 7241,
+          "sha256": "8e22aa75c8fede88cf7d9f4e02a8c057702c912a9d2c351a1191597fce884416"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 7588,
+          "sha256": "55f15c8cd2002c9e9f9b580946bdabb6a1370f5b9aa2c1543aad652052672214"
+        }
+      },
+      "internal/capacity/guest_retirement_v2_wire.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 8473,
+          "sha256": "2865f4d41e77a4709e0f023b93d67ba8919787671e4dd5f60fcbeb80235dff0f"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 8999,
+          "sha256": "f5341cb29d3329f0e4cb8ca763b0b4ba3ee9c908945215633adc9f27f3a7890c"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 21733,
+          "sha256": "fbca916bfcdf89e46efc9aa352670ca7b8b49696e59cd68246be946b6dcb91e0"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 21768,
+          "sha256": "d91fdd9ee4666f312339aa1866c795e4647f2c10c39b222b86b24447128f29c4"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 12938,
+          "sha256": "39f5fedc090ca3bb3daa2c948291df4704429ea53641a23e59ddaba31c3d157e"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 12973,
+          "sha256": "5962ded54e3cebd721b58a80388db4c3d10c84962f9775ad391a7a04928615d8"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 11824,
+          "sha256": "428569c4f57ebae6d8333defe8bcea0bc3447acc5e634dc8e74d5236d364f84d"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 13124,
+          "sha256": "0e4f96fd1778a0004b10ee2add2e1ebc9f951576de8c4ef2cc0cacfa4410a638"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 11422,
+          "sha256": "0b564ac9cb5badd6cad551dc2c76fb70ba6be838579651681a3c1438aed19082"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 11407,
+          "sha256": "09ff8c0327472fbf23930cab545656b23dc1a56d6ac6eece743554ffef40bd91"
+        }
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 41583,
+          "sha256": "9deac11d7d3030505baab6ead46332c34a88929c8f3287f2e7d87e55a3d743b0"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 41870,
+          "sha256": "c78f55cfeaece5f594ed529eab17ebfc495f928d5b2e3114a9bb62b981b7ea7e"
+        }
+      }
+    },
+    "all_other_source_facts_unchanged": 786,
+    "reviewed_changed_Go_files": {
+      "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
+        "bytes": 21485,
+        "sha256": "16bc88aa6ec11c4e053b55a80ff0019ab18ea672945c8653c8ffae1b91440ea3"
+      },
+      "internal/capacity/guest_recovery_fixture_retirement.go": {
+        "bytes": 8459,
+        "sha256": "2a4b1bdbe9453909c6bfae5c877f79b62a9f6551618be134186addfcf3acdfda"
+      },
+      "internal/capacity/guest_retirement.go": {
+        "bytes": 9765,
+        "sha256": "3b4febd741340dcc6191f0fc26d8ab074f0e9d4ee17061b12e1b57d3b29d437f"
+      },
+      "internal/capacity/guest_retirement_forward.go": {
+        "bytes": 1909,
+        "sha256": "636224a423fa901b3a707bdfe20a38be6fb63f470912f48eab35476d61412fbc"
+      },
+      "internal/capacity/guest_retirement_forward_test.go": {
+        "bytes": 5913,
+        "sha256": "d3e00734c8abcf72d55aca9e324932befb9cc7ff542f6c208dbeaf4f6354b743"
+      },
+      "internal/capacity/guest_retirement_v2_observation.go": {
+        "bytes": 7588,
+        "sha256": "55f15c8cd2002c9e9f9b580946bdabb6a1370f5b9aa2c1543aad652052672214"
+      },
+      "internal/capacity/guest_retirement_v2_wire.go": {
+        "bytes": 8999,
+        "sha256": "f5341cb29d3329f0e4cb8ca763b0b4ba3ee9c908945215633adc9f27f3a7890c"
+      },
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "bytes": 21768,
+        "sha256": "d91fdd9ee4666f312339aa1866c795e4647f2c10c39b222b86b24447128f29c4"
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "bytes": 12973,
+        "sha256": "5962ded54e3cebd721b58a80388db4c3d10c84962f9775ad391a7a04928615d8"
+      },
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "bytes": 13124,
+        "sha256": "0e4f96fd1778a0004b10ee2add2e1ebc9f951576de8c4ef2cc0cacfa4410a638"
+      },
+      "repository/capacity_guest_retirement_forward_postgres_test.go": {
+        "bytes": 22679,
+        "sha256": "3beb346d868afcb28ead9cfc7feaa02d93a7306368896c590698e9b3d25ecd87"
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "bytes": 11407,
+        "sha256": "09ff8c0327472fbf23930cab545656b23dc1a56d6ac6eece743554ffef40bd91"
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "bytes": 41870,
+        "sha256": "c78f55cfeaece5f594ed529eab17ebfc495f928d5b2e3114a9bb62b981b7ea7e"
+      },
+      "repository/capacity_guest_retirement_forward_guard_test.go": {
+        "bytes": 2736,
+        "sha256": "c292ba87a08e8ec31aee9a0d2e5ddeea3a099af656fd4157b381d1177d9d8a40"
+      }
+    },
+    "corrections": [
+      "Fixture-only canonical provider label encoder replaces an inaccessible private-package helper; unused test import removed.",
+      "Canonical four-disposition unresolved-grant predicate propagated into both new profile-wide pending counts; existing contract test unchanged.",
+      "No-marker slot guard reads the existing capacity_intents table first; every present marker requires its complete immutable ledger match, malformed/missing rows fail closed, exact terminal records remain historical. The intentional schema86 HTTP fixture stays unchanged.",
+      "Normal V2 public signatures and criteria remain fixed-normal private-context wrappers. Only the distinct forward context admits explicitly enrolled nonnil empty rosters with exact hashes and complete signed nonnil empty censuses; nonce/signature/clock/operation guards stay shared.",
+      "Empty test operands are constructed before hashes/signatures; normal-wrapper refusal and missing/foreign evidence negatives are retained.",
+      "Two lint transformations preserve all branch conditions and retained read/error outcomes."
+    ],
+    "normal_validator_current_byte_identity_claimed": false,
+    "prior_normal_byte_identity_records_are_historical_only": true,
+    "normal_public_API_and_success_criteria_unchanged": true,
+    "new_default_unit_root": "TestRetirementForwardSlotGuardRequiresLedgerForMarkers",
+    "focused_new_root_census": 18,
+    "focused_old_root_census": 16,
+    "local_functional_execution": false,
+    "new_exact_head_CI_required": true,
+    "exact_head_CI_pass_claimed": false,
+    "production_or_AB_acceptance": false,
+    "additional_original_CapacityPG_failure": {
+      "job_id": 125764650459,
+      "log_sha256": "e74dcbcd5828d372f5d9345130db8def81ed7ad28e512aeb2163342c1e398c98",
+      "error": "synthetic baseline registration: relation public.capacity_guest_retirement_forwards does not exist (42P01)",
+      "correction": "Same existing-intent no-marker guard path; no fixture schema or gate changed."
+    }
   }
 }
