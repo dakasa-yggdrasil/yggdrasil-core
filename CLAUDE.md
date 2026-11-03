@@ -61,7 +61,7 @@ cmd/                         # auxiliary CLIs (operator, validate-manifests, …
 ## Key concepts (vocabulary)
 
 - **Manifest** — versioned YAML/JSON record in `public.manifests`,
-  keyed by `(kind, namespace, name)`. Soft-delete via `deleted_at`.
+  keyed by `(kind, namespace, name)`. Soft retirement sets `active=false` on all logical versions and preserves history.
 - **Kind** — one of `workflow`, `integration`, `integration_type`,
   `product`, `surface`, `role`, `policy`, `auth_provider`,
   `repository_binding`, `team`, `team_grant`, `team_role_binding`, … (see
@@ -100,7 +100,7 @@ exist only as explicit migration bridges.
 
 ```
 GET    /healthz                                  liveness
-GET    /readyz                                   readiness (db + broker)
+GET    /readyz                                   readiness (DB required; broker degradation reported)
 GET    /metrics                                  Prometheus
 GET    /openapi.json                             embedded spec (sync'd by 5d088fa)
 
