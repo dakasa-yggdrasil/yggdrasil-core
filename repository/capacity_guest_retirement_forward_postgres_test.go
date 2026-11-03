@@ -499,6 +499,109 @@ func TestGuestRetirementForwardClosedGuardsPostgres(t *testing.T) {
 			if forwardTestRowCount(t, f, "capacity_vm_retirement_delete_bindings") != 0 || !reflect.DeepEqual(before, f.PreservedOriginals()) {
 				t.Fatal("closed guard changed native/original authority")
 			}
+
+			// Reconstruct the callback's private scope only from the actual owning
+			// DELETE. Forged inputs below are copies in memory; the issued grant,
+			// current marker and append-only admission/reads are never rewritten.
+			pending := forwardTestSettledDestroy(t, f, ctx, false)
+			grant := pending.Grant
+			var grantWire []byte
+			if err = f.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1`, grant.GrantID).Scan(&grantWire); err != nil {
+				t.Fatal(err)
+			}
+			var original capacityMutationRecord
+			if err = json.Unmarshal(grantWire, &original); err != nil {
+				t.Fatal(err)
+			}
+			ledger, err := f.Store.ReadGuestRetirementForwards(ctx, f.Pre.PreregistrationID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			readCount := forwardTestRowCount(t, f, "capacity_guest_retirement_forward_reads")
+			checkUnchanged := func(t *testing.T) {
+				t.Helper()
+				var after []byte
+				if err := f.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1`, grant.GrantID).Scan(&after); err != nil || string(after) != string(grantWire) {
+					t.Fatal("refused callback changed the issued grant", err)
+				}
+				rows, err := f.Store.ReadGuestRetirementForwards(ctx, f.Pre.PreregistrationID)
+				if err != nil || !reflect.DeepEqual(rows, ledger) || forwardTestRowCount(t, f, "capacity_guest_retirement_forward_reads") != readCount || forwardTestRowCount(t, f, "capacity_vm_retirement_delete_bindings") != 1 || !reflect.DeepEqual(before, f.PreservedOriginals()) {
+					t.Fatal("refused callback changed owning ledger or originals", err)
+				}
+			}
+			for _, kind := range []string{"owning_record", "wrong_grant", "wrong_target", "wrong_slot", "wrong_generation", "wrong_fence", "wrong_owner", "wrong_binding"} {
+				t.Run("callback_scope/"+kind, func(t *testing.T) {
+					record := original
+					switch kind {
+					case "wrong_grant":
+						record.Grant.GrantID = uuid.NewString()
+					case "wrong_target":
+						record.Grant.ExpectedResourceID = "foreign"
+					case "wrong_slot":
+						record.Grant.Slot = 1
+					case "wrong_generation":
+						record.Generation++
+					case "wrong_fence":
+						record.FencingToken++
+					case "wrong_owner":
+						record.LeaseOwner = uuid.NewString()
+					case "wrong_binding":
+						record.Binding.ScopeChecksum = strings.Repeat("a", 64)
+					}
+					func() {
+						tx, err := f.DB.BeginTx(ctx, nil)
+						if err != nil {
+							t.Fatal(err)
+						}
+						defer tx.Rollback()
+						if err = lockMutationScope(ctx, tx, f.Policy.Metadata.Namespace, f.Spec); err != nil {
+							t.Fatal(err)
+						}
+						if err = lockRetirementForwardBindingsTx(ctx, tx, append([]model.CapacityMutationBinding{original.Binding}, f.Spec.MutationBindings...)); err != nil {
+							t.Fatal(err)
+						}
+						private, err := retirementForwardCallbackContextTx(ctx, tx, record, f.Policy.Metadata.Namespace, f.Spec)
+						if kind == "owning_record" {
+							if err != nil {
+								t.Fatal("exact owning callback scope refused", err)
+							}
+							if err = guardRetirementForwardSlotTx(private, tx, original.Binding, grant.Slot); err != nil {
+								t.Fatal("server-owned callback scope did not authorize its exact slot", err)
+							}
+						} else if err == nil {
+							t.Fatal("foreign callback acquired private scope", kind)
+						}
+					}()
+					checkUnchanged(t)
+				})
+			}
+			for _, kind := range []string{"wrong_principal", "wrong_grant", "wrong_target", "wrong_slot", "wrong_request"} {
+				t.Run("callback_redeem/"+kind, func(t *testing.T) {
+					r := mutationRedeem(grant, uuid.NewString())
+					principal := original.Binding.AdapterPrincipalID
+					switch kind {
+					case "wrong_principal":
+						principal = "foreign"
+					case "wrong_grant":
+						r.GrantID = uuid.NewString()
+					case "wrong_target":
+						r.ExpectedResourceID = "foreign"
+					case "wrong_slot":
+						r.Slot = 1
+					case "wrong_request":
+						r.RequestSHA256 = strings.Repeat("a", 64)
+					}
+					callback := CapacityStore{DB: f.DB, ExecutionEnabled: true}
+					permit, err := callback.RedeemMutation(ctx, principal, r)
+					if err == nil || permit.Mode == "write_once" {
+						t.Fatal("foreign DB-only callback acquired native permission", kind, err)
+					}
+					if kind != "wrong_grant" && !errors.Is(err, ErrCapacityMutationAuthorization) {
+						t.Fatal("owning callback did not reach the unchanged authorization guard", kind, err)
+					}
+					checkUnchanged(t)
+				})
+			}
 		})
 	}
 }

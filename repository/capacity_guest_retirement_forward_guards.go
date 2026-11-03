@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"sort"
 	"time"
@@ -80,6 +81,61 @@ func forwardMutationContext(ctx context.Context, s CapacityStore, current model.
 		return ctx, ErrCapacityConflict
 	}
 	return context.WithValue(ctx, retirementForwardScopeKey{}, retirementForwardScope{id: m.ID, slot: slot}), nil
+}
+
+// Callback callers have no workflow Source context. Under the already-held
+// scope/profile locks, only the exact immutable owning DELETE can reconstruct
+// the private slot scope. All callback authentication/state checks still follow.
+func retirementForwardCallbackContextTx(ctx context.Context, tx *sql.Tx, record capacityMutationRecord, namespace string, p model.CapacityPolicySpec) (context.Context, error) {
+	var raw []byte
+	err := tx.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND intent ? 'retirement_forward' AND intent->'retirement_forward'<>'null'::jsonb FOR UPDATE`, namespace, p.Environment, p.Domain, p.Dimension).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ctx, nil // Existing schema86/no-marker callbacks need no ledger90.
+	}
+	if err != nil {
+		return ctx, err
+	}
+	var current model.CapacityIntent
+	if json.Unmarshal(raw, &current) != nil || current.RetirementForward == nil {
+		return ctx, ErrCapacityConflict
+	}
+	m := current.RetirementForward
+	if m.Stage == "terminal" {
+		return ctx, nil // The existing slot guard still authenticates terminal history.
+	}
+	if (m.Stage != "admitted" && m.Stage != "off_qualified") || current.Namespace != namespace || current.Environment != p.Environment || current.Domain != p.Domain || current.Dimension != p.Dimension || current.PolicyID != record.PolicyID || current.PolicyChecksum != record.PolicyChecksum || current.Generation != record.Generation || current.FencingToken != record.FencingToken || current.LeaseOwner != record.LeaseOwner || current.LeaseExecutorID != record.ExecutorID || current.Phase != "drained" || current.RecoveryOnly || record.Grant.Capability != record.Binding.DestroyCapability || record.Grant.CompensationOf != "" {
+		return ctx, ErrCapacityConflict
+	}
+	r, _, err := loadRetirementForwardTx(ctx, tx, m.ID, m.Stage)
+	if err != nil {
+		return ctx, err
+	}
+	if !reflect.DeepEqual(m, retirementForwardMarker(r)) || r.ActualCoreSource != capacity.CurrentGuestCoreSource() || r.Namespace != namespace || r.Environment != p.Environment || r.Domain != p.Domain || r.Dimension != p.Dimension || r.Generation != current.Generation || r.Fence != current.FencingToken || r.LeaseOwner != current.LeaseOwner || r.ExecutorID != current.LeaseExecutorID || record.WorkflowID.String() != r.Original.Request.Intent.WorkflowID || r.DestroyGrantID != "" {
+		return ctx, ErrCapacityConflict
+	}
+	// Historical parent receipts may be read/confirmed by a child, never used
+	// to reconstruct a callback scope under the child's different admission.
+	var sameAdmission bool
+	err = tx.QueryRowContext(ctx, `SELECT convert_from(original_wire,'UTF8')::jsonb->>'admission_id'=$3 FROM public.capacity_vm_retirement_delete_bindings WHERE intent_id=$1 AND destroy_grant_id=$2 FOR SHARE`, r.RetirementRequestID, record.Grant.GrantID, r.ID).Scan(&sameAdmission)
+	if err != nil {
+		return ctx, err
+	}
+	if !sameAdmission {
+		return ctx, ErrCapacityConflict
+	}
+	owned, err := retirementForwardDestroyRecordTx(ctx, tx, r, record.Grant.GrantID)
+	if err != nil {
+		return ctx, err
+	}
+	// State may have advanced before these ordered profile locks were acquired.
+	// Compare every immutable grant field; the actual state is reloaded FOR
+	// UPDATE and checked by the unchanged callback body before any mutation.
+	g := owned.Grant
+	g.State = record.Grant.State
+	if !reflect.DeepEqual(g, record.Grant) || !reflect.DeepEqual(owned.Binding, record.Binding) || owned.PolicyID != record.PolicyID || owned.PolicyChecksum != record.PolicyChecksum || owned.WorkflowID != record.WorkflowID || owned.Generation != record.Generation || owned.FencingToken != record.FencingToken || owned.LeaseOwner != record.LeaseOwner || owned.ExecutorID != record.ExecutorID || !owned.CreatedAt.Equal(record.CreatedAt) {
+		return ctx, ErrCapacityConflict
+	}
+	return context.WithValue(ctx, retirementForwardScopeKey{}, retirementForwardScope{id: m.ID, slot: record.Grant.Slot}), nil
 }
 
 // This new Source-only inventory path refreshes exact already-owned slots; it
