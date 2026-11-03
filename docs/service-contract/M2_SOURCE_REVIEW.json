@@ -1161,5 +1161,53 @@
     "exact_new_head_CI_required": true,
     "exact_new_head_CI_pass_claimed": false,
     "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_declared_member_roster_correction_20261103": {
+    "schema": "ADR0101_declared_member_roster_Source_correction_v1",
+    "base_commit": "3af747d5598816f9f11693ffa2f31d4505c5df0e",
+    "preserved_previous_complete_review_sha256": "a045f24773517e7830e075e0e8125efc8986ba38304799b570529c4323da6d7b",
+    "actual_failed_CI": {
+      "run_id": 41593319433,
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "error": "new declared member signed registration: complete original protected provisioning required",
+      "new_roots_run": 18,
+      "new_roots_passed": 9,
+      "new_roots_failed": 9,
+      "nodes_run_each": 149,
+      "nodes_failed_each": 37,
+      "skipped_each": 0
+    },
+    "cause": "Distinct declared birth substitutes the original boot ID in writer identities. The two enclosing writer roster digests still described the old birth, so the original protected registration validator correctly rejected it.",
+    "correction": "Recompute Result.WriterRosterSHA256 from the rebound Writers and bind EnrollmentStatement.WriterRosterSHA256 to it before the original result and signature cascade and first insert.",
+    "changed_source_facts": {
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "bytes": 42055,
+          "sha256": "a71ff6f503a82b96f1dbd2e9654c2115534e9676b459a26e27807112866a1f79"
+        },
+        "after": {
+          "bytes": 42212,
+          "sha256": "e6d78c139ecfb7fc158207d978dc6a561228aa35827033c35be99b0243616129"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "cf79cefef9696b139936b5224b531896283bb3dbcd9770302f4c001869a1d785",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 796,
+    "fixture_only": true,
+    "runtime_validators_test_assertions_clocks_leases_stored_frames_changed": false,
+    "root_reviewed_two_assignment_diff": true,
+    "signature_cascade_review": "Writer roster and bootstrap journal hashes are recomputed before clock/result/registration/receipt/enrollment/installation signatures. No additional affected derived hash was found.",
+    "local_functional_execution": false,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
   }
 }

@@ -246,6 +246,8 @@ func (f *GuestRetirementForwardRecoveryFixture) seedMember(slot int) *failedServ
 	clock.Authority.Signature, _ = capacity.GuestLifecycleSignature(failedServingKey('c'), clock.Authority)
 	reg.Result.OriginalCreateSettlementSHA256 = w.OriginalCreateSettlementSHA256
 	reg.Result.BootstrapOriginalObservation.JournalSHA256 = capacity.GuestRetirementSHA(reg.Result.BootstrapOriginalJournal)
+	reg.Result.WriterRosterSHA256 = capacity.GuestRetirementSHA(reg.Result.Writers)
+	reg.EnrollmentStatement.WriterRosterSHA256 = reg.Result.WriterRosterSHA256
 	reg.EnrollmentStatement.OriginalNativeResultSHA256 = capacity.GuestRetirementSHA(reg.Result)
 	reg.EnrollmentStatement.OriginalProvisioningClockSHA256 = capacity.GuestRetirementSHA(*clock)
 	reg.Signature = ""
