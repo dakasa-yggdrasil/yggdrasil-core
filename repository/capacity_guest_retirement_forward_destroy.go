@@ -227,9 +227,9 @@ func retirementForwardDestroyRecordTx(ctx context.Context, tx *sql.Tx, r GuestRe
 	// Revalidate the ORIGINAL eligibility at its immutable binding time, not
 	// against a fresh substituted clock after the target has been deleted.
 	read, issuedPG, readSHA, err := loadForwardReadReturnTx(ctx, tx, eligibility.NativeOffReadID)
-	policy := model.Manifest{ID: original.PolicyID, Checksum: original.PolicyChecksum, Metadata: model.ManifestMetadata{Namespace: authority.Namespace}}
+	policy := model.Manifest{ID: original.PolicyID, Kind: "capacity_policy", Checksum: original.PolicyChecksum, Metadata: model.ManifestMetadata{Namespace: authority.Namespace}}
 	var active bool
-	if err != nil || tx.QueryRowContext(ctx, `SELECT spec,active FROM public.manifests WHERE id=$1 AND checksum=$2 AND kind='capacity_policy'`, policy.ID, policy.Checksum).Scan(&policy.Spec, &active) != nil || !active {
+	if err != nil || tx.QueryRowContext(ctx, `SELECT name,spec,active FROM public.manifests WHERE id=$1 AND checksum=$2 AND kind='capacity_policy' AND namespace=$3`, policy.ID, policy.Checksum, authority.Namespace).Scan(&policy.Metadata.Name, &policy.Spec, &active) != nil || !active {
 		return original, ErrCapacityConflict
 	}
 	p, err := parseCapacityPolicy(policy)
