@@ -30,17 +30,34 @@ func lockRetirementForwardProfileTx(ctx context.Context, tx *sql.Tx, b model.Cap
 	return err
 }
 func guardRetirementForwardSlotTx(ctx context.Context, tx *sql.Tx, b model.CapacityMutationBinding, slot int) error {
-	rows, err := tx.QueryContext(ctx, `SELECT f.id::text,f.slot FROM public.capacity_guest_retirement_forwards f JOIN public.capacity_intents c ON c.namespace=f.namespace AND c.environment=f.environment AND c.domain=f.domain AND c.dimension=f.dimension AND c.intent#>>'{retirement_forward,id}'=f.id::text WHERE f.integration_instance_id=$1 AND f.scope_checksum=$2 AND f.profile_name=$3 AND c.intent#>>'{retirement_forward,stage}'<>'terminal' AND f.stage=c.intent#>>'{retirement_forward,stage}'`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName)
+	// A genuinely absent marker uses only the existing intent table. Callers
+	// hold the physical-profile lock, so a same-profile admission cannot race
+	// this check. Every present marker requires its ledger; errors never open it.
+	var present bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_intents WHERE intent ? 'retirement_forward' AND intent->'retirement_forward'<>'null'::jsonb)`).Scan(&present); err != nil {
+		return err
+	}
+	if !present {
+		return nil
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT f.id::text,f.slot,f.stage,COALESCE(c.intent->'retirement_forward'=jsonb_build_object('schema',f.original_record->>'schema','id',f.id::text,'retirement_request_id',f.retirement_request_id::text,'preregistration_id',f.preregistration_id::text,'mode',f.original_record->>'mode','stage',f.stage,'original_intent_sha256',f.original_record->>'original_intent_sha256','original_generation',f.original_record->'original_generation','original_fence',f.original_record->'original_fence'),false) FROM public.capacity_intents c LEFT JOIN public.capacity_guest_retirement_forwards f ON c.namespace=f.namespace AND c.environment=f.environment AND c.domain=f.domain AND c.dimension=f.dimension AND c.intent#>>'{retirement_forward,id}'=f.id::text AND f.stage=c.intent#>>'{retirement_forward,stage}' WHERE c.intent ? 'retirement_forward' AND c.intent->'retirement_forward'<>'null'::jsonb AND (f.id IS NULL OR (f.integration_instance_id=$1 AND f.scope_checksum=$2 AND f.profile_name=$3))`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	n := 0
 	for rows.Next() {
-		var id string
+		var id, stage string
 		var target int
-		if err = rows.Scan(&id, &target); err != nil {
-			return err
+		var markerMatches bool
+		if err = rows.Scan(&id, &target, &stage, &markerMatches); err != nil {
+			return err // NULL/unknown/malformed marker cannot disappear in a join.
+		}
+		if !markerMatches {
+			return ErrCapacityConflict
+		}
+		if stage == "terminal" {
+			continue // Exact immutable terminal is history, not an active fence.
 		}
 		n++
 		scope, ok := ctx.Value(retirementForwardScopeKey{}).(retirementForwardScope)
@@ -53,6 +70,7 @@ func guardRetirementForwardSlotTx(ctx context.Context, tx *sql.Tx, b model.Capac
 	}
 	return rows.Err()
 }
+
 func forwardMutationContext(ctx context.Context, s CapacityStore, current model.CapacityIntent, b model.CapacityMutationBinding, slot int, capability string) (context.Context, error) {
 	if !retirementForwardActive(&current) {
 		return ctx, nil

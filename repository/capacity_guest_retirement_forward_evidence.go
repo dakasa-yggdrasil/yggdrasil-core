@@ -200,7 +200,7 @@ func retirementForwardQuietTx(ctx context.Context, tx *sql.Tx, x retirementForwa
 	if err != nil || busy != 0 {
 		return ErrCapacityConflict
 	}
-	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, ownDestroy).Scan(&busy)
+	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE `+capacityGrantUndisposedSQL+` AND integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, ownDestroy).Scan(&busy)
 	if err != nil || busy != 0 {
 		return ErrCapacityConflict
 	}

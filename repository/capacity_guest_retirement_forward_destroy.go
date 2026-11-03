@@ -78,7 +78,7 @@ func (s CapacityStore) retirementForwardFloorTx(ctx context.Context, tx *sql.Tx,
 		if err != nil || live != fresh || live < x.spec.Floor || live < x.current.Decision.Units {
 			return ErrCapacityConflict
 		}
-		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, adopted).Scan(&pending)
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE `+capacityGrantUndisposedSQL+` AND integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, adopted).Scan(&pending)
 		if err != nil || pending != 0 {
 			return ErrCapacityConflict
 		}
