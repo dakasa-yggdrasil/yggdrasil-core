@@ -57,14 +57,14 @@ func failedServingWire(t *testing.T, value any) []byte {
 	return raw
 }
 
-func failedServingDB(t *testing.T) *sql.DB { t.Helper(); return failedServingDBAtSchema(t, 90) }
+func failedServingDB(t *testing.T) *sql.DB { t.Helper(); return failedServingDBAtSchema(t, 91) }
 
 // Only the historical index89 proof uses89; operational/new recovery fixtures
-// always use current90. No caller/env can select an arbitrary old schema.
+// always use current91. No caller/env can select an arbitrary old schema.
 func failedServingDBAtSchema(t *testing.T, target int64) *sql.DB {
 	t.Helper()
-	if target != 89 && target != 90 {
-		t.Fatal("closed fixture schema89 or90 required")
+	if target != 89 && target != 91 {
+		t.Fatal("closed fixture schema89 or91 required")
 	}
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		t.Fatal("explicit disposable fixture gate required")

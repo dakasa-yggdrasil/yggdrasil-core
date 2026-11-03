@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "06538fe916e60a3266315f7aa6a66c4dd52da5693692a27bd560affc57abe958"
+    "sha256": "80aa2fbf1e712af4430a6d40bd8d9dd9fe9b1352522f14b63f80e1856ecfc426"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "5fec73bb1e500f1e99b3d1fdbe2f02702c1e8d0e84a4d50a9ed58194072f68e9"
+      "sha256": "bdc6130e4adbb8bf50cf9f1f5f2cf747400b6082d84ac074b299f0d5968f21be"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -40,7 +40,7 @@
     {
       "id": "http_inbound_protocols_and_auth",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "1d248fb08167bb6b006e1b5d0fb165917b05a9dcbc4acbabc8b34903b8efae9a"
+      "sha256": "2733d7ce9c099ce0d003e766ba9580521e63dacddc9a998461ea6a620ec4805d"
     },
     {
       "id": "dependency_versions",
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/M2_SOURCE_REVIEW.json",
-      "sha256": "3f4c1e9cd453c9b8ffe9ee4fb5d976fdb0d904dc0c0c9d25eaba95ce6185b211"
+      "sha256": "b6c7807e3ca4c9a55fb124f384f3213522882315403c16cbc2ea9bb2247cc56f"
     },
     {
       "id": "prior_accepted_source_review",
@@ -82,14 +82,14 @@
     {
       "id": "parameterized_destination_families",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "1d248fb08167bb6b006e1b5d0fb165917b05a9dcbc4acbabc8b34903b8efae9a"
+      "sha256": "2733d7ce9c099ce0d003e766ba9580521e63dacddc9a998461ea6a620ec4805d"
     }
   ],
   "exposesREST": [
     {
       "id": "http_mux_registrations",
       "evidence": "docs/service-contract/source/http-routes.json",
-      "sha256": "f4e7ffec9c3ca98fcd2e8e6a4f35b919b7e49cc7305dec7e8bbb72a2fb2a1e8b"
+      "sha256": "1aaa2934654c3854343cad6b3c7f800d3aa105cf17ad56b1332a7d1ebb35c131"
     },
     {
       "id": "pre_mux_capacity_dispatch",
@@ -99,7 +99,7 @@
     {
       "id": "auth_dispatch_source_functions",
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
-      "sha256": "52bb19719c4af644d070db2c7971a8e2bdda6219a74e6fa2eb8991f7c8dbf331"
+      "sha256": "115651fd89b0131d8d6fadbba71394b2c2cb71d98b1e4f934be528d6e5e34986"
     }
   ]
 }

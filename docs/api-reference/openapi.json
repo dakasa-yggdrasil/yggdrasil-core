@@ -23,6 +23,126 @@
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
   ],
   "paths": {
+    "/api/v1/ops/capacity/http-maintenance-dispatch-dispositions": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Dispose an exact recorded context-refused maintenance return without replay",
+        "description": "Core requires the retained failed seven-step capacity-boundary refresh, one held publication with no original Guest wire, exact stored member/policy lineage, full typed policy validation, a lease expired for fifteen minutes and a real later Core process. Only one receipt and the job state/update time change; the failed workflow, NULL ACK and all canary records remain unchanged. No provider action, useful capacity or replay is inferred. Cookie sessions require X-CSRF-Token; verified OIDC bearer authentication retains the existing middleware exemption.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required for cookie-session POST; obtained from the authenticated session.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HTTPMaintenanceDispatchDispositionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable public receipt; original failed return and NULL ACK preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPMaintenanceDispatchDispositionSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed canonical job UUID or closed nine-field CAS request."
+          },
+          "401": {
+            "description": "Authenticated human collaborator required."
+          },
+          "403": {
+            "description": "Current manage-workflows and GodMode permission required; cookie-session POST also requires valid CSRF."
+          },
+          "503": {
+            "description": "Current operator authorization could not be established."
+          },
+          "409": {
+            "description": "Stale expectations, ineligible recorded failure, changed evidence or absent later-process barrier. Recover an uncertain POST response by GET only."
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/http-maintenance-dispatch-dispositions/{jobId}": {
+      "get": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Read the immutable recorded HTTP maintenance disposition",
+        "description": "Read the stored receipt and preserved-original hashes. Does not rescan membership, replay work or infer native presence, quiescence or useful capacity.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated historical public receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPMaintenanceDispatchDispositionSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Canonical non-nil lowercase job UUID required."
+          },
+          "401": {
+            "description": "Authenticated human collaborator required."
+          },
+          "403": {
+            "description": "Current manage-workflows and GodMode permission required; cookie-session POST also requires valid CSRF."
+          },
+          "503": {
+            "description": "Current operator authorization could not be established."
+          },
+          "404": {
+            "description": "No valid stored disposition for this exact job."
+          }
+        }
+      }
+    },
     "/api/v1/ops/capacity/guest-retirement-poweroff-forwards": {
       "post": {
         "tags": [
@@ -1398,6 +1518,258 @@
       }
     },
     "schemas": {
+      "HTTPMaintenanceDispatchDispositionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Exactly nine non-null CAS expectations, at most 8192 bytes. Duplicate or unknown keys, trailing JSON and caller-supplied proof are rejected. Core derives the evidence and issuer.",
+        "required": [
+          "job_id",
+          "expected_run_id",
+          "expected_lease_owner",
+          "expected_envelope_sha256",
+          "expected_run_sha256",
+          "expected_members_sha256",
+          "expected_fencing_token",
+          "expected_pending_wake_count",
+          "expected_returned_at"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_lease_owner": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_envelope_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_run_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_members_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_fencing_token": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "expected_pending_wake_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "expected_returned_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "HTTPMaintenanceDispatchDispositionSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "job_id",
+          "run_id",
+          "original_dispatch_sha256",
+          "original_run_sha256",
+          "current_members_sha256",
+          "original_dispatch_updated_at",
+          "original_returned_at",
+          "disposing_core_process_started_at",
+          "recorded_at",
+          "schema",
+          "current_member_count",
+          "executor_barrier",
+          "minimum_lease_age_seconds",
+          "reason",
+          "historical_return",
+          "dispatch_state",
+          "disposing_core_hostname",
+          "disposing_core_pid",
+          "disposing_core_source_commit",
+          "issuer",
+          "finalization_ack_at",
+          "provider_mutation_evidence",
+          "original_return_recorded",
+          "workflow_run_preserved",
+          "new_current_admission_required",
+          "original_finalization_ack_present",
+          "replayed",
+          "provider_read_performed",
+          "provider_quiescence_proved",
+          "other_core_replicas_excluded"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "original_dispatch_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "original_run_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "current_members_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "original_dispatch_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "original_returned_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "disposing_core_process_started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schema": {
+            "type": "string",
+            "enum": [
+              "capacity_dispatch_http_maintenance_disposition_v1"
+            ]
+          },
+          "current_member_count": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "executor_barrier": {
+            "type": "string",
+            "enum": [
+              "disposing_core_process_started_after_lease_expiry_v1"
+            ]
+          },
+          "minimum_lease_age_seconds": {
+            "type": "integer",
+            "enum": [
+              900
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "recorded_context_refused_http_maintenance_dispatch_disposed"
+            ]
+          },
+          "historical_return": {
+            "type": "string",
+            "enum": [
+              "unknown"
+            ]
+          },
+          "dispatch_state": {
+            "type": "string",
+            "enum": [
+              "http_maintenance_disposed"
+            ]
+          },
+          "disposing_core_hostname": {
+            "type": "string"
+          },
+          "disposing_core_pid": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "disposing_core_source_commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "issuer": {
+            "type": "string",
+            "pattern": "^collaborator:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "finalization_ack_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          },
+          "provider_mutation_evidence": {
+            "type": "object",
+            "description": "Retained aggregate effect counts and truthful flags; excludes original wires and member records."
+          },
+          "original_return_recorded": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "workflow_run_preserved": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "new_current_admission_required": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "original_finalization_ack_present": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "replayed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "provider_read_performed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "provider_quiescence_proved": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "other_core_replicas_excluded": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        }
+      },
       "GuestRetirementForwardRequest": {
         "type": "object",
         "additionalProperties": false,

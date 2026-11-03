@@ -526,3 +526,12 @@ and requires fresh native OFF and survivor evidence before ordinary owned
 cleanup. Automatic live execution and explicit historical admission share that
 proof; neither replays Guest retirement or an already issued destroy. The
 separate PostgreSQL16/17 CI cohort covers this contract using declared fixtures.
+
+[ADR-0103](docs/adr/0103-dispose-recorded-context-refused-http-maintenance-without-replay.md)
+describes a distinct recorded HTTP maintenance disposition. Its strict nine-field
+administrative POST and stored-receipt GET preserve the failed dispatch, NULL ACK
+and original workflow/canary rows; they neither replay a publication nor prove
+provider or business success. The API requires an authenticated current GodMode
+operator and session CSRF protection. The separate PostgreSQL 16/17 Source cohort
+checks the full receipt/CAS contract, retained originals, schema91 and the original
+R4 SQL migration-view no-op; native compatibility and adoption remain separate.

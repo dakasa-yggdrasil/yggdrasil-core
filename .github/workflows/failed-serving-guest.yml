@@ -69,7 +69,7 @@ jobs:
               assert (target in row.get('IgnoredGoFiles',[])) is (not present)
           print('FAILED_SERVING_FIXTURE_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')
           PY
-      - name: Run exact schema90 Source, HTTP and bounded original-read cases
+      - name: Run exact schema91 Source, HTTP and bounded original-read cases
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -135,7 +135,7 @@ jobs:
               summary[name]={'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'failed_serving_guest_Source_exact_CI_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'schema_version':90,'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'race':True,'count':1,'total_roots':16,'summary':summary,'mandatory_schema89_index_subtest':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          value={'schema':'failed_serving_guest_Source_exact_CI_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'schema_version':91,'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'race':True,'count':1,'total_roots':16,'summary':summary,'mandatory_schema89_index_subtest':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY
@@ -266,7 +266,7 @@ jobs:
               summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':90,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':91,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_FORWARD_CENSUS

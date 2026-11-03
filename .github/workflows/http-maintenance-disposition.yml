@@ -1,0 +1,50 @@
+name: Recorded HTTP maintenance disposition Source and PostgreSQL
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-source-postgres:
+    name: HTTP maintenance disposition (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17']
+    env:
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_POSTGRES_MAJOR: ${{ matrix.postgres }}
+      GOWORK: 'off'
+      GOFLAGS: -mod=readonly
+      CGO_ENABLED: '1'
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 2GiB
+      PYTHONDONTWRITEBYTECODE: '1'
+      HTTP_MAINTENANCE_LOGS: ${{ runner.temp }}/http-maintenance-pg${{ matrix.postgres }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Qualify schema91, retained originals, strict HTTP and old R4 SQL roster Up noop
+        shell: bash
+        run: bash .github/scripts/run_http_maintenance_disposition_ci.sh
+      - name: Retain original Go, database, census and owned PostgreSQL shutdown returns
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: http-maintenance-pg${{ matrix.postgres }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.HTTP_MAINTENANCE_LOGS }}
+          if-no-files-found: error
+          retention-days: 14
