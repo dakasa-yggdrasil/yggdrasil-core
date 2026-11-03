@@ -1,6 +1,6 @@
 # ADR-0095: Dispose the single failed installed tail of a Guest expansion
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-02
 - **Deciders:** Giovanni Martins
 - **Scope:** yggdrasil-core / original Notify Guest failed-installed disposal

@@ -1,6 +1,6 @@
 # ADR-0098: Quarantine a previously serving single Guest before native absence
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-02
 - **Deciders:** Giovanni Martins
 - **Scope:** yggdrasil-core / original Notify single-member operational recovery

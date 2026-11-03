@@ -1,6 +1,6 @@
 # ADR-0096: Dispose recorded unknown maintenance refreshes without rewriting their return
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-02
 - **Deciders:** Giovanni Martins
 - **Scope:** yggdrasil-core / capacity dispatch operator resolution

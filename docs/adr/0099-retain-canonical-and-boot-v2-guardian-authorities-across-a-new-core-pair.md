@@ -1,6 +1,6 @@
 # ADR-0099: Retain canonical and boot-v2 Guardian authorities across a new Core pair
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-02
 - **Deciders:** Giovanni Martins
 - **Scope:** Owned operational network Guardian / image-pair succession and immutable authority inheritance

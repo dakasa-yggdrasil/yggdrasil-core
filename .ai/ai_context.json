@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-02T19:04:55-03:00",
+  "generated_at": "2026-11-03T00:46:35-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1461,
-    ".json": 193,
-    ".py": 42,
-    ".sql": 88,
+    ".go": 1463,
+    ".json": 203,
+    ".py": 59,
+    ".sql": 89,
     ".yaml": 11,
     ".yml": 36
   },
   "provenance": {
-    "commit": "bfe645857c666333e44ccf2d6c0b6038007ac1e0",
+    "commit": "24d376eec78a8ca24de70c447ffea9b9a503f2ed",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "a22da2fea21af1756f39cf462e7b578fdac678e649a9255bec88ca0e59d470de"
+        "sha256": "1607f9d5980492ead4fd7fe62391bb6028ff47a39cf372fee2a87c16c03d83d8"
       },
       {
         "path": "AGENTS.md",
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 349,
-      "kb": 4516
+      "files": 350,
+      "kb": 4530
     },
     {
       "path": "controllers/httpapi",
@@ -85,8 +85,8 @@
     },
     {
       "path": "db/migrations",
-      "files": 87,
-      "kb": 615
+      "files": 88,
+      "kb": 616
     },
     {
       "path": "model",
@@ -100,8 +100,8 @@
     },
     {
       "path": "addons",
-      "files": 50,
-      "kb": 289
+      "files": 51,
+      "kb": 307
     },
     {
       "path": "internal/capacitynativeqemu",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 87,
+    "migrations": 88,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 35,
-    "k8s_manifests": 22
+    "config_files": 44,
+    "k8s_manifests": 24
   }
 }

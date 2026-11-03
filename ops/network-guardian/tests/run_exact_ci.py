@@ -1,4 +1,4 @@
-"""Run the reviewed, closed G6+G7 test roster and retain native outcomes."""
+"""Run the reviewed G6+G7+G8 roster; retain actual CI outcomes, no host claim."""
 import collections
 import json
 import os
@@ -47,7 +47,7 @@ def main():
     if collections.Counter(actual) != collections.Counter(expected):
         (OUT / 'CENSUS-REFUSAL.PUBLIC.json').write_text(json.dumps({
             'expected': expected, 'actual': actual, 'success': False}, indent=2) + '\n')
-        raise RuntimeError('discovered tests differ from reviewed exact G6+G7 roster')
+        raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8 roster')
     result = unittest.TextTestRunner(verbosity=2, resultclass=Outcomes).run(suite)
     success = (result.wasSuccessful() and not result.skipped and not result.expectedFailures
                and not result.unexpectedSuccesses and result.testsRun == len(expected)
@@ -56,7 +56,7 @@ def main():
     clean_source = (subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == actual_commit
                     and not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all']))
     success = success and clean_source
-    value = {'schema': 'owned_network_guardian_g6_g7_exact_CI_census_v1',
+    value = {'schema': 'owned_network_guardian_g6_g7_g8_exact_CI_census_v1',
              'source_commit': os.environ['SOURCE_COMMIT'], 'success': success,
              'expected': expected, 'executed': result.runs, 'passed': result.passes,
              'failures': [test.id() for test, _ in result.failures],

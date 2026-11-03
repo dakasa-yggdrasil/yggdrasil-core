@@ -1,6 +1,6 @@
 # ADR-0097: Bind current15 to an authenticated current-lifetime initializer
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-11-02
 
 ## Context

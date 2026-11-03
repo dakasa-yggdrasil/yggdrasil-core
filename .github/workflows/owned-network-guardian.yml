@@ -19,6 +19,18 @@ jobs:
   exact-source-and-historical-proof:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: guardian_ci
+          POSTGRES_PASSWORD: disposable-guardian-ci-only
+          POSTGRES_DB: yggdrasil
+        options: >-
+          --health-cmd "pg_isready -U guardian_ci -d yggdrasil"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,10 +47,17 @@ jobs:
           sha256sum --check SHA256SUMS
           cd tools
           sha256sum --check SHA256SUMS
-      - name: Run exact G6 and G7 proof, derivation and once-only cutover census
+      - name: Verify exact G8 runtime package and separate real operational tools
+        run: |
+          cd ops/network-guardian/g8pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+      - name: Run exact G6 G7 G8 historical proof and actual cutover CAS PostgreSQL census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
+          GUARDIAN_CI_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           mkdir -p "$GUARDIAN_CI_EVIDENCE"
           set +e

@@ -1,0 +1,11 @@
+# Typed Core image CAS after G8 acceptance
+
+`core_image_cas_once_g8.py` is a separately reviewed Root-only operator, outside the runtime10/tools4/21-member network package. Its own `SHA256SUMS` and exact source CI bind this script; it loads only the four package tools with the literal reviewed hashes. No production action occurs on import.
+
+The old Core preimage is the exact C9 source/f809 image, Deployment UID, generation271 and Pod3905. The new image is the qualified d451 linux/amd64 manifest0970. Root must freshly confirm those preimages, the actual package/claim/RETURN hashes and G8 original120/own15/independent15 identities. Every invocation has a new private evidence directory; its global once claim prevents replay through another directory.
+
+The schema89 read-only preflight uses the Root-reviewed UNION SQL SHA256 `7269ff606ca948d30a08fe7efed5594d616442ed050d0df3c0c613c6826428dd`. Both run identity scopes and the full terminal/finished-at predicate remain; all applied-migration/index/job/lease/steady checks must pass within the original8s statement limit. A read-only snapshot is not an atomic scheduler admission barrier. An active or uncertain observation is HOLD, never a reason to change a schedule, lease, counter, ACK, timeout or index.
+
+The script retains private stable kubeconfig and RAM-only mTLS material, the existing operation mutex, dry-run admission, fresh unchanged full preimage, durable possible-send markers, one actual PATCH, raw API return and no automatic retry/rollback. The patch tests UID/RV/generation/annotations/full spec and changes only the exact container named core image plus explicit source/change-cause annotations. Raw independent current15 binds to authenticated Owner source/config; it does not expect persisted-envelope fields on the raw observation.
+
+Original39 inherited refs, budget1, all owned source/unit files and accepted physical G8 lifetimes remain exact. HTTP200 means PATCH acknowledgement only. Actual new Pod ownership, ready generation, imageID/spec/provenance, health, current all-four and E2E/useful/A-B proofs remain Root's later acceptance. Do not run this code before its final source review, required CI and actual native G8 acceptance.

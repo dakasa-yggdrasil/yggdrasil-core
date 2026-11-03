@@ -76,5 +76,172 @@
     "M2_exact_head_CI_pass_claimed": false,
     "new_runtime_native_or_ADR_acceptance_claimed": false,
     "final_M2_candidate_exact_head_CI_required": true
+  },
+  "final_architecture_acceptance_review_20261103": {
+    "schema": "Root_final_elastic_architecture_acceptance_v1",
+    "scope": "Acceptance of ADR0095 through ADR0100 architectural Source contracts under the explicit authorized Root decision. Operational A/B and overall task completion are separate and not asserted.",
+    "decision_authority": "Root explicitly accepted these six architectural scopes in the authorized session; this draft records no independently invented human approval or acceptance timestamp.",
+    "architecture_statuses": {
+      "0095": "Accepted",
+      "0096": "Accepted",
+      "0097": "Accepted",
+      "0098": "Accepted",
+      "0099": "Accepted",
+      "0100": "Accepted"
+    },
+    "historical_review_preservation": {
+      "prior_M2_composition_commit": "491f693b06d31fc59ac146911a3f4e6fc24112af",
+      "prior_M2_composition_sha256": "424367556bd2df3cf7c29fa633475bcab04a6a0b5f987a8099eaaf4bb60eab1f",
+      "all_prior_top_level_nodes_and_validation_facts_preserved": true,
+      "prior_validation_scope_is_historical_pre_G8_Source_composition": true,
+      "historical_REVIEW_sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710",
+      "historical_REVIEW_bytes": 131070
+    },
+    "source_facts": {
+      "ops_P": "c4b2c76dec71ca8afa8780a3b8524d725e86f40a",
+      "Core_R": "d451ac07c6e412bd2eae06f648935799e046ea31",
+      "Core_amd64_D": "0970e1188ceb5fa3ba52a1a11337f5fae7ac0657a66a69e08d24f9888f813826",
+      "operational_manifest_sha256": "f0194023aef71d2e912e6fe064f6e1640c6880e46bb2b53bf4b7d6d841df0753",
+      "controller_config_sha256": "42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5",
+      "Guardian_source_sha256": "8259638127d811079d6a461d3bd7407f8a53ff3ebb75e8061bf8538dcf6508b9",
+      "runtime_package_sha256": "b87e3bedfa87a178fd5749812cb1575dff34e44c0ab693bb4c085218ab42d36d",
+      "operational_tools_roster_sha256": "939afab9e5746499a12df50cae676841592b1d2918d646c80b9eee606649f73a",
+      "typed_Core_CAS_source_sha256": "a6c54605c98636f673e0d6115471d78d9d32a82ee3bd858b051a18531fb9e349",
+      "non_test_Go_source_count": 784,
+      "non_test_Go_inventory_sha256": "9a9a664140ace89bf02fd0b8ec1549b12dbcfc124e50775281d972af1105dd6e",
+      "corrected_test0601_is_excluded_by_existing_non_test_selection": true
+    },
+    "qualified_Source_CI": {
+      "Root_original_acceptance_sha256": "953c95d982e1d73b48cc4c07f76ff9603453d142c09b4029d408202de7415a5c",
+      "head": "c4b2c76dec71ca8afa8780a3b8524d725e86f40a",
+      "actual_required_runs": 18,
+      "actual_jobs": 35,
+      "all_success_exact_head_attempt1": true,
+      "Native_8roots_114RUNPASS": true,
+      "Owned106_and_real_PG16": true,
+      "focused_PG16_PG17_each310_nodes": true,
+      "qualified_head_is_not_a_future_M2_CI_result": true
+    },
+    "actual_G8": {
+      "swap": {
+        "command_id": "f5d29a1c-46f7-4dc6-bf10-eb99a5606a50",
+        "receipt_sha256": "2db92c4c41873a8c37b8e8cb68b636c01bd2ae095447a08d6453e589142de75b",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "return_sha256": "2e26bef01ff324c4676f9a96ca38ae8673a4362001de09c75cc5492c5510a6b8",
+      "independent_closure": {
+        "command_id": "5d148564-46a9-4d51-b724-b70d7042372d",
+        "receipt_sha256": "97b7698e4b765c8d985b48298611cc40a238e666f27d80c6e479fe678059ec17",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "standing_sha256": "a02690f5e7a8c000478ceca6c4f4715e7b589814bf93fc5cbefe3bd9126e08d3",
+      "new_original_full120_sha256": "68f5b3bcd33a9ab8e1ad29f3fdbf52a83166b694b81f5bce474e2fe85afecce3",
+      "own_daemon_current15_sha256": "e406648a4ecd503ff8231e5fde8d6969a091fe9327c4e8e0927815eb929711c4",
+      "controller": {
+        "ExecMainStartTimestampMonotonic": "41794761090",
+        "InvocationID": "1f0c1c3947874f649671e1c212c23127",
+        "boot_id": "2b7e9be2-e45a-4cd5-86f2-6f0a3372576d",
+        "pid": 1462752,
+        "start_ticks": 4179475
+      },
+      "guardian": {
+        "ExecMainStartTimestampMonotonic": "41797894088",
+        "InvocationID": "a1826878088e4dbaa5e7adfb67cba5c6",
+        "boot_id": "2b7e9be2-e45a-4cd5-86f2-6f0a3372576d",
+        "pid": 1463003,
+        "start_ticks": 4179788
+      },
+      "independent_current15": true,
+      "all_original_refs_and_budget_unchanged": true,
+      "conservative_per_role_gap_seconds": {
+        "backend:broker": 0,
+        "backend:core": 0,
+        "backend:rds": 0,
+        "backend:redis": 0,
+        "core_ready4:10.42.0.83": 0,
+        "prometheus_ready4:10.42.0.37": 0
+      },
+      "Cold_Hub_or_Core_or_provider_mutation_by_swap": false
+    },
+    "actual_typed_Core_rollout": {
+      "CAS": {
+        "command_id": "d3c7ed22-6032-4a14-81c0-b8e34b03000a",
+        "receipt_sha256": "aea54edf2f5d3085af0edc20088c07fceff07cfd344a0e3c1ccad9d89dd3cf18",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "CAS_original_return_sha256": "262abc95aae82704004945647dc6bb3a281427677e8634f5104fac82420237d2",
+      "independent_post_rollout": {
+        "command_id": "170b54f0-69ab-47a7-9698-0b5464ae21c8",
+        "receipt_sha256": "1b9532c2e67db65903a7ebf6dd30e2751284139784ec30b4c21ab77841ac6770",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "Core": {
+        "annotations_sha256": "fb596df428a08bb26daaaaffbfef4eabb4de6fe1cc17b5e7c3aaccb4670ad6ea",
+        "containerID": "containerd://827a685085e245ed453e58c61de991576f106463ff8ad37e037146369751e465",
+        "deployment_uid": "a58ab8c2-da48-46c1-ae62-a650141eeb86",
+        "generation": 272,
+        "image": "153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:0970e1188ceb5fa3ba52a1a11337f5fae7ac0657a66a69e08d24f9888f813826",
+        "imageID": "153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:0970e1188ceb5fa3ba52a1a11337f5fae7ac0657a66a69e08d24f9888f813826",
+        "node": "ip-172-31-9-242",
+        "pod_ip": "10.42.0.96",
+        "pod_name": "yggdrasil-9c4866c66-8nvk5",
+        "pod_spec_sha256": "e5f88a196c9ebd8446453bcb8ed0ee307aa3136fa24a160152d1356fa15ae7cd",
+        "pod_uid": "30695e40-3349-4186-90e4-6db3951e34c2",
+        "replicaset_name": "yggdrasil-9c4866c66",
+        "replicaset_uid": "77d7d999-3989-4e4d-8007-09eb06903afe",
+        "revision": "269",
+        "spec_sha256": "1ecb33f80d5471d761723e7c4e6372577c21f9ea4566a027494d0c0817798014"
+      },
+      "schema": 89,
+      "complete_Goose_history_preserved": true,
+      "direct_ready_broker": {
+        "rabbitmq_status": "ok",
+        "status": "ready"
+      },
+      "SAML_OIDC_identity_preserved": true,
+      "fresh_independent_current15_all4": true,
+      "protected_ref_count": 39,
+      "recovery_budget_spent": 1,
+      "Cold_Hub_lifetimes_unchanged": true,
+      "read_only_observation_did_not_create_Root_approval_or_AB_acceptance": true
+    },
+    "actual_post_Core_four_E2E": {
+      "Root_original_acceptance_sha256": "447fec4d4622608b00f9f62a44cc26133a116722fe02e465643f48f9e559b6ae",
+      "System_test_source": "a5c23a7f533b8ff182b3454e2161142893861baf",
+      "runs": [
+        41578778045,
+        41578794326,
+        41578807942,
+        41578821236
+      ],
+      "workflows_success": 4,
+      "required_jobs_success": 12,
+      "scenario_RUN_PASS": 27,
+      "only_expected_Chat_detector_skipped": 1,
+      "isolated_CI_is_not_native_or_AB_qualification": true
+    },
+    "acceptance_boundaries": {
+      "ADR0095_accepts_Source_architecture_and_honest_CI_scope_only": true,
+      "ADR0095_failed_tail_production_lane_qualification_claimed": false,
+      "normal_AB_is_not_an_induced_failure_or_failed_tail_disposal": true,
+      "actual_historical_unknown_and_failed_serving_closures_remain_separate_immutable_Root_reviewed_records": true,
+      "original_NULL_ACKs_failures_business_effects_and_budget_are_not_rewritten": true,
+      "ADR0099_remains_G7_f809_d689_and_is_not_renamed_or_superseded_by_G8": true,
+      "canonical_G6_boot_v2_and_G7_authorities_remain_distinct": true,
+      "Decision_Consequence_date_scope_and_prior_source_reviews_not_rewritten": true,
+      "operational_AB_acceptance": "not_asserted",
+      "M2_main_adoption_requires_separate_actual_AB_acceptance": true,
+      "future_M2_exact_head_CI_main_merge_or_new_main_image_qualification_claimed": false,
+      "future_main_image_is_not_automatically_admitted_by_current_G8": true
+    },
+    "local_preparation_validation": {
+      "read_existing_local_originals_and_public_Root_acceptances_only": true,
+      "new_native_API_SQL_test_build_product_ops_import_or_official_CLI_execution": false,
+      "Source_worktree_or_git_refs_changed_by_this_preparation": false
+    }
   }
 }
