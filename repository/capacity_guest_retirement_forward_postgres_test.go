@@ -43,16 +43,43 @@ func TestGuestRetirementForwardLivePostgres(t *testing.T) {
 		for _, tail := range []int{2, 3, 8} {
 			t.Run(fmt.Sprintf("%s/tail%d", provider, tail), func(t *testing.T) {
 				var f *GuestRetirementForwardRecoveryFixture
-				if tail == 8 {
+				if tail == 2 {
+					f = NewGuestRetirementForwardFractionalOriginalFixture(t, provider)
+				} else if tail == 8 {
 					f = NewGuestRetirementForwardLiveWorkflowFixture(t, provider, tail, 3+(tail%2))
 				} else {
 					f = NewGuestRetirementForwardRecoveryFixture(t, provider, tail, 3+(tail%2))
 				}
 				ctx := forwardTestContext(t)
+				if tail == 2 {
+					nativeDeadline := f.Request.Intent.OriginalDeadline
+					if nativeDeadline.Nanosecond()%1000 != 789 {
+						t.Fatal("initial signed fractional deadline was not retained")
+					}
+					rows, err := f.DB.QueryContext(ctx, `SELECT original_deadline,original_deadline<=$2::timestamptz FROM public.capacity_guest_original_authority_reads WHERE intent_id=$1 ORDER BY phase,ordinal`, f.Request.Intent.RequestID, nativeDeadline.Format(time.RFC3339Nano))
+					if err != nil {
+						t.Fatal(err)
+					}
+					count, roundedAfterNative := 0, false
+					for rows.Next() {
+						var pgDeadline time.Time
+						var withinSignedPG bool
+						if err = rows.Scan(&pgDeadline, &withinSignedPG); err != nil || !withinSignedPG {
+							rows.Close()
+							t.Fatal("actual PG authority exceeded canonical signed bound", err)
+						}
+						count++
+						roundedAfterNative = roundedAfterNative || pgDeadline.After(nativeDeadline)
+					}
+					rowErr, closeErr := rows.Err(), rows.Close()
+					if rowErr != nil || closeErr != nil || count != 4 || !roundedAfterNative {
+						t.Fatal("actual source ingress did not exercise submicrosecond clipping", count, roundedAfterNative, rowErr, closeErr)
+					}
+				}
 				before := f.PreservedOriginals()
 				admitted, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID)
 				if err != nil || admitted.Mode != "live" || admitted.Stage != "admitted" || admitted.PreregistrationID != f.Pre.PreregistrationID || admitted.PrefixSHA256 == "" || admitted.OriginalCallerSHA256 == "" {
-					t.Fatal("real live admission", admitted, err)
+					t.Fatal("real live admission", admitted, err, f.AdmissionDiagnostics())
 				}
 				if _, err = f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID); err == nil {
 					t.Fatal("admission replay overwrote original")
@@ -136,7 +163,7 @@ func forwardTestSettledDestroy(t *testing.T, f *GuestRetirementForwardRecoveryFi
 	// infer no-send, nor may a second issue mint a new grant for the same tail.
 	pending, found, err := finish.GuestRetirementForwardDestroyReceipt(ctx, f.Request.Intent.RequestID)
 	if err != nil || !found || pending.Grant.GrantID != grant.GrantID || pending.Grant.State != "issued" {
-		t.Fatal("issued DELETE custody lost", err)
+		t.Fatal("issued DELETE custody lost", err, f.AdmissionDiagnostics())
 	}
 	again, err := finish.IssueMutation(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, issue)
 	if err == nil && again.GrantID != grant.GrantID {
@@ -246,7 +273,7 @@ func TestGuestRetirementForwardHistoricalAndAtomicityPostgres(t *testing.T) {
 				return nil
 			})
 			if err == nil || calls != 2 || forwardTestRowCount(t, f, "capacity_guest_retirement_forwards") != 0 {
-				t.Fatal("second revalidate failed without full rollback", calls, err)
+				t.Fatal("second revalidate failed without full rollback", calls, err, f.AdmissionDiagnostics())
 			}
 			current := f.HistoricalRequest()
 			if current.IntentSHA256 != req.IntentSHA256 {
@@ -259,12 +286,12 @@ func TestGuestRetirementForwardHistoricalAndAtomicityPostgres(t *testing.T) {
 			}
 			r, err := f.Store.RequestGuestRetirementForwardHistorical(ctx, req, "collaborator:"+uuid.NewString(), barrier, func(context.Context) error { return nil })
 			if err != nil || r.Stage != "requested" || r.Mode != "historical" {
-				t.Fatal("actual historical request", err)
+				t.Fatal("actual historical request", err, f.AdmissionDiagnostics())
 			}
 			f.StartSuccessorDispatch()
 			claimed, pre, id, handled, err := f.PlanStore().TryClaimGuestRetirementForward(ctx, f.Policy)
 			if err != nil || !handled || pre != f.Pre.PreregistrationID || id != f.Request.Intent.RequestID || claimed.FencingToken != f.Intent.FencingToken+1 || claimed.Generation != f.Intent.Generation {
-				t.Fatal("new child claim fenced exactly once", claimed, err)
+				t.Fatal("new child claim fenced exactly once", claimed, err, f.AdmissionDiagnostics())
 			}
 			f.Intent = claimed
 			orig, record, found, err := f.RetirementStore().GuestRetirementForwardOriginal(ctx, f.Policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, id)
@@ -287,7 +314,7 @@ func TestGuestRetirementForwardLivePendingHistoricalResumePostgres(t *testing.T)
 				ctx := forwardTestContext(t)
 				parent, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatal(err, f.AdmissionDiagnostics())
 				}
 				read, err := f.FinishStore().PrepareGuestRetirementForwardRead(ctx, f.Request.Intent.RequestID, "off", "")
 				if err != nil {
@@ -371,6 +398,30 @@ func TestGuestRetirementForwardLivePendingHistoricalResumePostgres(t *testing.T)
 }
 
 func TestGuestRetirementForwardClosedGuardsPostgres(t *testing.T) {
+	t.Run("authority_clock", func(t *testing.T) {
+		issued := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+		started := issued.Add(time.Millisecond)
+		original := issued.Add(4*time.Second + 789*time.Nanosecond)
+		pgDeadline := original.Truncate(time.Microsecond).Add(time.Microsecond)
+		for _, tc := range []struct {
+			name                        string
+			started, deadline, observed time.Time
+			withinPG, want              bool
+		}{
+			{"canonical_clipped", started, pgDeadline, original.Add(-time.Nanosecond), true, true},
+			{"observed_equal_native", started, pgDeadline, original, true, false},
+			{"observed_after_native", started, pgDeadline, original.Add(time.Nanosecond), true, false},
+			{"outside_signed_pg", started, pgDeadline, original.Add(-time.Nanosecond), false, false},
+			{"budget_over_five", started, started.Add(5*time.Second + time.Nanosecond), original.Add(-time.Nanosecond), true, false},
+			{"started_before_issued", issued.Add(-time.Microsecond), pgDeadline, original.Add(-time.Nanosecond), true, false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				if got := guestForwardAuthorityReadClockValid(tc.started, tc.deadline, tc.withinPG, tc.observed, issued, original); got != tc.want {
+					t.Fatal("canonical PG and strict native clock boundary changed", got, tc.want)
+				}
+			})
+		}
+	})
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
 			f := NewGuestRetirementForwardRecoveryFixture(t, provider, 2, 3)
@@ -409,7 +460,7 @@ func TestGuestRetirementForwardClosedGuardsPostgres(t *testing.T) {
 			}
 			r, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatal(err, f.AdmissionDiagnostics())
 			}
 			for _, kind := range []string{"wrong_tuple", "wrong_binding", "wrong_source", "renewed_deadline", "call_failed", "context_failed", "missing_plan", "late_return"} {
 				t.Run(kind, func(t *testing.T) {

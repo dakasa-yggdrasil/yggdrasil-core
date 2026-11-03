@@ -81,6 +81,7 @@ func TestGuestRetirementForwardHistoricalHTTPPostgres(t *testing.T) {
 			child := exec.CommandContext(ctx, binary, "-test.run=^TestGuestRetirementForwardHistoricalHTTPPostgres$", "-test.count=1")
 			child.Env = append(os.Environ(), "GUEST_FORWARD_HTTP_CHILD=true", "GUEST_FORWARD_HTTP_DB="+u.String(), "GUEST_FORWARD_HTTP_DB_IDENTITY="+base64.StdEncoding.EncodeToString(identityBody), "GUEST_FORWARD_HTTP_BODY="+base64.StdEncoding.EncodeToString(body), "GUEST_FORWARD_HTTP_ACTOR="+actor.String())
 			if output, err := child.CombinedOutput(); err != nil {
+				t.Logf("later admission observation: %s", f.AdmissionDiagnostics())
 				t.Fatalf("actual child HTTP boundary failed: %v\n%s", err, output)
 			}
 			if !reflect.DeepEqual(before, f.PreservedOriginals()) {
