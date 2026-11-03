@@ -27,8 +27,11 @@ jobs:
       GOMAXPROCS: '2'
       GOMEMLIMIT: 2GiB
       PYTHONDONTWRITEBYTECODE: '1'
-      HTTP_MAINTENANCE_LOGS: ${{ runner.temp }}/http-maintenance-pg${{ matrix.postgres }}
     steps:
+      - name: Prepare evidence directory reference
+        shell: bash
+        run: |
+          printf 'HTTP_MAINTENANCE_LOGS=%s/http-maintenance-pg%s\n' "$RUNNER_TEMP" "$EXPECTED_POSTGRES_MAJOR" >> "$GITHUB_ENV"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}

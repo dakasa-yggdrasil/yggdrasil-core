@@ -213,7 +213,7 @@ SELECT jsonb_build_object('schema','recorded_http_maintenance_dispatch_effect_sc
   AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_sends s WHERE s.challenge_id=c.id
     AND (s.possible_send_at>=c.original_deadline OR s.original_deadline IS DISTINCT FROM c.original_deadline OR s.recorded_at>=j.lease_expires_at))
   AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_nonces n WHERE n.challenge_id=c.id AND n.recorded_at>=j.lease_expires_at)
-  AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_returns r WHERE r.challenge_id=c.id AND r.recorded_at>=j.lease_expires_at),false))) END)
+  AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_returns r WHERE r.challenge_id=c.id AND r.recorded_at>=j.lease_expires_at),false)) END))
 FROM j
 $$;
 -- +goose StatementEnd

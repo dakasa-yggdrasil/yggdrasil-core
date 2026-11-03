@@ -1,12 +1,12 @@
 -- Generated from migration91 SQL bodies; do not hand-edit.
--- Source SHA256: 6ea7ce084db9dbdb7d9443acd8af94876aff6b126fdf7652bf975982d512f240
+-- Source SHA256: a1195e5765bf840dd8f6a49b1e32cb4b5a315f7c0bab1a87f219a2e5cdf0c2ef
 -- READ ONLY UTC transaction required; no new-process barrier or full Go ADR94 proof.
 -- Two independent Source scan expansions are preserved; no inferred memoization.
 -- http_maintenance_dispatch_result_valid: 21591d3ae4cd30561f8ac6dc38e497ba92a1ab8b79b531fb235596c8141bd7be
 -- http_maintenance_dispatch_policy_projection: 140704a048a380a8a73f514449f125284188c6cb0d0c11dfdfdc7237dca03517
 -- http_maintenance_dispatch_policy_continuous: cb95009944efaed5ea758bc8e7459e38f58b5af0a3607b3b1a4ee977cc000e49
 -- http_maintenance_dispatch_members: 3a2b7579ecac1a6dd29237e805bc9403d9397fda318a678397df43a28db7af5e
--- http_maintenance_dispatch_effect_scan: 7891ba715e3aa451f342420f1aef6e8404f7a530fac3eeb9f8fda9ac8bd00614
+-- http_maintenance_dispatch_effect_scan: 9e66d6f4c12087b8932d51c7ddb66508fdc1937943da9c6f71176a539a9db9eb
 -- http_maintenance_dispatch_effect_scan_tolerable: f2151029849b86803f2a82edd1f270845e9bafbdf005042cf2c35f5bfc875064
 -- http_maintenance_dispatch_admission_valid: 26ea09ea151a20deecb249d43742bb5fa777d8ff807336ab8ea0cb94d6c45ad5
 WITH __r6_pre91_input AS MATERIALIZED (
@@ -240,7 +240,7 @@ SELECT COALESCE(jsonb_typeof(__r6_pre91_args_6.p0)='object' AND __r6_pre91_args_
   AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_sends s WHERE s.challenge_id=c.id
     AND (s.possible_send_at>=c.original_deadline OR s.original_deadline IS DISTINCT FROM c.original_deadline OR s.recorded_at>=j.lease_expires_at))
   AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_nonces n WHERE n.challenge_id=c.id AND n.recorded_at>=j.lease_expires_at)
-  AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_returns r WHERE r.challenge_id=c.id AND r.recorded_at>=j.lease_expires_at),false))) END)
+  AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_returns r WHERE r.challenge_id=c.id AND r.recorded_at>=j.lease_expires_at),false)) END))
 FROM j
 ) FROM __r6_pre91_args_1) AS effect_scan FROM __r6_pre91_input
 )
@@ -494,7 +494,7 @@ SELECT COALESCE(jsonb_typeof(__r6_pre91_args_13.p0)='object' AND __r6_pre91_args
   AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_sends s WHERE s.challenge_id=c.id
     AND (s.possible_send_at>=c.original_deadline OR s.original_deadline IS DISTINCT FROM c.original_deadline OR s.recorded_at>=j.lease_expires_at))
   AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_nonces n WHERE n.challenge_id=c.id AND n.recorded_at>=j.lease_expires_at)
-  AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_returns r WHERE r.challenge_id=c.id AND r.recorded_at>=j.lease_expires_at),false))) END)
+  AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_returns r WHERE r.challenge_id=c.id AND r.recorded_at>=j.lease_expires_at),false)) END))
 FROM j
 ) FROM __r6_pre91_args_8))::jsonb AS p0) SELECT (
 SELECT COALESCE(jsonb_typeof(__r6_pre91_args_14.p0)='object' AND __r6_pre91_args_14.p0->>'schema'='recorded_http_maintenance_dispatch_effect_scan_v1'

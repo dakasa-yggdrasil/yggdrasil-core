@@ -147,9 +147,10 @@ func TestHTTPMaintenanceDispatchDispositionSessionCSRF(t *testing.T) {
 			}
 			r := rbacTestRequestWithClaims(method, path, actor)
 			r.Body = io.NopCloser(strings.NewReader(`{}`))
-			if token == "foreign" {
+			switch token {
+			case "foreign":
 				r.Header.Set(csrfHeaderName, computeCSRFToken(uuid.New()))
-			} else if token == "valid" {
+			case "valid":
 				claims, _ := claimsFromContext(r.Context())
 				r.Header.Set(csrfHeaderName, computeCSRFToken(uuid.MustParse(claims["session_id"].(string))))
 			}

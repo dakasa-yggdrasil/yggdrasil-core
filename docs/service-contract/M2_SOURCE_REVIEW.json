@@ -1995,5 +1995,111 @@
     "native_Guest_provider_or_business_qualification_claimed": false,
     "migration_application_or_deployment_or_main_adoption_claimed": false,
     "old_publication_deadlines_budgets_cursors_ACKs_or_markers_reset": false
+  },
+  "recorded_HTTP_maintenance_remote_validation_correction_20261103": {
+    "schema": "ADR0103_actual_remote_validation_Source_correction_v1",
+    "source_baseline": "30eda227356e4ddea601f2d8e4b23a322680d13f",
+    "actual_failed_CI": [
+      {
+        "run_id": 41650982606,
+        "stage": "workflow_validation_before_any_job",
+        "original_error": "(Line:30,Col:30): Unrecognized named-value: 'runner'. Located at position1 within expression: runner.temp",
+        "original_HTML_sha256": "f11a4dc8f4325eee363f23481407bfb3e0965fe7e64e6b8330d4d37b71d85a34"
+      },
+      {
+        "run_id": 41651126976,
+        "job_id": 125969250498,
+        "stage": "apply_schema91",
+        "original_error": "pq: syntax error at or near \")\" at position65:150 (42601)"
+      },
+      {
+        "run_id": 41651126698,
+        "job_id": 125969247544,
+        "stage": "unit_route_inventory",
+        "original_error": "TestOpsRoutesAreFullyMapped: ops route count=62, expected exactly60"
+      },
+      {
+        "run_id": 41651126698,
+        "job_id": 125969246448,
+        "stage": "lint",
+        "original_error": "QF1003 could use tagged switch on token (ops_http_maintenance_dispatch_disposition_test.go:150:4)"
+      }
+    ],
+    "causes_and_minimal_corrections": [
+      "Move one closing parenthesis from before CASE END to after it, retaining the complete jsonb_build_object and every scalar predicate. Six other SQL function bodies remain byte-identical.",
+      "Initialize the evidence path in the first runner step through GITHUB_ENV, using actual RUNNER_TEMP; remove the unsupported runner context from job-level env. The same fixed path and all existing test, retention and shutdown gates remain.",
+      "Regenerate only the deterministic pre91 SQL artifact from the corrected seven Source bodies; its mandatory --check passed as an artifact operation, without executing SQL.",
+      "The independently rederived source inventory preserves every original60 ops registration and adds exactly the two reviewed manage-workflows HTTP-maintenance routes. Update the same strict fixed census to62; the complete permission wrapper checks remain.",
+      "Use a tagged switch for the unchanged CSRF test token cases, satisfying QF1003 without changing any case or assertion."
+    ],
+    "changed_source_pins": {
+      ".github/workflows/http-maintenance-disposition.yml": {
+        "before": {
+          "bytes": 1744,
+          "sha256": "a3dc92cbe719d1115ef4575672f8d05ca71eb891d75abbf0d793c057c8deed38"
+        },
+        "after": {
+          "bytes": 1867,
+          "sha256": "2e40f634fa927a58557a87258e90f160a5a857677d2ac6f0e7298c58ba9f7923"
+        }
+      },
+      "db/migrations/00091_recorded_http_maintenance_dispatch_dispositions.sql": {
+        "before": {
+          "bytes": 40476,
+          "sha256": "6ea7ce084db9dbdb7d9443acd8af94876aff6b126fdf7652bf975982d512f240"
+        },
+        "after": {
+          "bytes": 40476,
+          "sha256": "a1195e5765bf840dd8f6a49b1e32cb4b5a315f7c0bab1a87f219a2e5cdf0c2ef"
+        }
+      },
+      "ops/http-maintenance/http_maintenance_pre91.sql": {
+        "before": {
+          "bytes": 53392,
+          "sha256": "1b47644164bf2d6dd6cabe0a04bd75b88cf68c0fbeede9966e5d34b67e1021f1"
+        },
+        "after": {
+          "bytes": 53392,
+          "sha256": "ef9cc17ac3551ecbb5dea4f73e866e1e7194c78e497f5599e9cd7b994fda3a7d"
+        }
+      },
+      "controllers/httpapi/ops_rbac_inventory_test.go": {
+        "before": {
+          "bytes": 19527,
+          "sha256": "d85a4d3d7dd8190005f51ff0f9a7c43bdf1764a24d614455c245a606259a57c9"
+        },
+        "after": {
+          "bytes": 19584,
+          "sha256": "3bd683432ba92b6fbc61684a922570d5ffe6a63b2e334f7ff0ab0a124fe7852d"
+        }
+      },
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition_test.go": {
+        "before": {
+          "bytes": 10045,
+          "sha256": "131dc4d942840fdec9b3cd56e4ae5fe39d09763d46ba09c4f7bbd744c2a8344d"
+        },
+        "after": {
+          "bytes": 10040,
+          "sha256": "aa59f84a5267feb0b550bcba23d1fd63792296e644f0831c00ecc985cb0e4d05"
+        }
+      }
+    },
+    "primary_GitHub_context_reference": "https://docs.github.com/en/actions/reference/workflows-and-actions/contexts",
+    "all_previous_review_values_preserved": true,
+    "all_old_migrations_through90_preserved": true,
+    "no_admission_predicate_or_test_or_exit_gate_weakened": true,
+    "local_SQL_or_product_tests_executed": false,
+    "new_exact_head_CI_required": {
+      "events": 18,
+      "jobs": 38,
+      "focused_PostgreSQL_majors": [
+        16,
+        17
+      ],
+      "roots_per_major": 12,
+      "nodes_per_major": 114,
+      "status": "pending"
+    },
+    "production_rollout_or_native_effects_claimed": false
   }
 }
