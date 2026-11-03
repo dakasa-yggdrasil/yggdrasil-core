@@ -1312,5 +1312,98 @@
     "exact_new_head_CI_required": true,
     "exact_new_head_CI_pass_claimed": false,
     "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_callback_custody_correction_20261103": {
+    "schema": "ADR0101_callback_custody_Source_correction_v1",
+    "base_commit": "517588f4a2d30678271adaad06099a6905b3493a",
+    "preserved_previous_complete_review_sha256": "a42ac545ca8dc336d6e584c0640638dffbb8e72a14673e36ac7d3f48039e6e2c",
+    "reviewed_Source_commits": [
+      "3fb1228b96d641422273148bb31b9b9b15be6015",
+      "6f53d095697b919efcf2c16ea7fbf017a929c898"
+    ],
+    "actual_failed_CI": {
+      "run_id": 41598294791,
+      "failure_manifest_sha256": "a106161c31d63acc483848c93385cc9c3ea7aa9ad7ec1fcc221bbc14da886be5",
+      "postgres16": {
+        "roots_run": 18,
+        "roots_passed": 14,
+        "roots_failed": 4,
+        "nodes_run": 184,
+        "nodes_passed": 164,
+        "nodes_failed": 20,
+        "skipped": 0
+      },
+      "postgres17": {
+        "roots_run": 18,
+        "roots_passed": 14,
+        "roots_failed": 4,
+        "nodes_run": 184,
+        "nodes_passed": 164,
+        "nodes_failed": 20,
+        "skipped": 0
+      },
+      "originals_preserved": true
+    },
+    "findings_and_changes": [
+      "Fourteen actual repository callback refusals reached the deterministic active-slot guard without private forward context. The callback now reconstructs only that internal scope from exact server-retained current marker, owning same-admission DELETE and complete immutable custody, under the existing scope/profile lock order.",
+      "Genuine no-marker callbacks read only the existing intent table and retain schema86 compatibility. Present malformed or missing ledger, foreign epoch/tuple/grant/binding and historical parent-as-child custody remain HOLD; terminal history is still checked by the original slot guard.",
+      "The reconstruction issues no grant, performs no DML and supplies no mutation authority. Every existing host guard, principal/request, execution, policy, lease, state, nonce, original-return and eligibility check remains. Current grant state is reloaded FOR UPDATE, preserving the no-resend boundary.",
+      "The HTTP preservation baseline moves after legitimate original failed-run finalization and the natural historical barrier, before admission. The full preserved-original equality remains unchanged.",
+      "Thirteen default marker/ledger cases and thirteen additional children per provider inside the existing PG ClosedGuards root cover one exact owning scope, seven forged in-memory records and five real DB-only redemption refusals. Existing-grant bad principal/target/slot/request cases require the exact unchanged authorization error, rather than accepting an earlier generic refusal. All grant bytes, ledgers, reads, bindings and originals remain checked unchanged."
+    ],
+    "changed_source_facts": {
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 13124,
+          "sha256": "0e4f96fd1778a0004b10ee2add2e1ebc9f951576de8c4ef2cc0cacfa4410a638"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 17137,
+          "sha256": "7a13fb981863ab4758a481ddecf7bc860a803a6499aed2614b4a2d96012ce3aa"
+        }
+      },
+      "repository/capacity_mutations.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 47960,
+          "sha256": "4b59a5aa5016d512197d9d081be75aa353d841162050fe83a7c28a9729c477b3"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 48064,
+          "sha256": "8a5acf4e1f647afc02c55ddfaae96dac7196a9480b9858a165a633eddfb8d6ac"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "f9bab0259e29ea85c7354e2109f8dd6e28250de66680dcbeb45d54a46aef971a",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 795,
+    "new_default_unit_root": "TestRetirementForwardCallbackRequiresExactMarkerLedger",
+    "new_default_unit_children": 13,
+    "strict_forward_top_level_roots_preserved": 18,
+    "new_strict_forward_top_level_roots": 0,
+    "additional_PG_children_per_provider": {
+      "private_owning_scope_positive": 1,
+      "private_scope_negative": 7,
+      "real_redeem_negative": 5
+    },
+    "root_static_review_sha256": "ba6d568c73def2720b30eecfa06bb8c7d04bc004341fce0e9cc4176bc918c941",
+    "author_freeze_sha256": "401a888809497799691d0ba59c53185f465f04b9de8716616ac2bee04bdeadc8",
+    "independent_source_peers": {
+      "Slot": "Complete runtime and default unit at exact frozen hashes PASS",
+      "Brain": "Complete final real PG negative cases and exact authorization error assertions PASS"
+    },
+    "normal_V2_and_original_authority_owner_source_changed": false,
+    "original_clocks_budgets_rows_or_ack_reset": false,
+    "local_functional_execution": false,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
   }
 }
