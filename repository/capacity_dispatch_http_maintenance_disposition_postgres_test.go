@@ -293,6 +293,35 @@ func TestHTTPMaintenanceDispatchPostgresRefusals(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := httpMaintenancePGFixture(t, db, "hetzner")
+			// Existing CHECK constraints reject these states even in replica mode.
+			// Require the exact storage refusal, rollback and preservation of all
+			// original records before this case can pass.
+			constraint := map[string]string{
+				"ack_present": "capacity_dispatch_jobs_original_ack_v2_check",
+				"late_send":   "capacity_guest_notify_canary_sends_check",
+			}[tc.name]
+			if constraint != "" {
+				j, w := f.snapshot(t)
+				c := f.canarySnapshot(t)
+				tx, err := f.db.Begin()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tx.Rollback()
+				if _, err = tx.Exec(`SET LOCAL session_replication_role=replica`); err != nil {
+					t.Fatal(err)
+				}
+				_, err = tx.Exec(`WITH declared_operands AS(SELECT $1::uuid,$2::uuid,$3::text,$4::uuid) `+tc.sql, f.envelope.JobID, f.envelope.RunID, f.envelope.Realm, f.canary)
+				var check *pq.Error
+				if !errors.As(err, &check) || check.Code != "23514" || check.Constraint != constraint {
+					t.Fatal("exact existing CHECK must reject impossible fixture", tc.name, err)
+				}
+				if err = tx.Rollback(); err != nil {
+					t.Fatal("rollback after CHECK refusal", err)
+				}
+				f.assertHTTPUntouched(t, j, w, c)
+				return
+			}
 			f.mutate(t, `WITH declared_operands AS(SELECT $1::uuid,$2::uuid,$3::text,$4::uuid) `+tc.sql, f.envelope.JobID, f.envelope.RunID, f.envelope.Realm, f.canary)
 			j, w := f.snapshot(t)
 			c := f.canarySnapshot(t)

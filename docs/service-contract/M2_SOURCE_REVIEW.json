@@ -2101,5 +2101,49 @@
       "status": "pending"
     },
     "production_rollout_or_native_effects_claimed": false
+  },
+  "recorded_HTTP_maintenance_storage_boundary_fixture_correction_20261103": {
+    "schema": "ADR0103_actual_storage_CHECK_fixture_Source_correction_v1",
+    "source_baseline": "062758dcdd8da75a183079ddcdccafc45ab23ff3",
+    "actual_failed_CI": {
+      "run_id": 41653551690,
+      "postgres16_job_id": 125977747317,
+      "postgres17_job_id": 125977747873,
+      "per_major": {
+        "nodes_run": 114,
+        "nodes_passed": 111,
+        "nodes_failed": 3,
+        "failed_children": [
+          "TestHTTPMaintenanceDispatchPostgresRefusals/ack_present",
+          "TestHTTPMaintenanceDispatchPostgresRefusals/late_send"
+        ],
+        "parent_refusals_failed": true,
+        "migration91_and_renderer_check_exit": 0,
+        "HTTP_and_tee_exits": 0,
+        "owned_PostgreSQL_shutdown_closed_zero": true
+      },
+      "failure_taxonomy_sha256": "7ce8f474c5a5b60536c42eb3942723677b3c252efbe6b836b56ecaa0136140c7"
+    },
+    "cause": "The two declared negative setup UPDATEs attempted states forbidden by existing PostgreSQL CHECK constraints, including replica mode, before the repository assertion could execute. A valid baseline fixture is independently required first.",
+    "correction": "Keep the same two children. Require pq.Error SQLSTATE23514 and its exact existing constraint name, successful rollback, complete unchanged job/run/canary snapshots and zero disposition rows. Return only after every assertion. All26 other negative repository paths and the28-case table remain unchanged. No constraint is relaxed and no arbitrary setup failure is accepted.",
+    "exact_constraints": {
+      "ack_present": "capacity_dispatch_jobs_original_ack_v2_check",
+      "late_send": "capacity_guest_notify_canary_sends_check"
+    },
+    "changed_file": {
+      "path": "repository/capacity_dispatch_http_maintenance_disposition_postgres_test.go",
+      "before_sha256": "b7b5dfbe5a15588e0d2a45c9ae0b3e632a8b1bf69e46f7ccd1c59267992eaa90",
+      "after_sha256": "079027c4c34fcb8e7c17bdd159199a3f4ff34686056cbd02b71aacd61a1031c2",
+      "after_bytes": 36982
+    },
+    "all_prior_review_values_preserved": true,
+    "runtime_Go_or_SQL_or_CI_gate_change": false,
+    "roots_and_nodes_unchanged": [
+      12,
+      114
+    ],
+    "local_functional_tests_or_SQL_executed": false,
+    "new_complete_exact_head_CI_still_required": true,
+    "production_or_native_qualification_claimed": false
   }
 }
