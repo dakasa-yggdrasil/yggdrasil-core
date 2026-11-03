@@ -1,12 +1,12 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-03T11:39:55-03:00_
+_Generated from HEAD at: 2026-11-03T12:48:43-03:00_
 
 ## Languages
 
 - `.go`: 1489 files
-- `.json`: 205 files
-- `.py`: 61 files
+- `.json`: 211 files
+- `.py`: 80 files
 - `.sql`: 92 files
 - `.yaml`: 11 files
 - `.yml`: 37 files
@@ -54,7 +54,7 @@ _Generated from HEAD at: 2026-11-03T11:39:55-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **46**
+- K8s/Config files scanned: **52**
 - Manifests (k8s-ish): **25**
 
 ## Dependencies
