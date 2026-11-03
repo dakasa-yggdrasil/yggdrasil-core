@@ -1112,5 +1112,54 @@
       "error": "synthetic baseline registration: relation public.capacity_guest_retirement_forwards does not exist (42P01)",
       "correction": "Same existing-intent no-marker guard path; no fixture schema or gate changed."
     }
+  },
+  "partial_poweroff_forward_declared_member_binding_correction_20261103": {
+    "schema": "ADR0101_declared_member_binding_Source_correction_v1",
+    "base_commit": "988e751e74b1aaceee6009ffe2ff3efac3f416ba",
+    "preserved_previous_complete_review_sha256": "7eee400ab795035a86805b20f0ec5ea6e4ea9612014df43e8d7500aa4137782f",
+    "actual_failed_CI": {
+      "run_id": 41591962056,
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "error": "new declared member signed registration: explicit original production clock required",
+      "new_roots_run": 18,
+      "new_roots_passed": 9,
+      "new_roots_failed": 9,
+      "nodes_run_each": 149,
+      "nodes_failed_each": 37,
+      "skipped_each": 0
+    },
+    "cause": "Recursive target-slot fixture substitution also changed the complete approved profile queues/bootstraps and binding slots; the original signed clock correctly rejected that mismatch. The changed bootstrap journal also needed its enclosing hash recomputed.",
+    "correction": "Restore the exact approved typed Binding and Authority.Profile, then rehash the rebound bootstrap journal before the original result/signature cascade and first insert.",
+    "changed_source_facts": {
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 41870,
+          "sha256": "c78f55cfeaece5f594ed529eab17ebfc495f928d5b2e3114a9bb62b981b7ea7e"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 42055,
+          "sha256": "a71ff6f503a82b96f1dbd2e9654c2115534e9676b459a26e27807112866a1f79"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "b522aab55c4c003a623061edbf774c0fe29528cae7c5931250d2db1900739fed",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 796,
+    "fixture_only": true,
+    "runtime_validators_tests_assertions_clocks_leases_stored_frames_changed": false,
+    "root_reviewed_three_assignment_diff": true,
+    "local_functional_execution": false,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
   }
 }

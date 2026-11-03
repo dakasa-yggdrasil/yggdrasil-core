@@ -232,10 +232,12 @@ func (f *GuestRetirementForwardRecoveryFixture) seedMember(slot int) *failedServ
 	var next capacityMutationRecord
 	clone(original, &next)
 	next.Generation, next.FencingToken = pre.Generation, pre.Fence
+	next.Binding = m
 	next.Grant.Slot = slot
 	next.Settlement.OriginalProviderCreateReturn.ActionID = next.Settlement.ActionID
 	clock := reg.Result.ProductionClock
 	clock.Authority.Preregistration = pre
+	clock.Authority.Profile = b.ProfileManifest
 	w := &clock.Authority.CreateWitness
 	w.OriginalCreateSettlementSHA256 = capacity.GuestRetirementSHA(next.Settlement)
 	w.Signature = ""
@@ -243,6 +245,7 @@ func (f *GuestRetirementForwardRecoveryFixture) seedMember(slot int) *failedServ
 	clock.Authority.Signature = ""
 	clock.Authority.Signature, _ = capacity.GuestLifecycleSignature(failedServingKey('c'), clock.Authority)
 	reg.Result.OriginalCreateSettlementSHA256 = w.OriginalCreateSettlementSHA256
+	reg.Result.BootstrapOriginalObservation.JournalSHA256 = capacity.GuestRetirementSHA(reg.Result.BootstrapOriginalJournal)
 	reg.EnrollmentStatement.OriginalNativeResultSHA256 = capacity.GuestRetirementSHA(reg.Result)
 	reg.EnrollmentStatement.OriginalProvisioningClockSHA256 = capacity.GuestRetirementSHA(*clock)
 	reg.Signature = ""
