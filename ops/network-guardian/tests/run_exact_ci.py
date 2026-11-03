@@ -49,8 +49,12 @@ def main():
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
     actual = [test.id() for test in flatten(suite)]
     if collections.Counter(actual) != collections.Counter(expected):
+        discovery_errors = list(unittest.defaultTestLoader.errors)
         (OUT / 'CENSUS-REFUSAL.PUBLIC.json').write_text(json.dumps({
-            'expected': expected, 'actual': actual, 'success': False}, indent=2) + '\n')
+            'expected': expected, 'actual': actual, 'success': False,
+            'discovery_errors': discovery_errors}, indent=2) + '\n')
+        for error in discovery_errors:
+            print(error, file=sys.stderr, flush=True)
         raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8+G9 roster')
     result = unittest.TextTestRunner(verbosity=2, resultclass=Outcomes).run(suite)
     success = (result.wasSuccessful() and not result.skipped and not result.expectedFailures
