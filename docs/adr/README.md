@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**100 decisions.**
+**101 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -142,3 +142,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0100](0100-preserve-g7-network-authority-before-a-scheduler-fix-core-rollout.md) | Preserve G7 network authority before a scheduler-fix Core rollout | Accepted | 2026-11-03 | Owned operational network Guardian / G8 historical authority, exact image pair and separately typed Core CAS |
 | [0101](0101-finish-an-authenticated-partial-poweroff-with-a-separate-native-forward-proof.md) | Finish an authenticated partial poweroff with a separate native forward proof | Proposed | 2026-11-03 | Core / ordinary useful tail retirement, live and historical native-OFF forward proofs |
 | [0102](0102-preserve-g8-authority-for-a-held-original-core-image-rollout.md) | Preserve G8 authority for a held-original Core image rollout | Proposed | 2026-11-03 | Owned network Guardian / G9 fourth historical authority and separately typed held-original image CAS |
+| [0103](0103-dispose-recorded-context-refused-http-maintenance-without-replay.md) | Dispose recorded context-refused HTTP maintenance without replay | Proposed | 2026-11-03 | Core recorded maintenance disposition |

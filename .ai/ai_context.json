@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-03T06:59:33-03:00",
+  "generated_at": "2026-11-03T11:06:57-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1484,
-    ".json": 209,
-    ".py": 76,
-    ".sql": 90,
+    ".go": 1489,
+    ".json": 205,
+    ".py": 61,
+    ".sql": 92,
     ".yaml": 11,
-    ".yml": 36
+    ".yml": 37
   },
   "provenance": {
-    "commit": "447dbdc48d319aaa622b7ee45533883c0bf225e3",
+    "commit": "375bab23435d669aee37be79bb8bcf12e708da4f",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "f9e83fc8c7b0711c4d9bf1a7068571d977885e119cea83fa94275aefc7663323"
+        "sha256": "259cd8cd96eca3bb56860f088904693a1a47c306a4c39a3df1518ffb0a40b654"
       },
       {
         "path": "AGENTS.md",
@@ -32,7 +32,7 @@
       },
       {
         "path": "README.md",
-        "sha256": "60310d788b034631600f5a471326ec52781122299313502a6ee1e8a756f9793e"
+        "sha256": "29e4944f4739970f4fd3986568405f6aa1c8fac44e5e1eb917d48e6f25122c5c"
       },
       {
         "path": "Taskfile.yml",
@@ -65,13 +65,13 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 361,
-      "kb": 4723
+      "files": 364,
+      "kb": 4786
     },
     {
       "path": "controllers/httpapi",
-      "files": 252,
-      "kb": 2544
+      "files": 254,
+      "kb": 2570
     },
     {
       "path": "controllers/message",
@@ -85,8 +85,8 @@
     },
     {
       "path": "db/migrations",
-      "files": 89,
-      "kb": 642
+      "files": 90,
+      "kb": 682
     },
     {
       "path": "model",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 89,
+    "migrations": 90,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 49,
-    "k8s_manifests": 24
+    "config_files": 46,
+    "k8s_manifests": 25
   }
 }

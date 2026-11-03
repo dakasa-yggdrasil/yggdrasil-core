@@ -750,3 +750,52 @@ redeemed destroy remains held. No Guest replay, Stop or second destroy is
 introduced. Migration90 retains append-only admission/read lineage and checks
 the complete terminal intent. Declared recovery fixtures and CI cannot qualify
 a production Guest, provider effect or operational A/B.
+
+## Recorded context-refused HTTP maintenance disposition (ADR-0103)
+
+`POST /api/v1/ops/capacity/http-maintenance-dispatch-dispositions` and
+`GET /api/v1/ops/capacity/http-maintenance-dispatch-dispositions/{jobId}`
+are separate from the unchanged ADR-0096 routes. Both retain the existing
+`manage_workflows` route permission and current named-human GodMode gate.
+Session mutations use the existing CSRF middleware; its verified human OIDC
+bearer exemption remains unchanged. The bounded POST body is at most 8192 bytes
+and contains exactly nine CAS expectations: `job_id`, `expected_run_id`,
+`expected_envelope_sha256`, `expected_fencing_token`, `expected_lease_owner`,
+`expected_pending_wake_count`, `expected_returned_at`, `expected_run_sha256`
+and `expected_members_sha256`. Duplicate, null, missing, unknown or malformed
+fields refuse. Issuer, process barrier, native facts and evidence are not inputs.
+
+Core requires the exact recorded context-refused failed dispatch/run, a return
+before the original lease, NULL finalization ACK, a lease expired for at least
+fifteen minutes and a real later Core process. The original seven-step result
+must be the capacity-boundary hold/refresh with no provision/retire/completion
+execution and a `fresh_original_canary`/`original_HTTP_or_return` refusal. Only
+one installed slot 1 member and its one complete steady-useful publish nonce,
+possible send and held NULL-wire return are admitted. Original deadlines,
+current unleased epoch/catalog, full stored membership and the existing closed
+effect scan remain mandatory; pending recovery or native authority refuses.
+
+Only policy revision may differ. SQL derives the exact stored lineage and a
+stricter raw complete-contract projection through every stored intermediate
+version. Raw JSON equality and shape checks do not implement the full typed
+ADR-0094 validator: the API DAO also executes the unchanged complete Go validator
+under the same locks. Missing, malformed, foreign or discontinuous lineage refuses.
+The two current-operator rechecks remain before receipt insertion and commit.
+
+Migration91 appends an immutable receipt and changes only the job state to
+`http_maintenance_disposed` and its update timestamp. It adds no job column; all
+six old disposition pointers remain NULL. UTC whole-row hashes retain the
+original update time for reconstruction. The original failed return/errors,
+workflow and canary rows stay exact. Deferred links require the receipt and
+terminal transition in one transaction. GET recovers the stored receipt after
+a lost response; its closed public summary omits raw membership/evidence bodies.
+It claims no success ACK, replay, provider read, usefulness or quiescence.
+
+A separately qualified image-maintenance admission may preserve an exact old
+UNKNOWN as HELD only under its own explicit guard and honest total/held/unrelated
+counts. It is not a terminal receipt or no-busy proof, and cannot authorize
+policy publication, business recovery, Guest work or provider actions. The new
+route and any upgrade exception do not reset a lease, cursor, budget or original
+ACK. A later ordinary tick must independently satisfy current admission and
+publication limits. Declared Source/PG tests and SQL migration-view compatibility
+do not qualify an old container, a native provider/Guest or production adoption.

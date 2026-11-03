@@ -1750,5 +1750,250 @@
     "compile_or_test_success_claimed": false,
     "new_exact_head18_workflows37_jobs_and153_cases_required": true,
     "native_main_or_AB_acceptance": false
+  },
+  "recorded_context_refused_HTTP_maintenance_Source_review_20261103": {
+    "schema": "ADR0103_recorded_context_refused_HTTP_maintenance_Source_review_v1",
+    "source_baseline": "ed76cef2d66d7f5368b96b41aaa22fc80a2233c4",
+    "scope": "Distinct Source contract for one recorded context-refused HTTP maintenance dispatch; no executed outcome or deployment qualification asserted.",
+    "preserved_previous_complete_review_sha256": "3f4c1e9cd453c9b8ffe9ee4fb5d976fdb0d904dc0c0c9d25eaba95ce6185b211",
+    "preserved_prior_top_level_nodes": 16,
+    "preserved_historical_evidence": {
+      "REVIEW": {
+        "path": "docs/service-contract/REVIEW.json",
+        "bytes": 131070,
+        "sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710"
+      },
+      "SCHEDULER_SKIP_REVIEW": {
+        "path": "docs/service-contract/SCHEDULER_SKIP_REVIEW.json",
+        "bytes": 3068,
+        "sha256": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f"
+      },
+      "all_previous_review_nodes_unchanged": true
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "bytes": 130582,
+      "sha256": "80aa2fbf1e712af4430a6d40bd8d9dd9fe9b1352522f14b63f80e1856ecfc426",
+      "complete_source_count": 799,
+      "format": "core_source_interface_census_v1",
+      "maximum_bytes_unchanged": 131072
+    },
+    "new_source_facts": {
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition.go": {
+        "build_constraint": "",
+        "bytes": 3979,
+        "sha256": "a30ed5c68e3c6cba9f6873f7dec9a691fa29200f82e88be48a7426a96442cfa6"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition.go": {
+        "build_constraint": "",
+        "bytes": 21186,
+        "sha256": "bb134d14777a937d0c965c597f3b4f0db099f41600295cd067eab2aee2c497f6"
+      }
+    },
+    "changed_source_facts": {
+      "controllers/httpapi/server.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 188368,
+          "sha256": "6f357a12e332df55a4817df0f4a06792f4c1ba0dbedef8980e0a6e5b9bf53a30"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 188759,
+          "sha256": "00036d7b0b47b05d6c21084515fa954de993b4925112b1dbbd1f20d0a82d99d8"
+        }
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 51210,
+          "sha256": "05b658074c003c63bf2be3f6ec4e0716a9e829bd729bbb180b5d7dbbe84c863d"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 51210,
+          "sha256": "130eacf91a3c6ddd60081c4762aef2217fa134c22166cf8c962d01b12a105598"
+        }
+      }
+    },
+    "unchanged_prior_source_facts": 795,
+    "source_fact_deletions": 0,
+    "reviewed_source_and_document_pins": {
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition.go": {
+        "bytes": 3979,
+        "sha256": "a30ed5c68e3c6cba9f6873f7dec9a691fa29200f82e88be48a7426a96442cfa6"
+      },
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition_test.go": {
+        "bytes": 10045,
+        "sha256": "131dc4d942840fdec9b3cd56e4ae5fe39d09763d46ba09c4f7bbd744c2a8344d"
+      },
+      "controllers/httpapi/server.go": {
+        "bytes": 188759,
+        "sha256": "00036d7b0b47b05d6c21084515fa954de993b4925112b1dbbd1f20d0a82d99d8"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition.go": {
+        "bytes": 21186,
+        "sha256": "bb134d14777a937d0c965c597f3b4f0db099f41600295cd067eab2aee2c497f6"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition_test.go": {
+        "bytes": 7729,
+        "sha256": "080bb806cabb6c3f39f77c562c668e679b2c89dd3941a08b1b9e30202ec9dfd2"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition_postgres_test.go": {
+        "bytes": 35798,
+        "sha256": "b7b5dfbe5a15588e0d2a45c9ae0b3e632a8b1bf69e46f7ccd1c59267992eaa90"
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "bytes": 51210,
+        "sha256": "130eacf91a3c6ddd60081c4762aef2217fa134c22166cf8c962d01b12a105598"
+      },
+      "db/migrations/00091_recorded_http_maintenance_dispatch_dispositions.sql": {
+        "bytes": 40476,
+        "sha256": "6ea7ce084db9dbdb7d9443acd8af94876aff6b126fdf7652bf975982d512f240"
+      },
+      "ops/http-maintenance/http_maintenance_pre91.sql": {
+        "bytes": 53392,
+        "sha256": "1b47644164bf2d6dd6cabe0a04bd75b88cf68c0fbeede9966e5d34b67e1021f1"
+      },
+      ".github/scripts/render_http_maintenance_pre91.py": {
+        "bytes": 14733,
+        "sha256": "5bbb75d06d96ad8fee5ee61e640bcebc7fe50a8157f79be55356ebc3e8b495ac"
+      },
+      ".github/workflows/http-maintenance-disposition.yml": {
+        "bytes": 1744,
+        "sha256": "a3dc92cbe719d1115ef4575672f8d05ca71eb891d75abbf0d793c057c8deed38"
+      },
+      ".github/scripts/run_http_maintenance_disposition_ci.sh": {
+        "bytes": 5864,
+        "sha256": "e36b738ff2d72d22e491632340ba2530d5e8758b290e1d329e028b57f6996e6f"
+      },
+      ".github/scripts/verify_http_maintenance_disposition_ci.py": {
+        "bytes": 9570,
+        "sha256": "2edb7a89f587f43e74ecfde6a889266319ad8799140813152c2652532dfa22ce"
+      },
+      ".github/scripts/http_maintenance_disposition_expected.json": {
+        "bytes": 4381,
+        "sha256": "084d705c5e1d8201f0ebc42286c7f5dbc4e2ad7b54b4729c99eb7c970a91c80a"
+      },
+      "docs/adr/0103-dispose-recorded-context-refused-http-maintenance-without-replay.md": {
+        "bytes": 5855,
+        "sha256": "dcdfd90859fe41246208b3b3e41715136f4f1090a506cf031266ad4e5a07bca4"
+      },
+      "controllers/httpapi/openapi.json": {
+        "bytes": 127843,
+        "sha256": "f37623ad7c846fe6ba23e63e3822ca22aa4850125ace6809218a5281ecb40fa0"
+      },
+      "docs/api-reference/openapi.json": {
+        "bytes": 127843,
+        "sha256": "f37623ad7c846fe6ba23e63e3822ca22aa4850125ace6809218a5281ecb40fa0"
+      },
+      "README.md": {
+        "bytes": 23196,
+        "sha256": "29e4944f4739970f4fd3986568405f6aa1c8fac44e5e1eb917d48e6f25122c5c"
+      },
+      "docs/service-contract/SEMANTICS.md": {
+        "bytes": 66143,
+        "sha256": "2733d7ce9c099ce0d003e766ba9580521e63dacddc9a998461ea6a620ec4805d"
+      }
+    },
+    "Source_contract": {
+      "HTTP": [
+        "POST /api/v1/ops/capacity/http-maintenance-dispatch-dispositions",
+        "GET /api/v1/ops/capacity/http-maintenance-dispatch-dispositions/{jobId}"
+      ],
+      "closed_request_fields": [
+        "job_id",
+        "expected_run_id",
+        "expected_envelope_sha256",
+        "expected_fencing_token",
+        "expected_lease_owner",
+        "expected_pending_wake_count",
+        "expected_returned_at",
+        "expected_run_sha256",
+        "expected_members_sha256"
+      ],
+      "request_body_cap_bytes": 8192,
+      "request_timeout_seconds": 20,
+      "issuer_and_process_barrier": "server-owned; never caller fields",
+      "authorization": "existing authenticated human/current GodMode plus manage_workflows; existing session CSRF and verified human OIDC bearer behavior unchanged; current operator rechecked before insertion and commit",
+      "new_receipt_table": "capacity_dispatch_http_maintenance_dispositions",
+      "new_terminal": "http_maintenance_disposed",
+      "reason": "recorded_context_refused_http_maintenance_dispatch_disposed",
+      "guarded_original_preservation": {
+        "job_mutations_permitted": [
+          "state",
+          "updated_at"
+        ],
+        "new_job_columns": 0,
+        "old_disposition_pointers_required_NULL": 6,
+        "original_finalization_ACK_required_NULL": true,
+        "workflow_and_canary_rows": "retained unchanged; no fabricated success ACK or replay",
+        "whole_job_hash": "UTC PG JSONB with receipt-retained original updated_at for historical reconstruction"
+      },
+      "SQL_and_Go_continuity": "SQL derives stricter raw complete-contract projection/equality and stored row lineage; API DAO separately executes the unchanged full typed Go ADR0094 validator. SQL is not described as a duplicate full typed validator.",
+      "membership": "one installed slot1 with same tuple/workflow/epoch and undisposed confirmed create; current policy or complete continuous stored policy lineage",
+      "canary": "one complete steady-useful publish challenge, nonce, possible send and held NULL-wire/no-business return; exact original time windows and enumerated other effects",
+      "HELD_upgrade_boundary": "Any image-maintenance HELD admission remains a separate explicit Source-qualified operational guard with exact original and honest total/held/unrelated counts. It is neither a terminal/no-busy proof nor publication, business, Guest or provider authority."
+    },
+    "review_and_corrections": {
+      "Root_full_Source_review_reported": true,
+      "independent_Slot_SQL_DAO_peer": {
+        "path": "docs/superpowers/http-maintenance-disposition-r6-20261103/ci-source-preparation-v1/SQL-DAO-INDEPENDENT-PEER.PUBLIC.json",
+        "sha256": "1bc5754699c8f9d49e722527dae26b95f5c3aa911de35aea937b2091786459f3",
+        "scope": "full migration91/DAO and conditional UUID/explicit realm deltas; no open scoped finding"
+      },
+      "independent_Release_HTTP_peer_reported": true,
+      "independent_Brain_CI_peer_reported": true,
+      "findings_fixed": [
+        "Explicit production realm in new admission, retaining narrower scope.",
+        "Physical workflow_id may remain NULL; a nonnull value must equal the original workflow UUID.",
+        "Fixture construction is per declared isolated history and parity uses fresh state-local READ ONLY repeatable snapshots."
+      ],
+      "old_common_job_guard": "removing only the new leading HTTP-maintenance branch reproduces migration87 guard bytes",
+      "old87_API_DAO_migration_and_criteria": "unchanged",
+      "old_R4_SQL_view_compatibility": "mandatory PG case uses original88files versions1..39+41..89 and real Goose Up after91, compares full history/originals; no old container execution claimed",
+      "canonical_pre91_query": "data-only derived Source; CI must check exact regenerated bytes and compare same-snapshot effect_scan/admission against functions91 for both providers and five states",
+      "final_SQL_format_correction": "Remove one extra final LF reported by staged diff --check; all seven SQL function bodies and guards remain byte-identical. The derived pre91 query changes only its whole-migration Source SHA header."
+    },
+    "validation_performed": {
+      "inventory_generator": {
+        "path": "scripts/ci/service_contract_inventory.py",
+        "bytes": 7706,
+        "sha256": "a8f4cdfb883f9fd55d0d9f7064b91c393bbabb598bd9b1f5926056a8bc2c5518",
+        "artifact_only_execution_authorized": true
+      },
+      "complete_source_fact_hash_bytes_and_build_constraints": "799 actual files; two additions/two changes; no deletion or cap increase",
+      "HTTP_gofmt_parse_only": true,
+      "CI_Python_AST_and_Bash_syntax_parse_only": true,
+      "local_functional_tests": false,
+      "local_builds_or_product_ops_imports": false,
+      "local_SQL_or_native_API_execution": false
+    },
+    "required_future_CI": {
+      "status": "pending_exact_final_head",
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "per_major_roots": 12,
+      "per_major_nodes": 114,
+      "repository_roots": 8,
+      "repository_nodes": 110,
+      "HTTP_roots": 4,
+      "HTTP_nodes": 4,
+      "strict_all_nodes_once_RUN_PASS_no_skip_fail_race": true,
+      "original_Go_tee_and_checker_exits_retained": true,
+      "schema91_full_history_and_owned_PG_shutdown_required": true,
+      "all_prior_selected_workflows_remain_mandatory": true,
+      "provisional_literal_workflow_cohort": {
+        "events": 18,
+        "jobs": 38,
+        "base": "ed76cef2d66d7f5368b96b41aaa22fc80a2233c4"
+      }
+    },
+    "exact_final_head_CI_pass_claimed": false,
+    "native_Guest_provider_or_business_qualification_claimed": false,
+    "migration_application_or_deployment_or_main_adoption_claimed": false,
+    "old_publication_deadlines_budgets_cursors_ACKs_or_markers_reset": false
   }
 }
