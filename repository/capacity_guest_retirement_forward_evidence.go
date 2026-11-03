@@ -99,7 +99,10 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 		return e, ErrCapacityConflict
 	}
 	// Read/authority rows are complete closed sets, never a filtered favorable set.
-	ar, err := tx.QueryContext(ctx, `SELECT r.id::text,r.phase,r.ordinal,r.possible_read_at,r.original_deadline,v.original_wire,v.authority_sha256,v.original_record=convert_from(v.original_wire,'UTF8')::jsonb FROM public.capacity_guest_original_authority_reads r LEFT JOIN public.capacity_guest_original_authority_returns v ON v.read_id=r.id WHERE r.intent_id=$1 ORDER BY CASE r.phase WHEN 'before_start' THEN 0 ELSE 1 END,r.ordinal`, i.RequestID)
+	// The read deadline is stored at PostgreSQL timestamp precision; compare its
+	// upper bound in that same representation. The raw authority still has to
+	// precede the exact native signed deadline below, without a time tolerance.
+	ar, err := tx.QueryContext(ctx, `SELECT r.id::text,r.phase,r.ordinal,r.possible_read_at,r.original_deadline,v.original_wire,v.authority_sha256,v.original_record=convert_from(v.original_wire,'UTF8')::jsonb,r.original_deadline<=$2::timestamptz FROM public.capacity_guest_original_authority_reads r LEFT JOIN public.capacity_guest_original_authority_returns v ON v.read_id=r.id WHERE r.intent_id=$1 ORDER BY CASE r.phase WHEN 'before_start' THEN 0 ELSE 1 END,r.ordinal`, i.RequestID, i.OriginalDeadline.Format(time.RFC3339Nano))
 	if err != nil {
 		return e, err
 	}
@@ -115,8 +118,8 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 		var ordinal int
 		var started, deadline time.Time
 		var raw []byte
-		var consistent bool
-		if err = ar.Scan(&id, &phase, &ordinal, &started, &deadline, &raw, &digest, &consistent); err != nil {
+		var consistent, deadlineWithinOriginalPG bool
+		if err = ar.Scan(&id, &phase, &ordinal, &started, &deadline, &raw, &digest, &consistent, &deadlineWithinOriginalPG); err != nil {
 			ar.Close()
 			return e, err
 		}
@@ -125,7 +128,7 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 			wantPhase = "before_poweroff"
 		}
 		var authority model.CapacityGuestRetirementAuthorityV2
-		if n >= 4 || phase != wantPhase || ordinal != n%2+1 || !consistent || capacity.DecodeGuestLifecycle(raw, &authority) != nil || capacity.GuestRetirementSHA(authority) != digest || authority.Schema != capacity.GuestRetirementV2AuthoritySchema || authority.Purpose != capacity.GuestRetirementV2Purpose || authority.Phase != phase || authority.IntentSHA256 != capacity.GuestRetirementSHA(i) || authority.AttemptID != i.AttemptID || authority.NonceSHA256 != i.NonceSHA256 || authority.EnrollmentSHA256 != i.EnrollmentSHA256 || authority.State != "authorized" || authority.SourceCommit != s.Binding.CoreAuthoritySourceCommit || !authority.OriginalDeadline.Equal(i.OriginalDeadline) || authority.GuestNonceSHA256 != capacity.GuestRetirementSHA(i.GuestNonce) || authority.GuestExpiresMonotonicNS != i.GuestExpiresMonotonicNS || started.Before(i.IssuedAt) || deadline.Sub(started) > 5*time.Second || authority.ObservedAt.Before(started) || !authority.ObservedAt.Before(deadline) || deadline.After(i.OriginalDeadline) {
+		if n >= 4 || phase != wantPhase || ordinal != n%2+1 || !consistent || capacity.DecodeGuestLifecycle(raw, &authority) != nil || capacity.GuestRetirementSHA(authority) != digest || authority.Schema != capacity.GuestRetirementV2AuthoritySchema || authority.Purpose != capacity.GuestRetirementV2Purpose || authority.Phase != phase || authority.IntentSHA256 != capacity.GuestRetirementSHA(i) || authority.AttemptID != i.AttemptID || authority.NonceSHA256 != i.NonceSHA256 || authority.EnrollmentSHA256 != i.EnrollmentSHA256 || authority.State != "authorized" || authority.SourceCommit != s.Binding.CoreAuthoritySourceCommit || !authority.OriginalDeadline.Equal(i.OriginalDeadline) || authority.GuestNonceSHA256 != capacity.GuestRetirementSHA(i.GuestNonce) || authority.GuestExpiresMonotonicNS != i.GuestExpiresMonotonicNS || !guestForwardAuthorityReadClockValid(started, deadline, deadlineWithinOriginalPG, authority.ObservedAt, i.IssuedAt, i.OriginalDeadline) {
 			ar.Close()
 			return e, ErrCapacityConflict
 		}
@@ -214,6 +217,12 @@ func retirementForwardQuietTx(ctx context.Context, tx *sql.Tx, x retirementForwa
 func retirementForwardEvidenceSHA(e guestRetirementForwardEvidence) string {
 	raw, _ := json.Marshal(e)
 	return capacity.BusinessCreationSHA256(raw)
+}
+
+// The bool is a source-owned PostgreSQL comparison, never a caller assertion.
+// Keep original native timestamps exact for the actual authority observation.
+func guestForwardAuthorityReadClockValid(started, deadline time.Time, deadlineWithinOriginalPG bool, observed, issued, originalDeadline time.Time) bool {
+	return deadlineWithinOriginalPG && !started.Before(issued) && deadline.Sub(started) <= 5*time.Second && !observed.Before(started) && observed.Before(deadline) && observed.Before(originalDeadline)
 }
 
 // Reapply the original caller ingress timeline invariants without requiring its
