@@ -1,4 +1,4 @@
-"""Run the preserved G6+G7+G8 and separate G9 rosters; retain actual CI outcomes, no host claim."""
+"""Run the preserved historical/G9 and additive R6 rosters; no host claim."""
 import collections
 import json
 import os
@@ -41,11 +41,13 @@ def main():
         raise RuntimeError('exact clean published source required before importing operational definitions')
     historical = json.loads((HERE / 'EXPECTED-TESTS.json').read_bytes())
     current = json.loads((HERE / 'EXPECTED-TESTS-G9.json').read_bytes())
+    r6 = json.loads((HERE / 'EXPECTED-TESTS-R6.json').read_bytes())
     if (type(historical) is not list or len(historical) != 106 or len(set(historical)) != 106
             or type(current) is not list or len(current) != 47 or len(set(current)) != 47
-            or set(historical) & set(current)):
-        raise RuntimeError('preserved original106 and closed separate G9 roster required')
-    expected = historical + current
+            or type(r6) is not list or len(r6) != 12 or len(set(r6)) != 12
+            or set(historical) & set(current) or (set(historical) | set(current)) & set(r6)):
+        raise RuntimeError('preserved original106/G9-47 and closed additive R6-12 rosters required')
+    expected = historical + current + r6
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
     actual = [test.id() for test in flatten(suite)]
     if collections.Counter(actual) != collections.Counter(expected):
@@ -55,7 +57,7 @@ def main():
             'discovery_errors': discovery_errors}, indent=2) + '\n')
         for error in discovery_errors:
             print(error, file=sys.stderr, flush=True)
-        raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8+G9 roster')
+        raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8+G9+R6 roster')
     result = unittest.TextTestRunner(verbosity=2, resultclass=Outcomes).run(suite)
     success = (result.wasSuccessful() and not result.skipped and not result.expectedFailures
                and not result.unexpectedSuccesses and result.testsRun == len(expected)
@@ -64,10 +66,10 @@ def main():
     clean_source = (subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == actual_commit
                     and not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all']))
     success = success and clean_source
-    value = {'schema': 'owned_network_guardian_g6_g7_g8_g9_exact_CI_census_v1',
+    value = {'schema': 'owned_network_guardian_g6_g7_g8_g9_r6_exact_CI_census_v1',
              'source_commit': os.environ['SOURCE_COMMIT'], 'success': success,
-             'expected': expected, 'historical_expected': historical, 'g9_expected': current,
-             'historical_count': len(historical), 'g9_count': len(current),
+             'expected': expected, 'historical_expected': historical, 'g9_expected': current, 'r6_expected': r6,
+             'historical_count': len(historical), 'g9_count': len(current), 'r6_count': len(r6),
              'executed': result.runs, 'passed': result.passes,
              'failures': [test.id() for test, _ in result.failures],
              'errors': [test.id() for test, _ in result.errors],

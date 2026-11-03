@@ -59,7 +59,9 @@ jobs:
           sha256sum --check SHA256SUMS
           cd tools
           sha256sum --check SHA256SUMS
-      - name: Run exact original106 and G9 historical proof and actual cutover CAS PostgreSQL census
+          cd ../../rollout
+          sha256sum --check SHA256SUMS
+      - name: Run exact preserved153 and additive R6 retained-proof and HELD-upgrade census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian

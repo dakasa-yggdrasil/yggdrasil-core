@@ -26,9 +26,9 @@ import types
 
 
 PROPOSAL_BOUND = True
-CORE_R = 'ed76cef2d66d7f5368b96b41aaa22fc80a2233c4'  # Actual qualified R5 Source; ops/rollout acceptance remain separate.
+CORE_R = 'c02512e9d11d29cad4e4ff67186602d3485d6fa3'  # Actual qualified R6 Source; ops/rollout acceptance remain separate.
 OLD_SOURCE = 'd451ac07c6e412bd2eae06f648935799e046ea31'
-SOURCE_PIN = 'c5d6a86f0741686382e10257ce880734d65b38da6b2c96fea35444ee6ccbf6eb'
+SOURCE_PIN = '6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765'
 UID = 'a58ab8c2-da48-46c1-ae62-a650141eeb86'
 OLD_POD = '30695e40-3349-4186-90e4-6db3951e34c2'
 GENERATION = 272
@@ -37,7 +37,7 @@ PODS_URI = '/api/v1/namespaces/dakasa/pods?labelSelector=app%3Dyggdrasil'
 KUBECONFIG = Path('/etc/rancher/k3s/k3s.yaml')
 ROOT = Path('/var/lib/dakasa-core-rollout/g9pair')
 OPLOCK = Path('/var/lib/dakasa-capacity-network-r13-cutover/operation.lock')
-TOOL_PINS = {'pair_change_contract.py': '0ef83ad2d4bbb28ad3d2319193bf3d9434ff04abbcf5c9b77c5993644f605a0a', 'derive_g9pair_controller_config.py': '967f7d8c01aad882a6158a38bfbdb04a24161a0b9b5400be0a2d70d4c8bafa7c', 'derive_standing_config.py': 'f151cff807091fd205fdd24f67bccfa9ca9557209176c4e187ffeafafc7821c9', 'g9cut.py': '9cf7995b2a63e6b395c71ef46f574d90872404b3dcd815c53bc45a19daa91dec'}
+TOOL_PINS = {'pair_change_contract.py': 'bf42b8073ac4c08807cb0ea6ad728a3681e975c4df2619bed05385ec2ab75bdb', 'derive_g9pair_controller_config.py': '2b6c9e9a0ec27dd359799ceeaaae261d06d0aa9cbfcede19251ef60a0d4e0948', 'derive_standing_config.py': 'f151cff807091fd205fdd24f67bccfa9ca9557209176c4e187ffeafafc7821c9', 'g9cut.py': '9cf7995b2a63e6b395c71ef46f574d90872404b3dcd815c53bc45a19daa91dec'}
 
 EXPECTED_INHERITED_REFS = {'/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-CLOSING.JSONL': '42b5834830c09b9c4b044171c69c7c2d9d4aabe68223c4bbbc887162d3b61991',
  '/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-PREFIX.JSONL': '6240b7f21932747366be7ce5ce6778559b3a5b63594c6d521ba7c2ab293d55ca',
@@ -351,6 +351,8 @@ def main():
     p.add_argument('--evidence-dir', required=True, type=Path)
     p.add_argument('--held-admission', type=Path)
     p.add_argument('--expected-held-admission-sha256')
+    p.add_argument('--http-maintenance-upgrade-admission', type=Path)
+    p.add_argument('--expected-http-maintenance-upgrade-admission-sha256')
     p.add_argument('--execute-core-image-cas-once', action='store_true', required=True)
     a = p.parse_args()
     need(os.geteuid() == 0 and sys.platform == 'linux', 'ROOT_LINUX_BRAIN_ONLY')
@@ -363,6 +365,14 @@ def main():
     else:
         need(a.held_admission is None and a.expected_held_admission_sha256 is None, 'NO_HELD_INPUT_IN_UNCHANGED_STEADY_BRANCH')
         held, held_raw = None, None
+    if a.http_maintenance_upgrade_admission is not None or a.expected_http_maintenance_upgrade_admission_sha256 is not None:
+        need(held is not None and a.http_maintenance_upgrade_admission is not None
+             and a.expected_http_maintenance_upgrade_admission_sha256 is not None,
+             'SEPARATE_EXPLICIT_HTTP_HELD_UPGRADE_INPUT_AND_SHA_REQUIRED')
+        http_upgrade, http_upgrade_raw = load_http_maintenance_upgrade(C,
+            a.http_maintenance_upgrade_admission.absolute(), a.expected_http_maintenance_upgrade_admission_sha256)
+    else:
+        http_upgrade, http_upgrade_raw = None, None
     folder, manifest = C.package(folder, a.expected_manifest_sha256)
     need(re.fullmatch('[a-f0-9]{40}', a.expected_ops_source) and a.expected_ops_source != '0' * 40
          and manifest['source_commit'] == a.expected_ops_source and manifest['files']['source/network_guardian.py'] == SOURCE_PIN
@@ -397,6 +407,12 @@ def main():
             if held_raw is not None:
                 C.once(run / 'HELD-ADMISSION.INPUT.json', held_raw)
                 C.once(run / 'HELD-ADMISSION.INPUT-SHA256.json', C.wire({'sha256':a.expected_held_admission_sha256,'reviewed_input_only_not_retirement_authority':True}))
+            if http_upgrade_raw is not None:
+                C.once(run / 'HTTP-MAINTENANCE-UPGRADE.INPUT.json', http_upgrade_raw)
+                C.once(run / 'HTTP-MAINTENANCE-UPGRADE.INPUT-SHA256.json', C.wire({
+                    'sha256':a.expected_http_maintenance_upgrade_admission_sha256,
+                    'admission_mode':'exact_partial_poweroff_and_recorded_http_HELD_image_upgrade',
+                    'steady_or_business_or_retirement_authority':False}))
             api = API(cut)
             before = api_read(api, C, run, 'DEPLOYMENT-BEFORE', DEP_URI)
             pods = api_read(api, C, run, 'PODS-BEFORE', PODS_URI)
@@ -427,7 +443,10 @@ def main():
             C.once(run / 'SERVER-DRYRUN.HTTP.json', C.wire({'status': status, **headers}))
             need(status == 200, 'SERVER_DRYRUN_200')
             result_shape(before, C.loads(raw), C)
-            database_preflight(cut, run, held)
+            if http_upgrade is None:
+                database_preflight(cut, run, held)
+            else:
+                database_r6_held_preflight(cut, run, held, http_upgrade)
             fresh = api_read(api, C, run, 'DEPLOYMENT-FRESH-PRESEND', DEP_URI)
             fresh_pods = api_read(api, C, run, 'PODS-FRESH-PRESEND', PODS_URI)
             need(core_before(fresh, fresh_pods, C) == old_tuple and fresh['metadata']['resourceVersion'] == before['metadata']['resourceVersion']
@@ -440,6 +459,8 @@ def main():
                  and cut.physical_identity(C.GUARD, cut.guardian_argv(C.NEW_SOURCE, SOURCE_PIN)) == guard, 'SAME_ACCEPTED_G9_AUTHORITY_IMMEDIATELY_BEFORE_PATCH')
             if ROOT_ROLLOUT_MODE == 'exact_held_partial_poweroff_original':
                 held_current_preimage(cut, run, held, 'PRESEND')
+            if http_upgrade is not None:
+                http_maintenance_current_preimage(cut, run, http_upgrade, 'PRESEND')
             current_lock = OPLOCK.lstat()
             need((current_lock.st_dev, current_lock.st_ino) == inode and time.monotonic() - observed <= 15, 'SAME_LOCK_AND_CURRENT15_COMPLETED_WITHIN15S')
             marker = {'schema': 'core_image_cas_possible_send_v1', 'at': now(), 'method': 'PATCH', 'uri': DEP_URI,
@@ -462,6 +483,8 @@ def main():
             result_shape(before, after, C)
             if ROOT_ROLLOUT_MODE == 'exact_held_partial_poweroff_original':
                 held_current_preimage(cut, run, held, 'AFTER-ACK')
+            if http_upgrade is not None:
+                http_maintenance_current_preimage(cut, run, http_upgrade, 'AFTER-ACK')
             result = {'schema': 'core_image_cas_return_v1', 'status': 'PATCH_ACKNOWLEDGED_ACCEPTANCE_PENDING',
                       'deployment_uid': UID, 'generation': after['metadata']['generation'], 'resourceVersion': after['metadata']['resourceVersion'],
                       'old_pod_uid': OLD_POD, 'Core_source': CORE_R, 'image': C.IMAGE_PREFIX + C.NEW_DIGEST,
@@ -485,6 +508,17 @@ def main():
 # Root selected this exact image-only branch; actual fresh admission evidence
 # remains a separately reviewed, SHA-pinned late input before any API.
 ROOT_ROLLOUT_MODE = 'exact_held_partial_poweroff_original'
+# This successor remains inert until Root binds a qualified product image that
+# actually supplies ADR0103. It is separate from the unchanged old held mode.
+HTTP_MAINTENANCE_UPGRADE_BOUND = True
+HTTP_MAINTENANCE_PRE91_QUERY_SHA256 = 'ef9cc17ac3551ecbb5dea4f73e866e1e7194c78e497f5599e9cd7b994fda3a7d'
+HTTP_MAINTENANCE_HELD_IDENTITY = {
+    'job_id': '9e6d3b13-b887-4822-9532-3c133d8df58f',
+    'run_id': '51540911-1389-41b5-a8a4-5cc1b3ee7493',
+    'realm': 'dakasa-production', 'environment': 'production', 'domain': 'notify',
+    'dimension': 'original_notify_hetzner_vm_members',
+    'error': 'capacity dispatch original context refused',
+}
 # Fixed original lineage only. Fresh history/catalog/slot snapshots and native
 # clocks are supplied in a separately Root-reviewed, SHA-pinned private input.
 HELD_ORIGINAL_IDENTITY = {'dimension': 'original_notify_aws_vm_members',
@@ -789,6 +823,324 @@ def held_original_frame_sql(retirement):
     return "SELECT jsonb_build_object('returns',(SELECT jsonb_agg(to_jsonb(r) ORDER BY sequence) FROM public.capacity_vm_retirement_original_returns r WHERE intent_id=$1),'caller',(SELECT to_jsonb(c) FROM public.capacity_guest_original_caller_returns c WHERE intent_id=$1),'attempt',(SELECT to_jsonb(a) FROM public.capacity_guest_original_caller_attempts a WHERE intent_id=$1),'authority',(SELECT jsonb_agg(jsonb_build_object('read',to_jsonb(r),'return',to_jsonb(v)) ORDER BY CASE r.phase WHEN 'before_start' THEN 0 ELSE 1 END,r.ordinal) FROM public.capacity_guest_original_authority_reads r LEFT JOIN public.capacity_guest_original_authority_returns v ON v.read_id=r.id WHERE r.intent_id=$1),'transport',(SELECT jsonb_agg(to_jsonb(t) ORDER BY t.read_id,t.native_stage) FROM public.capacity_guest_original_authority_transport_returns t JOIN public.capacity_guest_original_authority_reads r ON r.id=t.read_id WHERE r.intent_id=$1))::text".replace('$1', retirement)
 
 
+def retained_dispatch_terminal_ctes(schema_version):
+    """Closed schema89/91 retained proofs; never a live terminal effect scan.
+
+    The schema89 text is the reviewed seven-lane query, byte-identical. Only
+    schema91 can name its eighth immutable receipt table and pure validator.
+    """
+    need(type(schema_version) is int and schema_version in (89, 91), 'CLOSED_RETAINED_TERMINAL_SCHEMA_89_OR_91')
+    original = r'''dispatch_candidates AS MATERIALIZED (
+ SELECT j.* FROM public.capacity_dispatch_jobs j
+ WHERE j.realm='dakasa-production' AND j.environment='production' AND j.domain='notify'
+  AND j.dimension IN('original_notify_aws_vm_members','original_notify_hetzner_vm_members')
+  AND (j.state='returned' AND j.returned_at IS NOT NULL AND j.finalization_ack_at IS NOT NULL
+   AND num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+        j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=0
+   AND j.rejected_at IS NULL AND j.rejection_reason IS NULL AND j.rejection_issuer IS NULL
+   AND j.superseded_policy_id IS NULL AND j.superseded_policy_checksum IS NULL
+   AND j.superseding_policy_id IS NULL AND j.superseding_policy_checksum IS NULL) IS NOT TRUE
+),
+dispatch_original_identity AS MATERIALIZED (
+ SELECT j.id FROM dispatch_candidates j
+ WHERE j.protocol='capacity_dispatch_prestart_v1'
+  AND j.envelope_sha256=encode(sha256(convert_to(j.envelope,'UTF8')),'hex')
+  AND (j.state='prestart_rejected' OR num_nonnulls(j.rejected_at,j.rejection_reason,j.rejection_issuer,
+       j.superseded_policy_id,j.superseded_policy_checksum,j.superseding_policy_id,j.superseding_policy_checksum)=0)
+  AND (j.envelope IS JSON OBJECT WITH UNIQUE KEYS) IS TRUE
+  AND (j.envelope::jsonb->>'job_id',j.envelope::jsonb->>'run_id',j.envelope::jsonb->>'protocol',
+       j.envelope::jsonb->>'realm',j.envelope::jsonb->>'environment',j.envelope::jsonb->>'domain',
+       j.envelope::jsonb->>'dimension',j.envelope::jsonb->>'source_tick')
+      IS NOT DISTINCT FROM
+      (j.id::text,j.run_id::text,j.protocol,j.realm,j.environment,j.domain,j.dimension,j.source_tick)
+),
+dispatch_grant_terminals AS MATERIALIZED (
+ SELECT 'failed_disposed'::text terminal,d.id,d.grant_id,d.preregistration_id,d.job_id,d.run_id,
+  d.original_grant_sha256,d.original_preregistration_sha256,d.original_witness_sha256,
+  d.original_dispatch_sha256,d.original_run_sha256,d.disposition_sha256,d.original_wire,d.disposition_record,
+  d.closed_generation,d.closed_fencing_token,d.recorded_at,
+  NULL::text original_registration_sha256,NULL::text original_receipt_sha256,NULL::text original_enrollment_sha256
+ FROM public.capacity_failed_original_dispositions d JOIN dispatch_candidates j
+  ON j.state='failed_disposed' AND (j.failed_original_disposition_id,j.id,j.run_id)=(d.id,d.job_id,d.run_id)
+ UNION ALL
+ SELECT 'native_denied_disposed',d.id,d.grant_id,d.preregistration_id,d.job_id,d.run_id,
+  d.original_grant_sha256,d.original_preregistration_sha256,NULL::text,
+  d.original_dispatch_sha256,d.original_run_sha256,d.disposition_sha256,d.original_wire,d.disposition_record,
+  d.closed_generation,d.closed_fencing_token,d.recorded_at,NULL::text,NULL::text,NULL::text
+ FROM public.capacity_native_denied_dispositions d JOIN dispatch_candidates j
+  ON j.state='native_denied_disposed' AND (j.native_denied_disposition_id,j.id,j.run_id)=(d.id,d.job_id,d.run_id)
+ UNION ALL
+ SELECT 'enrolled_failed_disposed',d.id,d.grant_id,d.preregistration_id,d.job_id,d.run_id,
+  d.original_grant_sha256,d.original_preregistration_sha256,d.original_witness_sha256,
+  d.original_dispatch_sha256,d.original_run_sha256,d.disposition_sha256,d.original_wire,d.disposition_record,
+  d.closed_generation,d.closed_fencing_token,d.recorded_at,
+  d.original_registration_sha256,d.original_receipt_sha256,d.original_enrollment_sha256
+ FROM public.capacity_enrolled_failed_original_dispositions d JOIN dispatch_candidates j
+  ON j.state='enrolled_failed_disposed' AND (j.enrolled_failed_disposition_id,j.id,j.run_id)=(d.id,d.job_id,d.run_id)
+),
+dispatch_valid_grant_terminal AS MATERIALIZED (
+ SELECT j.id job_id FROM dispatch_candidates j JOIN dispatch_original_identity ji ON ji.id=j.id
+ JOIN dispatch_grant_terminals d ON d.job_id=j.id AND d.run_id=j.run_id AND d.terminal=j.state
+ JOIN public.capacity_mutation_grants g ON g.id=d.grant_id
+ JOIN public.capacity_vm_provisioning_preregistrations p ON p.id=d.preregistration_id AND p.create_grant_id=g.id
+ JOIN public.workflow_runs w ON w.id=d.run_id
+ LEFT JOIN public.capacity_guest_original_create_witnesses witness ON witness.preregistration_id=p.id
+ LEFT JOIN public.capacity_vm_original_enrollments en ON en.preregistration_id=p.id
+ WHERE num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+        j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=1
+  AND num_nonnulls(g.original_disposition_id,g.failed_original_disposition_id,g.native_denied_disposition_id,g.enrolled_failed_disposition_id)=1
+  AND CASE j.state WHEN 'failed_disposed' THEN g.failed_original_disposition_id=d.id
+      WHEN 'native_denied_disposed' THEN g.native_denied_disposition_id=d.id
+      WHEN 'enrolled_failed_disposed' THEN g.enrolled_failed_disposition_id=d.id ELSE false END IS TRUE
+  AND (j.realm,j.environment,j.domain,j.dimension)=(g.namespace,g.environment,g.domain,g.dimension)
+  AND j.started_at IS NOT NULL AND j.returned_at IS NOT NULL AND j.lease_owner IS NOT NULL AND j.lease_expires_at IS NOT NULL
+  AND j.rejected_at IS NULL AND j.rejection_reason IS NULL AND j.rejection_issuer IS NULL
+  AND d.original_dispatch_sha256 ~ '^[a-f0-9]{64}$'
+  AND NOT EXISTS(SELECT 1 FROM jsonb_each(d.disposition_record) x
+    WHERE (x.key ~ '^original_.*_sha256$' OR x.key='observation_sha256')
+     AND (jsonb_typeof(x.value)='string' AND x.value#>>'{}' ~ '^[a-f0-9]{64}$') IS NOT TRUE)
+  AND d.disposition_record->>'original_binding_sha256'=encode(sha256(p.binding_wire),'hex')
+  AND d.original_grant_sha256=encode(sha256(convert_to(g.grant_record::text,'UTF8')),'hex')
+  AND d.original_preregistration_sha256=encode(sha256(p.original_wire),'hex')
+  AND d.original_run_sha256=encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex')
+  AND d.disposition_sha256=encode(sha256(d.original_wire),'hex')
+  AND (convert_from(d.original_wire,'UTF8') IS JSON OBJECT WITH UNIQUE KEYS) IS TRUE
+  AND d.disposition_record=convert_from(d.original_wire,'UTF8')::jsonb
+  AND jsonb_typeof(d.disposition_record)='object'
+  AND (d.disposition_record->>'id',d.disposition_record->>'grant_id',d.disposition_record->>'preregistration_id',
+       d.disposition_record->>'job_id',d.disposition_record->>'run_id')
+      IS NOT DISTINCT FROM (d.id::text,d.grant_id::text,d.preregistration_id::text,d.job_id::text,d.run_id::text)
+  AND (d.disposition_record->>'original_grant_sha256',d.disposition_record->>'original_preregistration_sha256',
+       d.disposition_record->>'original_dispatch_sha256',d.disposition_record->>'original_run_sha256')
+      IS NOT DISTINCT FROM (d.original_grant_sha256,d.original_preregistration_sha256,d.original_dispatch_sha256,d.original_run_sha256)
+  AND d.disposition_record->'original_generation'=g.grant_record->'generation'
+  AND d.disposition_record->'original_fencing_token'=g.grant_record->'fencing_token'
+  AND (d.disposition_record->>'original_deadline')::timestamptz=p.original_deadline
+  AND d.disposition_record->>'historical_core_source_commit'=p.preregistration_record->>'core_source_commit'
+  AND d.disposition_record->'closed_generation'=to_jsonb(d.closed_generation)
+  AND d.disposition_record->'closed_fencing_token'=to_jsonb(d.closed_fencing_token)
+  AND (d.disposition_record->>'recorded_at')::timestamptz=d.recorded_at
+  AND jsonb_typeof(d.disposition_record->'issuer')='string'
+  AND d.disposition_record->>'issuer' ~ '^collaborator:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  AND jsonb_typeof(d.disposition_record->'observation')='object'
+  AND w.status='failed' AND w.started_at IS NOT NULL AND w.finished_at IS NOT NULL
+  AND (w.workflow_id IS NULL OR w.workflow_id::text=j.envelope::jsonb#>>'{workflow,id}')
+  AND (w.workflow_namespace,w.workflow_name,w.workflow_version::text)
+      IS NOT DISTINCT FROM (j.envelope::jsonb#>>'{workflow,namespace}',j.envelope::jsonb#>>'{workflow,name}',j.envelope::jsonb#>>'{workflow,version}')
+  AND w.inputs IS NOT DISTINCT FROM j.envelope::jsonb->'inputs' AND w.metadata IS NOT DISTINCT FROM j.envelope::jsonb->'metadata'
+  AND w.result->>'status'='failed' AND w.result#>>'{workflow,id}'=j.envelope::jsonb#>>'{workflow,id}'
+  AND (w.result#>>'{workflow,namespace}',w.result#>>'{workflow,name}',w.result#>>'{workflow,version}')
+      IS NOT DISTINCT FROM (j.envelope::jsonb#>>'{workflow,namespace}',j.envelope::jsonb#>>'{workflow,name}',j.envelope::jsonb#>>'{workflow,version}')
+  AND j.envelope::jsonb#>>'{policy,id}'=g.grant_record->>'policy_id'
+  AND j.envelope::jsonb#>>'{policy,checksum}'=g.grant_record->>'policy_checksum'
+  AND j.envelope::jsonb#>>'{workflow,id}'=g.grant_record->>'workflow_id'
+  AND CASE j.state
+   WHEN 'failed_disposed' THEN
+    j.finalization_ack_at IS NULL AND d.disposition_record->>'schema'='failed_original_guest_terminal_disposition_v1'
+    AND ARRAY(SELECT k FROM jsonb_object_keys(d.disposition_record) AS k ORDER BY k COLLATE "C")=ARRAY['closed_fencing_token','closed_generation','grant_id','historical_core_source_commit','historical_writer_start_state','id','issuer','job_id','observation','observation_sha256','original_accepted_unchanged','original_binding_sha256','original_deadline','original_dispatch_sha256','original_fencing_token','original_generation','original_grant_sha256','original_policy_sha256','original_preregistration_sha256','original_run_sha256','original_settlement_sha256','original_unknown_ACK_preserved','original_witness_preserved','original_witness_sha256','original_workflow_sha256','preregistration_id','recorded_at','run_id','schema','serving_or_business_or_savings_authority']::text[]
+    AND d.original_witness_sha256=encode(sha256(witness.original_wire),'hex')
+    AND d.disposition_record->>'original_witness_sha256'=d.original_witness_sha256
+    AND d.disposition_record->'original_accepted_unchanged'='true'::jsonb
+    AND d.disposition_record->'original_witness_preserved'='true'::jsonb
+    AND d.disposition_record->'original_unknown_ACK_preserved'='true'::jsonb
+    AND d.disposition_record->>'historical_writer_start_state'='unknown'
+    AND d.disposition_record->'serving_or_business_or_savings_authority'='false'::jsonb
+   WHEN 'enrolled_failed_disposed' THEN
+    j.finalization_ack_at IS NULL AND d.disposition_record->>'schema'='enrolled_failed_original_guest_terminal_disposition_v1'
+    AND ARRAY(SELECT k FROM jsonb_object_keys(d.disposition_record) AS k ORDER BY k COLLATE "C")=ARRAY['Guest_quiescence_proved','closed_fencing_token','closed_generation','grant_id','historical_core_source_commit','historical_writer_start_state','id','installation_or_serving_authority','issuer','job_id','observation','observation_sha256','original_accepted_unchanged','original_binding_sha256','original_deadline','original_dispatch_sha256','original_enrollment_preserved','original_enrollment_sha256','original_fencing_token','original_generation','original_grant_sha256','original_policy_sha256','original_preregistration_sha256','original_receipt_sha256','original_registration_sha256','original_run_sha256','original_settlement_sha256','original_unknown_ACK_preserved','original_witness_preserved','original_witness_sha256','original_workflow_sha256','preregistration_id','recorded_at','run_id','schema','serving_or_business_or_savings_authority']::text[]
+    AND d.original_witness_sha256=encode(sha256(witness.original_wire),'hex')
+    AND d.disposition_record->>'original_witness_sha256'=d.original_witness_sha256
+    AND en.enrollment_sha256=d.original_enrollment_sha256
+    AND encode(sha256(en.registration_wire),'hex')=d.original_registration_sha256
+    AND encode(sha256(en.receipt_wire),'hex')=d.original_receipt_sha256
+    AND d.disposition_record->>'original_binding_sha256'=encode(sha256(p.binding_wire),'hex')
+    AND d.disposition_record->>'original_registration_sha256'=d.original_registration_sha256
+    AND d.disposition_record->>'original_receipt_sha256'=d.original_receipt_sha256
+    AND d.disposition_record->>'original_enrollment_sha256'=d.original_enrollment_sha256
+    AND d.disposition_record->'original_accepted_unchanged'='true'::jsonb
+    AND d.disposition_record->'original_witness_preserved'='true'::jsonb
+    AND d.disposition_record->'original_unknown_ACK_preserved'='true'::jsonb
+    AND d.disposition_record->'original_enrollment_preserved'='true'::jsonb
+    AND d.disposition_record->'Guest_quiescence_proved'='false'::jsonb
+    AND d.disposition_record->'installation_or_serving_authority'='false'::jsonb
+    AND d.disposition_record->>'historical_writer_start_state'='unknown'
+    AND d.disposition_record->'serving_or_business_or_savings_authority'='false'::jsonb
+   WHEN 'native_denied_disposed' THEN
+    w.started_at=j.started_at AND w.finished_at=j.returned_at
+    AND d.disposition_record->'original_uncertain_and_NULL_identities_unchanged'='true'::jsonb
+    AND d.disposition_record->'witness_enrollment_installation_absent'='true'::jsonb
+    AND d.disposition_record->'serving_or_business_or_savings_authority'='false'::jsonb
+    AND CASE d.disposition_record->>'schema'
+       WHEN 'original_native_authorization_denied_terminal_disposition_v1'
+        THEN ARRAY(SELECT k FROM jsonb_object_keys(d.disposition_record) AS k ORDER BY k COLLATE "C")=ARRAY['closed_fencing_token','closed_generation','grant_id','historical_core_source_commit','id','issuer','job_id','observation','observation_sha256','original_binding_sha256','original_deadline','original_dispatch_sha256','original_fencing_token','original_generation','original_grant_sha256','original_policy_sha256','original_preregistration_sha256','original_run_sha256','original_settlement_sha256','original_uncertain_and_NULL_identities_unchanged','original_unknown_ACK_preserved','original_workflow_sha256','preregistration_id','recorded_at','run_id','schema','serving_or_business_or_savings_authority','witness_enrollment_installation_absent']::text[]
+       WHEN 'original_native_authorization_denied_failed_returned_ack_terminal_disposition_v2'
+        THEN ARRAY(SELECT k FROM jsonb_object_keys(d.disposition_record) AS k ORDER BY k COLLATE "C")=ARRAY['closed_fencing_token','closed_generation','grant_id','historical_core_source_commit','id','issuer','job_id','observation','observation_sha256','original_binding_sha256','original_deadline','original_dispatch_sha256','original_dispatch_state','original_failed_workflow_ACK_preserved','original_fencing_token','original_finalization_ack_at','original_generation','original_grant_sha256','original_policy_sha256','original_preregistration_sha256','original_run_sha256','original_settlement_sha256','original_uncertain_and_NULL_identities_unchanged','original_unknown_ACK_preserved','original_workflow_sha256','preregistration_id','recorded_at','run_id','schema','serving_or_business_or_savings_authority','witness_enrollment_installation_absent']::text[] ELSE false END IS TRUE
+    AND public.native_denied_original_ack_matches(d.disposition_record,
+       CASE d.disposition_record->>'schema' WHEN 'original_native_authorization_denied_terminal_disposition_v1' THEN 'unknown'
+       WHEN 'original_native_authorization_denied_failed_returned_ack_terminal_disposition_v2' THEN 'returned' ELSE NULL END,
+       j.finalization_ack_at,j.returned_at,j.lease_expires_at,j.return_status) IS TRUE
+   ELSE false END IS TRUE
+),
+dispatch_terminal_witnesses AS MATERIALIZED (
+ SELECT j.id job_id FROM dispatch_candidates j JOIN dispatch_original_identity ji ON ji.id=j.id
+ JOIN public.capacity_dispatch_prestart_rejections d ON d.job_id=j.id AND d.run_id=j.run_id
+ JOIN public.workflow_runs w ON w.id=d.run_id
+ WHERE j.state='prestart_rejected' AND j.started_at IS NULL AND j.returned_at IS NULL
+  AND j.return_status IS NULL AND j.return_error IS NULL AND j.finalization_error IS NULL AND j.finalization_ack_at IS NULL
+  AND num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+        j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=0
+  AND (d.envelope_sha256,d.fencing_token,d.reason,d.issuer,d.recorded_at,d.superseded_policy_id,d.superseded_policy_checksum,d.superseding_policy_id,d.superseding_policy_checksum)
+      IS NOT DISTINCT FROM
+      (j.envelope_sha256,j.fencing_token,j.rejection_reason,j.rejection_issuer,j.rejected_at,j.superseded_policy_id,j.superseded_policy_checksum,j.superseding_policy_id,j.superseding_policy_checksum)
+  AND d.reason='policy_superseded_before_start' AND d.superseded_policy_id<>d.superseding_policy_id
+  AND d.superseded_policy_checksum ~ '^[a-f0-9]{64}$' AND d.superseding_policy_checksum ~ '^[a-f0-9]{64}$'
+  AND d.issuer ~ '^collaborator:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  AND w.status='cancelled' AND w.started_at IS NULL AND w.result IS NULL AND w.finished_at=d.recorded_at AND w.error=d.reason
+ UNION
+ SELECT job_id FROM dispatch_valid_grant_terminal
+ UNION
+ SELECT j.id FROM dispatch_candidates j JOIN dispatch_original_identity ji ON ji.id=j.id
+ JOIN public.capacity_dispatch_abandoned_dispositions d ON (j.abandoned_disposition_id,j.id,j.run_id)=(d.id,d.job_id,d.run_id)
+ JOIN public.workflow_runs w ON w.id=d.run_id
+ WHERE j.state='abandoned_disposed' AND j.started_at IS NOT NULL AND j.returned_at IS NULL
+  AND j.return_status IS NULL AND j.return_error IS NULL AND j.finalization_error IS NULL AND j.finalization_ack_at IS NULL
+  AND num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+        j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=1
+  AND (d.realm,d.environment,d.domain,d.dimension,d.envelope_sha256,d.fencing_token,d.lease_owner,d.lease_expires_at,d.started_at,d.pending_wake_count)
+      IS NOT DISTINCT FROM (j.realm,j.environment,j.domain,j.dimension,j.envelope_sha256,j.fencing_token,j.lease_owner,j.lease_expires_at,j.started_at,j.pending_wake_count)
+  AND d.lease_owner IS NOT NULL AND d.fencing_token>0 AND d.started_at<d.lease_expires_at
+  AND d.executor_barrier='disposing_core_process_started_after_lease_expiry_v1' AND d.minimum_lease_age_seconds=900
+  AND d.disposing_core_process_started_at>d.lease_expires_at AND d.disposing_core_process_started_at<=d.recorded_at
+  AND d.recorded_at>=d.lease_expires_at+interval '15 minutes'
+  AND d.reason='abandoned_started_dispatch_disposed' AND d.historical_return='unknown'
+  AND d.run_status='failed' AND d.run_error='abandoned_started_dispatch_disposed: historical outcome unknown'
+  AND w.status=d.run_status AND w.error=d.run_error AND w.started_at=d.started_at AND w.finished_at=d.recorded_at AND w.result IS NULL
+  AND d.original_dispatch_sha256 ~ '^[a-f0-9]{64}$' AND d.original_run_sha256 ~ '^[a-f0-9]{64}$'
+  AND d.provider_mutation_evidence='{"authority_reads_since_start":0,"authority_returns_since_start":0,"authority_transport_returns_since_start":0,"caller_possible_sends_since_start":0,"caller_returns_since_start":0,"canary_challenges_since_start":0,"canary_nonces_since_start":0,"canary_possible_sends_since_start":0,"canary_returns_since_start":0,"clock_skew_margin_seconds":30,"create_witnesses_since_start":0,"enrollments_since_start":0,"executor_activity_updated_since_start":0,"grants_created_or_updated_since_start":0,"installations_since_start":0,"intent_events_since_start":0,"intents_updated_since_start":0,"native_commands_since_start":0,"native_lifetime_archives_since_start":0,"native_lifetimes_updated_since_start":0,"native_pod_checkpoints_since_start":0,"native_poweroff_reads_since_start":0,"notify_window_markers_for_job":0,"open_undisposed_grants":0,"partial_nativeoff_reads_since_start":0,"partial_nativeoff_reconciliations_since_start":0,"prejournal_refusal_recoveries_since_start":0,"preregistrations_since_start":0,"presend_retirement_recoveries_since_start":0,"provider_quiescence_proved":false,"provider_read_performed":false,"qualification_native_source_returns_since_start":0,"qualification_probe_challenges_since_start":0,"resource_slots_updated_since_start":0,"retirement_contexts_since_start":0,"retirement_delete_bindings_since_start":0,"retirement_intents_since_start":0,"retirement_native_readbacks_since_start":0,"retirement_original_returns_since_start":0,"runtime_snapshot_challenges_since_start":0,"runtime_snapshot_returns_since_start":0,"schema":"abandoned_started_dispatch_effect_scan_v2","source_recovery_cleanup_challenges_since_start":0,"source_recovery_cleanup_effect_permits_since_start":0}'::jsonb
+ UNION
+ SELECT j.id FROM dispatch_candidates j JOIN dispatch_original_identity ji ON ji.id=j.id
+ JOIN public.capacity_dispatch_finalization_lost_dispositions d ON (j.finalization_lost_disposition_id,j.id,j.run_id)=(d.id,d.job_id,d.run_id)
+ JOIN public.workflow_runs w ON w.id=d.run_id
+ WHERE j.state='finalization_lost_disposed' AND j.started_at IS NOT NULL AND j.returned_at IS NULL
+  AND j.return_status IS NULL AND j.return_error IS NULL AND j.finalization_error IS NULL AND j.finalization_ack_at IS NULL
+  AND num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+        j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=1
+  AND (d.realm,d.environment,d.domain,d.dimension,d.envelope_sha256,d.fencing_token,d.lease_owner,d.lease_expires_at,d.started_at,d.pending_wake_count)
+      IS NOT DISTINCT FROM (j.realm,j.environment,j.domain,j.dimension,j.envelope_sha256,j.fencing_token,j.lease_owner,j.lease_expires_at,j.started_at,j.pending_wake_count)
+  AND d.lease_owner IS NOT NULL AND d.fencing_token>0 AND d.started_at<d.lease_expires_at
+  AND d.executor_barrier='disposing_core_process_started_after_lease_expiry_v1' AND d.minimum_lease_age_seconds=900
+  AND d.disposing_core_process_started_at>d.lease_expires_at AND d.disposing_core_process_started_at<=d.recorded_at
+  AND d.recorded_at>=d.lease_expires_at+interval '15 minutes'
+  AND d.reason='finalization_lost_started_dispatch_disposed' AND d.return_observation='observed_by_operator_evidence_not_recorded'
+  AND d.historical_return='unknown' AND d.run_status='failed'
+  AND d.run_error='finalization_lost_disposed: return observed but not recorded; historical outcome unknown'
+  AND w.status=d.run_status AND w.error=d.run_error AND w.started_at=d.started_at AND w.finished_at=d.recorded_at AND w.result IS NULL
+  AND d.original_dispatch_sha256 ~ '^[a-f0-9]{64}$' AND d.original_run_sha256 ~ '^[a-f0-9]{64}$'
+  AND octet_length(d.operator_evidence) BETWEEN 1 AND 8192
+  AND d.operator_evidence_sha256=encode(sha256(convert_to(d.operator_evidence,'UTF8')),'hex')
+  AND ARRAY(SELECT k FROM jsonb_object_keys(d.provider_mutation_evidence) AS k ORDER BY k COLLATE "C")=ARRAY['authority_reads_since_start','authority_returns_since_start','authority_transport_returns_since_start','base_schema','caller_possible_sends_since_start','caller_returns_since_start','canary_challenges_since_start','canary_nonces_since_start','canary_possible_sends_since_start','canary_returns_since_start','clock_skew_margin_seconds','create_witnesses_since_start','enrollments_since_start','executor_activity_updated_since_start','grants_created_or_updated_since_start','installations_since_start','intent_events_since_start','intents_updated_since_start','native_commands_since_start','native_lifetime_archives_since_start','native_lifetimes_updated_since_start','native_pod_checkpoints_since_start','native_poweroff_reads_since_start','notify_window_markers_for_job','observation_refresh_slot_updates','open_undisposed_grants','partial_nativeoff_reads_since_start','partial_nativeoff_reconciliations_since_start','prejournal_refusal_recoveries_since_start','preregistrations_since_start','presend_retirement_recoveries_since_start','provider_quiescence_proved','provider_read_performed','pure_assessment_intent_updates','qualification_native_source_returns_since_start','qualification_probe_challenges_since_start','resource_slots_updated_since_start','retirement_contexts_since_start','retirement_delete_bindings_since_start','retirement_intents_since_start','retirement_native_readbacks_since_start','retirement_original_returns_since_start','runtime_snapshot_challenges_since_start','runtime_snapshot_returns_since_start','schema','source_recovery_cleanup_challenges_since_start','source_recovery_cleanup_effect_permits_since_start']::text[]
+  AND NOT EXISTS(SELECT 1 FROM jsonb_each(d.provider_mutation_evidence) e
+   WHERE e.key NOT IN('schema','base_schema','clock_skew_margin_seconds','provider_read_performed','provider_quiescence_proved')
+    AND (CASE WHEN jsonb_typeof(e.value)='number' THEN (e.value::text)::numeric>=0
+         AND (e.value::text)::numeric<=9223372036854775807
+         AND trunc((e.value::text)::numeric)=(e.value::text)::numeric ELSE false END) IS NOT TRUE)
+  AND (d.provider_mutation_evidence->>'intents_updated_since_start')::numeric>=0
+  AND (d.provider_mutation_evidence->>'resource_slots_updated_since_start')::numeric>=0
+  AND public.finalization_lost_dispatch_effect_scan_tolerable(d.provider_mutation_evidence) IS TRUE
+ UNION
+ SELECT j.id FROM dispatch_candidates j JOIN dispatch_original_identity ji ON ji.id=j.id
+ JOIN public.capacity_dispatch_unknown_maintenance_dispositions d ON (j.unknown_maintenance_disposition_id,j.id,j.run_id)=(d.id,d.job_id,d.run_id)
+ JOIN public.workflow_runs w ON w.id=d.run_id
+ WHERE j.state='unknown_maintenance_disposed' AND j.started_at IS NOT NULL AND j.returned_at=d.original_returned_at
+  AND j.finalization_ack_at IS NULL AND j.finalization_error IS NULL
+  AND num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+        j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=1
+  AND j.started_at<j.returned_at AND j.returned_at<j.lease_expires_at
+  AND d.executor_barrier='disposing_core_process_started_after_lease_expiry_v1'
+  AND d.disposing_core_process_started_at>j.lease_expires_at AND d.disposing_core_process_started_at<=d.recorded_at
+  AND d.recorded_at>=j.lease_expires_at+interval '15 minutes'
+  AND d.reason='unknown_failed_maintenance_dispatch_disposed' AND d.historical_return='unknown'
+  AND j.return_status='failed' AND w.status='failed'
+  AND j.return_error='capacity dispatch original deadline exceeded' AND w.error=j.return_error
+  AND w.started_at=j.started_at AND w.finished_at=j.returned_at AND w.result IS NOT NULL
+  AND d.original_dispatch_sha256 ~ '^[a-f0-9]{64}$'
+  AND d.original_run_sha256=encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex')
+  AND ARRAY(SELECT k FROM jsonb_object_keys(d.provider_mutation_evidence) AS k ORDER BY k COLLATE "C")=ARRAY['base','current_member_count','current_members','current_members_sha256','invalid_maintenance_canary_rows','policy_epoch_valid','refresh_only_result','schema']::text[]
+  AND ARRAY(SELECT k FROM jsonb_object_keys(d.provider_mutation_evidence->'base') AS k ORDER BY k COLLATE "C")=ARRAY['authority_reads_since_start','authority_returns_since_start','authority_transport_returns_since_start','base_schema','caller_possible_sends_since_start','caller_returns_since_start','canary_challenges_since_start','canary_nonces_since_start','canary_possible_sends_since_start','canary_returns_since_start','clock_skew_margin_seconds','create_witnesses_since_start','enrollments_since_start','executor_activity_updated_since_start','grants_created_or_updated_since_start','installations_since_start','intent_events_since_start','intents_updated_since_start','native_commands_since_start','native_lifetime_archives_since_start','native_lifetimes_updated_since_start','native_pod_checkpoints_since_start','native_poweroff_reads_since_start','notify_window_markers_for_job','observation_refresh_slot_updates','open_undisposed_grants','partial_nativeoff_reads_since_start','partial_nativeoff_reconciliations_since_start','prejournal_refusal_recoveries_since_start','preregistrations_since_start','presend_retirement_recoveries_since_start','provider_quiescence_proved','provider_read_performed','pure_assessment_intent_updates','qualification_native_source_returns_since_start','qualification_probe_challenges_since_start','resource_slots_updated_since_start','retirement_contexts_since_start','retirement_delete_bindings_since_start','retirement_intents_since_start','retirement_native_readbacks_since_start','retirement_original_returns_since_start','runtime_snapshot_challenges_since_start','runtime_snapshot_returns_since_start','schema','source_recovery_cleanup_challenges_since_start','source_recovery_cleanup_effect_permits_since_start']::text[]
+  AND NOT EXISTS(SELECT 1 FROM jsonb_each(d.provider_mutation_evidence->'base') e
+   WHERE e.key NOT IN('schema','base_schema','clock_skew_margin_seconds','provider_read_performed','provider_quiescence_proved')
+    AND (CASE WHEN jsonb_typeof(e.value)='number' THEN (e.value::text)::numeric>=0
+         AND (e.value::text)::numeric<=9223372036854775807
+         AND trunc((e.value::text)::numeric)=(e.value::text)::numeric ELSE false END) IS NOT TRUE)
+  AND (d.provider_mutation_evidence#>>'{base,intents_updated_since_start}')::numeric>=0
+  AND (d.provider_mutation_evidence#>>'{base,resource_slots_updated_since_start}')::numeric>=0
+  AND d.current_members_sha256=d.provider_mutation_evidence->>'current_members_sha256'
+  AND public.unknown_maintenance_dispatch_effect_scan_tolerable(d.provider_mutation_evidence) IS TRUE
+)'''
+    if schema_version == 89:
+        return original
+    return original[:-1] + r'''
+ UNION
+ SELECT j.id FROM dispatch_candidates j JOIN dispatch_original_identity ji ON ji.id=j.id
+ JOIN public.capacity_dispatch_http_maintenance_dispositions d ON (j.id,j.run_id)=(d.job_id,d.run_id)
+ JOIN public.workflow_runs w ON w.id=d.run_id
+ WHERE j.state='http_maintenance_disposed' AND d.id<>'00000000-0000-0000-0000-000000000000'::uuid
+  AND j.started_at IS NOT NULL AND j.returned_at=d.original_returned_at AND j.lease_expires_at IS NOT NULL
+  AND j.finalization_ack_at IS NULL
+  AND num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+        j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=0
+  AND j.started_at<j.returned_at AND j.returned_at<j.lease_expires_at
+  AND d.executor_barrier='disposing_core_process_started_after_lease_expiry_v1'
+  AND d.disposing_core_process_started_at>j.lease_expires_at AND d.disposing_core_process_started_at<=d.recorded_at
+  AND d.recorded_at>=j.lease_expires_at+interval '15 minutes'
+  AND d.disposing_core_hostname ~ '^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$' AND d.disposing_core_pid>0
+  AND d.disposing_core_source_commit ~ '^[a-f0-9]{40}$'
+  AND d.issuer ~ '^collaborator:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  AND d.reason='recorded_context_refused_http_maintenance_dispatch_disposed' AND d.historical_return='unknown'
+  AND j.return_status='failed' AND w.status='failed'
+  AND j.return_error='capacity dispatch original context refused' AND j.finalization_error=j.return_error AND w.error=j.return_error
+  AND w.started_at=j.started_at AND w.finished_at=j.returned_at AND w.result IS NOT NULL
+  AND (w.workflow_id IS NULL OR w.workflow_id::text=j.envelope::jsonb#>>'{workflow,id}')
+  AND (w.workflow_namespace,w.workflow_name,w.workflow_version::text) IS NOT DISTINCT FROM
+      (j.envelope::jsonb#>>'{workflow,namespace}',j.envelope::jsonb#>>'{workflow,name}',j.envelope::jsonb#>>'{workflow,version}')
+  AND w.inputs=j.envelope::jsonb->'inputs' AND w.metadata=j.envelope::jsonb->'metadata'
+  AND (w.result#>>'{workflow,id}',w.result#>>'{workflow,kind}',w.result#>>'{workflow,namespace}',w.result#>>'{workflow,name}',w.result#>>'{workflow,version}')
+      IS NOT DISTINCT FROM (j.envelope::jsonb#>>'{workflow,id}','workflow',j.envelope::jsonb#>>'{workflow,namespace}',j.envelope::jsonb#>>'{workflow,name}',j.envelope::jsonb#>>'{workflow,version}')
+  AND d.original_dispatch_updated_at IS NOT NULL AND d.original_dispatch_updated_at<=d.recorded_at
+  AND d.original_dispatch_sha256 ~ '^[a-f0-9]{64}$'
+  AND d.original_dispatch_sha256=encode(sha256(convert_to((to_jsonb(j)||jsonb_build_object('state','unknown','updated_at',d.original_dispatch_updated_at))::text,'UTF8')),'hex')
+  AND d.original_run_sha256=encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex')
+  AND ARRAY(SELECT k FROM jsonb_object_keys(d.provider_mutation_evidence) AS k ORDER BY k COLLATE "C")=ARRAY['base','current_member_count','current_members','current_members_sha256','invalid_maintenance_canary_rows','policy_epoch_valid','refresh_only_result','schema']::text[]
+  AND ARRAY(SELECT k FROM jsonb_object_keys(d.provider_mutation_evidence->'base') AS k ORDER BY k COLLATE "C")=ARRAY['authority_reads_since_start','authority_returns_since_start','authority_transport_returns_since_start','base_schema','caller_possible_sends_since_start','caller_returns_since_start','canary_challenges_since_start','canary_nonces_since_start','canary_possible_sends_since_start','canary_returns_since_start','clock_skew_margin_seconds','create_witnesses_since_start','enrollments_since_start','executor_activity_updated_since_start','grants_created_or_updated_since_start','installations_since_start','intent_events_since_start','intents_updated_since_start','native_commands_since_start','native_lifetime_archives_since_start','native_lifetimes_updated_since_start','native_pod_checkpoints_since_start','native_poweroff_reads_since_start','notify_window_markers_for_job','observation_refresh_slot_updates','open_undisposed_grants','partial_nativeoff_reads_since_start','partial_nativeoff_reconciliations_since_start','prejournal_refusal_recoveries_since_start','preregistrations_since_start','presend_retirement_recoveries_since_start','provider_quiescence_proved','provider_read_performed','pure_assessment_intent_updates','qualification_native_source_returns_since_start','qualification_probe_challenges_since_start','resource_slots_updated_since_start','retirement_contexts_since_start','retirement_delete_bindings_since_start','retirement_intents_since_start','retirement_native_readbacks_since_start','retirement_original_returns_since_start','runtime_snapshot_challenges_since_start','runtime_snapshot_returns_since_start','schema','source_recovery_cleanup_challenges_since_start','source_recovery_cleanup_effect_permits_since_start']::text[]
+  AND NOT EXISTS(SELECT 1 FROM jsonb_each(d.provider_mutation_evidence->'base') e
+   WHERE e.key NOT IN('schema','base_schema','clock_skew_margin_seconds','provider_read_performed','provider_quiescence_proved')
+    AND (CASE WHEN jsonb_typeof(e.value)='number' THEN (e.value::text)::numeric>=0
+         AND (e.value::text)::numeric<=9223372036854775807
+         AND trunc((e.value::text)::numeric)=(e.value::text)::numeric ELSE false END) IS NOT TRUE)
+  AND (d.provider_mutation_evidence#>>'{base,intents_updated_since_start}')::numeric>=0
+  AND (d.provider_mutation_evidence#>>'{base,resource_slots_updated_since_start}')::numeric>=0
+  AND d.current_members_sha256=d.provider_mutation_evidence->>'current_members_sha256'
+  AND d.current_members_sha256 ~ '^[a-f0-9]{64}$'
+  AND jsonb_typeof(d.provider_mutation_evidence->'current_member_count')='number'
+  AND d.provider_mutation_evidence->>'current_member_count'='1'
+  AND jsonb_typeof(d.provider_mutation_evidence->'invalid_maintenance_canary_rows')='number'
+  AND d.provider_mutation_evidence->>'invalid_maintenance_canary_rows'='0'
+  AND d.provider_mutation_evidence#>>'{base,clock_skew_margin_seconds}'='30'
+  AND NOT EXISTS(SELECT 1 FROM jsonb_each(d.provider_mutation_evidence->'base') e
+   WHERE e.key NOT IN('schema','base_schema','clock_skew_margin_seconds','provider_read_performed','provider_quiescence_proved')
+    AND e.value::text !~ '^(0|[1-9][0-9]*)$')
+  AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(d.provider_mutation_evidence->'current_members') m
+   WHERE (ARRAY(SELECT k FROM jsonb_object_keys(m) AS k ORDER BY k COLLATE "C")) IS DISTINCT FROM
+    ARRAY['enrollment_sha256','installation_sha256','policy_checksum','policy_id','preregistration_id','resource_id','slot','slot_sha256']::text[]
+    OR jsonb_typeof(m->'slot') IS DISTINCT FROM 'number' OR m->>'slot' IS DISTINCT FROM '1'
+    OR jsonb_typeof(m->'resource_id') IS DISTINCT FROM 'string' OR COALESCE(m->>'resource_id','')='' OR octet_length(m->>'resource_id')>256
+    OR EXISTS(SELECT 1 FROM unnest(ARRAY['policy_id','preregistration_id']) k WHERE jsonb_typeof(m->k) IS DISTINCT FROM 'string'
+      OR COALESCE(m->>k,'') !~ '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' OR m->>k='00000000-0000-0000-0000-000000000000')
+    OR EXISTS(SELECT 1 FROM unnest(ARRAY['enrollment_sha256','installation_sha256','slot_sha256','policy_checksum']) k
+      WHERE jsonb_typeof(m->k) IS DISTINCT FROM 'string' OR COALESCE(m->>k,'') !~ '^[a-f0-9]{64}$'))
+  AND public.http_maintenance_dispatch_effect_scan_tolerable(d.provider_mutation_evidence) IS TRUE
+)'''
+
 def held_database_sql(expected):
     e = validate_held_original(expected)
     # Every interpolated operand is a closed UUID, hex digest or strict UTC
@@ -804,6 +1156,7 @@ def held_database_sql(expected):
     profile = e['physical_profile']
     frame_sql = held_original_frame_sql(retirement)
     return f"""BEGIN READ ONLY;
+SET LOCAL enable_indexscan=off;
 SET LOCAL statement_timeout='8000ms';
 SET LOCAL lock_timeout='1000ms';
 SET LOCAL TIME ZONE 'UTC';
@@ -875,7 +1228,8 @@ WITH scoped AS (SELECT * FROM public.capacity_intents WHERE namespace='dakasa-pr
    AND pub.original_transport->>'PreflightFailed'='false' AND pub.original_transport->>'DoFailed'='false' AND pub.original_transport->>'ReadFailed'='false' AND pub.original_transport->>'CloseFailed'='false' AND pub.original_transport->>'OriginalContextFailed'='false'
    AND (r.original_transport->>'DriverReturnedAt')::timestamptz>=(pub.original_transport->>'StartedAt')::timestamptz
    AND (r.original_transport->>'DriverReturnedAt')::timestamptz-(pub.original_transport->>'StartedAt')::timestamptz<=interval '5 seconds'
-   AND r.recorded_at<=(SELECT original_deadline FROM original))
+   AND r.recorded_at<=(SELECT original_deadline FROM original)),
+{retained_dispatch_terminal_ctes(89)}
 SELECT jsonb_build_object(
  'database',current_database(),'readonly',current_setting('transaction_read_only'),
  'schema',(SELECT max(version_id) FROM goose_db_version WHERE is_applied),
@@ -919,7 +1273,7 @@ SELECT jsonb_build_object(
  'forward_admissions',(SELECT count(*) FROM public.capacity_guest_retirement_forwards WHERE retirement_request_id={retirement}::uuid),
  'other_leases',(SELECT count(*) FROM scoped c WHERE NOT(c.dimension='original_notify_aws_vm_members' AND encode(digest(c.intent::text,'sha256'),'hex')={wire}) AND (COALESCE(c.intent->>'lease_owner','')<>'' OR COALESCE(c.intent->>'lease_executor_id','')<>'' OR (c.intent->>'lease_expires_at')::timestamptz>clock_timestamp())),
  'other_nonsteady',(SELECT count(*) FROM scoped c WHERE NOT(c.dimension='original_notify_aws_vm_members' AND encode(digest(c.intent::text,'sha256'),'hex')={wire}) AND (c.intent->>'lease_expires_at' IS NOT NULL OR coalesce((c.intent->>'recovery_only')::boolean,false) OR coalesce(c.intent->>'phase','') NOT IN('promoted','reconciled','reconciled_partial') OR coalesce(c.intent#>>'{{original_notify_window,state}}','original_returns_observed')<>'original_returns_observed')),
- 'busy_jobs',(SELECT count(*) FROM public.capacity_dispatch_jobs WHERE realm='dakasa-production' AND environment='production' AND domain='notify' AND dimension IN('original_notify_aws_vm_members','original_notify_hetzner_vm_members') AND (state IS NULL OR state NOT IN('returned') OR returned_at IS NULL OR finalization_ack_at IS NULL)),
+ 'busy_jobs',(SELECT count(*) FROM dispatch_candidates j WHERE NOT EXISTS(SELECT 1 FROM dispatch_terminal_witnesses d WHERE d.job_id=j.id)),
  'busy_runs',(SELECT count(*) FROM (
  SELECT wr.id FROM public.manifests m JOIN public.workflow_runs wr ON wr.workflow_id=m.id
  WHERE m.kind='workflow' AND m.namespace='dakasa-production' AND m.name IN('notify-aws-elastic-capacity','notify-hetzner-elastic-capacity')
@@ -1006,6 +1360,226 @@ def database_held_preflight(cut, run, expected):
          'original_failure_relabelled':False,'historical_useful_is_fresh_business_authority':False,
          'native_observation':native,'history':expected['history'],'catalog':expected['catalog'],
          'snapshot_only_not_cross_system_atomicity':True}))
+    return value
+
+
+def require_http_maintenance_upgrade_bound():
+    require_bound()
+    need(HTTP_MAINTENANCE_UPGRADE_BOUND is True
+         and ROOT_ROLLOUT_MODE == 'exact_held_partial_poweroff_original'
+         and digest_value(HTTP_MAINTENANCE_PRE91_QUERY_SHA256),
+         'QUALIFIED_R6_HTTP_MAINTENANCE_IMAGE_UPGRADE_NOT_BOUND')
+
+
+def pg_utc_time(value):
+    """Parse PG's UTC offset without changing its retained original wire."""
+    need(type(value) is str and (value.endswith('Z') or value.endswith('+00:00')),
+         'ACTUAL_PG_UTC_CLOCK_REQUIRED')
+    return utc_time(value[:-6] + 'Z' if value.endswith('+00:00') else value)
+
+
+def validate_http_maintenance_projection(value):
+    need(type(value) is dict and set(value) == {'observed_at_pg','job_id','run_id',
+         'original_dispatch_sha256','original_run_sha256','cas','effect_scan','admission'},
+         'CLOSED_CANONICAL_HTTP_MAINTENANCE_PROJECTION')
+    identity = HTTP_MAINTENANCE_HELD_IDENTITY
+    need(value['job_id'] == identity['job_id'] and value['run_id'] == identity['run_id']
+         and value['admission'] is True, 'ONLY_EXACT_KNOWN_HTTP_MAINTENANCE_HELD_ORIGINAL')
+    pg_utc_time(value['observed_at_pg'])
+    cas = value['cas']
+    need(type(cas) is dict and set(cas) == {'job_id','expected_run_id','expected_envelope_sha256',
+         'expected_fencing_token','expected_lease_owner','expected_pending_wake_count',
+         'expected_returned_at','expected_run_sha256','expected_members_sha256'}, 'CLOSED_CANONICAL_NINE_CAS')
+    need(cas['job_id'] == identity['job_id'] and cas['expected_run_id'] == identity['run_id']
+         and full_id(cas['expected_lease_owner']) and cas['expected_lease_owner'] != '00000000-0000-0000-0000-000000000000'
+         and type(cas['expected_fencing_token']) is int and 1 <= cas['expected_fencing_token'] <= 9007199254740991
+         and type(cas['expected_pending_wake_count']) is int and 1 <= cas['expected_pending_wake_count'] <= 32,
+         'EXACT_HTTP_MAINTENANCE_CAS_IDENTITIES_AND_BOUNDS')
+    pg_utc_time(cas['expected_returned_at'])
+    for key in ('expected_envelope_sha256','expected_run_sha256','expected_members_sha256'):
+        need(digest_value(cas[key]), 'CLOSED_HTTP_MAINTENANCE_CAS_DIGEST')
+    need(digest_value(value['original_dispatch_sha256'])
+         and value['original_run_sha256'] == cas['expected_run_sha256'], 'WHOLE_HTTP_MAINTENANCE_ORIGINAL_ROW_PINS')
+    scan = value['effect_scan']
+    need(type(scan) is dict and set(scan) == {'schema','base','current_members','current_members_sha256',
+         'current_member_count','policy_epoch_valid','refresh_only_result','invalid_maintenance_canary_rows'}
+         and scan['schema'] == 'recorded_http_maintenance_dispatch_effect_scan_v1'
+         and scan['current_members_sha256'] == cas['expected_members_sha256'], 'CANONICAL_HTTP_MAINTENANCE_SCAN_SHAPE_NOT_CALLER_PROOF')
+    # Its full semantics are checked by the actual Source-derived SQL, not a
+    # Python duplicate of the database or complete Go ADR0094 validator.
+    return value
+
+
+def load_http_maintenance_upgrade(C, path, expected_sha256):
+    """Separate stable Root input, loaded before any possible native API call."""
+    require_http_maintenance_upgrade_bound()
+    evidence_ref({'path':str(path),'sha256':expected_sha256})
+    raw = read(path, 128 << 10, 0o600)
+    need(sha(raw) == expected_sha256, 'ROOT_REVIEWED_HTTP_MAINTENANCE_UPGRADE_SHA')
+    value = C.loads(raw)
+    need(type(value) is dict and set(value) == {'schema','identity','query_ref','projection_ref','Root_review_ref'}
+         and value['schema'] == 'root_exact_recorded_http_maintenance_image_upgrade_v1'
+         and value['identity'] == HTTP_MAINTENANCE_HELD_IDENTITY, 'FIXED_HTTP_MAINTENANCE_UPGRADE_IDENTITY_NOT_ANOTHER_UNKNOWN')
+    original = {}
+    for key in ('query_ref','projection_ref','Root_review_ref'):
+        ref = evidence_ref(value[key])
+        original[key] = read(ref['path'], 128 << 10, 0o600)
+        need(sha(original[key]) == ref['sha256'], 'PINNED_HTTP_MAINTENANCE_' + key.upper())
+    query = original['query_ref']
+    need(sha(query) == HTTP_MAINTENANCE_PRE91_QUERY_SHA256
+         and query.count(b'$1::uuid') == 1, 'EXACT_REVIEWED_CANONICAL_PRE91_QUERY_BYTES')
+    projection = validate_http_maintenance_projection(C.loads(original['projection_ref']))
+    review = C.loads(original['Root_review_ref'])
+    identity = {key:value for key,value in projection.items() if key != 'observed_at_pg'}
+    need(type(review) is dict and set(review) == {'schema','reviewed_by_root','unknown_state',
+         'identity_sha256','pre91_query_sha256'}
+         and review['schema'] == 'root_goose91_HTTP_HELD_upgrade_review_v1'
+         and review['reviewed_by_root'] is True and review['unknown_state'] == 'UNKNOWN'
+         and review['identity_sha256'] == sha(C.wire(identity))
+         and review['pre91_query_sha256'] == HTTP_MAINTENANCE_PRE91_QUERY_SHA256,
+         'ACTUAL_ROOT_REVIEWED_EXACT_HTTP_HELD_IDENTITY_NOT_DISPOSITION')
+    return {'input':value,'projection':projection,'query':query}, raw
+
+
+def http_maintenance_counts_sql(projection, schema_version):
+    """Actual fixed-scope SQL: keep one exact UNKNOWN distinct from terminals."""
+    e = validate_http_maintenance_projection(projection)
+    identity = HTTP_MAINTENANCE_HELD_IDENTITY
+    quote = lambda v: "'" + v.replace("'", "''") + "'"
+    return """BEGIN READ ONLY;
+SET LOCAL statement_timeout='8000ms';
+SET LOCAL lock_timeout='1000ms';
+SET LOCAL enable_indexscan=off;
+SET LOCAL TIME ZONE 'UTC';
+WITH """ + retained_dispatch_terminal_ctes(schema_version) + """,
+http_maintenance_exact_held AS MATERIALIZED (
+ SELECT j.id FROM dispatch_candidates j JOIN public.workflow_runs w ON w.id=j.run_id
+ WHERE j.id=""" + quote(identity['job_id']) + """::uuid AND j.run_id=""" + quote(identity['run_id']) + """::uuid
+ AND (j.realm,j.environment,j.domain,j.dimension)=('dakasa-production','production','notify','original_notify_hetzner_vm_members')
+ AND j.protocol='capacity_dispatch_prestart_v1' AND j.state='unknown'
+ AND j.return_status='failed' AND j.return_error='capacity dispatch original context refused'
+ AND j.finalization_error=j.return_error AND w.status='failed' AND w.error=j.return_error
+ AND j.started_at IS NOT NULL AND j.returned_at IS NOT NULL AND j.lease_expires_at IS NOT NULL
+ AND j.started_at<j.returned_at AND j.returned_at<j.lease_expires_at AND j.lease_expires_at<clock_timestamp()
+ AND w.started_at=j.started_at AND w.finished_at=j.returned_at AND j.finalization_ack_at IS NULL
+ AND num_nonnulls(j.failed_original_disposition_id,j.native_denied_disposition_id,j.enrolled_failed_disposition_id,
+  j.abandoned_disposition_id,j.finalization_lost_disposition_id,j.unknown_maintenance_disposition_id)=0
+ AND encode(sha256(convert_to(to_jsonb(j)::text,'UTF8')),'hex')=""" + quote(e['original_dispatch_sha256']) + """
+ AND encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex')=""" + quote(e['original_run_sha256']) + """
+)
+SELECT jsonb_build_object(
+ 'total_jobs',(SELECT count(*) FROM dispatch_candidates j WHERE NOT EXISTS(SELECT 1 FROM dispatch_terminal_witnesses d WHERE d.job_id=j.id)),
+ 'held_jobs',(SELECT count(*) FROM http_maintenance_exact_held),
+ 'unrelated_jobs',(SELECT count(*) FROM dispatch_candidates j WHERE NOT EXISTS(SELECT 1 FROM dispatch_terminal_witnesses d WHERE d.job_id=j.id)
+  AND NOT EXISTS(SELECT 1 FROM http_maintenance_exact_held h WHERE h.id=j.id)));
+COMMIT;
+"""
+
+
+def held_r6_database_sql(expected):
+    """Extend the old held snapshot to91, keeping its other predicates exact."""
+    sql = held_database_sql(expected)
+    prior = retained_dispatch_terminal_ctes(89)
+    need(sql.count(prior) == 1 and sql.count(" 'migration90_applied',") == 1,
+         'EXACT_PRIOR_HELD_QUERY_FOR_SCHEMA91_EXTENSION')
+    return sql.replace(prior, retained_dispatch_terminal_ctes(91), 1).replace(
+        " 'migration90_applied',",
+        " 'migration91_applied',(SELECT count(*) FROM goose_db_version WHERE version_id=91 AND is_applied),\n 'migration90_applied',", 1)
+
+
+def http_upgrade_db_read(cut, run, name, sql):
+    """One read-only subprocess with original custody before semantic parsing."""
+    need(re.fullmatch('DB-R6-[A-Z-]{1,64}', name), 'CLOSED_HTTP_UPGRADE_DB_EVIDENCE_NAME')
+    cut.C.once(run / (name + '.sql'), sql.encode())
+    command = 'PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=8000" psql -X -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d yggdrasil -At'
+    started_utc, started_mono = now(), time.monotonic()
+    try:
+        result = cut.subprocess.run(cut.KUBE + ['-n','dakasa','exec','-i','unified-database-0','--','sh','-c',command],
+            input=sql.encode(), stdout=cut.subprocess.PIPE, stderr=cut.subprocess.PIPE, timeout=12,
+            env={'PATH':'/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C.UTF-8'})
+    except cut.subprocess.TimeoutExpired as error:
+        cut.C.once(run / (name + '.stdout'), error.stdout or b'')
+        cut.C.once(run / (name + '.stderr'), error.stderr or b'')
+        cut.C.once(run / (name + '.RETURN.json'), cut.C.wire({'started_at':started_utc,
+            'returned_at':now(),'started_monotonic':started_mono,'returned_monotonic':time.monotonic(),
+            'returncode':None,'timeout':True,'automatic_retry':False}))
+        raise Hold('HTTP_MAINTENANCE_READONLY_TIMEOUT_NO_RETRY') from error
+    cut.C.once(run / (name + '.stdout'), result.stdout)
+    cut.C.once(run / (name + '.stderr'), result.stderr)
+    cut.C.once(run / (name + '.RETURN.json'), cut.C.wire({'started_at':started_utc,
+        'returned_at':now(),'started_monotonic':started_mono,'returned_monotonic':time.monotonic(),
+        'returncode':result.returncode,'timeout':False,'automatic_retry':False}))
+    need(result.returncode == 0 and len(result.stdout) < 128 << 10 and len(result.stderr) < 32768,
+         'HTTP_MAINTENANCE_BOUNDED_READONLY_RETURN_ZERO')
+    return cut.C.loads(result.stdout)
+
+
+def http_maintenance_canonical_preimage(cut, run, upgrade, phase):
+    """Fresh complete canonical semantics, never only the unchanged job/run."""
+    require_http_maintenance_upgrade_bound()
+    need(phase in ('PREFLIGHT','PRESEND','AFTER-ACK'), 'CLOSED_HTTP_MAINTENANCE_CURRENT_PHASE')
+    query = upgrade['query']
+    need(type(query) is bytes and sha(query) == HTTP_MAINTENANCE_PRE91_QUERY_SHA256
+         and query.count(b'$1::uuid') == 1, 'PINNED_CANONICAL_HTTP_QUERY_NO_SOURCE_EVALUATION')
+    sql = "BEGIN READ ONLY;\nSET LOCAL statement_timeout='8000ms';\nSET LOCAL lock_timeout='1000ms';\nSET LOCAL enable_indexscan=off;\nSET LOCAL standard_conforming_strings=on;\nSET LOCAL TIME ZONE 'UTC';\n"
+    sql += query.decode('utf-8').replace('$1::uuid', "'" + HTTP_MAINTENANCE_HELD_IDENTITY['job_id'] + "'::uuid", 1)
+    sql += '\nCOMMIT;\n'
+    actual = validate_http_maintenance_projection(http_upgrade_db_read(cut, run,
+        'DB-R6-HTTP-CANONICAL-' + phase, sql))
+    wanted = validate_http_maintenance_projection(upgrade['projection'])
+    need({k:v for k,v in actual.items() if k != 'observed_at_pg'} == {k:v for k,v in wanted.items() if k != 'observed_at_pg'},
+         'FRESH_CANONICAL_HTTP_PROJECTION_MATCHES_COMPLETE_REVIEWED_ORIGINAL')
+    age = (datetime.datetime.now(datetime.timezone.utc) - pg_utc_time(actual['observed_at_pg'])).total_seconds()
+    need(0 <= age <= 15, 'ACTUAL_PG_OBSERVATION_FRESH_NOT_RELABELED')
+    return actual
+
+
+def http_maintenance_current_preimage(cut, run, upgrade, phase):
+    require_http_maintenance_upgrade_bound()
+    need(phase in ('PREFLIGHT','PRESEND','AFTER-ACK'), 'CLOSED_HTTP_MAINTENANCE_CURRENT_PHASE')
+    projection = validate_http_maintenance_projection(upgrade['projection'])
+    if phase in ('PRESEND','AFTER-ACK'):
+        http_maintenance_canonical_preimage(cut, run, upgrade, phase)
+    counts = http_upgrade_db_read(cut, run, 'DB-R6-HTTP-' + phase,
+                                  http_maintenance_counts_sql(projection, 91))
+    need(counts == {'total_jobs':1,'held_jobs':1,'unrelated_jobs':0},
+         'EXACT_HTTP_HELD_ONE_TOTAL_ONE_HELD_ZERO_UNRELATED_' + phase)
+    return counts
+
+
+def database_r6_held_preflight(cut, run, expected, upgrade):
+    require_http_maintenance_upgrade_bound()
+    e = match_held_identity(expected)
+    review = e['Root_review_ref']
+    need(sha(read(review['path'], 1 << 20, 0o600)) == review['sha256'], 'ACTUAL_ROOT_HELD_ROLLOUT_REVIEW_STILL_PINNED')
+    request = upgrade['input']
+    for key in ('query_ref','projection_ref','Root_review_ref'):
+        ref = evidence_ref(request[key])
+        need(sha(read(ref['path'], 128 << 10, 0o600)) == ref['sha256'], 'HTTP_UPGRADE_ORIGINAL_REFERENCE_STILL_PINNED')
+    native = validate_held_native_observation(e, cut.C.loads)
+    value = http_upgrade_db_read(cut, run, 'DB-R6-HELD-READONLY', held_r6_database_sql(e))
+    need(value == {'database':'yggdrasil','readonly':'on','schema':91,
+         'migration88_applied':1,'migration89_applied':1,'migration90_applied':1,'migration91_applied':1,
+         'history_rows':e['history']['rows'],'history_exact':True,
+         'catalog_rows':e['catalog']['rows'],'catalog_exact':True,'index89_valid':True,
+         'active_latest_policies':2,'current_original_catalog':1,'current_original_binding':1,
+         'current_physical_members':3,'physical_profile_slot_count':3,'historical_useful_survivors':2,
+         'forward_table_present':True,'held_count':1,'held_unchanged_expired':1,
+         'known_original':1,'closed_original_run':1,'original_frame_exact':True,'original_row_count':4,
+         'original_failed_caller':1,'authority_reads':4,'authority_returns':4,'journal_transports':3,
+         'delete_bindings':0,'forward_admissions':0,'other_leases':0,'other_nonsteady':0,
+         'busy_jobs':1,'busy_runs':0,'native_authority':0},
+         'ONLY_ORIGINAL_S3_AND_DISTINCT_EXACT_HTTP_HELD_UPGRADE_NOT_STEADY_PROOF')
+    wanted = http_maintenance_canonical_preimage(cut, run, upgrade, 'PREFLIGHT')
+    counts = http_maintenance_current_preimage(cut, run, upgrade, 'PREFLIGHT')
+    need(validate_held_native_observation(e, cut.C.loads) == native, 'SAME_FRESH_NATIVE_ORIGINALS_AFTER_R6_DB')
+    cut.C.once(run / 'R6-HELD-UPGRADE-READONLY-RETURN.PUBLIC.json', cut.C.wire({
+        'schema':'exact_partial_poweroff_and_recorded_HTTP_HELD_image_upgrade_readonly_v1',
+        'retirement_authority':False,'provider_mutations':False,'Guest_replay':False,
+        'steady_or_no_busy_proof':False,'total_jobs':counts['total_jobs'],'held_jobs':counts['held_jobs'],
+        'unrelated_jobs':counts['unrelated_jobs'],'http_job_id':wanted['job_id'],'http_run_id':wanted['run_id'],
+        'original_failure_relabelled':False,'original_finalization_ACK_fabricated':False,
+        'snapshot_only_not_cross_system_atomicity':True}))
     return value
 
 

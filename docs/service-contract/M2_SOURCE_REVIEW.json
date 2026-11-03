@@ -2145,5 +2145,100 @@
     "local_functional_tests_or_SQL_executed": false,
     "new_complete_exact_head_CI_still_required": true,
     "production_or_native_qualification_claimed": false
+  },
+  "recorded_HTTP_maintenance_R6_bound_G9_Source_review_20261103": {
+    "schema": "R6_G9_exact_HELD_upgrade_and_retained_terminal_Source_review_v1",
+    "reviewed_parent_commit": "7ed950f4bf0acfc1c50c715b7f2dd0d18ed70e81",
+    "qualified_Core_R": "c02512e9d11d29cad4e4ff67186602d3485d6fa3",
+    "qualified_AMD64_D": "7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6",
+    "Root_accepted_controller_C": "3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111",
+    "Guardian_S": "6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765",
+    "actual_G8_predecessor_C": "42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5",
+    "Root_image_qualification_sha256": "35c8baff8632fba879c345633c1f95719244cea5367327fa2bc61f42d3774b0a",
+    "Root_implementation_Source_review_sha256": "2f434e2fc2ed3576f5d0173e8e5a20be29f60d4bb6c821d475426f36a1701eef",
+    "Root_complete_33_owner_spans_and_fixed31_segments_seven_helpers_review_sha256": "9c6b463d2f31e0d7fdf84b52746b731432d5c6921f4f9aaa34fe2ad95cf1e0af",
+    "independent_V3_CAS_Source_review_sha256": "cadc588633b2bb5d6f3eeeed0f4f20f446b6c8f660766f1e882b33a941fb25aa",
+    "independent_V3_other7_Source_review_sha256": "9069f55f096dce5e3be1e0b1af548568be78101e5eea4ceda3904dff9c0b7c21",
+    "independent_V3_unit7_Source_review_sha256": "6702c0846d41cf3c4ac30effc66066d93f062aa7ab443be88ef65bf6141edbbb",
+    "scope": "Bind only actual qualified R6 image directly after ACTUAL installed G8, preserving all historical authorities, whole33 Owner bodies including fixed31 method segment hashes, seven helpers, units behavior, original recovery budget and Cold/Hub. Preserve exact schema89 seven terminal lanes; schema91 adds only a retained same-job/run reconstructed-original receipt lane, never fresh current-policy rescan for terminal history. A distinct explicit recorded HTTP UNKNOWN9e/5154 admission additionally preserves original AWS S3 HELD, full canonical semantics and PG clock0..15 at preflight/presend/afterACK before exact total1/held1/unrelated0 counts. No closure, quietness, provider quiescence or fresh business authority is inferred. All existing timer, once-marker, ACK/framing, failure and no-replay/rollback guards remain. Actual final-bound-head CI and future native/Goose/Core/E2E operations remain mandatory. Declared CI PG/transport fixtures are not installed/provider/Guest qualification.",
+    "expected_current_bound_head_CI": {
+      "workflow_events": 19,
+      "jobs": 39,
+      "Source_methods": 165,
+      "original_methods": 106,
+      "prior_G9_methods": 47,
+      "new_R6_methods": 12,
+      "actual_PG_methods": 25,
+      "status": "pending_exact_current_head",
+      "prior_R6_product_or_P96_success_transferred": false
+    },
+    "files": {
+      ".github/workflows/owned-network-guardian.yml": {
+        "sha256": "2868d4250d7ba3b18071e689d26706209a0e68f29825c2922fce9a37443680e6",
+        "bytes": 3133
+      },
+      "ops/network-guardian/g9pair/PACKAGE.json": {
+        "sha256": "ba6b625f73f372d954e094bba1b2deb1b9f46dd5059f4157fb5be835feba6d98",
+        "bytes": 8114
+      },
+      "ops/network-guardian/g9pair/SHA256SUMS": {
+        "sha256": "a980c69b0c0cbd8dc211e959e90e144d69567257442f845061e81d76960d1921",
+        "bytes": 1089
+      },
+      "ops/network-guardian/g9pair/source/network_guardian.py": {
+        "sha256": "6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765",
+        "bytes": 114213
+      },
+      "ops/network-guardian/g9pair/tools/SHA256SUMS": {
+        "sha256": "09cb572afbd786333839dabaa23917211f15a163504df59e70f5a058f6b8de95",
+        "bytes": 358
+      },
+      "ops/network-guardian/g9pair/tools/derive_g9pair_controller_config.py": {
+        "sha256": "2b6c9e9a0ec27dd359799ceeaaae261d06d0aa9cbfcede19251ef60a0d4e0948",
+        "bytes": 16679
+      },
+      "ops/network-guardian/g9pair/tools/pair_change_contract.py": {
+        "sha256": "bf42b8073ac4c08807cb0ea6ad728a3681e975c4df2619bed05385ec2ab75bdb",
+        "bytes": 28743
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-cold-transport.service": {
+        "sha256": "4b49a3ec10cb131242e7a17d8c0026aa6a48e1e0d2d1ec3c3610ae3763406879",
+        "bytes": 815
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-guardian.service": {
+        "sha256": "038d72711a76ccd98d71127f7746a41dc0c4fda27f255f566bee6161aa8a2531",
+        "bytes": 725
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "sha256": "b3a010f01e8d8ca349f76312d2a7511aafef0f8f54eea1e72ef06280c51ddfc2",
+        "bytes": 184
+      },
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "sha256": "4f8a08ce3daf612912e6a0f5f3a719299c55de42e8f83cd36fd9823db510a2f0",
+        "bytes": 139701
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-R6.json": {
+        "sha256": "9349da4bc15bdbfeff2944231f203e330d554947fdfce605791a08b6f9c464e9",
+        "bytes": 1503
+      },
+      "ops/network-guardian/tests/run_exact_ci.py": {
+        "sha256": "0cca0427c3f7ea5bbd885a6b05d8cb3fb95b8332e192e044088fc2628ccda80f",
+        "bytes": 4486
+      },
+      "ops/network-guardian/tests/test_g9pair_core_cas.py": {
+        "sha256": "35f1af2bb2e379c105150b200ef9b68f28cc48a84642b3b6457d7c3fec88d5f5",
+        "bytes": 90488
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_postgres.py": {
+        "sha256": "22acb671aa8c52360f8de65aa00391b60dda354e10a74aea7a9746d1faf6a04d",
+        "bytes": 19158
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_unit.py": {
+        "sha256": "c29968fc0eebe96fc7a3c7ed3b4519e9e183c389bc42fee0fd9821a2713a33b7",
+        "bytes": 30335
+      }
+    },
+    "no_local_functional_tests_SQL_build_import_container_or_native_operation": true,
+    "production_schema_rollout_Core_main_or_AB_qualified": false
   }
 }

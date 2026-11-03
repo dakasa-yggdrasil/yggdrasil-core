@@ -26,14 +26,14 @@ OLD_CORE_UID = 'a58ab8c2-da48-46c1-ae62-a650141eeb86'
 OLD_CORE_GENERATION = 272  # Root actual singleton preimage25c4
 OLD_CORE_POD_UID = '30695e40-3349-4186-90e4-6db3951e34c2'  # Root actual singleton preimage25c4
 PROPOSAL_BOUND = True  # Actual Source/image/config/ref bindings; qualified ops and native gates remain mandatory.
-SOURCE_R = 'ed76cef2d66d7f5368b96b41aaa22fc80a2233c4'
+SOURCE_R = 'c02512e9d11d29cad4e4ff67186602d3485d6fa3'
 OLD_DIGEST = '0970e1188ceb5fa3ba52a1a11337f5fae7ac0657a66a69e08d24f9888f813826'
-NEW_DIGEST = '68518595394601e92320f1ff074c1a85b8685ff6a810ddabab3bd649afd4de69'
+NEW_DIGEST = '7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6'
 IMAGE_PREFIX = '153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:'
 G6_CONFIG_SHA = '8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e'
 G7_CONFIG_SHA = 'd68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf'
 G8_CONFIG_SHA = '42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5'
-G9_CONFIG_SHA = 'bd7707a1a1cc0fd9a59ae567493ccb19023c9310a7d5e6840e10355618f7f338'
+G9_CONFIG_SHA = '3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111'
 HEAD_CONFIG_SHA = G9_CONFIG_SHA
 G7_SOURCE_SHA = '2379e9cb0fcf36faf7dfe58e930d0eb6ae97ba4d177db6610a23583d0a00a8aa'
 G7_STANDING_SHA = 'dd7d449ea8fdba60a43d6badb138ea9496e1342572f90633e62d7b87d9b44866'
@@ -85,7 +85,7 @@ ANCESTORS = {'g6_predecessor_guardian_source_sha256': G6_SOURCE_SHA,
 DERIVATION_SCHEMA = 'r13_g9pair_guardian_standing_config_derivation_v1'
 PACKAGE_SCHEMA = 'guardian_g9pair_operational_package_v1'
 STAGED_SCHEMA = 'guardian_g9pair_staged_v1'
-REQUIRED_CI = frozenset((('Capacity intent PostgreSQL protocol', 'pull_request'), ('Capacity source-owned HTTP qualification', 'pull_request'), ('Context Freshness (ADR + durable context)', 'pull_request'), ('Docs freshness', 'pull_request'), ('Failed installed Guest administrative HTTP Source', 'pull_request'), ('Failed serving Guest Source and PostgreSQL', 'pull_request'), ('Guest historical unknown read recovery', 'pull_request'), ('Installed Guest reconciliation Source', 'pull_request'), ('Native OIDC protocol integration', 'pull_request'), ('Original Guest Core source and PostgreSQL gates', 'pull_request'), ('Original Guest Core source and PostgreSQL gates', 'push'), ('Original and native denied disposition Source', 'pull_request'), ('Owned Network Guardian', 'pull_request'), ('Partial Guest native OFF reconciliation Source', 'pull_request'), ('Protected native capacity API qualification', 'pull_request'), ('Service contract', 'pull_request'), ('Service contract', 'push'), ('template-go-api CI', 'pull_request')))
+REQUIRED_CI = frozenset((('Capacity intent PostgreSQL protocol', 'pull_request'), ('Capacity source-owned HTTP qualification', 'pull_request'), ('Context Freshness (ADR + durable context)', 'pull_request'), ('Docs freshness', 'pull_request'), ('Failed installed Guest administrative HTTP Source', 'pull_request'), ('Failed serving Guest Source and PostgreSQL', 'pull_request'), ('Guest historical unknown read recovery', 'pull_request'), ('Installed Guest reconciliation Source', 'pull_request'), ('Native OIDC protocol integration', 'pull_request'), ('Original Guest Core source and PostgreSQL gates', 'pull_request'), ('Original Guest Core source and PostgreSQL gates', 'push'), ('Original and native denied disposition Source', 'pull_request'), ('Owned Network Guardian', 'pull_request'), ('Partial Guest native OFF reconciliation Source', 'pull_request'), ('Protected native capacity API qualification', 'pull_request'), ('Service contract', 'pull_request'), ('Service contract', 'push'), ('template-go-api CI', 'pull_request'), ('Recorded HTTP maintenance disposition Source and PostgreSQL', 'pull_request')))
 
 
 EXPECTED_INHERITED_REFS = {'/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-CLOSING.JSONL': '42b5834830c09b9c4b044171c69c7c2d9d4aabe68223c4bbbc887162d3b61991',

@@ -531,11 +531,17 @@ CREATE TABLE capacity_guest_original_authority_returns(read_id uuid,original_rec
 CREATE TABLE capacity_guest_original_authority_transport_returns(read_id uuid,native_stage text,original_record jsonb);
 CREATE TABLE capacity_vm_retirement_delete_bindings(intent_id uuid);
 CREATE TABLE capacity_guest_retirement_forwards(retirement_request_id uuid);
-CREATE TABLE capacity_dispatch_jobs(run_id uuid,realm text,environment text,domain text,dimension text,state text,return_status text,returned_at timestamptz,finalization_ack_at timestamptz,envelope jsonb);
+CREATE TABLE capacity_dispatch_jobs(run_id uuid,realm text,environment text,domain text,dimension text,state text,return_status text,returned_at timestamptz,finalization_ack_at timestamptz,envelope text);
 CREATE TABLE capacity_guest_notify_canary_challenges(id uuid,preregistration_id uuid,record_challenge_id uuid,phase text,policy_id uuid,workflow_id uuid,generation bigint,fence bigint,lease_owner text,executor_id text,original_record jsonb,original_wire bytea,challenge_sha256 text);
 CREATE TABLE capacity_guest_notify_canary_returns(challenge_id uuid,outcome text,return_sha256 text,original_wire bytea,business_observation jsonb,original_transport jsonb,recorded_at timestamptz);
 CREATE TABLE capacity_guest_notify_canary_nonces(challenge_id uuid,final_challenge_wire bytea,final_challenge_sha256 text);
 '''
+
+# Declared relevant-column ledgers, with exact Source pure validators only.
+TERMINAL_DDL = "\nALTER TABLE workflow_runs ADD COLUMN workflow_version bigint,ADD COLUMN inputs jsonb,ADD COLUMN metadata jsonb,ADD COLUMN started_at timestamptz,ADD COLUMN error text,ADD COLUMN updated_at timestamptz;\nALTER TABLE capacity_dispatch_jobs ADD COLUMN id uuid,ADD COLUMN protocol text,ADD COLUMN source_tick text,ADD COLUMN envelope_sha256 text,ADD COLUMN fencing_token bigint,ADD COLUMN lease_owner uuid,ADD COLUMN lease_expires_at timestamptz,ADD COLUMN started_at timestamptz,ADD COLUMN pending_wake_count integer,ADD COLUMN return_error text,ADD COLUMN finalization_error text,ADD COLUMN failed_original_disposition_id uuid,ADD COLUMN native_denied_disposition_id uuid,ADD COLUMN enrolled_failed_disposition_id uuid,ADD COLUMN abandoned_disposition_id uuid,ADD COLUMN finalization_lost_disposition_id uuid,ADD COLUMN unknown_maintenance_disposition_id uuid,ADD COLUMN rejected_at timestamptz,ADD COLUMN rejection_reason text,ADD COLUMN rejection_issuer text,ADD COLUMN superseded_policy_id uuid,ADD COLUMN superseded_policy_checksum text,ADD COLUMN superseding_policy_id uuid,ADD COLUMN superseding_policy_checksum text;\nALTER TABLE capacity_vm_provisioning_preregistrations ADD COLUMN original_wire bytea,ADD COLUMN binding_wire bytea,ADD COLUMN original_deadline timestamptz,ADD COLUMN preregistration_record jsonb;\nALTER TABLE capacity_guest_original_create_witnesses ADD COLUMN original_wire bytea;\nALTER TABLE capacity_vm_original_enrollments ADD COLUMN registration_wire bytea,ADD COLUMN receipt_wire bytea;\nCREATE TABLE capacity_dispatch_prestart_rejections(job_id uuid,run_id uuid,envelope_sha256 text,fencing_token bigint,reason text,issuer text,recorded_at timestamptz,superseded_policy_id uuid,superseded_policy_checksum text,superseding_policy_id uuid,superseding_policy_checksum text);\nCREATE TABLE capacity_failed_original_dispositions(id uuid,grant_id uuid,preregistration_id uuid,job_id uuid,run_id uuid,original_grant_sha256 text,original_preregistration_sha256 text,original_dispatch_sha256 text,original_run_sha256 text,disposition_sha256 text,original_wire bytea,disposition_record jsonb,closed_generation bigint,closed_fencing_token bigint,recorded_at timestamptz,original_witness_sha256 text);\nCREATE TABLE capacity_native_denied_dispositions(id uuid,grant_id uuid,preregistration_id uuid,job_id uuid,run_id uuid,original_grant_sha256 text,original_preregistration_sha256 text,original_dispatch_sha256 text,original_run_sha256 text,disposition_sha256 text,original_wire bytea,disposition_record jsonb,closed_generation bigint,closed_fencing_token bigint,recorded_at timestamptz);\nCREATE TABLE capacity_enrolled_failed_original_dispositions(id uuid,grant_id uuid,preregistration_id uuid,job_id uuid,run_id uuid,original_grant_sha256 text,original_preregistration_sha256 text,original_dispatch_sha256 text,original_run_sha256 text,disposition_sha256 text,original_wire bytea,disposition_record jsonb,closed_generation bigint,closed_fencing_token bigint,recorded_at timestamptz,original_witness_sha256 text,original_registration_sha256 text,original_receipt_sha256 text,original_enrollment_sha256 text);\nCREATE TABLE capacity_dispatch_abandoned_dispositions(id uuid,job_id uuid,run_id uuid,original_dispatch_sha256 text,original_run_sha256 text,executor_barrier text,disposing_core_process_started_at timestamptz,disposing_core_hostname text,disposing_core_pid int,disposing_core_source_commit text,recorded_at timestamptz,issuer text,historical_return text,provider_mutation_evidence jsonb,realm text,environment text,domain text,dimension text,envelope_sha256 text,fencing_token bigint,lease_owner uuid,lease_expires_at timestamptz,started_at timestamptz,pending_wake_count int,minimum_lease_age_seconds int,run_status text,run_error text,reason text);\nCREATE TABLE capacity_dispatch_finalization_lost_dispositions(id uuid,job_id uuid,run_id uuid,original_dispatch_sha256 text,original_run_sha256 text,executor_barrier text,disposing_core_process_started_at timestamptz,disposing_core_hostname text,disposing_core_pid int,disposing_core_source_commit text,recorded_at timestamptz,issuer text,historical_return text,provider_mutation_evidence jsonb,realm text,environment text,domain text,dimension text,envelope_sha256 text,fencing_token bigint,lease_owner uuid,lease_expires_at timestamptz,started_at timestamptz,pending_wake_count int,minimum_lease_age_seconds int,run_status text,run_error text,reason text,return_observation text,operator_evidence text,operator_evidence_sha256 text);\nCREATE TABLE capacity_dispatch_unknown_maintenance_dispositions(id uuid,job_id uuid,run_id uuid,original_dispatch_sha256 text,original_run_sha256 text,executor_barrier text,disposing_core_process_started_at timestamptz,disposing_core_hostname text,disposing_core_pid int,disposing_core_source_commit text,recorded_at timestamptz,issuer text,historical_return text,provider_mutation_evidence jsonb,original_returned_at timestamptz,current_members_sha256 text,reason text);\nCREATE FUNCTION public.native_denied_original_ack_matches(d jsonb,original_state text,ack timestamptz,returned timestamptz,lease_end timestamptz,return_status text)\nRETURNS boolean LANGUAGE sql STABLE AS $$\n SELECT coalesce(CASE d->>'schema'\n WHEN 'original_native_authorization_denied_terminal_disposition_v1' THEN\n  original_state='unknown' AND ack IS NULL\n  AND d->'original_unknown_ACK_preserved' IS NOT DISTINCT FROM 'true'::jsonb\n  AND NOT(d ?| ARRAY['original_dispatch_state','original_finalization_ack_at','original_failed_workflow_ACK_preserved'])\n WHEN 'original_native_authorization_denied_failed_returned_ack_terminal_disposition_v2' THEN\n  original_state='returned' AND ack IS NOT NULL AND returned IS NOT NULL AND lease_end IS NOT NULL\n  AND ack>=returned AND ack<lease_end AND return_status='failed'\n  AND d->'original_unknown_ACK_preserved' IS NOT DISTINCT FROM 'false'::jsonb\n  AND d->>'original_dispatch_state' IS NOT DISTINCT FROM 'returned'\n  AND d->'original_failed_workflow_ACK_preserved' IS NOT DISTINCT FROM 'true'::jsonb\n  AND jsonb_typeof(d->'original_finalization_ack_at') IS NOT DISTINCT FROM 'string'\n  AND (d->>'original_finalization_ack_at')::timestamptz IS NOT DISTINCT FROM ack\n ELSE false END,false);\n$$;\nCREATE FUNCTION public.finalization_lost_dispatch_effect_scan_tolerable(scan jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$\nSELECT jsonb_typeof(scan)='object'\n AND scan->>'schema'='finalization_lost_dispatch_effect_scan_v1'\n AND scan->>'base_schema'='abandoned_started_dispatch_effect_scan_v2'\n AND scan->'clock_skew_margin_seconds'='30'::jsonb\n AND scan->'provider_read_performed'='false'::jsonb\n AND scan->'provider_quiescence_proved'='false'::jsonb\n AND jsonb_typeof(scan->'intents_updated_since_start')='number'\n AND jsonb_typeof(scan->'resource_slots_updated_since_start')='number'\n AND (scan->>'intents_updated_since_start')::numeric<=1\n AND scan->'intents_updated_since_start'=scan->'pure_assessment_intent_updates'\n AND scan->'resource_slots_updated_since_start'=scan->'observation_refresh_slot_updates'\n AND NOT EXISTS(SELECT 1 FROM jsonb_each(scan) e\n   WHERE e.key NOT IN('schema','base_schema','clock_skew_margin_seconds','intents_updated_since_start','resource_slots_updated_since_start','pure_assessment_intent_updates','observation_refresh_slot_updates')\n     AND e.value NOT IN('0'::jsonb,'false'::jsonb))\n$$;\nCREATE OR REPLACE FUNCTION public.unknown_maintenance_dispatch_effect_scan_tolerable(scan jsonb)\nRETURNS boolean LANGUAGE sql IMMUTABLE AS $$\nSELECT COALESCE(jsonb_typeof(scan)='object' AND scan->>'schema'='unknown_maintenance_dispatch_effect_scan_v1'\n AND scan->'policy_epoch_valid'='true'::jsonb AND scan->'refresh_only_result'='true'::jsonb\n AND scan->'invalid_maintenance_canary_rows'='0'::jsonb\n AND jsonb_typeof(scan->'current_members')='array' AND jsonb_array_length(scan->'current_members') BETWEEN 1 AND 8\n AND scan->'current_member_count'=to_jsonb(jsonb_array_length(scan->'current_members'))\n AND scan->>'current_members_sha256'=encode(sha256(convert_to((scan->'current_members')::text,'UTF8')),'hex')\n AND NOT EXISTS(SELECT 1 FROM jsonb_each(scan->'base') e WHERE e.key IN('canary_challenges_since_start','canary_nonces_since_start','canary_possible_sends_since_start','canary_returns_since_start')\n   AND (jsonb_typeof(e.value)<>'number' OR (e.value::text)::numeric<0 OR trunc((e.value::text)::numeric)<>(e.value::text)::numeric))\n AND public.finalization_lost_dispatch_effect_scan_tolerable((scan->'base') || jsonb_build_object(\n  'canary_challenges_since_start',0,'canary_nonces_since_start',0,'canary_possible_sends_since_start',0,'canary_returns_since_start',0)),false)\n$$;"
+DDL += TERMINAL_DDL
+TERMINAL_ZERO83 = {'schema': 'abandoned_started_dispatch_effect_scan_v2', 'clock_skew_margin_seconds': 30, 'grants_created_or_updated_since_start': 0, 'open_undisposed_grants': 0, 'preregistrations_since_start': 0, 'create_witnesses_since_start': 0, 'enrollments_since_start': 0, 'installations_since_start': 0, 'qualification_probe_challenges_since_start': 0, 'qualification_native_source_returns_since_start': 0, 'source_recovery_cleanup_challenges_since_start': 0, 'source_recovery_cleanup_effect_permits_since_start': 0, 'partial_nativeoff_reconciliations_since_start': 0, 'partial_nativeoff_reads_since_start': 0, 'prejournal_refusal_recoveries_since_start': 0, 'presend_retirement_recoveries_since_start': 0, 'retirement_intents_since_start': 0, 'retirement_contexts_since_start': 0, 'retirement_original_returns_since_start': 0, 'retirement_delete_bindings_since_start': 0, 'retirement_native_readbacks_since_start': 0, 'caller_possible_sends_since_start': 0, 'caller_returns_since_start': 0, 'runtime_snapshot_challenges_since_start': 0, 'runtime_snapshot_returns_since_start': 0, 'authority_reads_since_start': 0, 'authority_returns_since_start': 0, 'authority_transport_returns_since_start': 0, 'native_poweroff_reads_since_start': 0, 'canary_challenges_since_start': 0, 'canary_nonces_since_start': 0, 'canary_possible_sends_since_start': 0, 'canary_returns_since_start': 0, 'intents_updated_since_start': 0, 'notify_window_markers_for_job': 0, 'intent_events_since_start': 0, 'native_commands_since_start': 0, 'native_lifetimes_updated_since_start': 0, 'native_lifetime_archives_since_start': 0, 'native_pod_checkpoints_since_start': 0, 'executor_activity_updated_since_start': 0, 'resource_slots_updated_since_start': 0, 'provider_read_performed': False, 'provider_quiescence_proved': False}
+TERMINAL_RECORD_KEYS = {'failed_disposed': ['schema', 'id', 'grant_id', 'preregistration_id', 'job_id', 'run_id', 'issuer', 'original_grant_sha256', 'original_preregistration_sha256', 'original_witness_sha256', 'original_dispatch_sha256', 'original_run_sha256', 'original_binding_sha256', 'original_settlement_sha256', 'original_policy_sha256', 'original_workflow_sha256', 'original_generation', 'original_fencing_token', 'closed_generation', 'closed_fencing_token', 'original_deadline', 'recorded_at', 'historical_core_source_commit', 'observation', 'observation_sha256', 'original_accepted_unchanged', 'original_witness_preserved', 'original_unknown_ACK_preserved', 'historical_writer_start_state', 'serving_or_business_or_savings_authority'], 'enrolled_failed_disposed': ['schema', 'id', 'grant_id', 'preregistration_id', 'job_id', 'run_id', 'issuer', 'original_grant_sha256', 'original_preregistration_sha256', 'original_witness_sha256', 'original_dispatch_sha256', 'original_run_sha256', 'original_binding_sha256', 'original_settlement_sha256', 'original_policy_sha256', 'original_workflow_sha256', 'original_generation', 'original_fencing_token', 'closed_generation', 'closed_fencing_token', 'original_deadline', 'recorded_at', 'historical_core_source_commit', 'observation', 'observation_sha256', 'original_accepted_unchanged', 'original_witness_preserved', 'original_unknown_ACK_preserved', 'historical_writer_start_state', 'serving_or_business_or_savings_authority', 'original_registration_sha256', 'original_receipt_sha256', 'original_enrollment_sha256', 'original_enrollment_preserved', 'Guest_quiescence_proved', 'installation_or_serving_authority'], 'native_v2': ['schema', 'id', 'grant_id', 'preregistration_id', 'job_id', 'run_id', 'issuer', 'original_grant_sha256', 'original_preregistration_sha256', 'original_settlement_sha256', 'original_binding_sha256', 'original_policy_sha256', 'original_workflow_sha256', 'original_dispatch_sha256', 'original_run_sha256', 'original_generation', 'original_fencing_token', 'closed_generation', 'closed_fencing_token', 'original_deadline', 'historical_core_source_commit', 'observation', 'observation_sha256', 'recorded_at', 'original_uncertain_and_NULL_identities_unchanged', 'original_unknown_ACK_preserved', 'original_dispatch_state', 'original_finalization_ack_at', 'original_failed_workflow_ACK_preserved', 'witness_enrollment_installation_absent', 'serving_or_business_or_savings_authority'], 'native_v1': ['schema', 'id', 'grant_id', 'preregistration_id', 'job_id', 'run_id', 'issuer', 'original_grant_sha256', 'original_preregistration_sha256', 'original_settlement_sha256', 'original_binding_sha256', 'original_policy_sha256', 'original_workflow_sha256', 'original_dispatch_sha256', 'original_run_sha256', 'original_generation', 'original_fencing_token', 'closed_generation', 'closed_fencing_token', 'original_deadline', 'historical_core_source_commit', 'observation', 'observation_sha256', 'recorded_at', 'original_uncertain_and_NULL_identities_unchanged', 'original_unknown_ACK_preserved', 'witness_enrollment_installation_absent', 'serving_or_business_or_savings_authority']}
 
 
 class G9CASPostgresTests(unittest.TestCase):
@@ -639,7 +645,7 @@ class G9CASPostgresTests(unittest.TestCase):
             result={'steps': [{'metadata': {'generation': 14, 'fencing_token': 28, 'lease_owner': e['lease_owner']}}]})
         insert('capacity_dispatch_jobs', run_id=e['original_run_id'], realm=e['namespace'], environment=e['environment'], domain=e['domain'], dimension=e['dimension'],
             state='returned', return_status='failed', returned_at='2020-01-01T00:00:31Z',
-            finalization_ack_at='2020-01-01T00:00:32Z' if final_ack else None, envelope={'workflow': {'id': e['workflow_id']}})
+            finalization_ack_at='2020-01-01T00:00:32Z' if final_ack else None, envelope=json.dumps({'workflow': {'id': e['workflow_id']}}))
         self.pg('\n'.join(statements))
         pins = json.loads(self.pg("SELECT jsonb_build_object('intent',(SELECT encode(digest(intent::text,'sha256'),'hex') FROM capacity_intents WHERE dimension='original_notify_aws_vm_members'),'history',(SELECT encode(digest(jsonb_agg(to_jsonb(v) ORDER BY id)::text,'sha256'),'hex') FROM goose_db_version v),'catalog',(SELECT encode(digest(jsonb_agg(to_jsonb(m) ORDER BY kind,namespace,name,version,id)::text,'sha256'),'hex') FROM manifests m),'slots',(SELECT jsonb_object_agg(slot,encode(digest(slot_record::text,'sha256'),'hex')) FROM capacity_resource_slots));").stdout)
         e['intent_pgtext_sha256'], e['history']['sha256'], e['catalog']['sha256'] = pins['intent'], pins['history'], pins['catalog']
@@ -809,3 +815,306 @@ class G9CASPostgresTests(unittest.TestCase):
             self.pg('DROP INDEX IF EXISTS workflow_runs_workflow_id_idx;' + ddl)
             with self.subTest(index=ddl):
                 self.observe(False, 'index89_valid', False)
+
+    # Declared relevant-column receipts exercise the actual SQL matcher only.
+    # They are not signed/provider records or a production admission proof.
+    def terminal_insert(self, table, row):
+        self.pg('INSERT INTO ' + table + '(' + ','.join(row) + ') VALUES(' +
+                ','.join(self.value(v) for v in row.values()) + ');')
+
+    def terminal_hash_row(self, table, row_id):
+        return self.pg("SELECT encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex') FROM " +
+                       table + " w WHERE id='" + row_id + "';").stdout.decode().strip()
+
+    def terminal_seed(self, kind, defect=None):
+        """Construct each operand before its first INSERT; never patch originals."""
+        self.seed()
+        e = self.expected
+        job_id, run_id, disposition_id, grant_id, pre_id = (uid(n) for n in range(1000, 1005))
+        declared_current_unknown = defect == 'declared_known_HZ_unknown_class'
+        if declared_current_unknown:
+            # Only public IDs/error class are retained. All times/lease/other
+            # operands below remain declared CI data, never a real receipt.
+            job_id = '9e6d3b13-b887-4822-9532-3c133d8df58f'
+            run_id = '51540911-1389-41b5-a8a4-5cc1b3ee7493'
+        started, returned, expires, recorded = ('2020-01-01T00:00:00Z', '2020-01-01T00:00:20Z',
+                                               '2020-01-01T00:01:00Z', '2020-01-01T00:20:00Z')
+        state = {'native_v1': 'native_denied_disposed', 'native_v2': 'native_denied_disposed'}.get(kind, kind)
+        workflow = {'id': e['workflow_id'], 'namespace': e['namespace'],
+                    'name': 'notify-aws-elastic-capacity', 'version': 2}
+        dimension = e['dimension']
+        if declared_current_unknown:
+            dimension = 'original_notify_hetzner_vm_members'
+            workflow.update(id=uid(2), name='notify-hetzner-elastic-capacity', version=1)
+        envelope = {'job_id': job_id, 'run_id': run_id, 'protocol': 'capacity_dispatch_prestart_v1',
+                    'realm': e['namespace'], 'environment': 'production', 'domain': 'notify',
+                    'dimension': dimension, 'source_tick': 'declared-terminal-CI',
+                    'workflow': workflow, 'policy': {'id': e['policy_id'], 'checksum': e['policy_checksum']},
+                    'inputs': {'declared': True}, 'metadata': {'declared': True}}
+        envelope_wire = cut.C.wire(envelope).decode()
+        pointer = {'failed_disposed': 'failed_original_disposition_id',
+                   'native_v1': 'native_denied_disposition_id', 'native_v2': 'native_denied_disposition_id',
+                   'enrolled_failed_disposed': 'enrolled_failed_disposition_id',
+                   'abandoned_disposed': 'abandoned_disposition_id',
+                   'finalization_lost_disposed': 'finalization_lost_disposition_id',
+                   'unknown_maintenance_disposed': 'unknown_maintenance_disposition_id'}.get(kind)
+        j = {'id': job_id, 'run_id': run_id, 'protocol': envelope['protocol'], 'realm': e['namespace'],
+             'environment': 'production', 'domain': 'notify', 'dimension': dimension,
+             'source_tick': envelope['source_tick'], 'envelope': envelope_wire,
+             'envelope_sha256': cas.sha(envelope_wire.encode()), 'state': state,
+             'fencing_token': 28, 'lease_owner': e['lease_owner'], 'lease_expires_at': expires,
+             'started_at': started, 'returned_at': returned, 'return_status': 'failed',
+             'pending_wake_count': 1, 'finalization_ack_at': None}
+        w = {'id': run_id, 'workflow_id': workflow['id'], 'workflow_namespace': workflow['namespace'],
+             'workflow_name': workflow['name'], 'workflow_version': workflow['version'], 'inputs': envelope['inputs'],
+             'metadata': envelope['metadata'], 'started_at': started, 'finished_at': returned,
+             'status': 'failed', 'result': {'status': 'failed', 'workflow': workflow}, 'error': None}
+        if pointer:
+            j[pointer] = disposition_id
+        if kind == 'prestart_rejected':
+            j.update(started_at=None, returned_at=None, return_status=None, rejected_at=recorded,
+                     rejection_reason='policy_superseded_before_start', rejection_issuer='collaborator:' + uid(1010),
+                     superseded_policy_id=uid(1011), superseding_policy_id=uid(1012),
+                     superseded_policy_checksum='a' * 64, superseding_policy_checksum='b' * 64)
+            w.update(started_at=None, finished_at=recorded, status='cancelled', result=None,
+                     error='policy_superseded_before_start')
+        elif kind in ('abandoned_disposed', 'finalization_lost_disposed'):
+            error = ('abandoned_started_dispatch_disposed: historical outcome unknown' if kind == 'abandoned_disposed'
+                     else 'finalization_lost_disposed: return observed but not recorded; historical outcome unknown')
+            j.update(returned_at=None, return_status=None)
+            w.update(finished_at=recorded, result=None, error=error)
+        elif kind == 'unknown_maintenance_disposed':
+            j['return_error'] = w['error'] = 'capacity dispatch original deadline exceeded'
+        elif kind in ('returned', 'unknown', None):
+            j['finalization_ack_at'] = '2020-01-01T00:00:21Z' if kind == 'returned' else None
+        elif kind == 'native_v2':
+            j['finalization_ack_at'] = '2020-01-01T00:00:21Z'
+        if declared_current_unknown:
+            j['return_error'] = j['finalization_error'] = w['error'] = 'capacity dispatch original context refused'
+        if defect == 'native_v1_has_ack':
+            j['finalization_ack_at'] = '2020-01-01T00:00:21Z'
+        elif defect == 'native_v2_missing_ack':
+            j['finalization_ack_at'] = None
+        if defect == 'foreign_pointer':
+            j[pointer] = uid(1020)
+        elif defect == 'multiple_pointer':
+            j['abandoned_disposition_id'] = uid(1021)
+        elif defect == 'rejection_metadata':
+            j['rejected_at'] = recorded
+        elif defect == 'foreign_workflow':
+            w['workflow_id'] = uid(1022)
+        elif defect == 'null_workflow_positive':
+            w['workflow_id'] = None  # Original reader permits NULL if logical/result identities match.
+        elif defect == 'unfinished':
+            w['finished_at'] = None
+        elif defect == 'raw_envelope':
+            j['envelope'] = '{not-json'
+            j['envelope_sha256'] = cas.sha(j['envelope'].encode())
+        elif defect == 'envelope_hash':
+            j['envelope_sha256'] = 'f' * 64
+        self.terminal_insert('workflow_runs', w)
+        self.terminal_insert('capacity_dispatch_jobs', j)
+        run_sha = self.terminal_hash_row('workflow_runs', run_id)  # Full physical row, not a CTE projection.
+        if kind in ('returned', 'unknown', None) or defect == 'missing_ledger':
+            return job_id
+        if kind == 'prestart_rejected':
+            d = {k: j[k] for k in ('envelope_sha256', 'fencing_token', 'superseded_policy_id',
+                  'superseding_policy_id', 'superseded_policy_checksum', 'superseding_policy_checksum')}
+            d.update(job_id=job_id, run_id=run_id, reason=j['rejection_reason'], issuer=j['rejection_issuer'], recorded_at=recorded)
+            self.terminal_insert('capacity_dispatch_prestart_rejections', d)
+            return job_id
+        if kind in ('abandoned_disposed', 'finalization_lost_disposed', 'unknown_maintenance_disposed'):
+            scan = copy.deepcopy(TERMINAL_ZERO83)
+            if kind != 'abandoned_disposed':
+                scan.update(schema='finalization_lost_dispatch_effect_scan_v1',
+                            base_schema='abandoned_started_dispatch_effect_scan_v2',
+                            pure_assessment_intent_updates=0, observation_refresh_slot_updates=0)
+            if defect == 'overflow_int64':
+                scan['resource_slots_updated_since_start'] = scan['observation_refresh_slot_updates'] = 9223372036854775808
+            if defect == 'missing_scan_key':
+                del scan['authority_reads_since_start']
+            if defect == 'bad_scan':
+                scan['provider_read_performed'] = True
+            d = {'id': disposition_id, 'job_id': job_id, 'run_id': run_id,
+                 'original_dispatch_sha256': 'a' * 64, 'original_run_sha256': run_sha,
+                 'executor_barrier': 'disposing_core_process_started_after_lease_expiry_v1',
+                 'disposing_core_process_started_at': '2020-01-01T00:02:00Z',
+                 'disposing_core_hostname': 'declared-ci', 'disposing_core_pid': 123,
+                 'disposing_core_source_commit': cas.OLD_SOURCE, 'recorded_at': recorded,
+                 'issuer': 'collaborator:' + uid(1010), 'historical_return': 'unknown',
+                 'provider_mutation_evidence': scan}
+            if kind == 'unknown_maintenance_disposed':
+                members = [{'declared_historical_member': True}]
+                members_sha = self.pg("SELECT encode(sha256(convert_to((" + self.value(members) + ")::text,'UTF8')),'hex');").stdout.decode().strip()
+                d.update(original_returned_at=returned, current_members_sha256=members_sha,
+                         reason='unknown_failed_maintenance_dispatch_disposed',
+                         provider_mutation_evidence={'schema': 'unknown_maintenance_dispatch_effect_scan_v1',
+                          'base': scan, 'current_members': members, 'current_members_sha256': members_sha,
+                          'current_member_count': 1, 'policy_epoch_valid': True, 'refresh_only_result': True,
+                          'invalid_maintenance_canary_rows': 0})
+                if defect == 'wrong_run_hash':
+                    d['original_run_sha256'] = 'f' * 64
+                if defect == 'wrong_members_hash':
+                    d['current_members_sha256'] = 'f' * 64
+                table = 'capacity_dispatch_unknown_maintenance_dispositions'
+            else:
+                d.update({k: j[k] for k in ('realm', 'environment', 'domain', 'dimension', 'envelope_sha256',
+                          'fencing_token', 'lease_owner', 'lease_expires_at', 'started_at', 'pending_wake_count')})
+                d.update(minimum_lease_age_seconds=900, run_status='failed', run_error=w['error'],
+                         reason='abandoned_started_dispatch_disposed' if kind == 'abandoned_disposed'
+                         else 'finalization_lost_started_dispatch_disposed')
+                if defect == 'foreign_scope':
+                    d['dimension'] = 'foreign'
+                if defect == 'foreign_epoch':
+                    d['fencing_token'] = 29
+                if kind == 'finalization_lost_disposed':
+                    evidence = 'declared opaque evidence\n'
+                    d.update(return_observation='observed_by_operator_evidence_not_recorded',
+                             operator_evidence=evidence, operator_evidence_sha256=cas.sha(evidence.encode()))
+                    if defect == 'wrong_evidence_hash':
+                        d['operator_evidence_sha256'] = 'f' * 64
+                table = ('capacity_dispatch_abandoned_dispositions' if kind == 'abandoned_disposed'
+                         else 'capacity_dispatch_finalization_lost_dispositions')
+            if defect == 'foreign_job':
+                d['job_id'] = uid(1023)
+            if defect == 'foreign_run':
+                d['run_id'] = uid(1024)
+            self.terminal_insert(table, d)
+            return job_id
+        # Three grant-backed branches. Construct raw originals before ledger INSERT.
+        prereg_wire = cut.C.wire({'schema': 'declared-relevant-preregistration-CI', 'id': pre_id})
+        binding_wire = cut.C.wire({'schema': 'declared-relevant-binding-CI'})
+        witness_wire, registration_wire, receipt_wire = (cut.C.wire({'declared-original': v}) for v in ('witness', 'registration', 'receipt'))
+        grant = {'generation': 14, 'fencing_token': 28, 'policy_id': e['policy_id'],
+                 'policy_checksum': e['policy_checksum'], 'workflow_id': e['workflow_id']}
+        g = {'id': grant_id, 'namespace': e['namespace'], 'environment': 'production', 'domain': 'notify',
+             'dimension': e['dimension'], **e['physical_profile'], 'slot': 8, 'state': 'settled',
+             'grant_record': grant, pointer: disposition_id}
+        if defect == 'foreign_scope':
+            g['namespace'] = 'foreign'
+        self.terminal_insert('capacity_mutation_grants', g)
+        self.terminal_insert('capacity_vm_provisioning_preregistrations', {'id': pre_id, 'create_grant_id': grant_id,
+                             'original_wire': prereg_wire, 'binding_wire': binding_wire,
+                             'original_deadline': '2020-01-01T00:00:30Z',
+                             'preregistration_record': {'core_source_commit': cas.OLD_SOURCE}})
+        grant_sha = self.pg("SELECT encode(sha256(convert_to(grant_record::text,'UTF8')),'hex') FROM capacity_mutation_grants WHERE id='" + grant_id + "';").stdout.decode().strip()
+        if kind in ('failed_disposed', 'enrolled_failed_disposed'):
+            self.terminal_insert('capacity_guest_original_create_witnesses', {'preregistration_id': pre_id, 'original_wire': witness_wire})
+        if kind == 'enrolled_failed_disposed':
+            self.terminal_insert('capacity_vm_original_enrollments', {'preregistration_id': pre_id,
+                'enrollment_sha256': 'e' * 64, 'registration_wire': registration_wire, 'receipt_wire': receipt_wire})
+        keys = TERMINAL_RECORD_KEYS[kind]
+        record = {key: 'a' * 64 for key in keys}
+        record.update(id=disposition_id, grant_id=grant_id, preregistration_id=pre_id, job_id=job_id,
+                      run_id=run_id, issuer='collaborator:' + uid(1010), original_grant_sha256=grant_sha,
+                      original_preregistration_sha256=cas.sha(prereg_wire), original_run_sha256=run_sha,
+                      original_dispatch_sha256='a' * 64, original_binding_sha256=cas.sha(binding_wire),
+                      original_generation=14, original_fencing_token=28, closed_generation=15,
+                      closed_fencing_token=29, original_deadline='2020-01-01T00:00:30Z',
+                      recorded_at=recorded, historical_core_source_commit=cas.OLD_SOURCE,
+                      observation={'schema': 'declared-CI-observation-not-provider-proof'},
+                      observation_sha256='a' * 64, serving_or_business_or_savings_authority=False,
+                      schema={'failed_disposed': 'failed_original_guest_terminal_disposition_v1',
+                              'enrolled_failed_disposed': 'enrolled_failed_original_guest_terminal_disposition_v1',
+                              'native_v1': 'original_native_authorization_denied_terminal_disposition_v1',
+                              'native_v2': 'original_native_authorization_denied_failed_returned_ack_terminal_disposition_v2'}[kind])
+        if kind in ('failed_disposed', 'enrolled_failed_disposed'):
+            record.update(original_witness_sha256=cas.sha(witness_wire), original_accepted_unchanged=True,
+                          original_witness_preserved=True, original_unknown_ACK_preserved=True,
+                          historical_writer_start_state='unknown')
+        else:
+            record.update(original_uncertain_and_NULL_identities_unchanged=True,
+                          original_unknown_ACK_preserved=kind == 'native_v1', witness_enrollment_installation_absent=True)
+            if kind == 'native_v2':
+                record.update(original_dispatch_state='returned', original_finalization_ack_at='2020-01-01T00:00:21Z',
+                              original_failed_workflow_ACK_preserved=True)
+                if defect == 'native_v2_ack_differs':
+                    record['original_finalization_ack_at'] = '2020-01-01T00:00:22Z'
+        if kind == 'enrolled_failed_disposed':
+            record.update(original_registration_sha256=cas.sha(registration_wire), original_receipt_sha256=cas.sha(receipt_wire),
+                          original_enrollment_sha256='e' * 64, original_enrollment_preserved=True,
+                          Guest_quiescence_proved=False, installation_or_serving_authority=False)
+        if defect == 'foreign_epoch':
+            record['original_generation'] = 13
+        if defect == 'missing_record_key':
+            del record['original_binding_sha256']
+        if defect == 'extra_record_key':
+            record['undeclared_extra'] = 0
+        body = cut.C.wire(record)
+        if defect == 'malformed_wire':
+            body = b'{not-json'
+        if defect == 'duplicate_wire_key':
+            body = b'{"schema":' + json.dumps(record['schema']).encode() + b',' + body[1:]
+        d = {'id': disposition_id, 'grant_id': grant_id, 'preregistration_id': pre_id, 'job_id': job_id,
+             'run_id': run_id, 'original_grant_sha256': grant_sha, 'original_preregistration_sha256': cas.sha(prereg_wire),
+             'original_dispatch_sha256': 'a' * 64, 'original_run_sha256': run_sha,
+             'disposition_sha256': cas.sha(body), 'original_wire': body, 'disposition_record': record,
+             'closed_generation': 15, 'closed_fencing_token': 29, 'recorded_at': recorded}
+        if kind in ('failed_disposed', 'enrolled_failed_disposed'):
+            d['original_witness_sha256'] = cas.sha(witness_wire)
+        if kind == 'enrolled_failed_disposed':
+            d.update(original_registration_sha256=cas.sha(registration_wire), original_receipt_sha256=cas.sha(receipt_wire), original_enrollment_sha256='e' * 64)
+        if defect == 'foreign_job':
+            d['job_id'] = uid(1023)
+        if defect == 'foreign_run':
+            d['run_id'] = uid(1024)
+        if defect == 'foreign_grant':
+            d['grant_id'] = uid(1025)
+        if defect == 'wrong_record_hash':
+            d['disposition_sha256'] = 'f' * 64
+        table = {'failed_disposed': 'capacity_failed_original_dispositions',
+                 'enrolled_failed_disposed': 'capacity_enrolled_failed_original_dispositions',
+                 'native_v1': 'capacity_native_denied_dispositions', 'native_v2': 'capacity_native_denied_dispositions'}[kind]
+        self.terminal_insert(table, d)
+        return job_id
+
+    def terminal_observe_actual_sql(self, busy, allow_json_hold=False, full_held=False):
+        before = self.snapshot()
+        sql = (cas.held_database_sql(self.expected) if full_held else
+               "BEGIN READ ONLY; SET LOCAL statement_timeout='8000ms'; WITH " +
+               cas.retained_dispatch_terminal_ctes(89) +
+               " SELECT jsonb_build_object('busy_jobs',(SELECT count(*) FROM dispatch_candidates j WHERE NOT EXISTS(SELECT 1 FROM dispatch_terminal_witnesses d WHERE d.job_id=j.id))); COMMIT;")
+        result = old.REAL_RUN(['docker', 'exec', '-i', self.container, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1',
+                             '-U', 'guardian_ci', '-d', 'yggdrasil', '-At'], input=sql.encode(), capture_output=True, timeout=12)
+        if result.returncode:
+            self.assertTrue(allow_json_hold and busy > 0, result.stderr.decode(errors='replace'))
+            self.assertRegex(result.stderr.decode(errors='replace'), r'(?i)(json|invalid|syntax|encoding)')
+        else:
+            value = json.loads(result.stdout)
+            self.assertEqual(value['busy_jobs'], busy)
+        self.assertEqual(self.snapshot(), before, 'actual terminal SQL wrote original/ledger rows')
+
+    def test_actual_retained_terminal_contract_and_fail_closed_cases(self):
+        """One new PG method; subcases do not replace any original20 intent."""
+        positive = ('prestart_rejected', 'failed_disposed', 'native_v1', 'native_v2',
+                    'enrolled_failed_disposed', 'abandoned_disposed',
+                    'finalization_lost_disposed', 'unknown_maintenance_disposed', 'returned')
+        for kind in positive:
+            with self.subTest(actual_terminal_positive=kind):
+                self.setUp()
+                self.terminal_seed(kind)
+                self.terminal_observe_actual_sql(0)
+                self.terminal_observe_actual_sql(0, full_held=True)
+                if kind in ('native_v2', 'unknown_maintenance_disposed'):
+                    self.observe(True, 'busy_jobs', 0)  # Existing real-DB custody + full Python gate.
+        with self.subTest(nullable_workflow_positive='logical-and-result-identities-exact'):
+            self.setUp()
+            self.terminal_seed('failed_disposed', 'null_workflow_positive')
+            self.terminal_observe_actual_sql(0)
+        negative = [('unknown', None), (None, None)]
+        negative.append(('unknown', 'declared_known_HZ_unknown_class'))
+        negative += [('failed_disposed', d) for d in ('foreign_pointer', 'multiple_pointer', 'rejection_metadata',
+                     'foreign_workflow', 'unfinished', 'raw_envelope', 'envelope_hash', 'missing_ledger',
+                     'foreign_job', 'foreign_run', 'foreign_scope', 'foreign_epoch', 'foreign_grant',
+                     'missing_record_key', 'extra_record_key', 'malformed_wire', 'duplicate_wire_key', 'wrong_record_hash')]
+        negative += [('abandoned_disposed', d) for d in ('foreign_scope', 'foreign_epoch', 'missing_scan_key', 'bad_scan')]
+        negative += [('finalization_lost_disposed', d) for d in ('wrong_evidence_hash', 'overflow_int64')]
+        negative += [('unknown_maintenance_disposed', d) for d in ('wrong_run_hash', 'wrong_members_hash', 'bad_scan')]
+        negative += [('native_v1', 'native_v1_has_ack'), ('native_v2', 'native_v2_missing_ack'),
+                     ('native_v2', 'native_v2_ack_differs')]
+        for kind, defect in negative:
+            with self.subTest(actual_terminal_refusal=kind, defect=defect):
+                self.setUp()
+                self.terminal_seed(kind, defect)
+                self.terminal_observe_actual_sql(1, allow_json_hold=defect in ('raw_envelope', 'malformed_wire'))
+        self.assertEqual(len(re.findall(r'CREATE TABLE (\w+)\(', DDL)), 30)

@@ -72,10 +72,10 @@ CORE_9913 = CORE_IMAGE_REF + 'sha256:9913ebfb5afc3620b8d6f4136ea1b9cc5acfda0c339
 # Pin the actual amd64 head manifest; historical G6 is independently fixed.
 # No index, tag, configuration digest or placeholder admits an image.
 CORE_CADC = CORE_IMAGE_REF + 'sha256:cadc0c4491109d5791438b6187b53620008f8a634ae8d93903f664ae18c18edd'
-# Root-reviewed R5 release and controller input; native adoption remains separate.
+# Root-reviewed R6 release and controller input; native adoption remains separate.
 PROPOSAL_BOUND = True
-HEAD_CORE_SOURCE = 'ed76cef2d66d7f5368b96b41aaa22fc80a2233c4'
-HEAD_NEW_CORE_DIGEST = 'sha256:68518595394601e92320f1ff074c1a85b8685ff6a810ddabab3bd649afd4de69'
+HEAD_CORE_SOURCE = 'c02512e9d11d29cad4e4ff67186602d3485d6fa3'
+HEAD_NEW_CORE_DIGEST = 'sha256:7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6'
 HEAD_DIGEST_PLACEHOLDER = 'sha256:' + '0' * 64
 CORE_G5 = CORE_CADC
 CORE_G6 = CORE_IMAGE_REF + 'sha256:750d5e46aee679075c2b88c163d22036093cf893edbe16bb5c2ca484f4275838'
@@ -152,7 +152,7 @@ G6_PREDECESSOR_CONFIG_SHA = 'be5b25495056bd25e1512827b5ccbe7236f84928b4d20515f50
 G6_CONTROLLER_CONFIG_SHA = '8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e'
 G7_CONTROLLER_CONFIG_SHA = 'd68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf'
 G8_CONTROLLER_CONFIG_SHA = '42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5'
-G9_CONTROLLER_CONFIG_SHA = 'bd7707a1a1cc0fd9a59ae567493ccb19023c9310a7d5e6840e10355618f7f338'
+G9_CONTROLLER_CONFIG_SHA = '3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111'
 G8_PREDECESSOR_HERE = ROOT / 'network-boot-recovery-r13-g8pair-source-v1'
 G8_PREDECESSOR_SOURCE_SHA = '8259638127d811079d6a461d3bd7407f8a53ff3ebb75e8061bf8538dcf6508b9'
 G8_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g8pair.production.json')

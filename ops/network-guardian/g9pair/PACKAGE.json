@@ -1,8 +1,8 @@
 {
-  "amd64_Core_manifest_digest": "sha256:68518595394601e92320f1ff074c1a85b8685ff6a810ddabab3bd649afd4de69",
-  "base_Core_source": "ed76cef2d66d7f5368b96b41aaa22fc80a2233c4",
+  "amd64_Core_manifest_digest": "sha256:7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6",
+  "base_Core_source": "c02512e9d11d29cad4e4ff67186602d3485d6fa3",
   "controller_config_path": "/etc/dakasa/capacity-network/controller.r13-netlink-g9pair.production.json",
-  "controller_config_sha256": "bd7707a1a1cc0fd9a59ae567493ccb19023c9310a7d5e6840e10355618f7f338",
+  "controller_config_sha256": "3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111",
   "controller_unit_sha256": "a6a4bdcda5270a7000dc8399c1eb5e84fc762ceac9f6ad3845c4a334eaea6c0d",
   "files": {
     "source/coverage.py": "eb7ed1fcbcc665cdc3603812a10103b4e19dd0b66693b99dc8cfeb15adceeb88",
@@ -10,11 +10,11 @@
     "source/current15_bounded_tail_contract.py": "c18809987960f9aea524240f7ea6886a1ed782e5c4001e68edac875bbbe3431d",
     "source/initial_boot_Cold_read_adoption.py": "0e690f4b74303da774aa7d5a651444e7f74c8445428af38002192bf1079b5799",
     "source/journal_contract.py": "b0c153b69cc8275e1e330cb3c584b498c1685c1b999c4b5c7b972f164c96db6c",
-    "source/network_guardian.py": "c5d6a86f0741686382e10257ce880734d65b38da6b2c96fea35444ee6ccbf6eb",
+    "source/network_guardian.py": "6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765",
     "source/proof_cache.py": "c2e0b981a2843c15dd5907cc186e4c23a7d844a78c1ce4f7e2e3578704eb5b4b",
     "source/qualification_initializer.py": "d73ade12564ba7b672a4dbdf8225e99af13a64a9b8aff4a41fb1a0225bef9ec8",
-    "units/dakasa-capacity-network-cold-transport.service": "074fe0a9024ba1bb91206600b5f975c2181b03eab0290546b96d0b7d765f502d",
-    "units/dakasa-capacity-network-guardian.service": "66b0eecf531f31cd4a656321299f62e003a1dc0064cb1a44b79f09f55cea35fe"
+    "units/dakasa-capacity-network-cold-transport.service": "4b49a3ec10cb131242e7a17d8c0026aa6a48e1e0d2d1ec3c3610ae3763406879",
+    "units/dakasa-capacity-network-guardian.service": "038d72711a76ccd98d71127f7746a41dc0c4fda27f255f566bee6161aa8a2531"
   },
   "historical_g6_controller_config_sha256": "8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e",
   "historical_g6_controller_unit_sha256": "12671f666b11b6176701735e08c9e6f53280f145fe19c7ec9add9fe1fc2b2327",
