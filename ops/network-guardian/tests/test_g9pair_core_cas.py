@@ -470,21 +470,26 @@ class G9CASTests(unittest.TestCase):
                     '--evidence-dir', str(run), '--held-admission', str(admission),
                     '--expected-held-admission-sha256', cas.sha(raw), '--execute-core-image-cas-once']
             backend = types.SimpleNamespace(files=Mock(), protected=Mock(return_value=protected))
-            with patch.object(sys, 'argv', argv), patch.object(cas.os, 'geteuid', return_value=0), \
-                    patch.object(cas.sys, 'platform', 'linux'), patch.object(cas, 'ROOT', root), patch.object(cas, 'OPLOCK', lock_path), \
-                    patch.object(cas, 'load_tools', return_value=cut), \
-                    patch.object(cut.C, 'package', return_value=(tools.TOOLS.parent, manifest)), \
-                    patch.object(cut.C, 'private_dir', side_effect=private_dir), \
-                    patch.object(cas, 'load_held_admission', side_effect=load) as loader, \
-                    patch.object(cas, 'operation_lock', return_value=contextlib.nullcontext((lock_stat.st_dev, lock_stat.st_ino))), \
-                    patch.object(cas, 'API', side_effect=client) as factory, \
-                    patch.object(cas, 'database_preflight', side_effect=database) as database_call, \
-                    patch.object(cas, 'held_current_preimage', side_effect=current) as current_call, \
-                    patch.object(cas, 'validate_held_native_observation', side_effect=native) as native_call, \
-                    patch.object(cas, 'g9_acceptance', return_value=(backend, protected, ctrl, guard, time.monotonic())), \
-                    patch.object(cut, 'physical_identity', side_effect=[ctrl, guard]), \
-                    patch.object(cas.signal, 'signal'), patch.object(cas.signal, 'alarm'), \
-                    contextlib.redirect_stdout(io.StringIO()) as output:
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(patch.object(sys, 'argv', argv))
+                stack.enter_context(patch.object(cas.os, 'geteuid', return_value=0))
+                stack.enter_context(patch.object(cas.sys, 'platform', 'linux'))
+                stack.enter_context(patch.object(cas, 'ROOT', root))
+                stack.enter_context(patch.object(cas, 'OPLOCK', lock_path))
+                stack.enter_context(patch.object(cas, 'load_tools', return_value=cut))
+                stack.enter_context(patch.object(cut.C, 'package', return_value=(tools.TOOLS.parent, manifest)))
+                stack.enter_context(patch.object(cut.C, 'private_dir', side_effect=private_dir))
+                loader = stack.enter_context(patch.object(cas, 'load_held_admission', side_effect=load))
+                stack.enter_context(patch.object(cas, 'operation_lock', return_value=contextlib.nullcontext((lock_stat.st_dev, lock_stat.st_ino))))
+                factory = stack.enter_context(patch.object(cas, 'API', side_effect=client))
+                database_call = stack.enter_context(patch.object(cas, 'database_preflight', side_effect=database))
+                current_call = stack.enter_context(patch.object(cas, 'held_current_preimage', side_effect=current))
+                native_call = stack.enter_context(patch.object(cas, 'validate_held_native_observation', side_effect=native))
+                stack.enter_context(patch.object(cas, 'g9_acceptance', return_value=(backend, protected, ctrl, guard, time.monotonic())))
+                stack.enter_context(patch.object(cut, 'physical_identity', side_effect=[ctrl, guard]))
+                stack.enter_context(patch.object(cas.signal, 'signal'))
+                stack.enter_context(patch.object(cas.signal, 'alarm'))
+                output = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
                 cas.main()
                 loader.assert_called_once_with(cut.C, admission, cas.sha(raw))
                 factory.assert_called_once_with(cut)
