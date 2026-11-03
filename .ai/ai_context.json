@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-03T02:27:38-03:00",
+  "generated_at": "2026-11-03T03:21:14-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1463,
+    ".go": 1483,
     ".json": 204,
     ".py": 59,
-    ".sql": 89,
+    ".sql": 90,
     ".yaml": 11,
     ".yml": 36
   },
   "provenance": {
-    "commit": "6f1bdf66b737179c51bf1596d150d9dcf5147282",
+    "commit": "c866e36f0713116e1a66b00ce72a033914bc3bdf",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "2aed270fdabc4dbb35960cbeb0c460492da33e625f4a936bd6df676be9ca975d"
+        "sha256": "649ea8ba59f55784101384c85e6276d77289f478dcaee59588d520bf855a4095"
       },
       {
         "path": "AGENTS.md",
@@ -32,7 +32,7 @@
       },
       {
         "path": "README.md",
-        "sha256": "290d3fdb5bbbd3513f396ac2f70799ce5f4efb92f3b4e5f1d2468cc1f7e97a27"
+        "sha256": "60310d788b034631600f5a471326ec52781122299313502a6ee1e8a756f9793e"
       },
       {
         "path": "Taskfile.yml",
@@ -65,33 +65,33 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 350,
-      "kb": 4530
+      "files": 360,
+      "kb": 4694
     },
     {
       "path": "controllers/httpapi",
-      "files": 249,
-      "kb": 2515
+      "files": 252,
+      "kb": 2542
     },
     {
       "path": "controllers/message",
-      "files": 189,
-      "kb": 1615
+      "files": 193,
+      "kb": 1654
     },
     {
       "path": "internal/capacity",
-      "files": 124,
-      "kb": 1367
+      "files": 126,
+      "kb": 1373
     },
     {
       "path": "db/migrations",
-      "files": 88,
-      "kb": 616
+      "files": 89,
+      "kb": 642
     },
     {
       "path": "model",
-      "files": 86,
-      "kb": 477
+      "files": 87,
+      "kb": 478
     },
     {
       "path": "manifest",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 88,
+    "migrations": 89,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
