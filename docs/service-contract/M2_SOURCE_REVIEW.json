@@ -1209,5 +1209,108 @@
     "exact_new_head_CI_required": true,
     "exact_new_head_CI_pass_claimed": false,
     "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_policy_clock_and_fixture_corrections_20261103": {
+    "schema": "ADR0101_policy_clock_fixture_Source_corrections_v1",
+    "base_commit": "1b73f995217198391ed3042d15a87fcddfefce51",
+    "preserved_previous_complete_review_sha256": "846a97177832646306b27259a4d3d9962e51af46298576ffd6aba0ac7840bd0d",
+    "reviewed_Source_commits": [
+      "86b7579cd9b15dcb9af08d0edd33f5d6142fc5f1",
+      "70b5463f2617eee15907683743746755dfe1b88f",
+      "032e21b565e4d72c32433f52befa9ccb8a26d089",
+      "c24f0a2c5180e7cded5a2e100cdf091b7bc3bfc3"
+    ],
+    "actual_failed_CI": {
+      "run_id": 41594624644,
+      "original_failure_manifest_sha256": "11cad5c0e4bd876607dd90232198f4bd5e6f266e255bade91f4662a53a4c936d",
+      "postgres16": {
+        "roots_run": 18,
+        "roots_passed": 11,
+        "roots_failed": 7,
+        "nodes_run": 161,
+        "nodes_passed": 132,
+        "nodes_failed": 29,
+        "skipped": 0
+      },
+      "postgres17": {
+        "roots_run": 18,
+        "roots_passed": 10,
+        "roots_failed": 8,
+        "nodes_run": 161,
+        "nodes_passed": 128,
+        "nodes_failed": 33,
+        "skipped": 0
+      },
+      "provider_specific_deterministic_cause_claimed": false
+    },
+    "findings_and_changes": [
+      "The actual HZ issued DELETE receipt reader rebuilt a policy without Kind or stored Name, which deterministically failed parseCapacityPolicy. The exact stored name and fixed kind are now loaded under the same ID/checksum plus exact namespace. All original eligibility, native time, source, tuple and ownership checks remain.",
+      "The original HTTP child rejected the database server representation behind its admitted loopback connection. It now requires exact equality with the complete nonsecret parent-captured database/canonical server address/port/major, retaining URL loopback/Unix, owned-name and explicit PostgreSQL16/17 gates.",
+      "The forward evidence reader compared PostgreSQL microsecond deadlines directly to signed nanosecond values. Its upper bound now compares both operands in PostgreSQL representation with the full signed RFC3339Nano input, while the raw authority observation must also precede the exact native original deadline. No epsilon or original data normalization is introduced. This defect follows from the types and conversions; the exact earlier CI failing branch is not claimed measured.",
+      "Default fixture owners now start with the actual production30s parent cap before first Issue; tail8 keeps its original declared300s lease. Retained canary windows close naturally before live admission. No stored clocks, leases, ACKs, counters or rows are reset.",
+      "The tail2 real authority ingress deliberately retains an initial short future fractional789ns deadline before first Issue. It requires four actual PostgreSQL authority rows, all within the signed PostgreSQL bound and at least one numerically after the raw signed nanoseconds, followed by real live admission. Six additional clock children comprise one positive and five negative strict-bound cases inside the existing root.",
+      "Bounded failure diagnostics run only after failed existing assertions in the excluded fixture, close all result sets and roll back; they are later observations, expose no raw wires or keys and do not attribute earlier refusal branches."
+    ],
+    "changed_source_facts": {
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 21768,
+          "sha256": "d91fdd9ee4666f312339aa1866c795e4647f2c10c39b222b86b24447128f29c4"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 21859,
+          "sha256": "d00784b70a575fc3c60772c484582348aac7e33a973fce50b4edbcb681ed9fdb"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 12973,
+          "sha256": "5962ded54e3cebd721b58a80388db4c3d10c84962f9775ad391a7a04928615d8"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 13801,
+          "sha256": "1caaf480fd57b5d3269b9b9e5d7c1926fe7d3cd5b6a54c84a4fd2845831f5431"
+        }
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 42212,
+          "sha256": "e6d78c139ecfb7fc158207d978dc6a561228aa35827033c35be99b0243616129"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 49899,
+          "sha256": "8afc501fd596f8f2258fe0e205f99bd410317d2034413fed203ba07b82a3002c"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "9f92af7f674eb7198c6f870ca2a3683697e4d5b6d5b1f28121759b4c3539aca5",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 794,
+    "new_tests_roots_preserved": 18,
+    "new_clock_children_total": 6,
+    "new_clock_children_positive": 1,
+    "new_clock_children_negative": 5,
+    "independent_source_peers": [
+      "Slot full runtime deadline diff and complete final fixture/test paths exact hashes",
+      "Brain complete final fixture/test paths and bounded diagnostic helper exact hashes"
+    ],
+    "root_review": "Complete current Source deltas and all final modified functions reviewed; every prior complete review node is retained.",
+    "normal_V2_and_original_authority_owner_source_changed": false,
+    "per_authority_read_max_seconds": 5,
+    "local_functional_execution": false,
+    "original_failure_preserved": true,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
   }
 }
