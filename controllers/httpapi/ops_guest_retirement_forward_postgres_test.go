@@ -41,9 +41,9 @@ func TestGuestRetirementForwardHistoricalHTTPPostgres(t *testing.T) {
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
 			f := repository.NewGuestRetirementForwardRecoveryFixture(t, provider, 3, 3)
-			before := f.PreservedOriginals()
 			f.FinishFailedRun("retire-original-guest")
 			_ = f.WaitHistoricalBarrier()
+			before := f.PreservedOriginals()
 			actor := uuid.New()
 			if _, err := f.DB.Exec(`INSERT INTO public.collaborators(id,slug,status,display_name,traits) VALUES($1,$2,'active','Declared recovery test human','{"yggdrasil_admin":true}'::jsonb)`, actor, "forward-human-"+actor.String()); err != nil {
 				t.Fatal(err)
