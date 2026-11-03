@@ -129,7 +129,7 @@ class R6CASPrivateInputTests(unittest.TestCase):
             'realm': 'dakasa-production', 'environment': 'production', 'domain': 'notify',
             'dimension': 'original_notify_hetzner_vm_members',
             'error': 'capacity dispatch original context refused'})
-        for version in (90, 88, True, '91', None):
+        for version in (90, 88, 92, 93, True, '91', None):
             with self.subTest(schema_version=version), self.assertRaises(cas.Hold):
                 cas.retained_dispatch_terminal_ctes(version)
         with base.binding(base.declared_held()), \
@@ -138,6 +138,42 @@ class R6CASPrivateInputTests(unittest.TestCase):
             with self.assertRaises(cas.Hold):
                 cas.load_http_maintenance_upgrade(cut.C, Path('/never-read'), 'a' * 64)
             read.assert_not_called()
+        # Declared transport operands exercise the real response guard. They do
+        # not insert a Goose row or assert that any database was migrated.
+        e = base.declared_held()
+        value = {'database': 'yggdrasil', 'readonly': 'on', 'schema': 92,
+                 'migration88_applied': 1, 'migration89_applied': 1,
+                 'migration90_applied': 1, 'migration91_applied': 1,
+                 'migration92_applied': 1, 'history_max_version': 92, 'index92_valid': True,
+                 'history_rows': e['history']['rows'], 'history_exact': True,
+                 'catalog_rows': e['catalog']['rows'], 'catalog_exact': True,
+                 'index89_valid': True, 'active_latest_policies': 2,
+                 'current_original_catalog': 1, 'current_original_binding': 1,
+                 'current_physical_members': 3, 'physical_profile_slot_count': 3,
+                 'historical_useful_survivors': 2, 'forward_table_present': True,
+                 'held_count': 1, 'held_unchanged_expired': 1, 'known_original': 1,
+                 'closed_original_run': 1, 'original_frame_exact': True,
+                 'original_row_count': 4, 'original_failed_caller': 1,
+                 'authority_reads': 4, 'authority_returns': 4,
+                 'journal_transports': 3, 'delete_bindings': 0,
+                 'forward_admissions': 0, 'other_leases': 0,
+                 'other_nonsteady': 0, 'busy_jobs': 1, 'busy_runs': 0,
+                 'native_authority': 0}
+        original = copy.deepcopy(value)
+        self.assertIs(cas.validate_r6_held_database(value, e), value)
+        self.assertEqual(value, original)
+        for key, wrong in (('schema', 91), ('schema', 93),
+                           ('history_max_version', 91), ('history_max_version', 93),
+                           ('migration92_applied', 0), ('migration92_applied', 2),
+                           ('index92_valid', False), ('index89_valid', False),
+                           ('history_exact', False), ('catalog_exact', False),
+                           ('migration88_applied', 0), ('migration91_applied', 0),
+                           ('busy_jobs', 0), ('busy_runs', 1)):
+            with self.subTest(declared_response_field=key, refused_value=wrong):
+                bad = {**value, key: wrong}
+                with self.assertRaises(cas.Hold):
+                    cas.validate_r6_held_database(bad, e)
+                self.assertEqual(value, original)
 
     def test_projection_closes_identity_cas_digest_types_and_scan_envelope(self):
         value = projection()

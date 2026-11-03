@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'ops/network-guardian/**'
+      - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
       - '.github/workflows/owned-network-guardian.yml'
   push:
     branches: [main]
     paths:
       - 'ops/network-guardian/**'
+      - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
       - '.github/workflows/owned-network-guardian.yml'
   workflow_dispatch:
 
@@ -61,7 +63,7 @@ jobs:
           sha256sum --check SHA256SUMS
           cd ../../rollout
           sha256sum --check SHA256SUMS
-      - name: Run exact preserved153 and additive R6 retained-proof and HELD-upgrade census
+      - name: Run exact preserved153, R6 and additive migration92 census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
@@ -82,6 +84,7 @@ jobs:
           name: owned-network-guardian-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             ops/network-guardian/
+            db/migrations/00092_workflow_runs_busy_logical_index.sql
             ${{ runner.temp }}/owned-network-guardian/
           if-no-files-found: error
           retention-days: 30

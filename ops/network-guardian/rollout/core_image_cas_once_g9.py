@@ -1479,14 +1479,35 @@ COMMIT;
 """
 
 
+def workflow_busy_logical_index92_sql():
+    """Closed complete busy predicate, including PostgreSQL's lossless casts."""
+    predicates = (
+        "(((COALESCE(status, ''::character varying))::text <> ALL ('{succeeded,failed,cancelled}'::text[])) OR (finished_at IS NULL))",
+        "(((COALESCE(status, ''::character varying))::text <> ALL ((ARRAY['succeeded'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[])) OR (finished_at IS NULL))",
+    )
+    quoted = ','.join("'" + value.replace("'", "''") + "'" for value in predicates)
+    return """COALESCE((SELECT i.indisvalid AND i.indisready AND i.indislive AND NOT i.indisunique
+ AND i.indrelid='public.workflow_runs'::regclass AND i.indnkeyatts=3 AND i.indnatts=3
+ AND i.indexprs IS NULL AND i.indpred IS NOT NULL AND a.amname='btree'
+ AND pg_get_indexdef(i.indexrelid,1,false)='workflow_namespace'
+ AND pg_get_indexdef(i.indexrelid,2,false)='workflow_name'
+ AND pg_get_indexdef(i.indexrelid,3,false)='id'
+ AND pg_get_expr(i.indpred,i.indrelid,false) IN (""" + quoted + """)
+ FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid JOIN pg_am a ON a.oid=c.relam
+ WHERE i.indexrelid=to_regclass('public.workflow_runs_busy_logical_idx')),false)"""
+
+
 def held_r6_database_sql(expected):
-    """Extend the old held snapshot to91, keeping its other predicates exact."""
+    """Require the separately accepted index-only92; protocol91 stays exact."""
     sql = held_database_sql(expected)
     prior = retained_dispatch_terminal_ctes(89)
     need(sql.count(prior) == 1 and sql.count(" 'migration90_applied',") == 1,
-         'EXACT_PRIOR_HELD_QUERY_FOR_SCHEMA91_EXTENSION')
+         'EXACT_PRIOR_HELD_QUERY_FOR_SCHEMA92_INDEX_EXTENSION')
     return sql.replace(prior, retained_dispatch_terminal_ctes(91), 1).replace(
         " 'migration90_applied',",
+        " 'migration92_applied',(SELECT count(*) FROM goose_db_version WHERE version_id=92 AND is_applied),\n"
+        " 'history_max_version',(SELECT max(version_id) FROM goose_db_version),\n"
+        " 'index92_valid'," + workflow_busy_logical_index92_sql() + ",\n"
         " 'migration91_applied',(SELECT count(*) FROM goose_db_version WHERE version_id=91 AND is_applied),\n 'migration90_applied',", 1)
 
 
@@ -1550,6 +1571,24 @@ def http_maintenance_current_preimage(cut, run, upgrade, phase):
     return counts
 
 
+def validate_r6_held_database(value, e):
+    """Exact92 snapshot response; no widening of the original held predicates."""
+    need(value == {'database':'yggdrasil','readonly':'on','schema':92,
+         'migration88_applied':1,'migration89_applied':1,'migration90_applied':1,'migration91_applied':1,
+         'migration92_applied':1,'history_max_version':92,'index92_valid':True,
+         'history_rows':e['history']['rows'],'history_exact':True,
+         'catalog_rows':e['catalog']['rows'],'catalog_exact':True,'index89_valid':True,
+         'active_latest_policies':2,'current_original_catalog':1,'current_original_binding':1,
+         'current_physical_members':3,'physical_profile_slot_count':3,'historical_useful_survivors':2,
+         'forward_table_present':True,'held_count':1,'held_unchanged_expired':1,
+         'known_original':1,'closed_original_run':1,'original_frame_exact':True,'original_row_count':4,
+         'original_failed_caller':1,'authority_reads':4,'authority_returns':4,'journal_transports':3,
+         'delete_bindings':0,'forward_admissions':0,'other_leases':0,'other_nonsteady':0,
+         'busy_jobs':1,'busy_runs':0,'native_authority':0},
+         'ONLY_ORIGINAL_S3_AND_DISTINCT_EXACT_HTTP_HELD_UPGRADE_NOT_STEADY_PROOF')
+    return value
+
+
 def database_r6_held_preflight(cut, run, expected, upgrade):
     require_http_maintenance_upgrade_bound()
     e = match_held_identity(expected)
@@ -1561,18 +1600,7 @@ def database_r6_held_preflight(cut, run, expected, upgrade):
         need(sha(read(ref['path'], 128 << 10, 0o600)) == ref['sha256'], 'HTTP_UPGRADE_ORIGINAL_REFERENCE_STILL_PINNED')
     native = validate_held_native_observation(e, cut.C.loads)
     value = http_upgrade_db_read(cut, run, 'DB-R6-HELD-READONLY', held_r6_database_sql(e))
-    need(value == {'database':'yggdrasil','readonly':'on','schema':91,
-         'migration88_applied':1,'migration89_applied':1,'migration90_applied':1,'migration91_applied':1,
-         'history_rows':e['history']['rows'],'history_exact':True,
-         'catalog_rows':e['catalog']['rows'],'catalog_exact':True,'index89_valid':True,
-         'active_latest_policies':2,'current_original_catalog':1,'current_original_binding':1,
-         'current_physical_members':3,'physical_profile_slot_count':3,'historical_useful_survivors':2,
-         'forward_table_present':True,'held_count':1,'held_unchanged_expired':1,
-         'known_original':1,'closed_original_run':1,'original_frame_exact':True,'original_row_count':4,
-         'original_failed_caller':1,'authority_reads':4,'authority_returns':4,'journal_transports':3,
-         'delete_bindings':0,'forward_admissions':0,'other_leases':0,'other_nonsteady':0,
-         'busy_jobs':1,'busy_runs':0,'native_authority':0},
-         'ONLY_ORIGINAL_S3_AND_DISTINCT_EXACT_HTTP_HELD_UPGRADE_NOT_STEADY_PROOF')
+    validate_r6_held_database(value, e)
     wanted = http_maintenance_canonical_preimage(cut, run, upgrade, 'PREFLIGHT')
     counts = http_maintenance_current_preimage(cut, run, upgrade, 'PREFLIGHT')
     need(validate_held_native_observation(e, cut.C.loads) == native, 'SAME_FRESH_NATIVE_ORIGINALS_AFTER_R6_DB')

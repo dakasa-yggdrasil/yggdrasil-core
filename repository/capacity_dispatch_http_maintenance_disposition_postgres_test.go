@@ -32,8 +32,11 @@ type httpMaintenanceFixture struct {
 	spec   model.CapacityPolicySpec
 }
 
-func httpMaintenanceDisposableDB(t *testing.T, parent *sql.DB) *sql.DB {
+func httpMaintenanceDisposableDBAtSchema(t *testing.T, parent *sql.DB, target int64) *sql.DB {
 	t.Helper()
+	if target != 91 && target != 92 {
+		t.Fatal("closed HTTP fixture schema91 or92 required")
+	}
 	// The parent has already passed originalDispositionPG's explicit Unix socket,
 	// named disposable database and opt-in checks. Never consume generic DB_URL.
 	var parentName string
@@ -66,22 +69,33 @@ func httpMaintenanceDisposableDB(t *testing.T, parent *sql.DB) *sql.DB {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if err = goose.UpContext(ctx, db, "../db/migrations"); err != nil {
-		t.Fatal("actual full migration91", err)
+	if target == 91 {
+		// Keep the original old-R4-on91 proof on an actual historical91 DB.
+		err = goose.UpToContext(ctx, db, "../db/migrations", 91)
+	} else {
+		err = goose.UpContext(ctx, db, "../db/migrations")
+	}
+	if err != nil {
+		t.Fatal("actual HTTP fixture migrations", target, err)
 	}
 	var version int64
-	if err = db.QueryRow(`SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 91 {
-		t.Fatal("exact schema91 required", err, version)
+	if err = db.QueryRow(`SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != target {
+		t.Fatal("exact closed HTTP fixture schema required", target, version, err)
 	}
 	return db
 }
 
 func httpMaintenancePGFixture(t *testing.T, parent *sql.DB, provider string) httpMaintenanceFixture {
 	t.Helper()
+	return httpMaintenancePGFixtureAtSchema(t, parent, provider, 92)
+}
+
+func httpMaintenancePGFixtureAtSchema(t *testing.T, parent *sql.DB, provider string, target int64) httpMaintenanceFixture {
+	t.Helper()
 	if provider != "aws" && provider != "hetzner" {
 		t.Fatal("closed provider")
 	}
-	db := httpMaintenanceDisposableDB(t, parent)
+	db := httpMaintenanceDisposableDBAtSchema(t, parent, target)
 	var p model.CapacityPolicySpec
 	raw, err := os.ReadFile("../internal/capacity/testdata/b509-notify-" + provider + "-production-contract.json")
 	if err != nil || json.Unmarshal(raw, &p) != nil {
@@ -509,55 +523,59 @@ func TestHTTPMaintenanceDispatchMigration91Guards(t *testing.T) {
 		f.assertHTTPUntouched(t, j, w, c)
 	})
 	t.Run("old_r4_up89_after91", func(t *testing.T) {
-		f := httpMaintenancePGFixture(t, db, "aws")
-		j, w := f.snapshot(t)
-		c := f.canarySnapshot(t)
-		var historyBefore, historyAfter string
-		if err := f.db.QueryRow(`SELECT jsonb_agg(to_jsonb(v) ORDER BY id)::text FROM goose_db_version v`).Scan(&historyBefore); err != nil {
-			t.Fatal(err)
-		}
-		oldFiles := t.TempDir()
-		entries, err := os.ReadDir("../db/migrations")
-		if err != nil {
-			t.Fatal(err)
-		}
-		copied := 0
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
-				continue
+		// Preserve the exact historical91 proof and add the current92 case
+		// under the existing reviewed subtest ID. Neither history may change.
+		for _, target := range []int64{91, 92} {
+			f := httpMaintenancePGFixtureAtSchema(t, db, "aws", target)
+			j, w := f.snapshot(t)
+			c := f.canarySnapshot(t)
+			var historyBefore, historyAfter string
+			if err := f.db.QueryRow(`SELECT jsonb_agg(to_jsonb(v) ORDER BY id)::text FROM goose_db_version v`).Scan(&historyBefore); err != nil {
+				t.Fatal(err)
 			}
-			version, err := strconv.ParseInt(strings.SplitN(entry.Name(), "_", 2)[0], 10, 64)
+			oldFiles := t.TempDir()
+			entries, err := os.ReadDir("../db/migrations")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if version > 89 {
-				continue
+			copied := 0
+			for _, entry := range entries {
+				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+					continue
+				}
+				version, err := strconv.ParseInt(strings.SplitN(entry.Name(), "_", 2)[0], 10, 64)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if version > 89 {
+					continue
+				}
+				raw, err := os.ReadFile(filepath.Join("../db/migrations", entry.Name()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = os.WriteFile(filepath.Join(oldFiles, entry.Name()), raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+				copied++
 			}
-			raw, err := os.ReadFile(filepath.Join("../db/migrations", entry.Name()))
-			if err != nil {
-				t.Fatal(err)
+			if copied != 88 {
+				t.Fatal("original R4 1..39+41..89 file roster changed", copied)
 			}
-			if err = os.WriteFile(filepath.Join(oldFiles, entry.Name()), raw, 0600); err != nil {
-				t.Fatal(err)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err = goose.UpContext(ctx, f.db, oldFiles); err != nil {
+				t.Fatal("old R4 <=89 Up against actual schema", target, err)
 			}
-			copied++
+			if v, err := goose.GetDBVersionContext(ctx, f.db); err != nil || v != target {
+				t.Fatal("old view changed actual closed schema", target, v, err)
+			}
+			if err := f.db.QueryRow(`SELECT jsonb_agg(to_jsonb(v) ORDER BY id)::text FROM goose_db_version v`).Scan(&historyAfter); err != nil || historyBefore != historyAfter {
+				t.Fatal("old Up changed whole actual history", target, err)
+			}
+			f.assertHTTPUntouched(t, j, w, c)
+			t.Logf("R4_SOURCE_MIGRATION_VIEW_88_FILES_UP89_ON%d_NOOP_PG_ONLY_NOT_OLD_CONTAINER_EXECUTION", target)
 		}
-		if copied != 88 {
-			t.Fatal("original R4 1..39+41..89 file roster changed", copied)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err = goose.UpContext(ctx, f.db, oldFiles); err != nil {
-			t.Fatal("old R4 <=89 Up against91", err)
-		}
-		if v, err := goose.GetDBVersionContext(ctx, f.db); err != nil || v != 91 {
-			t.Fatal("old view changed schema91", v, err)
-		}
-		if err := f.db.QueryRow(`SELECT jsonb_agg(to_jsonb(v) ORDER BY id)::text FROM goose_db_version v`).Scan(&historyAfter); err != nil || historyBefore != historyAfter {
-			t.Fatal("old Up changed whole91 history", err)
-		}
-		f.assertHTTPUntouched(t, j, w, c)
-		t.Log("R4_SOURCE_MIGRATION_VIEW_88_FILES_UP89_ON91_NOOP_PG_ONLY_NOT_OLD_CONTAINER_EXECUTION")
 	})
 	t.Run("pre91_literal_equivalence", func(t *testing.T) {
 		query, err := os.ReadFile("../ops/http-maintenance/http_maintenance_pre91.sql")

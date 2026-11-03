@@ -19,6 +19,7 @@ import test_g9pair_core_cas as base
 cas = base.cas
 REPO = Path(__file__).resolve().parents[3]
 M91 = REPO / 'db/migrations/00091_recorded_http_maintenance_dispatch_dispositions.sql'
+M92 = REPO / 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
 HTTP_TABLE = 'capacity_dispatch_http_maintenance_dispositions'
 HTTP_DDL = '''
 ALTER TABLE capacity_dispatch_jobs ADD COLUMN created_at timestamptz,ADD COLUMN updated_at timestamptz;
@@ -53,7 +54,10 @@ class R6CASPostgresTests(unittest.TestCase):
 
     def setUp(self):
         base.G9CASPostgresTests.setUp(self)
-        self.pg(HTTP_DDL + actual_retained_function())
+        # Match the actual M18 status type before the first declared row. The
+        # nullable fixture still admits defensive NULL-status refusal vectors.
+        self.pg(HTTP_DDL + 'ALTER TABLE workflow_runs ALTER COLUMN status TYPE varchar(32);' +
+                actual_retained_function())
 
     def full_snapshot(self):
         names = json.loads(self.pg("SELECT json_agg(tablename ORDER BY tablename) FROM pg_tables WHERE schemaname='public';").stdout)
@@ -202,6 +206,66 @@ class R6CASPostgresTests(unittest.TestCase):
                 self.assertNotIn('public.http_maintenance_dispatch_effect_scan(', sql)
                 self.actual_sql(sql, {'busy_jobs':0})
                 self.actual_sql(self.terminal_sql(89), {'busy_jobs':1})
+        self.assert_index92_and_busy_predicate_parity()
+
+    def assert_index92_and_busy_predicate_parity(self):
+        """Actual M92 index DDL and actual CAS SQL; no synthetic Goose92 row."""
+        self.setUp()
+        self.seed_http(terminal=False)
+        for number, workflow, namespace, name, status, finished in (
+                (3501, None, 'dakasa-production', 'notify-aws-elastic-capacity', 'failed', None),
+                (3502, self.expected['workflow_id'], 'dakasa-production', 'notify-aws-elastic-capacity', 'running', '2020-01-01T00:01:00Z'),
+                (3503, self.expected['workflow_id'], 'foreign', 'foreign-logical', 'failed', None),
+                (3504, None, 'dakasa-production', 'notify-aws-elastic-capacity', None, '2020-01-01T00:01:00Z'),
+                (3505, None, 'dakasa-production', 'notify-aws-elastic-capacity', 'succeeded', '2020-01-01T00:01:00Z'),
+                (3506, None, 'foreign', 'foreign-logical', 'running', None)):
+            self.terminal_insert('workflow_runs', {'id': base.uid(number), 'workflow_id': workflow,
+                'workflow_namespace': namespace, 'workflow_name': name, 'status': status,
+                'finished_at': finished})
+        query = cas.held_r6_database_sql(self.expected)
+        self.assertEqual(query.count('\n\\gset\n'), 1)
+        # Preserve the actual whole physical-UUID UNION logical-id count,
+        # including its real psql variable path and original 8s/1s limits.
+        busy = query.split('\n\\gset\n', 1)[0] + "\n\\gset\nSELECT jsonb_build_object('busy_runs', :'root_held_busy_runs'::bigint);\nCOMMIT;"
+        self.actual_sql(busy, {'busy_runs': 4})
+        probe = "BEGIN READ ONLY; SELECT jsonb_build_object('index92_valid'," + cas.workflow_busy_logical_index92_sql() + '); COMMIT;'
+        self.actual_sql(probe, {'index92_valid': False})
+        source = M92.read_text()
+        self.assertIn('-- +goose NO TRANSACTION', source)
+        up = source.split('-- +goose Up\n', 1)[1].split('-- +goose Down\n', 1)[0]
+        self.pg(up)
+        self.actual_sql(probe, {'index92_valid': True})
+        self.actual_sql(busy, {'busy_runs': 4})
+        # A declared future/unapplied row is a refusal vector, never a claim
+        # that this fixture applied Goose92. The actual SQL must see all rows.
+        self.pg("INSERT INTO goose_db_version(id,version_id,is_applied,tstamp) "
+                "VALUES(5,93,false,'2020-01-01T00:00:00Z');")
+        before = self.full_snapshot()
+        observed = json.loads(self.pg(cas.held_r6_database_sql(self.expected)).stdout)
+        self.assertEqual(observed['history_max_version'], 93)
+        self.assertEqual(observed['schema'], 91)
+        self.assertEqual(observed['migration92_applied'], 0)
+        self.assertTrue(observed['index92_valid'])
+        with self.assertRaises(cas.Hold):
+            cas.validate_r6_held_database(observed, self.expected)
+        self.assertEqual(self.full_snapshot(), before)
+        predicate = "(COALESCE(status,'') NOT IN ('succeeded','failed','cancelled') OR finished_at IS NULL)"
+        wrong_indexes = {
+            'not_partial': 'CREATE INDEX workflow_runs_busy_logical_idx ON workflow_runs(workflow_namespace,workflow_name,id);',
+            'wrong_order': 'CREATE INDEX workflow_runs_busy_logical_idx ON workflow_runs(workflow_name,workflow_namespace,id) WHERE ' + predicate + ';',
+            'unique': 'CREATE UNIQUE INDEX workflow_runs_busy_logical_idx ON workflow_runs(workflow_namespace,workflow_name,id) WHERE ' + predicate + ';',
+            'include': 'CREATE INDEX workflow_runs_busy_logical_idx ON workflow_runs(workflow_namespace,workflow_name,id) INCLUDE(status) WHERE ' + predicate + ';',
+            'expression': 'CREATE INDEX workflow_runs_busy_logical_idx ON workflow_runs(lower(workflow_namespace),workflow_name,id) WHERE ' + predicate + ';',
+            'missing_null_finished': "CREATE INDEX workflow_runs_busy_logical_idx ON workflow_runs(workflow_namespace,workflow_name,id) WHERE COALESCE(status,'') NOT IN ('succeeded','failed','cancelled');",
+            'missing_coalesce': "CREATE INDEX workflow_runs_busy_logical_idx ON workflow_runs(workflow_namespace,workflow_name,id) WHERE status NOT IN ('succeeded','failed','cancelled') OR finished_at IS NULL;",
+            'changed_terminal_set': "CREATE INDEX workflow_runs_busy_logical_idx ON workflow_runs(workflow_namespace,workflow_name,id) WHERE COALESCE(status,'') NOT IN ('succeeded','failed','cancelled','pending') OR finished_at IS NULL;",
+            'wrong_table': 'CREATE TABLE foreign_workflow_runs (LIKE workflow_runs); CREATE INDEX workflow_runs_busy_logical_idx ON foreign_workflow_runs(workflow_namespace,workflow_name,id) WHERE ' + predicate + ';',
+        }
+        for defect, ddl in wrong_indexes.items():
+            with self.subTest(declared_index92_defect=defect):
+                self.pg('DROP INDEX workflow_runs_busy_logical_idx;' + ddl)
+                self.actual_sql(probe, {'index92_valid': False})
+                self.actual_sql(busy, {'busy_runs': 4})
 
     def test_schema91_missing_malformed_or_foreign_retained_proofs_stay_busy(self):
         for defect in ('missing_receipt','foreign_job','foreign_run','job_sha','run_sha','old_update',

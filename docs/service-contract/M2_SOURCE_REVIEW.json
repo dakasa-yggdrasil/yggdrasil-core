@@ -2387,5 +2387,187 @@
       "schema_stats_index_global_or_timeout_changed": false,
       "cold_cache_or_general_percentage_or_guaranteed_runtime_claimed": false
     }
+  },
+  "workflow_busy_logical_index92_and_companion_source_review_20261103": {
+    "schema": "workflow_busy_logical_index92_and_companion_source_review_v1",
+    "baseline_Ops_P": "44588c8328a8326d3bd2cbfb88cf2614f16da382",
+    "scope": "Canonical additive workflow busy index and exact schema92 R6 held operator, with separately qualified companion migration Job. Source review only; installed G9 and selected runtime Core have independent provenance.",
+    "actual_pre_mutation_HOLDs": {
+      "first_CAS_command_id": "5fef77fd-f1dd-4b6d-8233-ceecc8f1c15a",
+      "second_CAS_command_id": "0d642a59-8b65-424e-bd77-e5826beddfed",
+      "error": "statement_timeout on first complete busy-count SELECT",
+      "statement_timeout_ms": 8000,
+      "independent_global_image_possible_claim_absent": true,
+      "mutating_Core_PATCH_sent": false
+    },
+    "readonly_diagnosis": {
+      "exact_original_SQL_sha256": "d89691e689489b6fcf6f08eaac295615758ec560e2f12f347c92fcbeb8accfdc",
+      "actual_unchanged_command_id": "e88ea21f-6951-4302-966d-f049088a5462",
+      "complete_elapsed_seconds": 9.47596,
+      "bounded_observation": "The first complete busy count spent approximately7.9 seconds reading relation blocks; the later full guard took approximately1.4 seconds. This is an observation, not a controlled-cache benchmark.",
+      "sequential_variant_command_id": "4dd70435-4986-43e1-af37-1e3dd8d3f8e2",
+      "sequential_variant_statement_timeout": true,
+      "planner_variant_shipped": false,
+      "actual_index_catalog_command_id": "1ce0ff10-17c9-47e9-aca4-b5f0eff01e0d",
+      "estimated_workflow_runs": 951944,
+      "index_missing_in_observed_schema91": true,
+      "performance_improvement_or_guarantee_claimed": false
+    },
+    "migration92": "Nonunique concurrent btree on exactly public.workflow_runs(workflow_namespace,workflow_name,id), with the complete COALESCE-status OR NULL-finished predicate. Wrong/invalid existing same-name indexes require HOLD; no automatic drop or repair.",
+    "CAS_contract": "Require exact schema92, max of all Goose versions92, one applied92 row, whole accepted history and valid/ready/live exact index. Complete UUID/logical busy UNION, deduplication, all other original proofs, closed89/91 retained protocol factory, legacy branches, Source/image/runtime pins, claims and budgets remain unchanged.",
+    "companion_contract": "Source-boundFalse and all future pinsNone before IO. A separately CI/image-qualified Q companion ships canonical SQL1..39+41..92. One UUID Job, backoff0/restartNever, disjoint app label, normal /app/goose up. Durable possible marker before exactly one POST; uncertain ACK only GET. Full old91 history byte-exact plus one actual92 row, unchanged90/91 catalog and exact92 index, unchanged Core/G9 required. No ordinary quiet/business assertion, Core/provider/Guest mutation, Down, cleanup, index repair or retry.",
+    "preserved_runtime": {
+      "installed_G9_Ops_P": "44588c8328a8326d3bd2cbfb88cf2614f16da382",
+      "selected_Core_R": "c02512e9d11d29cad4e4ff67186602d3485d6fa3",
+      "selected_Core_amd64_D": "7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6",
+      "runtime10_tools4_and_old_checksum_row_unchanged": true,
+      "companion_is_not_selected_runtime_Core": true
+    },
+    "budgets": {
+      "held_per_statement_ms": 8000,
+      "held_lock_ms": 1000,
+      "held_process_seconds": 12,
+      "companion_job_seconds": 240,
+      "companion_DDL_ms": 120000,
+      "companion_parent_seconds": 595,
+      "raised": false
+    },
+    "current_latest_fixture_reconciliation": "Full-Up fixtures require92. Actual historical89/index89 remains; unchanged old_r4_up89_after91 ID now verifies both actual91 and92 with the original88 old-R4 SQL files, full history and row snapshots unchanged. All historical test IDs and literal subtest names remain.",
+    "closed_CI_rosters": {
+      "original_historical": 106,
+      "G9": 47,
+      "R6": 12,
+      "new_actual_M18_M92_and_complete_busy_PG16": 6,
+      "new_companion_declared_transport_unit": 9,
+      "total": 180,
+      "preserved_original_test_IDs": true,
+      "exact_discovery_RUN_PASS_no_skip_required": true,
+      "index_helper_PG17_acceptance_claimed": false,
+      "separate_full_Goose_and_protocol_PG16_PG17_required": true,
+      "current_head_results": "pending_new_exact_head_no_outcome_transfer"
+    },
+    "complete_non_test_Go_inventory": {
+      "count": 799,
+      "sha256": "485b1ff740f6e8336ec36a2c193d5bc2e06607acddc72190fb19011d975ead35",
+      "only_changed_fact": "repository/failed_serving_recoveryfixture.go",
+      "build_constraint": "recoveryfixture && !nativequalification",
+      "other798_facts_unchanged": true
+    },
+    "files": {
+      ".github/scripts/verify_http_maintenance_disposition_ci.py": {
+        "bytes": 9570,
+        "sha256": "0e6ab9dc38688f48a6f84e0824117a4c85fe93005217cfbbdb859abc9fd543ab"
+      },
+      ".github/workflows/capacity-postgres.yml": {
+        "bytes": 56655,
+        "sha256": "ede89bd3a9d703d95572a09d3e7e63ec7845a3202435f94c5ddc2e15c4452b65"
+      },
+      ".github/workflows/failed-original-disposition-source.yml": {
+        "bytes": 27329,
+        "sha256": "ccd4063047e95247316a822e7a5bd5d089ad5577a717ba8a2a58f458431b7102"
+      },
+      ".github/workflows/failed-serving-guest.yml": {
+        "bytes": 16790,
+        "sha256": "a20a8df7cfc3869671db635d0854d41517b1ce6c4ea06eb30fb845de43f619ab"
+      },
+      ".github/workflows/http-maintenance-disposition.yml": {
+        "bytes": 1867,
+        "sha256": "c2429609e941a1fe372aeb677f5ce2c4b97ceec25d46b1ed7ed75c5de784d575"
+      },
+      ".github/workflows/installed-reconcile-source.yml": {
+        "bytes": 21638,
+        "sha256": "f326dca41e744544ddb153e1405c6494facd4708ddea8814cc86ced209078cda"
+      },
+      ".github/workflows/owned-network-guardian.yml": {
+        "bytes": 3317,
+        "sha256": "a12c412d6ad3f31db856a659c813802d6c6972b18e79a9b6398c60dcbb26bb96"
+      },
+      ".github/workflows/partial-nativeoff-reconciliation-source.yml": {
+        "bytes": 11980,
+        "sha256": "9cab3bd1093fbc67766c41bcb94800be6359a812673f8c344eb9b5a115096947"
+      },
+      "db/migrations/00092_workflow_runs_busy_logical_index.sql": {
+        "bytes": 1062,
+        "sha256": "ddc3be6589b6bc55ae786f75752f69e20f5241e25d053f3d817fb6b1caeb9f33"
+      },
+      "docs/service-contract/source/sources.json": {
+        "bytes": 130582,
+        "sha256": "485b1ff740f6e8336ec36a2c193d5bc2e06607acddc72190fb19011d975ead35"
+      },
+      "ops/network-guardian/rollout/README.md": {
+        "bytes": 4068,
+        "sha256": "2e8dcf3ffab3df26799664a2c8e80a1c1b0e275552b58a48d8d11e825394cbbc"
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "bytes": 273,
+        "sha256": "47de21f7f37e6cdbb2a1d9ba918bdd3283dfd8364b0300585fae8b1a0c92f3dc"
+      },
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "bytes": 141609,
+        "sha256": "6a810e1c408ec597657e55464603666ce7e4c2c6e8808d999cf36d453f09cc06"
+      },
+      "ops/network-guardian/rollout/goose92_native_once.py": {
+        "bytes": 35837,
+        "sha256": "1c258c6db23c657a91c0330065a7ed78ac294525edaf7be4c264d43dfadceba8"
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-GOOSE92.json": {
+        "bytes": 922,
+        "sha256": "298a1c46c48874f237d7ae03d42e390146f5487d4c9e5f7314f3c94f59942d6b"
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-INDEX92.json": {
+        "bytes": 821,
+        "sha256": "a79c06801a8d79fa5fd5b58788b30e429e718e3a46b6157c1d4f5ac6d30a1238"
+      },
+      "ops/network-guardian/tests/run_exact_ci.py": {
+        "bytes": 5054,
+        "sha256": "9411517db020983f856a39e8cc9a983456d48c90560499a0ccddedb8feeca5ab"
+      },
+      "ops/network-guardian/tests/test_goose92_native_once.py": {
+        "bytes": 20564,
+        "sha256": "299d1e72291cfcbd36e210d7a171164a94c55b48e01701e8f6bace6bbffe46ef"
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_postgres.py": {
+        "bytes": 24516,
+        "sha256": "20106584c61c2d7797160313d0b9d7b4fd96fdddd830b7f2e2d389dd8897644a"
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_unit.py": {
+        "bytes": 32798,
+        "sha256": "0b876e74e4f51e2ea6b15d4054d65b2b05ef311437931eef2e71ef736dc5a395"
+      },
+      "ops/network-guardian/tests/test_workflow_busy_index92_postgres.py": {
+        "bytes": 12774,
+        "sha256": "1a04d2a35ca421b6ee16096bc01d6a47141c0b89578818fc0be7fa4a3c067efd"
+      },
+      "repository/capacity_dispatch_finalization_lost_disposition_postgres_test.go": {
+        "bytes": 23108,
+        "sha256": "e5478714a3624c0e5cce5641d92bb9e7f441c4a6c5824b29ef938403d359b6cf"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition_postgres_test.go": {
+        "bytes": 37848,
+        "sha256": "aafe5a4101ad1dd5671e9311c7e40ef56e7092d22f5fa888f7c446115beaa1bd"
+      },
+      "repository/capacity_guest_failed_installed_external_cause_postgres_test.go": {
+        "bytes": 30353,
+        "sha256": "1f22033e52b98a5256542346e7b0f220391632eb42cf0ec772f2f03784bb1709"
+      },
+      "repository/capacity_guest_partial_nativeoff_postgres_test.go": {
+        "bytes": 14978,
+        "sha256": "215b18c1f9439e9c2d94a01c9219f82bc9ee0321470a5e38110c362d9ee6db57"
+      },
+      "repository/capacity_guest_v2_refused_nativeoff_postgres_test.go": {
+        "bytes": 28526,
+        "sha256": "920b21e90e4a3de78448c6b283693af50dc951410119513b78b4a67a25991999"
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "bytes": 51210,
+        "sha256": "b61630c043c8fc0063bd4c53b82aaef7b1d6f4d05cdd11b1a1656c7b57453952"
+      }
+    },
+    "validation": {
+      "source_review_and_static_parse_only": true,
+      "local_functional_tests_import_build_SQL_container_execution": false,
+      "production_migration92_Core_rollout_retirement_cycles_main_or_completion_claimed": false,
+      "new_exact_head_CI_and_independent_native_acceptance_required": true
+    }
   }
 }
