@@ -53,6 +53,7 @@ func TestGuestRetirementForwardLiveWorkflowDoesNotReplayGuestPostgres(t *testing
 			input := forwardFixtureInput(f)
 			out, err := liveGuestRetirementForward(ctx, f.RetirementStore(), f.Policy, input, f.Request.Intent.RequestID)
 			if err != nil {
+				t.Logf("later admission observation: %s", f.AdmissionDiagnostics())
 				t.Fatal("actual live forward admission", err)
 			}
 			meta, ok := out.(map[string]any)
@@ -71,6 +72,9 @@ func TestGuestRetirementForwardLiveWorkflowDoesNotReplayGuestPostgres(t *testing
 			}
 			plan, handled, err := planGuestRetirementForward(ctx, f.PlanStore(), f.Policy, f.Workflow, forwardFixtureStep(t, f, "plan-original-guest"))
 			if err != nil || !handled {
+				if err != nil {
+					t.Logf("later admission observation: %s", f.AdmissionDiagnostics())
+				}
 				t.Fatal("active live admission fell through to dead-target coverage", err)
 			}
 			hold, ok := plan.(map[string]any)
@@ -99,12 +103,16 @@ func TestGuestRetirementForwardHistoricalPlanClaimsBeforeCoveragePostgres(t *tes
 			defer stop()
 			_, err := f.Store.RequestGuestRetirementForwardHistorical(ctx, f.HistoricalRequest(), "collaborator:"+uuid.NewString(), barrier, func(context.Context) error { return nil })
 			if err != nil {
+				t.Logf("later admission observation: %s", f.AdmissionDiagnostics())
 				t.Fatal("declared historical original admission", err)
 			}
 			f.StartSuccessorDispatch()
 			ctx = context.WithValue(ctx, originalGuestReconcileOwnerKey{}, &capacity.OriginalGuestReconcileOwner{})
 			out, handled, err := planGuestRetirementForward(ctx, f.PlanStore(), f.Policy, f.Workflow, forwardFixtureStep(t, f, "plan-original-guest"))
 			if err != nil || !handled {
+				if err != nil {
+					t.Logf("later admission observation: %s", f.AdmissionDiagnostics())
+				}
 				t.Fatal("historical plan did not claim before coverage", err)
 			}
 			plan, ok := out.(originalGuestReconcilePlan)
@@ -150,6 +158,7 @@ func TestGuestRetirementForwardSourceReadClocksPostgres(t *testing.T) {
 			ctx, stop := context.WithTimeout(context.Background(), 90*time.Second)
 			defer stop()
 			if _, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID); err != nil {
+				t.Logf("later admission observation: %s", f.AdmissionDiagnostics())
 				t.Fatal(err)
 			}
 			input := forwardFixtureInput(f)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"sort"
 	"time"
@@ -30,17 +31,34 @@ func lockRetirementForwardProfileTx(ctx context.Context, tx *sql.Tx, b model.Cap
 	return err
 }
 func guardRetirementForwardSlotTx(ctx context.Context, tx *sql.Tx, b model.CapacityMutationBinding, slot int) error {
-	rows, err := tx.QueryContext(ctx, `SELECT f.id::text,f.slot FROM public.capacity_guest_retirement_forwards f JOIN public.capacity_intents c ON c.namespace=f.namespace AND c.environment=f.environment AND c.domain=f.domain AND c.dimension=f.dimension AND c.intent#>>'{retirement_forward,id}'=f.id::text WHERE f.integration_instance_id=$1 AND f.scope_checksum=$2 AND f.profile_name=$3 AND c.intent#>>'{retirement_forward,stage}'<>'terminal' AND f.stage=c.intent#>>'{retirement_forward,stage}'`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName)
+	// A genuinely absent marker uses only the existing intent table. Callers
+	// hold the physical-profile lock, so a same-profile admission cannot race
+	// this check. Every present marker requires its ledger; errors never open it.
+	var present bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_intents WHERE intent ? 'retirement_forward' AND intent->'retirement_forward'<>'null'::jsonb)`).Scan(&present); err != nil {
+		return err
+	}
+	if !present {
+		return nil
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT f.id::text,f.slot,f.stage,COALESCE(c.intent->'retirement_forward'=jsonb_build_object('schema',f.original_record->>'schema','id',f.id::text,'retirement_request_id',f.retirement_request_id::text,'preregistration_id',f.preregistration_id::text,'mode',f.original_record->>'mode','stage',f.stage,'original_intent_sha256',f.original_record->>'original_intent_sha256','original_generation',f.original_record->'original_generation','original_fence',f.original_record->'original_fence'),false) FROM public.capacity_intents c LEFT JOIN public.capacity_guest_retirement_forwards f ON c.namespace=f.namespace AND c.environment=f.environment AND c.domain=f.domain AND c.dimension=f.dimension AND c.intent#>>'{retirement_forward,id}'=f.id::text AND f.stage=c.intent#>>'{retirement_forward,stage}' WHERE c.intent ? 'retirement_forward' AND c.intent->'retirement_forward'<>'null'::jsonb AND (f.id IS NULL OR (f.integration_instance_id=$1 AND f.scope_checksum=$2 AND f.profile_name=$3))`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	n := 0
 	for rows.Next() {
-		var id string
+		var id, stage string
 		var target int
-		if err = rows.Scan(&id, &target); err != nil {
-			return err
+		var markerMatches bool
+		if err = rows.Scan(&id, &target, &stage, &markerMatches); err != nil {
+			return err // NULL/unknown/malformed marker cannot disappear in a join.
+		}
+		if !markerMatches {
+			return ErrCapacityConflict
+		}
+		if stage == "terminal" {
+			continue // Exact immutable terminal is history, not an active fence.
 		}
 		n++
 		scope, ok := ctx.Value(retirementForwardScopeKey{}).(retirementForwardScope)
@@ -53,6 +71,7 @@ func guardRetirementForwardSlotTx(ctx context.Context, tx *sql.Tx, b model.Capac
 	}
 	return rows.Err()
 }
+
 func forwardMutationContext(ctx context.Context, s CapacityStore, current model.CapacityIntent, b model.CapacityMutationBinding, slot int, capability string) (context.Context, error) {
 	if !retirementForwardActive(&current) {
 		return ctx, nil
@@ -62,6 +81,61 @@ func forwardMutationContext(ctx context.Context, s CapacityStore, current model.
 		return ctx, ErrCapacityConflict
 	}
 	return context.WithValue(ctx, retirementForwardScopeKey{}, retirementForwardScope{id: m.ID, slot: slot}), nil
+}
+
+// Callback callers have no workflow Source context. Under the already-held
+// scope/profile locks, only the exact immutable owning DELETE can reconstruct
+// the private slot scope. All callback authentication/state checks still follow.
+func retirementForwardCallbackContextTx(ctx context.Context, tx *sql.Tx, record capacityMutationRecord, namespace string, p model.CapacityPolicySpec) (context.Context, error) {
+	var raw []byte
+	err := tx.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND intent ? 'retirement_forward' AND intent->'retirement_forward'<>'null'::jsonb FOR UPDATE`, namespace, p.Environment, p.Domain, p.Dimension).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ctx, nil // Existing schema86/no-marker callbacks need no ledger90.
+	}
+	if err != nil {
+		return ctx, err
+	}
+	var current model.CapacityIntent
+	if json.Unmarshal(raw, &current) != nil || current.RetirementForward == nil {
+		return ctx, ErrCapacityConflict
+	}
+	m := current.RetirementForward
+	if m.Stage == "terminal" {
+		return ctx, nil // The existing slot guard still authenticates terminal history.
+	}
+	if (m.Stage != "admitted" && m.Stage != "off_qualified") || current.Namespace != namespace || current.Environment != p.Environment || current.Domain != p.Domain || current.Dimension != p.Dimension || current.PolicyID != record.PolicyID || current.PolicyChecksum != record.PolicyChecksum || current.Generation != record.Generation || current.FencingToken != record.FencingToken || current.LeaseOwner != record.LeaseOwner || current.LeaseExecutorID != record.ExecutorID || current.Phase != "drained" || current.RecoveryOnly || record.Grant.Capability != record.Binding.DestroyCapability || record.Grant.CompensationOf != "" {
+		return ctx, ErrCapacityConflict
+	}
+	r, _, err := loadRetirementForwardTx(ctx, tx, m.ID, m.Stage)
+	if err != nil {
+		return ctx, err
+	}
+	if !reflect.DeepEqual(m, retirementForwardMarker(r)) || r.ActualCoreSource != capacity.CurrentGuestCoreSource() || r.Namespace != namespace || r.Environment != p.Environment || r.Domain != p.Domain || r.Dimension != p.Dimension || r.Generation != current.Generation || r.Fence != current.FencingToken || r.LeaseOwner != current.LeaseOwner || r.ExecutorID != current.LeaseExecutorID || record.WorkflowID.String() != r.Original.Request.Intent.WorkflowID || r.DestroyGrantID != "" {
+		return ctx, ErrCapacityConflict
+	}
+	// Historical parent receipts may be read/confirmed by a child, never used
+	// to reconstruct a callback scope under the child's different admission.
+	var sameAdmission bool
+	err = tx.QueryRowContext(ctx, `SELECT convert_from(original_wire,'UTF8')::jsonb->>'admission_id'=$3 FROM public.capacity_vm_retirement_delete_bindings WHERE intent_id=$1 AND destroy_grant_id=$2 FOR SHARE`, r.RetirementRequestID, record.Grant.GrantID, r.ID).Scan(&sameAdmission)
+	if err != nil {
+		return ctx, err
+	}
+	if !sameAdmission {
+		return ctx, ErrCapacityConflict
+	}
+	owned, err := retirementForwardDestroyRecordTx(ctx, tx, r, record.Grant.GrantID)
+	if err != nil {
+		return ctx, err
+	}
+	// State may have advanced before these ordered profile locks were acquired.
+	// Compare every immutable grant field; the actual state is reloaded FOR
+	// UPDATE and checked by the unchanged callback body before any mutation.
+	g := owned.Grant
+	g.State = record.Grant.State
+	if !reflect.DeepEqual(g, record.Grant) || !reflect.DeepEqual(owned.Binding, record.Binding) || owned.PolicyID != record.PolicyID || owned.PolicyChecksum != record.PolicyChecksum || owned.WorkflowID != record.WorkflowID || owned.Generation != record.Generation || owned.FencingToken != record.FencingToken || owned.LeaseOwner != record.LeaseOwner || owned.ExecutorID != record.ExecutorID || !owned.CreatedAt.Equal(record.CreatedAt) {
+		return ctx, ErrCapacityConflict
+	}
+	return context.WithValue(ctx, retirementForwardScopeKey{}, retirementForwardScope{id: m.ID, slot: record.Grant.Slot}), nil
 }
 
 // This new Source-only inventory path refreshes exact already-owned slots; it
@@ -122,7 +196,7 @@ func (s CapacityStore) RefreshGuestRetirementForwardInventory(ctx context.Contex
 	return tx.Commit()
 }
 
-func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, old *model.CapacityIntent, next *model.CapacityIntent, now time.Time) error {
+func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, old *model.CapacityIntent, next *model.CapacityIntent, now time.Time) error {
 	if !retirementForwardActive(old) {
 		return nil
 	}
@@ -147,7 +221,7 @@ func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, t
 	if err != nil {
 		return err
 	}
-	if err = s.guestForwardCompletionTx(ctx, tx, p, *old, r, now); err != nil {
+	if err = s.guestForwardCompletionTx(ctx, tx, policy, p, *old, r, now); err != nil {
 		return err
 	}
 	terminal := r
@@ -179,7 +253,7 @@ func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, t
 	_, err = insertRetirementForwardTx(ctx, tx, terminal)
 	return err
 }
-func (s CapacityStore) guestForwardCompletionTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, r GuestRetirementForward, now time.Time) error {
+func (s CapacityStore) guestForwardCompletionTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, r GuestRetirementForward, now time.Time) error {
 	if r.Generation != current.Generation || r.Fence != current.FencingToken || r.ExecutorID != s.ExecutorID || r.LeaseOwner != current.LeaseOwner || r.RunID != s.OriginalRunID.String() {
 		return ErrCapacityConflict
 	}
@@ -194,7 +268,6 @@ func (s CapacityStore) guestForwardCompletionTx(ctx context.Context, tx *sql.Tx,
 	if _, _, err = s.retirementForwardLatestAbsenceTx(ctx, tx, r, p, original, now); err != nil {
 		return err
 	}
-	policy := model.Manifest{ID: current.PolicyID, Checksum: current.PolicyChecksum, Metadata: model.ManifestMetadata{Namespace: current.Namespace}}
 	if err = s.retirementForwardUsefulFloorTx(ctx, tx, retirementForwardSnapshot{original: r.Original, policy: policy, spec: p, current: current, binding: original.Binding, now: now}, r); err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 

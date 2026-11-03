@@ -437,6 +437,10 @@ func (s CapacityStore) callbackTransaction(ctx context.Context, id string, fn fu
 	if err = lockRetirementForwardBindingsTx(ctx, tx, bindings); err != nil {
 		return err
 	}
+	ctx, err = retirementForwardCallbackContextTx(ctx, tx, record, ns, p)
+	if err != nil {
+		return err
+	}
 	if err = s.guardOriginalHostCallbackTx(ctx, tx, record, ns, p, originalRequest...); err != nil {
 		return err
 	}

@@ -48,16 +48,20 @@ func RecoveryFixtureRetirementJournal(t *testing.T, i model.CapacityGuestRetirem
 		return model.CapacityGuestRetirementClockV2{Schema: GuestRetirementV2ClockSchema, BootID: e.Statement.Actor.BootID, GuestNonceSHA256: GuestRetirementSHA(i.GuestNonce), ExpiresMonotonicNS: i.GuestExpiresMonotonicNS, StartedMonotonicNS: mono, ReturnedMonotonicNS: mono + int64(time.Duration(ms)*time.Millisecond), GuestLocalStartedAt: start, GuestLocalDeadline: start.Add(time.Duration(i.GuestExpiresMonotonicNS - mono))}
 	}
 	digest := strings.Repeat("a", 64)
-	writer := e.Statement.Writers[0]
 	census := func(ms int, processes []model.CapacityGuestRetirementNativeProcess) model.CapacityGuestRetirementProtectedCensus {
 		return model.CapacityGuestRetirementProtectedCensus{Schema: "guest_retirement_protected_cgroup_v1", Scope: "fixed_protected_cgroup_v2", SourceCommit: e.Statement.Runtime.SourceCommit, Processes: processes, RawCensusSHA256: digest, ObservedAt: at(ms)}
 	}
 	runtime := model.CapacityGuestRetirementRuntimeReturnV2{Schema: GuestRetirementV2RuntimeSchema, IntentSHA256: GuestRetirementSHA(i), AttemptID: i.AttemptID, Runtime: e.Statement.Runtime, WriterRosterSHA256: e.Statement.WriterRosterSHA256, WithdrawRequestSHA256: i.WithdrawRequestSHA256, DrainRequestSHA256: i.DrainRequestSHA256, UnknownWriters: []string{}, ReturnedAt: at(41), Clock: clock(41)}
 	runtime.Withdraw = model.CapacityGuestRetirementOriginalOperation{OperationID: i.WithdrawOperationID, RequestSHA256: i.WithdrawRequestSHA256, ResultSHA256: digest, StartedAt: at(33), OriginalReturnedAt: at(34), Outcome: "returned"}
 	runtime.Drain = model.CapacityGuestRetirementOriginalOperation{OperationID: i.DrainOperationID, RequestSHA256: i.DrainRequestSHA256, ResultSHA256: digest, StartedAt: at(35), OriginalReturnedAt: at(39), Outcome: "returned"}
-	runtime.CensusBefore = census(32, []model.CapacityGuestRetirementNativeProcess{{PID: writer.Lifetime.PID, StartTicks: writer.Lifetime.StartTicks}})
+	processes := make([]model.CapacityGuestRetirementNativeProcess, 0, len(e.Statement.Writers))
+	runtime.Writers = make([]model.CapacityGuestRetirementWriterReturn, 0, len(e.Statement.Writers))
+	for _, writer := range e.Statement.Writers {
+		processes = append(processes, model.CapacityGuestRetirementNativeProcess{PID: writer.Lifetime.PID, StartTicks: writer.Lifetime.StartTicks})
+		runtime.Writers = append(runtime.Writers, model.CapacityGuestRetirementWriterReturn{Writer: writer, AdmissionClosedAt: at(32), OriginalWithdrawReturnedAt: at(34), OriginalWorkersJoinedAt: at(38), OriginalConnectionsJoinedAt: at(38), OriginalResultSHA256: digest, Outcome: "joined"})
+	}
+	runtime.CensusBefore = census(32, processes)
 	runtime.CensusAfter = census(40, []model.CapacityGuestRetirementNativeProcess{})
-	runtime.Writers = []model.CapacityGuestRetirementWriterReturn{{Writer: writer, AdmissionClosedAt: at(32), OriginalWithdrawReturnedAt: at(34), OriginalWorkersJoinedAt: at(38), OriginalConnectionsJoinedAt: at(38), OriginalResultSHA256: digest, Outcome: "joined"}}
 	op := model.CapacityGuestRetirementOperationReturn{StartedAt: at(31), PID: 200, StartTicks: 201, WaitReturnedAt: at(42), BodyJoined: true, CloseReturned: true, Outcome: "returned"}
 	offStart := at(65)
 	power := model.CapacityGuestRetirementOperationReturn{StartedAt: at(66), PID: 210, StartTicks: 211, WaitReturnedAt: at(69), BodyJoined: true, CloseReturned: true, Outcome: "returned"}
@@ -89,7 +93,11 @@ func RecoveryFixtureRetirementJournal(t *testing.T, i model.CapacityGuestRetirem
 		}
 		observed := model.CapacityGuestRetirementObservationV2{Schema: GuestRetirementV2ObservationSchema, Record: record, RecordSHA256: GuestRetirementSHA(record), JournalComplete: true, HoldReasons: []string{}, ActiveAttemptID: i.AttemptID, ActiveIntentSHA256: GuestRetirementSHA(i), Reader: e.Statement.Actor, ObservedAt: at([]int{25, 50, 68, 75}[n-1]), Clock: record.Clock}
 		observed.Signature, _ = GuestLifecycleSignature(observer, observed)
-		if err := GuestRetirementV2Observation(observed, e, i, true); err != nil {
+		validationContext := guestRetirementV2NormalContext
+		if guestRetirementForwardEnrolledEmptyRoster(e, i) {
+			validationContext = guestRetirementV2ForwardContext
+		}
+		if err := guestRetirementV2Observation(observed, e, i, true, validationContext); err != nil {
 			t.Fatal("signed V2 retirement fixture", n, err)
 		}
 		observations = append(observations, observed)

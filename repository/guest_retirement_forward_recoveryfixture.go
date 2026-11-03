@@ -5,10 +5,13 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/base32"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -21,6 +24,114 @@ import (
 	"github.com/lib/pq"
 )
 
+// AdmissionDiagnostics is a bounded, later observation of the disposable test
+// database after a failed operation. It never retries that operation, changes
+// stored evidence, commits a transaction or attributes the earlier refusal.
+func (f *GuestRetirementForwardRecoveryFixture) AdmissionDiagnostics() string {
+	report := map[string]any{"later_observation_only": true, "earlier_refusal_branch_measured": false}
+	encode := func() string {
+		raw, err := json.Marshal(report)
+		if err != nil || len(raw) > 16<<10 {
+			return `{"later_observation_only":true,"diagnostic_output_unavailable":true}`
+		}
+		return string(raw)
+	}
+	if f == nil || f.DB == nil || f.private == nil || !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
+		report["test_fixture_required"] = true
+		return encode()
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stop()
+	tx, err := f.DB.BeginTx(ctx, nil)
+	if err != nil {
+		report["begin_error_type"] = fmt.Sprintf("%T", err)
+		return encode()
+	}
+	defer tx.Rollback()
+	stage := func(name string, err error) {
+		report[name] = map[string]any{"ok": err == nil, "error_type": fmt.Sprintf("%T", err)}
+	}
+	_, err = tx.ExecContext(ctx, `SET LOCAL TIME ZONE 'UTC'`)
+	stage("utc_session", err)
+	original, loadErr := loadGuestRetirementV2Tx(ctx, tx, f.Request.Intent.RequestID, true)
+	stage("load_original", loadErr)
+	if loadErr == nil {
+		i := original.Request.Intent
+		report["request_matches_fixture"] = reflect.DeepEqual(original.Request, f.Request)
+		rows, rowErr := tx.QueryContext(ctx, `SELECT r.phase,r.ordinal,r.possible_read_at,r.original_deadline,v.original_wire,v.authority_sha256,r.original_deadline<=$2::timestamptz FROM public.capacity_guest_original_authority_reads r LEFT JOIN public.capacity_guest_original_authority_returns v ON v.read_id=r.id WHERE r.intent_id=$1 ORDER BY CASE r.phase WHEN 'before_start' THEN 0 ELSE 1 END,r.ordinal LIMIT 5`, i.RequestID, i.OriginalDeadline.Format(time.RFC3339Nano))
+		authorities := []map[string]any{}
+		if rowErr == nil {
+			for rows.Next() {
+				if len(authorities) == 4 {
+					report["extra_authority_rows"] = true
+					break
+				}
+				var phase string
+				var ordinal int
+				var started, deadline time.Time
+				var raw []byte
+				var digest sql.NullString
+				var withinOriginalPG bool
+				if rowErr = rows.Scan(&phase, &ordinal, &started, &deadline, &raw, &digest, &withinOriginalPG); rowErr != nil {
+					break
+				}
+				var authority model.CapacityGuestRetirementAuthorityV2
+				decoded := capacity.DecodeGuestLifecycle(raw, &authority) == nil
+				entry := map[string]any{"phase": phase, "ordinal": ordinal, "decoded": decoded, "deadline_minus_signed_original_ns": deadline.Sub(i.OriginalDeadline).Nanoseconds(), "deadline_after_original": deadline.After(i.OriginalDeadline), "started_before_issued": started.Before(i.IssuedAt), "budget_ns": deadline.Sub(started).Nanoseconds(), "budget_over_five_seconds": deadline.Sub(started) > 5*time.Second}
+				entry["deadline_within_original_pg"] = withinOriginalPG
+				if decoded {
+					entry["schema_matches"] = authority.Schema == capacity.GuestRetirementV2AuthoritySchema
+					entry["sha_matches"] = digest.Valid && capacity.GuestRetirementSHA(authority) == digest.String
+					entry["observed_minus_started_ns"] = authority.ObservedAt.Sub(started).Nanoseconds()
+					entry["observed_before_start"] = authority.ObservedAt.Before(started)
+					entry["observed_at_or_after_deadline"] = !authority.ObservedAt.Before(deadline)
+					entry["signed_deadline_matches"] = authority.OriginalDeadline.Equal(i.OriginalDeadline)
+					entry["observed_at_or_after_signed_native_deadline"] = !authority.ObservedAt.Before(i.OriginalDeadline)
+				}
+				authorities = append(authorities, entry)
+			}
+			if rowErr == nil {
+				rowErr = rows.Err()
+			}
+			if closeErr := rows.Close(); rowErr == nil {
+				rowErr = closeErr
+			}
+		}
+		stage("authority_rows", rowErr)
+		report["authority"] = authorities
+		_, err = guestRetirementForwardEvidenceTx(ctx, tx, original)
+		stage("evidence", err)
+		receipt, receiptErr := guestOriginalCreateReceiptV2Tx(ctx, tx, original)
+		stage("create_receipt", receiptErr)
+		if receiptErr == nil {
+			report["create_receipt_pins"] = map[string]any{"confirmed": receipt.Grant.State == "confirmed", "grant_matches": receipt.Grant.GrantID == original.Preregistration.OriginalCreateGrantID, "resource_matches": receipt.ResourceID == i.Tuple.ResourceID, "created_at_matches": receipt.ResourceCreatedAt == i.Tuple.CreatedAt}
+		}
+		x, snapshotErr := f.Store.retirementForwardSnapshotTx(ctx, tx, i.RequestID)
+		stage("snapshot", snapshotErr)
+		if x.current.PolicyID != uuid.Nil {
+			report["current_epoch"] = map[string]any{"generation": x.current.Generation, "fence": x.current.FencingToken, "phase": x.current.Phase, "baseline_units": x.current.BaselineSnapshot.Units, "decision_units": x.current.Decision.Units, "target_slot": i.Slot, "generation_matches_original": x.current.Generation == int64(i.Generation), "fence_matches_original": x.current.FencingToken == int64(i.Fence), "owner_matches_original": x.current.LeaseOwner == i.LeaseOwner, "executor_matches_original": x.current.LeaseExecutorID == original.ExecutorID}
+		}
+		if snapshotErr == nil {
+			stage("quiet", retirementForwardQuietTx(ctx, tx, x, f.RunID.String(), ""))
+		}
+		var pgNow time.Time
+		var active int
+		var maxDeadline sql.NullTime
+		err = tx.QueryRowContext(ctx, `SELECT clock_timestamp(),count(*) FILTER(WHERE original_deadline>clock_timestamp()),max(original_deadline) FROM public.capacity_guest_notify_canary_challenges WHERE policy_id=$1`, i.PolicyID).Scan(&pgNow, &active, &maxDeadline)
+		stage("canary_window", err)
+		if err == nil {
+			report["active_canary_windows"] = active
+			if maxDeadline.Valid {
+				report["max_canary_deadline_minus_pg_now_ns"] = maxDeadline.Time.Sub(pgNow).Nanoseconds()
+			}
+		}
+	}
+	err = tx.Rollback()
+	report["rollback_completed"] = err == nil || err == sql.ErrTxDone
+	report["rollback_error_type"] = fmt.Sprintf("%T", err)
+	return encode()
+}
+
 // GuestRetirementForwardRecoveryFixture is declared signed storage and transport
 // data in an owned disposable PG16/17 database. No Guest/provider is contacted.
 // The starting N-member reduction is an explicit initial storage operand, not
@@ -29,25 +140,26 @@ import (
 // repository APIs with FK/trigger enforcement. No stored original is rewritten.
 // This file is absent from default and nativequalification builds.
 type GuestRetirementForwardRecoveryFixture struct {
-	DB                *sql.DB
-	Store             CapacityStore
-	Policy, Workflow  model.Manifest
-	Spec              model.CapacityPolicySpec
-	Intent            model.CapacityIntent
-	Pre               model.CapacityGuestOriginalProvisioningPreregistration
-	Registration      model.CapacityGuestOriginalProvisioningRegistration
-	Receipt           model.CapacityGuestOriginalProvisioningReceipt
-	Request           model.CapacityGuestRetirementRequestV2
-	Caller            GuestOriginalCallerReturn
-	RunID             uuid.UUID
-	Journal           []model.CapacityGuestRetirementObservationV2
-	retainedCanaryIDs []string
-	originalRunID     uuid.UUID
-	private           *failedServingFixture
-	members           []*failedServingFixture
-	job               CapacityDispatchJob
-	envelope          CapacityDispatchEnvelope
-	t                 *testing.T
+	DB                 *sql.DB
+	Store              CapacityStore
+	Policy, Workflow   model.Manifest
+	Spec               model.CapacityPolicySpec
+	Intent             model.CapacityIntent
+	Pre                model.CapacityGuestOriginalProvisioningPreregistration
+	Registration       model.CapacityGuestOriginalProvisioningRegistration
+	Receipt            model.CapacityGuestOriginalProvisioningReceipt
+	Request            model.CapacityGuestRetirementRequestV2
+	Caller             GuestOriginalCallerReturn
+	RunID              uuid.UUID
+	Journal            []model.CapacityGuestRetirementObservationV2
+	retainedCanaryIDs  []string
+	originalRunID      uuid.UUID
+	private            *failedServingFixture
+	members            []*failedServingFixture
+	job                CapacityDispatchJob
+	envelope           CapacityDispatchEnvelope
+	t                  *testing.T
+	fractionalOriginal bool
 }
 
 // NewGuestRetirementForwardRecoveryFixture accepts only the same test-process,
@@ -55,17 +167,23 @@ type GuestRetirementForwardRecoveryFixture struct {
 // mutex/cleanup gates enforced by newFailedServingFixtureHistory. It cannot
 // accept an existing database, URL, signing key, clock or proof from its caller.
 func NewGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords int) *GuestRetirementForwardRecoveryFixture {
-	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 30)
+	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 30, false)
 }
 
 // NewGuestRetirementForwardLiveWorkflowFixture declares a live workflow lease
 // of300s BEFORE its first policy/intent insert and retirement frame. It never
 // extends an existing original timer. Historical tests use the30s constructor.
 func NewGuestRetirementForwardLiveWorkflowFixture(tb testing.TB, provider string, tail, prefixRecords int) *GuestRetirementForwardRecoveryFixture {
-	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 300)
+	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 300, false)
 }
 
-func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords, initialLeaseSeconds int) *GuestRetirementForwardRecoveryFixture {
+// NewGuestRetirementForwardFractionalOriginalFixture declares one short original
+// before its first Issue. No caller can supply a clock, deadline or prior frame.
+func NewGuestRetirementForwardFractionalOriginalFixture(tb testing.TB, provider string) *GuestRetirementForwardRecoveryFixture {
+	return newGuestRetirementForwardRecoveryFixture(tb, provider, 2, 3, 30, true)
+}
+
+func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords, initialLeaseSeconds int, fractionalOriginal bool) *GuestRetirementForwardRecoveryFixture {
 	tb.Helper()
 	t, ok := tb.(*testing.T)
 	if !ok || !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
@@ -74,8 +192,11 @@ func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, ta
 	if tail < 2 || tail > 8 || (prefixRecords < 1 || prefixRecords > 4) {
 		t.Fatal("closed tail2..8/prefix1..4 fixture operands (only3|4 admissible)")
 	}
+	if fractionalOriginal && (tail != 2 || prefixRecords != 3 || initialLeaseSeconds != 30) {
+		t.Fatal("closed initial fractional original fixture")
+	}
 	base := newFailedServingFixtureLease(t, provider, true, initialLeaseSeconds)
-	f := &GuestRetirementForwardRecoveryFixture{DB: base.db, Store: base.store, Policy: base.policy, Workflow: base.workflow, Spec: base.p, private: base, t: t, members: []*failedServingFixture{base}}
+	f := &GuestRetirementForwardRecoveryFixture{DB: base.db, Store: base.store, Policy: base.policy, Workflow: base.workflow, Spec: base.p, private: base, t: t, members: []*failedServingFixture{base}, fractionalOriginal: fractionalOriginal}
 	// Complete declared read catalog for actual bounded message supplier calls;
 	// version0.1.0 remains explicitly synthetic, never an enrolled adapter claim.
 	typeSpec := failedServingTypeSpec(provider, f.Spec.MutationBindings[0])
@@ -149,6 +270,15 @@ func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, ta
 	}
 	if err = rows.Close(); err != nil {
 		t.Fatal(err)
+	}
+	// Observe natural closure of the retained original canary windows before
+	// exposing the fixture to admission; no stored deadline or ACK is changed.
+	var delay float64
+	if err = f.DB.QueryRow(`SELECT COALESCE(GREATEST(0,EXTRACT(EPOCH FROM(max(original_deadline)-clock_timestamp()))),0) FROM public.capacity_guest_notify_canary_challenges`).Scan(&delay); err != nil || delay > 6 {
+		t.Fatal("bounded original canary windows", delay, err)
+	}
+	if delay > 0 {
+		time.Sleep(time.Duration(delay*float64(time.Second)) + 5*time.Millisecond)
 	}
 	f.originalRunID = f.RunID
 	return f
@@ -230,10 +360,12 @@ func (f *GuestRetirementForwardRecoveryFixture) seedMember(slot int) *failedServ
 	var next capacityMutationRecord
 	clone(original, &next)
 	next.Generation, next.FencingToken = pre.Generation, pre.Fence
+	next.Binding = m
 	next.Grant.Slot = slot
 	next.Settlement.OriginalProviderCreateReturn.ActionID = next.Settlement.ActionID
 	clock := reg.Result.ProductionClock
 	clock.Authority.Preregistration = pre
+	clock.Authority.Profile = b.ProfileManifest
 	w := &clock.Authority.CreateWitness
 	w.OriginalCreateSettlementSHA256 = capacity.GuestRetirementSHA(next.Settlement)
 	w.Signature = ""
@@ -241,6 +373,9 @@ func (f *GuestRetirementForwardRecoveryFixture) seedMember(slot int) *failedServ
 	clock.Authority.Signature = ""
 	clock.Authority.Signature, _ = capacity.GuestLifecycleSignature(failedServingKey('c'), clock.Authority)
 	reg.Result.OriginalCreateSettlementSHA256 = w.OriginalCreateSettlementSHA256
+	reg.Result.BootstrapOriginalObservation.JournalSHA256 = capacity.GuestRetirementSHA(reg.Result.BootstrapOriginalJournal)
+	reg.Result.WriterRosterSHA256 = capacity.GuestRetirementSHA(reg.Result.Writers)
+	reg.EnrollmentStatement.WriterRosterSHA256 = reg.Result.WriterRosterSHA256
 	reg.EnrollmentStatement.OriginalNativeResultSHA256 = capacity.GuestRetirementSHA(reg.Result)
 	reg.EnrollmentStatement.OriginalProvisioningClockSHA256 = capacity.GuestRetirementSHA(*clock)
 	reg.Signature = ""
@@ -301,6 +436,14 @@ func (f *GuestRetirementForwardRecoveryFixture) PlanStore() CapacityStore {
 	return f.Store.WithOriginalGuestReconcile(f.Workflow, f.step("plan-original-guest"), capacity.CurrentGuestCoreSource(), "retire", f.Request.Intent.RequestID, f.Inventory(true), model.CapacityMetricRangeObservation{})
 }
 
+func forwardFixtureVMLabelDigest(digest string) string {
+	raw, err := hex.DecodeString(digest)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
+}
+
 func (f *GuestRetirementForwardRecoveryFixture) Inventory(targetPresent bool) model.CapacityVMFleetInventory {
 	t := f.t
 	inv := capacity.RecoveryFixtureInventory(t, f.Spec, f.private.reg, time.Now().UTC())
@@ -313,7 +456,7 @@ func (f *GuestRetirementForwardRecoveryFixture) Inventory(targetPresent bool) mo
 			continue
 		}
 		d := m.Slots[j]
-		labels := map[string]string{"yggdrasil.io/owner": f.Spec.Owner, "yggdrasil.io/scope": vmLabelDigest(m.ScopeChecksum), "yggdrasil.io/spec": vmLabelDigest(d.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": m.ProfileName, "yggdrasil.io/slot": strconv.Itoa(slot), "yggdrasil.io/intent": x.pre.OriginalCreateGrantID}
+		labels := map[string]string{"yggdrasil.io/owner": f.Spec.Owner, "yggdrasil.io/scope": forwardFixtureVMLabelDigest(m.ScopeChecksum), "yggdrasil.io/spec": forwardFixtureVMLabelDigest(d.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": m.ProfileName, "yggdrasil.io/slot": strconv.Itoa(slot), "yggdrasil.io/intent": x.pre.OriginalCreateGrantID}
 		server := model.CapacityVMServerObservation{CapacityVMNativeTuple: model.CapacityVMNativeTuple{ID: x.reg.Result.Tuple.ResourceID, CreatedAt: x.reg.Result.Tuple.CreatedAt}, Name: d.DesiredSpec.NativeName, Status: "running", PhysicalSpecVerified: true, ObservedAt: inv.ObservedAt, Labels: labels}
 		inv.Members = append(inv.Members, model.CapacityVMFleetInventoryMember{Slot: slot, Protected: slot <= m.ProtectedSlots, DesiredSpec: *d.DesiredSpec, RequestSHA256: d.DesiredSpecSHA256, Server: server})
 	}
@@ -428,7 +571,11 @@ func (f *GuestRetirementForwardRecoveryFixture) startDispatch() {
 
 func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 	t := f.t
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+	deadline := time.Now().Add(30 * time.Second)
+	if f.fractionalOriginal {
+		deadline = time.Now().UTC().Truncate(time.Microsecond).Add(4*time.Second + 789*time.Nanosecond)
+	}
+	ctx, stop := context.WithDeadline(context.Background(), deadline)
 	defer stop()
 	owner, err := capacity.NewGuestRetirementV2OriginalOwner(ctx)
 	if err != nil {
@@ -470,7 +617,8 @@ func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 			}
 		}
 		if _, e = store.FinishGuestAuthorityReadV2(ctx, read, observed); e != nil {
-			t.Fatal("real authority return", e)
+			parentDeadline, _ := ctx.Deadline()
+			t.Fatalf("real authority return phase=%s ordinal=%d ctx_err=%v parent_remaining=%s read_remaining=%s: %v later_diagnostics=%s", phase, read.Ordinal, ctx.Err(), time.Until(parentDeadline), time.Until(read.Deadline), e, f.AdmissionDiagnostics())
 		}
 	}
 	authority("before_start", nil)

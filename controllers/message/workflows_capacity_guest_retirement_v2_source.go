@@ -210,7 +210,7 @@ func finishProductionGuestNativeDestroyV2Forward(ctx context.Context, store repo
 			return nil, errOriginalGuestStep
 		}
 	}
-	if (receipt.Grant.State != "settled" && !(forward != nil && receipt.Grant.State == "confirmed")) || receipt.Outcome != "accepted" || !receipt.TransportCompleted {
+	if (receipt.Grant.State != "settled" && (forward == nil || receipt.Grant.State != "confirmed")) || receipt.Outcome != "accepted" || !receipt.TransportCompleted {
 		return nil, errOriginalGuestStep
 	}
 	// Read-only eventual-consistency polling remains inside this ONE original

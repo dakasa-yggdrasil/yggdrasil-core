@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -111,7 +110,8 @@ func (s CapacityStore) RecordGuestRetirementForwardRead(ctx context.Context, ret
 	x, r, sha, currentErr := s.retirementForwardCurrentTx(ctx, tx, challenge.RetirementRequestID)
 	accepted, pending := false, false
 	if currentErr == nil && r.ID == challenge.AdmissionID && sha == challenge.AdmissionSHA256 && r.PrefixSHA256 == challenge.PrefixSHA256 && r.OriginalCallerSHA256 == challenge.OriginalCallerSHA256 && challenge.Tuple == x.original.Request.Intent.Tuple && challenge.MutationBindingSHA256 == capacity.GuestRetirementSHA(x.binding) && challenge.AdapterSourceCommit == x.binding.OriginalProviderSourceCommit && recordedPG.Sub(issuedPG) >= 0 && recordedPG.Sub(issuedPG)+5*time.Second <= time.Duration(x.spec.MaxEvidenceAgeSeconds)*time.Second && forwardReadTransportValid(returned) {
-		if challenge.Kind == "off" {
+		switch challenge.Kind {
+		case "off":
 			original, e := guestOriginalCreateReceiptV2Tx(ctx, tx, x.original)
 			if e == nil && returned.Plan != nil && returned.Plan.Server != nil && returned.Observation == nil && returned.OriginalDestroyReceipt == nil && challenge.DestroyGrantID == "" && returned.Plan.Server.Labels["yggdrasil.io/owner"] == x.spec.Owner {
 				accepted = capacity.GuestRetirementV2NativeOffPlanContent(x.spec, x.binding, *returned.Plan, original) == nil
@@ -150,7 +150,7 @@ func (s CapacityStore) RecordGuestRetirementForwardRead(ctx context.Context, ret
 					}
 				}
 			}
-		} else if challenge.Kind == "absence" {
+		case "absence":
 			original, e := retirementForwardDestroyRecordTx(ctx, tx, r, challenge.DestroyGrantID)
 			if e == nil {
 				proof, e = retirementForwardAbsenceContent(returned, x.spec, original)

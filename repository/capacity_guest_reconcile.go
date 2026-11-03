@@ -343,7 +343,7 @@ func (s CapacityStore) guestReconcilePhaseTx(ctx context.Context, tx *sql.Tx, po
 			if e != nil {
 				return e
 			}
-			return s.guestForwardCompletionTx(ctx, tx, p, old, r, now)
+			return s.guestForwardCompletionTx(ctx, tx, policy, p, old, r, now)
 		}
 		stored, err := loadGuestRetirementV2Tx(ctx, tx, s.guestReconcile.requestID, true)
 		if err != nil {

@@ -8,7 +8,9 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -39,22 +41,33 @@ func TestGuestRetirementForwardHistoricalHTTPPostgres(t *testing.T) {
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
 			f := repository.NewGuestRetirementForwardRecoveryFixture(t, provider, 3, 3)
-			before := f.PreservedOriginals()
 			f.FinishFailedRun("retire-original-guest")
 			_ = f.WaitHistoricalBarrier()
+			before := f.PreservedOriginals()
 			actor := uuid.New()
 			if _, err := f.DB.Exec(`INSERT INTO public.collaborators(id,slug,status,display_name,traits) VALUES($1,$2,'active','Declared recovery test human','{"yggdrasil_admin":true}'::jsonb)`, actor, "forward-human-"+actor.String()); err != nil {
 				t.Fatal(err)
 			}
-			var database string
-			if err := f.DB.QueryRow(`SELECT current_database()`).Scan(&database); err != nil {
+			var identity guestRetirementForwardHTTPDBIdentity
+			if err := f.DB.QueryRow(`SELECT current_database(),COALESCE(host(inet_server_addr()),'unix'),COALESCE(inet_server_port(),0),current_setting('server_version_num')::int/10000`).Scan(&identity.Database, &identity.Address, &identity.Port, &identity.Major); err != nil {
 				t.Fatal(err)
 			}
 			u, err := url.Parse(os.Getenv("FAILED_SERVING_FIXTURE_ADMIN_URL"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			u.Path = "/" + database
+			u.Path = "/" + identity.Database
+			identityBody, err := json.Marshal(identity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := strconv.Atoi(os.Getenv("FAILED_SERVING_TEST_PG_MAJOR"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = decodeGuestRetirementForwardHTTPDBIdentity(identityBody, u.Path, want); err != nil {
+				t.Fatal("parent-owned disposable DB identity invalid", err)
+			}
 			body, err := json.Marshal(f.HistoricalRequest())
 			if err != nil {
 				t.Fatal(err)
@@ -66,8 +79,9 @@ func TestGuestRetirementForwardHistoricalHTTPPostgres(t *testing.T) {
 			ctx, stop := context.WithTimeout(context.Background(), 45*time.Second)
 			defer stop()
 			child := exec.CommandContext(ctx, binary, "-test.run=^TestGuestRetirementForwardHistoricalHTTPPostgres$", "-test.count=1")
-			child.Env = append(os.Environ(), "GUEST_FORWARD_HTTP_CHILD=true", "GUEST_FORWARD_HTTP_DB="+u.String(), "GUEST_FORWARD_HTTP_BODY="+base64.StdEncoding.EncodeToString(body), "GUEST_FORWARD_HTTP_ACTOR="+actor.String())
+			child.Env = append(os.Environ(), "GUEST_FORWARD_HTTP_CHILD=true", "GUEST_FORWARD_HTTP_DB="+u.String(), "GUEST_FORWARD_HTTP_DB_IDENTITY="+base64.StdEncoding.EncodeToString(identityBody), "GUEST_FORWARD_HTTP_BODY="+base64.StdEncoding.EncodeToString(body), "GUEST_FORWARD_HTTP_ACTOR="+actor.String())
 			if output, err := child.CombinedOutput(); err != nil {
+				t.Logf("later admission observation: %s", f.AdmissionDiagnostics())
 				t.Fatalf("actual child HTTP boundary failed: %v\n%s", err, output)
 			}
 			if !reflect.DeepEqual(before, f.PreservedOriginals()) {
@@ -79,6 +93,23 @@ func TestGuestRetirementForwardHistoricalHTTPPostgres(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The already admitted parent captures this exact local disposable endpoint.
+// Container server addresses are compared to it, never to a private CIDR list.
+type guestRetirementForwardHTTPDBIdentity struct {
+	Database string `json:"database"`
+	Address  string `json:"address"`
+	Port     int    `json:"port"`
+	Major    int    `json:"major"`
+}
+
+func decodeGuestRetirementForwardHTTPDBIdentity(raw []byte, path string, want int) (guestRetirementForwardHTTPDBIdentity, error) {
+	var identity guestRetirementForwardHTTPDBIdentity
+	if len(raw) > 1024 || capacity.DecodeGuestLifecycle(raw, &identity) != nil || "/"+identity.Database != path || !strings.HasPrefix(identity.Database, "failed_serving_fixture_") || (want != 16 && want != 17) || identity.Major != want || (identity.Address == "unix" && identity.Port != 0) || (identity.Address != "unix" && (net.ParseIP(identity.Address) == nil || identity.Port < 1 || identity.Port > 65535)) {
+		return identity, errors.New("closed parent-owned disposable database identity required")
+	}
+	return identity, nil
 }
 
 func guestRetirementForwardHTTPChild(t *testing.T) {
@@ -95,14 +126,21 @@ func guestRetirementForwardHTTPChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	var database, address string
-	var major int
 	want, err := strconv.Atoi(os.Getenv("FAILED_SERVING_TEST_PG_MAJOR"))
 	if err != nil || want != 16 && want != 17 {
 		t.Fatal("explicit major16/17 required")
 	}
-	if err = db.QueryRow(`SELECT current_database(),COALESCE(inet_server_addr()::text,'unix'),current_setting('server_version_num')::int/10000`).Scan(&database, &address, &major); err != nil || "/"+database != u.Path || major != want || address != "unix" && address != "127.0.0.1" && address != "::1" {
-		t.Fatal("actual disposable DB identity differs", err)
+	identityBody, err := base64.StdEncoding.DecodeString(os.Getenv("GUEST_FORWARD_HTTP_DB_IDENTITY"))
+	if err != nil {
+		t.Fatal("parent-owned disposable DB identity missing or malformed")
+	}
+	expected, err := decodeGuestRetirementForwardHTTPDBIdentity(identityBody, u.Path, want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actual guestRetirementForwardHTTPDBIdentity
+	if err = db.QueryRow(`SELECT current_database(),COALESCE(host(inet_server_addr()),'unix'),COALESCE(inet_server_port(),0),current_setting('server_version_num')::int/10000`).Scan(&actual.Database, &actual.Address, &actual.Port, &actual.Major); err != nil || actual != expected {
+		t.Fatalf("actual disposable DB identity differs: actual=%+v expected=%+v err=%v", actual, expected, err)
 	}
 	body, err := base64.StdEncoding.DecodeString(os.Getenv("GUEST_FORWARD_HTTP_BODY"))
 	if err != nil || len(body) > 4096 {

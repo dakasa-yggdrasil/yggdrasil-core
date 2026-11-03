@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "ccbd5c50de13d07a31b8271edb6a1e52ea60b3790f687f9df8b4891df9ecdeb5"
+    "sha256": "06538fe916e60a3266315f7aa6a66c4dd52da5693692a27bd560affc57abe958"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "ecdc11cb9deb912f5ec5df5406c9fb715be2d750c9a30ea292b078a088b46285"
+      "sha256": "5fec73bb1e500f1e99b3d1fdbe2f02702c1e8d0e84a4d50a9ed58194072f68e9"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/M2_SOURCE_REVIEW.json",
-      "sha256": "351e1a838ef514f3cffc539db4a5ecb1d01397d90529dc7073a61537d7e25a53"
+      "sha256": "3f4c1e9cd453c9b8ffe9ee4fb5d976fdb0d904dc0c0c9d25eaba95ce6185b211"
     },
     {
       "id": "prior_accepted_source_review",

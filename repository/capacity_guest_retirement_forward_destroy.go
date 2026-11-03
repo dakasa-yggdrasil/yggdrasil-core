@@ -78,7 +78,7 @@ func (s CapacityStore) retirementForwardFloorTx(ctx context.Context, tx *sql.Tx,
 		if err != nil || live != fresh || live < x.spec.Floor || live < x.current.Decision.Units {
 			return ErrCapacityConflict
 		}
-		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, adopted).Scan(&pending)
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE `+capacityGrantUndisposedSQL+` AND integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, adopted).Scan(&pending)
 		if err != nil || pending != 0 {
 			return ErrCapacityConflict
 		}
@@ -227,9 +227,9 @@ func retirementForwardDestroyRecordTx(ctx context.Context, tx *sql.Tx, r GuestRe
 	// Revalidate the ORIGINAL eligibility at its immutable binding time, not
 	// against a fresh substituted clock after the target has been deleted.
 	read, issuedPG, readSHA, err := loadForwardReadReturnTx(ctx, tx, eligibility.NativeOffReadID)
-	policy := model.Manifest{ID: original.PolicyID, Checksum: original.PolicyChecksum, Metadata: model.ManifestMetadata{Namespace: authority.Namespace}}
+	policy := model.Manifest{ID: original.PolicyID, Kind: "capacity_policy", Checksum: original.PolicyChecksum, Metadata: model.ManifestMetadata{Namespace: authority.Namespace}}
 	var active bool
-	if err != nil || tx.QueryRowContext(ctx, `SELECT spec,active FROM public.manifests WHERE id=$1 AND checksum=$2 AND kind='capacity_policy'`, policy.ID, policy.Checksum).Scan(&policy.Spec, &active) != nil || !active {
+	if err != nil || tx.QueryRowContext(ctx, `SELECT name,spec,active FROM public.manifests WHERE id=$1 AND checksum=$2 AND kind='capacity_policy' AND namespace=$3`, policy.ID, policy.Checksum, authority.Namespace).Scan(&policy.Metadata.Name, &policy.Spec, &active) != nil || !active {
 		return original, ErrCapacityConflict
 	}
 	p, err := parseCapacityPolicy(policy)
