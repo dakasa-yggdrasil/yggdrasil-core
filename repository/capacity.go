@@ -491,7 +491,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if err != nil {
 		return model.CapacityIntent{}, err
 	}
-	if err = s.guardRetirementForwardTransitionTx(ctx, tx, p, previous, &next, now.UTC()); err != nil {
+	if err = s.guardRetirementForwardTransitionTx(ctx, tx, policy, p, previous, &next, now.UTC()); err != nil {
 		return model.CapacityIntent{}, err
 	}
 	if s.guestReconcile != nil && previous != nil && next.Phase != previous.Phase && (next.Phase == "prepared" || next.Phase == "canary" || next.Phase == "drained" || next.Phase == "promoted") {

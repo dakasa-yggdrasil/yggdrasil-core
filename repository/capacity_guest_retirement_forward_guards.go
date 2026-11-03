@@ -196,7 +196,7 @@ func (s CapacityStore) RefreshGuestRetirementForwardInventory(ctx context.Contex
 	return tx.Commit()
 }
 
-func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, old *model.CapacityIntent, next *model.CapacityIntent, now time.Time) error {
+func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, old *model.CapacityIntent, next *model.CapacityIntent, now time.Time) error {
 	if !retirementForwardActive(old) {
 		return nil
 	}
@@ -221,7 +221,7 @@ func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, t
 	if err != nil {
 		return err
 	}
-	if err = s.guestForwardCompletionTx(ctx, tx, p, *old, r, now); err != nil {
+	if err = s.guestForwardCompletionTx(ctx, tx, policy, p, *old, r, now); err != nil {
 		return err
 	}
 	terminal := r
@@ -253,7 +253,7 @@ func (s CapacityStore) guardRetirementForwardTransitionTx(ctx context.Context, t
 	_, err = insertRetirementForwardTx(ctx, tx, terminal)
 	return err
 }
-func (s CapacityStore) guestForwardCompletionTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, r GuestRetirementForward, now time.Time) error {
+func (s CapacityStore) guestForwardCompletionTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, r GuestRetirementForward, now time.Time) error {
 	if r.Generation != current.Generation || r.Fence != current.FencingToken || r.ExecutorID != s.ExecutorID || r.LeaseOwner != current.LeaseOwner || r.RunID != s.OriginalRunID.String() {
 		return ErrCapacityConflict
 	}
@@ -268,7 +268,6 @@ func (s CapacityStore) guestForwardCompletionTx(ctx context.Context, tx *sql.Tx,
 	if _, _, err = s.retirementForwardLatestAbsenceTx(ctx, tx, r, p, original, now); err != nil {
 		return err
 	}
-	policy := model.Manifest{ID: current.PolicyID, Checksum: current.PolicyChecksum, Metadata: model.ManifestMetadata{Namespace: current.Namespace}}
 	if err = s.retirementForwardUsefulFloorTx(ctx, tx, retirementForwardSnapshot{original: r.Original, policy: policy, spec: p, current: current, binding: original.Binding, now: now}, r); err != nil {
 		return err
 	}
