@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 0471ad98c830acc069e99982b1c7fa7ad32fb9f3
-verified_diff_sha256: 0f9a020250d62b5a2c5cf6af58cff4107397526a63146deb0975a6951f74cc45
+verified_at_commit: 5fc87c63c45195c7690b55b9cd21d862eb22206c
+verified_diff_sha256: a49ec1898a965b6a874393367651ba3becd7417b1424f7bc3cf3be77f04225fc
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
