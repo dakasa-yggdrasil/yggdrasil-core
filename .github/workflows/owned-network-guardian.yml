@@ -53,7 +53,13 @@ jobs:
           sha256sum --check SHA256SUMS
           cd tools
           sha256sum --check SHA256SUMS
-      - name: Run exact G6 G7 G8 historical proof and actual cutover CAS PostgreSQL census
+      - name: Verify exact G9 runtime package and separate real operational tools
+        run: |
+          cd ops/network-guardian/g9pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+      - name: Run exact original106 and G9 historical proof and actual cutover CAS PostgreSQL census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian

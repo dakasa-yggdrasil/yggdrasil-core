@@ -1,0 +1,115 @@
+{
+  "custody": {
+    "historical_native_tag_body_sha256": "7d50af03273fd375669ddced378856377e5737630705adfc230a78ae2ae6a742",
+    "projection_sha256": "446c4b16605b298b7118da5f7bb204298fa4900302d763b625da199eab749cc0",
+    "ssm_command_id": "df473628-015d-4094-a80b-283794251405",
+    "ssm_original_sha256": "7dcb4d9e19f9b16cd4fdb5d75411898e26e14b56c42011ec2b2083f627b14995"
+  },
+  "dynamic_history_catalog_revisions_and_clocks_included": false,
+  "identity": {
+    "dimension": "original_notify_aws_vm_members",
+    "domain": "notify",
+    "environment": "production",
+    "executor_id": "5f35983a-b02f-4963-929c-1a12b0709afd",
+    "fence": 28,
+    "generation": 14,
+    "historical_survivors": [
+      {
+        "frame_sha256": "f21f4f241fd6e383c68e0a232207052d5db49fd6713921abafc541014d62e93a",
+        "publication_challenge_id": "201a1922-9f8b-46ce-a9c3-1e6dfec5eb22",
+        "publication_return_sha256": "a1bdae09df3d9eaac6bd25662ca094c744adb939ed527bb1d68e7ad46611852a",
+        "read_challenge_id": "a70975da-50bc-4842-879e-b864ee5c3890",
+        "read_return_sha256": "ca356092656796b5e2f31702a29bbd86549b6631e6c47bea53b2858a119d0663",
+        "slot": 1
+      },
+      {
+        "frame_sha256": "618d6020861a5e9d2f6e213714789117408a11eaca3c867c56ee8014b9af7ebc",
+        "publication_challenge_id": "5168b453-72dc-4e30-b4e3-f3aee466651e",
+        "publication_return_sha256": "2985e3bcc84bb13165f2d5723d823c1ea42f8b6b238cdd61435d190883d00ed8",
+        "read_challenge_id": "9e053ef4-7cbf-4146-a027-72889c237ffd",
+        "read_return_sha256": "c1410065bba7f85e7b9a13139f6fa8ff15bba6b23f2eb17cf16bf7bd87925308",
+        "slot": 2
+      }
+    ],
+    "intent_pgtext_sha256": "3c2791bd1ee7d8bdd6f303ce91ebc9e4d16d165bf9fc7fd609cfde14e95c60ee",
+    "lease_owner": "f28d3398-1a5f-4c03-8f1b-705259409015",
+    "namespace": "dakasa-production",
+    "native_members": [
+      {
+        "create_grant_id": "12c1c3d8-3a7e-4180-8764-608fc3914468",
+        "enrollment_sha256": "f2f714b3feb5c80de0708e06c39c6200a7a9b5ff44232378fb8d51fb5a7bd701",
+        "preregistration_id": "92786167-e141-415d-9b5b-7987bdcb0d29",
+        "resource_created_at": "2026-11-03T01:17:18Z",
+        "resource_id": "i-070b5767a35c7f0d5",
+        "slot": 1,
+        "tags": {
+          "Name": "dakasa-notify-notify-aws-elastic-1",
+          "yggdrasil.io/intent": "12c1c3d8-3a7e-4180-8764-608fc3914468",
+          "yggdrasil.io/owner": "elastic-production-20261021",
+          "yggdrasil.io/profile": "notify-aws-elastic",
+          "yggdrasil.io/scope": "kpvmd54niya4k5ncouun47xer55uh6zdud4bd427kfzyew5qicbq",
+          "yggdrasil.io/slot": "1",
+          "yggdrasil.io/spec": "7n7blmqyoyn4ykwmpqaxeyjb2eiheangclu7yqruldyckjzsx7yq"
+        }
+      },
+      {
+        "create_grant_id": "c4a84075-5dd9-4e4d-9366-80d8fba5f9ef",
+        "enrollment_sha256": "b211aff85fe8a470b62ed94bc77999b8130433b2e78460d59904c66e7ddb6a35",
+        "preregistration_id": "81b839ef-c8fd-4661-a44b-5a05bc6cca34",
+        "resource_created_at": "2026-11-03T05:00:07Z",
+        "resource_id": "i-0e1656927db62d75b",
+        "slot": 2,
+        "tags": {
+          "Name": "dakasa-notify-notify-aws-elastic-2",
+          "yggdrasil.io/intent": "c4a84075-5dd9-4e4d-9366-80d8fba5f9ef",
+          "yggdrasil.io/owner": "elastic-production-20261021",
+          "yggdrasil.io/profile": "notify-aws-elastic",
+          "yggdrasil.io/scope": "kpvmd54niya4k5ncouun47xer55uh6zdud4bd427kfzyew5qicbq",
+          "yggdrasil.io/slot": "2",
+          "yggdrasil.io/spec": "7n7blmqyoyn4ykwmpqaxeyjb2eiheangclu7yqruldyckjzsx7yq"
+        }
+      },
+      {
+        "create_grant_id": "42a0690d-1e32-4024-96a8-94e1a2dbcd18",
+        "enrollment_sha256": "36d3b4e2f485ab35d20e7bf7d4d747cd48fe14aaa82b3d0c9d33ccda4729a1e7",
+        "preregistration_id": "20e58827-cfe9-403e-8e34-765547326927",
+        "resource_created_at": "2026-11-03T05:10:09Z",
+        "resource_id": "i-0de5b9d0da65f9e93",
+        "slot": 3,
+        "tags": {
+          "Name": "dakasa-notify-notify-aws-elastic-3",
+          "yggdrasil.io/intent": "42a0690d-1e32-4024-96a8-94e1a2dbcd18",
+          "yggdrasil.io/owner": "elastic-production-20261021",
+          "yggdrasil.io/profile": "notify-aws-elastic",
+          "yggdrasil.io/scope": "kpvmd54niya4k5ncouun47xer55uh6zdud4bd427kfzyew5qicbq",
+          "yggdrasil.io/slot": "3",
+          "yggdrasil.io/spec": "7n7blmqyoyn4ykwmpqaxeyjb2eiheangclu7yqruldyckjzsx7yq"
+        }
+      }
+    ],
+    "native_tuple": {
+      "provider": "aws",
+      "resource_created_at": "2026-11-03T05:10:09Z",
+      "resource_id": "i-0de5b9d0da65f9e93",
+      "slot": 3
+    },
+    "original_caller_sha256": "87b5e539413300eaf026ebc88c9a218cc14375bc797653bd32eaeee8caaebbc9",
+    "original_frame_sha256": "58465dd3e2c68bc95a39545ba23ac4e8d296aa42065f915a6cee85df265edb55",
+    "original_run_id": "43b1dbee-2d4b-43dc-ab93-8117fae6c3ab",
+    "physical_profile": {
+      "integration_instance_id": "143beb1c-ed53-4027-b11d-dcc49b35f571",
+      "profile_name": "notify-aws-elastic",
+      "scope_checksum": "53eac1f78d4601c575a27528de7ee48f7b43fb23a0f811f35f5173825bb04083"
+    },
+    "policy_checksum": "59bf55ab6a5ac144bfee7f211022bd0a85074d54a146a28b30dc034f050629af",
+    "policy_id": "6a6b1aed-f10c-42bc-8a6c-25a0f6e37cba",
+    "preregistration_id": "20e58827-cfe9-403e-8e34-765547326927",
+    "retirement_request_id": "376a7e86-905d-44dd-8583-c8fed2ecac1a",
+    "schema": "root_exact_held_partial_poweroff_image_rollout_v1",
+    "workflow_checksum": "ef0b83536632a6c86a157b56bc0ce22f4ff4b3ba446d12cd5f8154bf07e2da85",
+    "workflow_id": "9bb4a35b-6eb4-4983-9133-73bd96cfea94"
+  },
+  "native_authorization": false,
+  "purpose": "Static Source identity equality only; never fresh native, image admission or retirement authority",
+  "schema": "g9_historical_immutable_identity_static_source_fixture_v1"
+}

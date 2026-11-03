@@ -1,0 +1,24 @@
+[Unit]
+Description=Owned network operational health and bounded terminal controller recovery
+After=dakasa-capacity-network.service dakasa-capacity-network-hub.service dakasa-capacity-network-cold-transport.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 -B /opt/dakasa/capacity-network/network-boot-recovery-r13-g9pair-source-v1/network_guardian.py --watch --source-sha256 c5d6a86f0741686382e10257ce880734d65b38da6b2c96fea35444ee6ccbf6eb
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=5
+KillMode=control-group
+CPUQuota=25%
+MemoryMax=384M
+MemorySwapMax=0
+TasksMax=32
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
