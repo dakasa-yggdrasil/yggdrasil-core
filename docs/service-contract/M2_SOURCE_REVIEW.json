@@ -822,5 +822,58 @@
       "production_rollout_or_AB_acceptance": false,
       "ADR_status": "Proposed"
     }
+  },
+  "partial_poweroff_forward_compile_correction_source_review_20261103": {
+    "schema": "ADR0101_import_correction_Source_review_v1",
+    "base_commit": "ceb577558ba9ba491ebc3c0d845b769390a1cb54",
+    "preserved_previous_complete_review_sha256": "351e1a838ef514f3cffc539db4a5ecb1d01397d90529dc7073a61537d7e25a53",
+    "scope": "Correct two compiler-reported imports. No runtime branch, query, test condition or proof contract changes. All prior complete Source review nodes remain historical and unchanged.",
+    "actual_failed_CI": {
+      "run_id": 41589515183,
+      "job_id": 125762752664,
+      "head": "ceb577558ba9ba491ebc3c0d845b769390a1cb54",
+      "log_sha256": "d4b6f3b865d4fe36d05079f09fbd891a952041fc46af3bcd8660d38db2ba8196",
+      "errors": [
+        "repository/capacity_guest_notify_phase.go:49:13: undefined: capacity",
+        "repository/capacity_guest_retirement_forward_reads.go:5:2: database/sql imported and not used"
+      ]
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "357d837a5e790da12d53715f5312d3293a39d7bb85da45a860f8e90cacabfc81",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "changed_source_facts": {
+      "repository/capacity_guest_notify_phase.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 3519,
+          "sha256": "0be7e275ec0be5b9edcbc42b593f4338c38ab2442a15048f4fa49087d6af5e01"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 3583,
+          "sha256": "b027259c979fd8292df7449dff9473e40522990f46798b120cc99855d0c7653c"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 11438,
+          "sha256": "e9280bb4269fce8bcb7e448e00e27386973cd13a942bbf50d0b9c9600688aaa3"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 11422,
+          "sha256": "0b564ac9cb5badd6cad551dc2c76fb70ba6be838579651681a3c1438aed19082"
+        }
+      }
+    },
+    "all_other_source_facts_unchanged": 795,
+    "local_functional_execution": false,
+    "corrected_exact_head_CI_required": true,
+    "exact_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
   }
 }
