@@ -1,0 +1,206 @@
+{
+  "schema": "actual_G7_inherited_reference_inventory_v1",
+  "historical_manifest_sha256": "7ae2875d2ef901ab244106a984b74d7f779b8145e61dd0c242af68cc0d1c3814",
+  "original37_unchanged": [
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-CLOSING.JSONL",
+      "sha256": "42b5834830c09b9c4b044171c69c7c2d9d4aabe68223c4bbbc887162d3b61991"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-PREFIX.JSONL",
+      "sha256": "6240b7f21932747366be7ce5ce6778559b3a5b63594c6d521ba7c2ab293d55ca"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-QUALIFIED.PUBLIC.json",
+      "sha256": "21e4697326aa0e74b1e169a897870b10e4668328ca04d497900a2f297bc99a31"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/16318aeaf6613083dbbfa093d40e5c48e5a1704d41563a9b69e8fc47032f2af0-ORIGINAL-START-CALLER.PUBLIC.json",
+      "sha256": "0b6123e439384db4c8a484bc6d892269430ad1d0ef5a86a4897863835cfc19c1"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-000.PUBLIC",
+      "sha256": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-001.PUBLIC",
+      "sha256": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-002.PUBLIC",
+      "sha256": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-003.PUBLIC",
+      "sha256": "a5ae600dbc46ec7147d2d9eebf6332d802b88fddd666a636c69100041e8f664c"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-004.PUBLIC",
+      "sha256": "eab45a8f8f3ffa517ff2f69ec34788aecad0c0fa13b75905416f170174ae832a"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-005.PUBLIC",
+      "sha256": "0c0c38cb4f58bc74626a88f11cb1d2fa9a99cf7914c8ecc8d07fdd76e48a49e4"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-006.PUBLIC",
+      "sha256": "9ad05fe413a30ab815daf199bad5affa8f5333adac0533e9f1adfeb61fbe475e"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-007.PUBLIC",
+      "sha256": "33ec2a8b760fc8be311d5c8c11677e06a4c5c23e4c9715838b43dbc1934e730a"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-008.PUBLIC",
+      "sha256": "0e67570f63931bf4cd8e6a8c25adfa2d49e1c83778e0ea8ae37a83079a45524d"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-009.PUBLIC",
+      "sha256": "3b15998a1dfdcc7694406b238ec922ee18ac0245a8e82db538d3ae79050b45eb"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-010.PUBLIC",
+      "sha256": "7c57e0b8c8fde6b1e348f3529565c3db10de18730a3b0b0bf6c030a624d208e8"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-011.PUBLIC",
+      "sha256": "444a9a7809645adb806965188d2acc66b4baac2ac3709f96dccd5c4b84d78882"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-012.PUBLIC",
+      "sha256": "4a97f07c2a4c1a4093c4980916c5df080a6e6a03e374f1063b162464d4005a37"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-013.PUBLIC",
+      "sha256": "56662ef0bd85f39ef3acd8b7a0f081bafdbca1dbdcc9e68de184762a16696018"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-014.PUBLIC",
+      "sha256": "b58c052f197a0c0965eec6f589ec6a98c1258799f0f0402f44a0255fcdd2f748"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-015.PUBLIC",
+      "sha256": "87000b3e7b94475084db03fcd5ec687818aa1aac8c9506837670b0be546b47b8"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-016.PUBLIC",
+      "sha256": "46c33d8621dc5a1a235ce881fea0ac167546a45fc0e9c3ff092b82247ec151b2"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-017.PUBLIC",
+      "sha256": "b8e78b562498ff7b0802089c1d3d7f8b3543f2eacc26b328039be98aa526c623"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-018.PUBLIC",
+      "sha256": "5fbb03fb64fe747ff71f432939cb079b6167e10370656310f1933361f185ed31"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-019.PUBLIC",
+      "sha256": "740d7d3f97947a82657fbc52fc5b88496b9ca124952c2361c4d8d5457f42dbd0"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-020.PUBLIC",
+      "sha256": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-021.PUBLIC",
+      "sha256": "a5ae600dbc46ec7147d2d9eebf6332d802b88fddd666a636c69100041e8f664c"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-022.PUBLIC",
+      "sha256": "eab45a8f8f3ffa517ff2f69ec34788aecad0c0fa13b75905416f170174ae832a"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-023.PUBLIC",
+      "sha256": "0c0c38cb4f58bc74626a88f11cb1d2fa9a99cf7914c8ecc8d07fdd76e48a49e4"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-024.PUBLIC",
+      "sha256": "9ad05fe413a30ab815daf199bad5affa8f5333adac0533e9f1adfeb61fbe475e"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-025.PUBLIC",
+      "sha256": "33ec2a8b760fc8be311d5c8c11677e06a4c5c23e4c9715838b43dbc1934e730a"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-026.PUBLIC",
+      "sha256": "0e67570f63931bf4cd8e6a8c25adfa2d49e1c83778e0ea8ae37a83079a45524d"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-027.PUBLIC",
+      "sha256": "415c3f6a7adcc100d3e6c81a03bacad35a35adc5cb936f5f783a97b569bc991b"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-028.PUBLIC",
+      "sha256": "e85cdc89e63efa30a55bc82b76f12de66f67d1e80588278fde30b55a8e91e65f"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-029.PUBLIC",
+      "sha256": "b3b18ab331ab9a438fe5c5b68296f8d7a85b0cd3c3c611151c9dfdcae555cc5c"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-030.PUBLIC",
+      "sha256": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-RETURN.PUBLIC.json",
+      "sha256": "c7ea2e766170be89868bb3bad661b448bcda458d587137e40bd019dc3ab5dcee"
+    },
+    {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-RECOVERY-16318aeaf6613083dbbfa093d40e5c48e5a1704d41563a9b69e8fc47032f2af0-POSSIBLE-START.PUBLIC.json",
+      "sha256": "c135e28d51f47fbe04cd4ad1ac2869e15e974043998df6a08c9a35e00d42a865"
+    }
+  ],
+  "actual_G7_additions": {
+    "actual_new_full120_ref": {
+      "path": "/var/lib/dakasa-capacity-network-recovery/da4532e3a6d1391f2d25947f0a326e8c4c6a1e133c3fd40a9a0a54e69c194972-QUALIFIED.PUBLIC.json",
+      "sha256": "5ddec8e4df310b344a8066984066f207e9e63b781d923ec8c94b95437ebf6564"
+    },
+    "own_daemon_first_current15_ref": {
+      "path": "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-f75222a9f6ef4348842c653ebe3f1ac7-FIRST-CURRENT15-RETURN.PUBLIC.json",
+      "sha256": "b98254514e5975fb2773212b912e9695b67f97a0fae5be152c3dde2934098931"
+    }
+  },
+  "expected_complete_map": {
+    "/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-CLOSING.JSONL": "42b5834830c09b9c4b044171c69c7c2d9d4aabe68223c4bbbc887162d3b61991",
+    "/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-PREFIX.JSONL": "6240b7f21932747366be7ce5ce6778559b3a5b63594c6d521ba7c2ab293d55ca",
+    "/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-QUALIFIED.PUBLIC.json": "21e4697326aa0e74b1e169a897870b10e4668328ca04d497900a2f297bc99a31",
+    "/var/lib/dakasa-capacity-network-recovery/16318aeaf6613083dbbfa093d40e5c48e5a1704d41563a9b69e8fc47032f2af0-ORIGINAL-START-CALLER.PUBLIC.json": "0b6123e439384db4c8a484bc6d892269430ad1d0ef5a86a4897863835cfc19c1",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-000.PUBLIC": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-001.PUBLIC": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-002.PUBLIC": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-003.PUBLIC": "a5ae600dbc46ec7147d2d9eebf6332d802b88fddd666a636c69100041e8f664c",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-004.PUBLIC": "eab45a8f8f3ffa517ff2f69ec34788aecad0c0fa13b75905416f170174ae832a",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-005.PUBLIC": "0c0c38cb4f58bc74626a88f11cb1d2fa9a99cf7914c8ecc8d07fdd76e48a49e4",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-006.PUBLIC": "9ad05fe413a30ab815daf199bad5affa8f5333adac0533e9f1adfeb61fbe475e",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-007.PUBLIC": "33ec2a8b760fc8be311d5c8c11677e06a4c5c23e4c9715838b43dbc1934e730a",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-008.PUBLIC": "0e67570f63931bf4cd8e6a8c25adfa2d49e1c83778e0ea8ae37a83079a45524d",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-009.PUBLIC": "3b15998a1dfdcc7694406b238ec922ee18ac0245a8e82db538d3ae79050b45eb",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-010.PUBLIC": "7c57e0b8c8fde6b1e348f3529565c3db10de18730a3b0b0bf6c030a624d208e8",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-011.PUBLIC": "444a9a7809645adb806965188d2acc66b4baac2ac3709f96dccd5c4b84d78882",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-012.PUBLIC": "4a97f07c2a4c1a4093c4980916c5df080a6e6a03e374f1063b162464d4005a37",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-013.PUBLIC": "56662ef0bd85f39ef3acd8b7a0f081bafdbca1dbdcc9e68de184762a16696018",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-014.PUBLIC": "b58c052f197a0c0965eec6f589ec6a98c1258799f0f0402f44a0255fcdd2f748",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-015.PUBLIC": "87000b3e7b94475084db03fcd5ec687818aa1aac8c9506837670b0be546b47b8",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-016.PUBLIC": "46c33d8621dc5a1a235ce881fea0ac167546a45fc0e9c3ff092b82247ec151b2",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-017.PUBLIC": "b8e78b562498ff7b0802089c1d3d7f8b3543f2eacc26b328039be98aa526c623",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-018.PUBLIC": "5fbb03fb64fe747ff71f432939cb079b6167e10370656310f1933361f185ed31",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-019.PUBLIC": "740d7d3f97947a82657fbc52fc5b88496b9ca124952c2361c4d8d5457f42dbd0",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-020.PUBLIC": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-021.PUBLIC": "a5ae600dbc46ec7147d2d9eebf6332d802b88fddd666a636c69100041e8f664c",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-022.PUBLIC": "eab45a8f8f3ffa517ff2f69ec34788aecad0c0fa13b75905416f170174ae832a",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-023.PUBLIC": "0c0c38cb4f58bc74626a88f11cb1d2fa9a99cf7914c8ecc8d07fdd76e48a49e4",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-024.PUBLIC": "9ad05fe413a30ab815daf199bad5affa8f5333adac0533e9f1adfeb61fbe475e",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-025.PUBLIC": "33ec2a8b760fc8be311d5c8c11677e06a4c5c23e4c9715838b43dbc1934e730a",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-026.PUBLIC": "0e67570f63931bf4cd8e6a8c25adfa2d49e1c83778e0ea8ae37a83079a45524d",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-027.PUBLIC": "415c3f6a7adcc100d3e6c81a03bacad35a35adc5cb936f5f783a97b569bc991b",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-028.PUBLIC": "e85cdc89e63efa30a55bc82b76f12de66f67d1e80588278fde30b55a8e91e65f",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-029.PUBLIC": "b3b18ab331ab9a438fe5c5b68296f8d7a85b0cd3c3c611151c9dfdcae555cc5c",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-READ-030.PUBLIC": "b4e72700d714bafa9a32615b17c77891beb947d43d4513aadc5e933894cff731",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-651c798b400048929e705c00f8185931-FIRST-CURRENT15-RETURN.PUBLIC.json": "c7ea2e766170be89868bb3bad661b448bcda458d587137e40bd019dc3ab5dcee",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-RECOVERY-16318aeaf6613083dbbfa093d40e5c48e5a1704d41563a9b69e8fc47032f2af0-POSSIBLE-START.PUBLIC.json": "c135e28d51f47fbe04cd4ad1ac2869e15e974043998df6a08c9a35e00d42a865",
+    "/var/lib/dakasa-capacity-network-recovery/da4532e3a6d1391f2d25947f0a326e8c4c6a1e133c3fd40a9a0a54e69c194972-QUALIFIED.PUBLIC.json": "5ddec8e4df310b344a8066984066f207e9e63b781d923ec8c94b95437ebf6564",
+    "/var/lib/dakasa-capacity-network-recovery/2b7e9be2-e45a-4cd5-86f2-6f0a3372576d-GUARDIAN-f75222a9f6ef4348842c653ebe3f1ac7-FIRST-CURRENT15-RETURN.PUBLIC.json": "b98254514e5975fb2773212b912e9695b67f97a0fae5be152c3dde2934098931"
+  },
+  "native_bytes_not_reread_by_this_preparation": true
+}
