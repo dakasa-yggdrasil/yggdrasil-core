@@ -116,6 +116,13 @@ metric assessment or self-advances a workflow phase to obtain destroy authority.
 
 ## Original Notify Guest scheduler source
 
+The common cron selector honors `catchup_policy`: `skip` (also the default)
+coalesces missed occurrences to the latest real tick due at the observed time;
+explicit `catch_up` keeps the oldest next tick for a later pass. Both capacity
+and legacy dispatch use that same selection. The existing admission transaction
+alone advances the cursor; pre-admission refusal or transaction rollback neither
+consumes it nor creates acknowledgments for the omitted historical ticks.
+
 An explicit original_guest_notify_reconcile_v1 binding selects the existing
 durable scheduler/dispatch owner and a canonical seven-step Guest graph. The
 new capacity.plan_original_guest and capacity.complete_original_guest operations

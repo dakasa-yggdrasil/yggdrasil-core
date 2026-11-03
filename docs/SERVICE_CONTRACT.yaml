@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "829f925379dc9f3a5a905be99cb1ff9d16d43732eaf3a3937cf2a270b6e8f080"
+    "sha256": "9a9a664140ace89bf02fd0b8ec1549b12dbcfc124e50775281d972af1105dd6e"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "42c08d5b7caba4a5b917eff874344b7ea74526ba8fbb9a9efbad638bd026b645"
+      "sha256": "c1c923b882f53e581401af835e5640e5e30dbdf7857f2e3010c69fc4e8e8e5de"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -40,7 +40,7 @@
     {
       "id": "http_inbound_protocols_and_auth",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "3b5ea3eb1ba9901f1613cb772fe502ab8e7e695c80ecf7f86265777fab8f0496"
+      "sha256": "175d46c25e1ac8f76bec62babdd637b8d6f11bb13da79245a571c6081eb7437f"
     },
     {
       "id": "dependency_versions",
@@ -54,8 +54,18 @@
     },
     {
       "id": "independent_source_review",
+      "evidence": "docs/service-contract/M2_SOURCE_REVIEW.json",
+      "sha256": "424367556bd2df3cf7c29fa633475bcab04a6a0b5f987a8099eaaf4bb60eab1f"
+    },
+    {
+      "id": "prior_accepted_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
       "sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710"
+    },
+    {
+      "id": "scheduler_skip_source_review",
+      "evidence": "docs/service-contract/SCHEDULER_SKIP_REVIEW.json",
+      "sha256": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f"
     }
   ],
   "callsREST": [
@@ -72,7 +82,7 @@
     {
       "id": "parameterized_destination_families",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "3b5ea3eb1ba9901f1613cb772fe502ab8e7e695c80ecf7f86265777fab8f0496"
+      "sha256": "175d46c25e1ac8f76bec62babdd637b8d6f11bb13da79245a571c6081eb7437f"
     }
   ],
   "exposesREST": [

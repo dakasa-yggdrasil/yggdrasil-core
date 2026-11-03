@@ -1,0 +1,80 @@
+{
+  "schema": "core_service_source_review_composition_v1",
+  "scope": "Local convergence of two independently Source-reviewed deltas. Preserve both original reviews and their historical source hashes; this composition does not reattribute the historical review to the scheduler correction.",
+  "source_inventory": {
+    "path": "docs/service-contract/source/sources.json",
+    "sha256": "9a9a664140ace89bf02fd0b8ec1549b12dbcfc124e50775281d972af1105dd6e",
+    "complete_source_count": 784
+  },
+  "source_baseline": {
+    "commit": "d06f2f9157fd2333032e6e4f8e687dd7352676da",
+    "source_inventory_sha256": "02241d59611f8179c006d8a4086e7ea52aeaea93d71e2c07a0d71760662cb047"
+  },
+  "preserved_reviews": {
+    "historical_and_m2_eof": {
+      "path": "docs/service-contract/REVIEW.json",
+      "sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710",
+      "original_historical_nodes": 109,
+      "total_nodes": 110,
+      "m2_eof_source_inventory_sha256": "829f925379dc9f3a5a905be99cb1ff9d16d43732eaf3a3937cf2a270b6e8f080",
+      "scope": "Root accepted only the two terminal LF removals and their complete static source census. Existing historical review nodes remain unchanged."
+    },
+    "scheduler_skip": {
+      "commit": "d451ac07c6e412bd2eae06f648935799e046ea31",
+      "path": "docs/service-contract/SCHEDULER_SKIP_REVIEW.json",
+      "sha256": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f",
+      "source_inventory_sha256": "6456e9fca2569124e390f75bc86f8637ff0f9e780cd0bba8d056b19b414481d1",
+      "scope": "Preserved exact P4 Source review; its source inventory hash describes P4 before the two M2 EOF cleanups."
+    }
+  },
+  "composition": {
+    "only_source_facts_changed_from_baseline": {
+      "addons/workflow_scheduler.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 17302,
+          "sha256": "b5778f60d04d31062553e7041eff9ef4b74d6057b63a3487ef8bb252ec35f94c"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 20149,
+          "sha256": "c6e39fc3f88e1cd201a89dced02dfd716b03959aa9258bcb3e58836322c1d0ea"
+        }
+      },
+      "cmd/native-guest-lifecycle-fixture/source_compensation.go": {
+        "before": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15230,
+          "sha256": "a8f85764bdca22172347d686ba8b2db0b555be62429f99826012c22483798625"
+        },
+        "after": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15229,
+          "sha256": "562a7ce6cc52509da5072e591e211698be14c3078ba42b13641640878b329916"
+        }
+      },
+      "repository/capacity_failed_floor_source.go": {
+        "before": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15344,
+          "sha256": "9e16c56fe2b89266c89de110cb7a1d801902e6c7658ba380cad08175d39d38fd"
+        },
+        "after": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15343,
+          "sha256": "166a61cd49d18f7ae6151396b0622577b6ef28c50e517b53f9eaf0829bb1bd8c"
+        }
+      }
+    },
+    "all_other_source_facts_unchanged": 781,
+    "runtime_scheduler_byte_identical_to_P4": true,
+    "two_other_source_files_remove_exactly_one_terminal_LF": true
+  },
+  "validation": {
+    "static_source_census_only": true,
+    "new_local_functional_execution": false,
+    "M2_exact_head_CI_pass_claimed": false,
+    "new_runtime_native_or_ADR_acceptance_claimed": false,
+    "final_M2_candidate_exact_head_CI_required": true
+  }
+}
