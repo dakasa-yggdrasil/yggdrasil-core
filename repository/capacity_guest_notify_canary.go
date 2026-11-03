@@ -118,6 +118,13 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		if err != nil {
 			return err
 		}
+		if retirementForwardActive(&current) {
+			m := current.RetirementForward
+			r, _, e := loadRetirementForwardTx(ctx, tx, m.ID, "admitted")
+			if e != nil || maintenance || usage != "after_retirement_floor" || stored.pre.Slot >= r.Original.Request.Intent.Slot || preID == r.PreregistrationID || r.Generation != generation || r.Fence != fence || r.LeaseOwner != owner || r.ExecutorID != s.ExecutorID || !forwardSourceOrigin(s, "capacity.finish_original_guest_retirement") {
+				return ErrCapacityConflict
+			}
+		}
 		if current.FailedInstalledDisposal != nil {
 			// ADR-0095: the failed member never receives another canary.
 			// Only the unchanged retirement-floor protocol may probe survivors

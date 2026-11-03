@@ -37,6 +37,21 @@ func (s CapacityStore) guardGuestNotifyPhaseTx(ctx context.Context, tx *sql.Tx, 
 }
 
 func (s CapacityStore) guestNotifyRetirementFloorTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, slot int, now time.Time, usage, afterAckID string) error {
+	if retirementForwardActive(&current) {
+		r, _, err := loadRetirementForwardTx(ctx, tx, current.RetirementForward.ID, "admitted")
+		if err != nil {
+			return err
+		}
+		stored, err := loadGuestRetirementV2Tx(ctx, tx, r.RetirementRequestID, true)
+		if err != nil {
+			return err
+		}
+		b, err := capacity.VMObservationBinding(p, stored.Binding.MutationBindingName)
+		if err != nil || slot != stored.Request.Intent.Slot {
+			return ErrCapacityConflict
+		}
+		return s.retirementForwardFloorTx(ctx, tx, retirementForwardSnapshot{original: stored, policy: policy, spec: p, current: current, binding: b, now: now}, r)
+	}
 	if current.FailedInstalledDisposal != nil {
 		valid, err := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, slot, now)
 		if err != nil || !valid {

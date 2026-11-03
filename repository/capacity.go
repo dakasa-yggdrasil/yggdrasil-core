@@ -430,6 +430,9 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(key)); err != nil {
 		return model.CapacityIntent{}, err
 	}
+	if err = lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings); err != nil {
+		return model.CapacityIntent{}, err
+	}
 	var checksum string
 	var active bool
 	if err = tx.QueryRowContext(ctx, `SELECT checksum, active FROM public.manifests WHERE id=$1 AND kind='capacity_policy' AND namespace=$2 AND name=$3 FOR SHARE`, policy.ID, policy.Metadata.Namespace, policy.Metadata.Name).Scan(&checksum, &active); err != nil {
@@ -486,6 +489,9 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	}
 	next, receipt, err := mutate(p, previous, now.UTC())
 	if err != nil {
+		return model.CapacityIntent{}, err
+	}
+	if err = s.guardRetirementForwardTransitionTx(ctx, tx, p, previous, &next, now.UTC()); err != nil {
 		return model.CapacityIntent{}, err
 	}
 	if s.guestReconcile != nil && previous != nil && next.Phase != previous.Phase && (next.Phase == "prepared" || next.Phase == "canary" || next.Phase == "drained" || next.Phase == "promoted") {

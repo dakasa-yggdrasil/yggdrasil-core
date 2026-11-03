@@ -303,6 +303,22 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			return result
 		}
 	}
+	// An authenticated historical forward claim must be selected before the
+	// powered-off target is asked to satisfy aggregate useful coverage.
+	if step.Use.Operation == capacity.PlanOriginalGuestOperation {
+		forward, handled, forwardErr := planGuestRetirementForward(ctx, store, policy, wf, step)
+		if forwardErr != nil {
+			return fail(forwardErr)
+		}
+		if handled {
+			raw, e := json.Marshal(forward)
+			if e != nil || json.Unmarshal(raw, &result.Metadata) != nil || originalGuestReconcileLive(ctx) != nil {
+				return fail(errOriginalGuestStep)
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
+	}
 	var inv model.CapacityVMFleetInventory
 	var assessment model.CapacityAssessment
 	var reporting model.CapacityMetricRangeObservation

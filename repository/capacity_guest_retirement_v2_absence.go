@@ -215,6 +215,9 @@ func guestConfirmedDestroyV2Tx(ctx context.Context, tx *sql.Tx, p model.Capacity
 // Only the exact V2 delete binding selects the causal read-custody validator.
 // Every legacy/create/qualification grant retains its original validator.
 func guestV2RetirementProofTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, original capacityMutationRecord, proof model.CapacityMutationProof, now time.Time) (bool, error) {
+	if handled, err := (CapacityStore{}).guestForwardConfirmedDestroyTx(ctx, tx, p, original, proof, now); handled {
+		return true, err
+	}
 	if original.Grant.Capability != original.Binding.DestroyCapability || original.Grant.CompensationOf != "" {
 		return false, nil
 	}

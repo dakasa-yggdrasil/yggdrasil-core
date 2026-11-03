@@ -170,7 +170,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		return fail("original-guest-step-12")
 	}
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
-	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executor}
+	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executor, OriginalRunID: capacityDispatchOriginalRun(ctx)}
 	if maintenance {
 		store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
 		parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, err = store.GuestNotifyMaintenanceEpoch(ctx, policy, parsed.PreregistrationID)

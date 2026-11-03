@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -94,6 +95,16 @@ func executeProductionGuestRetirementFinishedV2(ctx context.Context, db *sql.DB,
 		return nil, errOriginalGuestStep
 	}
 	store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
+	forwardOriginal, forward, forwardHandled, forwardErr := store.GuestRetirementForwardOriginal(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID)
+	if forwardErr != nil {
+		return nil, forwardErr
+	}
+	if forwardHandled {
+		if forwardOriginal.Preregistration.PreregistrationID != input.PreregistrationID || forwardOriginal.Request.Intent.Slot != input.Slot {
+			return nil, errOriginalGuestStep
+		}
+		return finishGuestRetirementForward(ctx, db, store, policy, p, input, key, forwardOriginal, forward)
+	}
 	stored, err := store.GuestRetirementWorkflowOriginalV2(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID, input.PreregistrationID, input.Slot)
 	if err != nil {
 		return nil, err
@@ -125,6 +136,10 @@ func executeProductionGuestRetirementFinishedV2(ctx context.Context, db *sql.DB,
 // This source owns one actual destroy RPC. A prior issued/redeemed/uncertain
 // grant is never resent, even when its adapter response was lost.
 func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, stored repository.GuestRetirementOriginalV2, off repository.GuestNativePoweroffReturnV2, existing model.CapacityMutationReceipt, found bool) (any, error) {
+	return finishProductionGuestNativeDestroyV2Forward(ctx, store, policy, p, input, stored, off, existing, found, nil)
+}
+
+func finishProductionGuestNativeDestroyV2Forward(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, stored repository.GuestRetirementOriginalV2, off repository.GuestNativePoweroffReturnV2, existing model.CapacityMutationReceipt, found bool, forward *repository.GuestRetirementForward) (any, error) {
 	b, err := capacity.VMObservationBinding(p, input.BindingName)
 	if err != nil {
 		return nil, err
@@ -134,7 +149,7 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 	if !capacity.AWSOriginalMutationPair(b) && (b.EnsureCapability != "ensure_server" || b.DestroyCapability != "destroy_server") {
 		return nil, errOriginalGuestStep
 	}
-	if found && existing.Grant.State == "confirmed" {
+	if found && existing.Grant.State == "confirmed" && forward == nil {
 		return struct {
 			RequestID                string                      `json:"request_id"`
 			Grant                    model.CapacityMutationGrant `json:"grant"`
@@ -166,10 +181,15 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 		if err != nil {
 			return nil, err
 		}
-		// The actual V2 chain, closed caller, survivor canary and native off
-		// observation own drained. The later complete step owns the fresh
-		// reduced inventory assessment and final promotion after native absence.
-		if _, err = store.AdvanceGuestRetirementDrainedV2(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID, input.PreregistrationID, input.Slot); err != nil {
+		// Normal V2 keeps its closed-caller barrier. The separately admitted
+		// forward lane owns its own immutable prefix/OFF/survivor barrier.
+		// Complete still owns fresh reduced inventory and final promotion.
+		if forward != nil {
+			_, err = store.AdvanceGuestRetirementForwardDrained(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID)
+		} else {
+			_, err = store.AdvanceGuestRetirementDrainedV2(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID, input.PreregistrationID, input.Slot)
+		}
+		if err != nil {
 			return nil, err
 		}
 		grant, err := store.IssueMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw})
@@ -190,19 +210,41 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 			return nil, errOriginalGuestStep
 		}
 	}
-	if receipt.Grant.State != "settled" || receipt.Outcome != "accepted" || !receipt.TransportCompleted {
+	if (receipt.Grant.State != "settled" && !(forward != nil && receipt.Grant.State == "confirmed")) || receipt.Outcome != "accepted" || !receipt.TransportCompleted {
 		return nil, errOriginalGuestStep
 	}
 	// Read-only eventual-consistency polling remains inside this ONE original
 	// sixty-second finish invocation. Each actual RPC has a shorter new five-
-	// second read challenge. Neither budget can substitute for the original
-	// thirty-second Guest caller success or authorize another DELETE.
+	// second read challenge. Normal V2 still requires its original Guest
+	// caller success; the forward lane uses only its distinct typed barrier.
+	// Neither read budget authorizes another DELETE.
 	for {
-		returned, proof, pending, readErr := sourceProductionNativeAbsenceV2(original, store, policy, p, b, input, receipt)
+		var returned any
+		var proof model.CapacityMutationProof
+		var pending bool
+		var readErr error
+		if forward != nil {
+			returned, proof, readErr = sourceGuestRetirementForwardRead(original, store, policy, p, input, stored, "absence", receipt)
+			pending = errors.Is(readErr, repository.ErrGuestRetirementForwardNativePending)
+		} else {
+			returned, proof, pending, readErr = sourceProductionNativeAbsenceV2(original, store, policy, p, b, input, receipt)
+		}
 		if readErr == nil {
-			confirmed, err := store.ConfirmMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, proof)
-			if err != nil {
-				return nil, err
+			confirmed := receipt.Grant
+			if forward == nil || receipt.Grant.State != "confirmed" {
+				confirmed, err = store.ConfirmMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, proof)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if forward != nil {
+				result := guestRetirementForwardResult(*forward)
+				result["destroy_grant_id"], result["native_absence_sha256"] = confirmed.GrantID, capacity.GuestRetirementSHA(returned)
+				result["physical_capacity_released"], result["original_confirmed_destroy"] = true, true
+				result["native_destroy_sent"] = !found
+				// No statement is made about the old caller ACK, journal tail,
+				// billing reconciliation or completion of remote business work.
+				return result, nil
 			}
 			return struct {
 				RequestID                string                      `json:"request_id"`

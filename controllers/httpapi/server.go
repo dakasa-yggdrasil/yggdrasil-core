@@ -593,6 +593,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/ops/capacity/failed-installed-guest-disposals", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposal))
 	mux.HandleFunc("GET /api/v1/ops/capacity/failed-installed-guest-disposals/{preregistrationId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/failed-serving-guest-disposals", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedServingGuestDisposal))
+	mux.HandleFunc("POST /api/v1/ops/capacity/guest-retirement-poweroff-forwards", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsGuestRetirementForward))
+	mux.HandleFunc("GET /api/v1/ops/capacity/guest-retirement-poweroff-forwards/{preregistrationId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsGuestRetirementForwardRead))
 	mux.HandleFunc("GET /api/v1/ops/capacity/failed-serving-guest-disposals/{preregistrationId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedServingGuestDisposalRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/failed-serving-guest-disposals/native-off", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedServingGuestNativeOff))
 	mux.HandleFunc("POST /api/v1/ops/capacity/failed-serving-guest-disposals/complete", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedServingGuestDisposalComplete))

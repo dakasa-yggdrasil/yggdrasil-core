@@ -354,7 +354,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleCollaboratorCreate",
-      "line": 2119,
+      "line": 2121,
       "type_expressions": [
         "repository.EventTypeCollaboratorCreated"
       ]
@@ -365,7 +365,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamCreate",
-      "line": 2361,
+      "line": 2363,
       "type_expressions": [
         "repository.EventTypeTeamCreated"
       ]
@@ -376,7 +376,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamUpdate",
-      "line": 2456,
+      "line": 2458,
       "type_expressions": [
         "repository.EventTypeTeamUpdated"
       ]
@@ -387,7 +387,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamDelete",
-      "line": 2545,
+      "line": 2547,
       "type_expressions": [
         "repository.EventTypeTeamDeleted"
       ]
@@ -398,7 +398,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantCreate",
-      "line": 2609,
+      "line": 2611,
       "type_expressions": [
         "repository.EventTypeTeamGrantAdded",
         "model.ActorTypeAPI"
@@ -410,7 +410,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantDelete",
-      "line": 2646,
+      "line": 2648,
       "type_expressions": [
         "repository.EventTypeTeamGrantRevoked",
         "model.ActorTypeAPI"
@@ -422,7 +422,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2753,
+      "line": 2755,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded"
       ]
@@ -433,7 +433,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2778,
+      "line": 2780,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved"
       ]
@@ -702,7 +702,7 @@
       "callee": "EmitEvent",
       "file": "repository/capacity_mutations.go",
       "function": "emitCapacityMutationEvent",
-      "line": 920,
+      "line": 957,
       "type_expressions": [
         "record.EventProvider + \".\" + record.EventResource + \".\" + verb",
         "\"workflow\""

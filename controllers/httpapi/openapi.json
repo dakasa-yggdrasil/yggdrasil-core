@@ -23,6 +23,122 @@
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
   ],
   "paths": {
+    "/api/v1/ops/capacity/guest-retirement-poweroff-forwards": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Admit historical forward recovery of a partially powered-off useful tail",
+        "description": "Named-human admission only. Core authenticates the entire retained original retirement frame and failed scheduled run, derives its own process barrier and appends a separately referenced claim. The seven-field body supplies no native facts, clocks or replacement success. A later ordinary protected workflow may use fresh survivor canaries and bounded source-owned OFF/absence reads before its existing one-time exact destroy authority. Original caller failure and all Guest records remain unchanged; this operation does not replay Guest work or issue a provider mutation.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestRetirementForwardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable public admission summary. No normal Guest success, native OFF or deletion is inferred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestRetirementForwardSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not the exact closed original-retirement/current-frame request."
+          },
+          "401": {
+            "description": "An authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and current administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Original lineage, failed run, expired lease/process barrier, current frame or outstanding authority conflicts. No Guest command or provider write was sent."
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/guest-retirement-poweroff-forwards/{preregistrationId}": {
+      "get": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Read stored partial-poweroff forward recovery lineage",
+        "description": "Pure stored read of all immutable stages and linked admissions for the exact preregistration. Returns only public UUIDs, hashes, stage and truthful flags; no native I/O or private original wires.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "preregistrationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered immutable public summaries, including historical parent lineage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GuestRetirementForwardSummary"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not the exact closed original-retirement/current-frame request."
+          },
+          "401": {
+            "description": "An authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and current administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "404": {
+            "description": "Stored original lineage is unavailable or invalid."
+          }
+        }
+      }
+    } ,
     "/api/v1/ops/capacity/failed-serving-guest-disposals": {
       "post": {
         "tags": [
@@ -1282,6 +1398,166 @@
       }
     },
     "schemas": {
+      "GuestRetirementForwardRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preregistration_id",
+          "retirement_request_id",
+          "policy_id",
+          "policy_checksum",
+          "generation",
+          "fencing_token",
+          "intent_sha256"
+        ],
+        "properties": {
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retirement_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policy_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policy_checksum": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "fencing_token": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "GuestRetirementForwardSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "id",
+          "root_admission_id",
+          "parent_admission_id",
+          "parent_admission_sha256",
+          "stage",
+          "mode",
+          "preregistration_id",
+          "retirement_request_id",
+          "admission_sha256",
+          "prefix_sha256",
+          "original_caller_sha256",
+          "native_off_sha256",
+          "destroy_grant_id",
+          "native_absence_sha256",
+          "recorded_at",
+          "original_failure_preserved",
+          "normal_guest_success_claimed",
+          "guest_command_replayed",
+          "native_off_observed",
+          "native_absence_observed"
+        ],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "original_guest_partial_poweroff_forward_v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "root_admission_id": {
+            "type": "string"
+          },
+          "parent_admission_id": {
+            "type": "string"
+          },
+          "parent_admission_sha256": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "admitted",
+              "off_qualified",
+              "terminal"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "historical"
+            ]
+          },
+          "preregistration_id": {
+            "type": "string"
+          },
+          "retirement_request_id": {
+            "type": "string"
+          },
+          "admission_sha256": {
+            "type": "string"
+          },
+          "prefix_sha256": {
+            "type": "string"
+          },
+          "original_caller_sha256": {
+            "type": "string"
+          },
+          "native_off_sha256": {
+            "type": "string"
+          },
+          "destroy_grant_id": {
+            "type": "string"
+          },
+          "native_absence_sha256": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "original_failure_preserved": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "normal_guest_success_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "guest_command_replayed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "native_off_observed": {
+            "type": "boolean"
+          },
+          "native_absence_observed": {
+            "type": "boolean"
+          }
+        }
+      } ,
       "FailedServingGuestDisposalRequest": {
         "type": "object",
         "additionalProperties": false,

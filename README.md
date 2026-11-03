@@ -517,3 +517,12 @@ bounded provider OFF reads before separate cleanup. They do not resend Guest
 retirement or replace the normal four-record success proof. The dedicated
 `partial-nativeoff-reconciliation-source.yml` job retains its six-root race/PG81
 census and physical shutdown separately from the historical Source gates.
+
+
+[ADR-0101](docs/adr/0101-finish-an-authenticated-partial-poweroff-with-a-separate-native-forward-proof.md)
+describes the separate production V2 partial-poweroff forward proof. It preserves
+the failed original caller, authenticates the complete retained signed prefix,
+and requires fresh native OFF and survivor evidence before ordinary owned
+cleanup. Automatic live execution and explicit historical admission share that
+proof; neither replays Guest retirement or an already issued destroy. The
+separate PostgreSQL16/17 CI cohort covers this contract using declared fixtures.

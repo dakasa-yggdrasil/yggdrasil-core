@@ -65,12 +65,18 @@ func lockMutationScope(ctx context.Context, tx *sql.Tx, namespace string, p mode
 // A logical native slot is global across policy realms. Scope locks alone
 // cannot serialize two first registrations of an absent native-slot row.
 func lockNativeMutationSlot(ctx context.Context, tx *sql.Tx, b model.CapacityMutationBinding, slot int) error {
+	if err := lockRetirementForwardProfileTx(ctx, tx, b); err != nil {
+		return err
+	}
 	key, _ := json.Marshal([]any{"capacity-native-slot", b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, slot})
 	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, string(key))
 	if err != nil {
 		return err
 	}
-	return guardFailedServingSlotTx(ctx, tx, b, slot)
+	if err := guardFailedServingSlotTx(ctx, tx, b, slot); err != nil {
+		return err
+	}
+	return guardRetirementForwardSlotTx(ctx, tx, b, slot)
 }
 
 func (s CapacityStore) mutationTransaction(ctx context.Context, policy model.Manifest, historical bool, generation, fence int64, owner string, fn func(*sql.Tx, model.CapacityPolicySpec, model.CapacityIntent, time.Time) error) error {
@@ -93,6 +99,9 @@ func (s CapacityStore) mutationTransactionWithCommitReturn(ctx context.Context, 
 	}
 	defer tx.Rollback()
 	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
+		return err
+	}
+	if err = lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings); err != nil {
 		return err
 	}
 	var checksum string
@@ -196,6 +205,10 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return err
 		}
 		b := plan.Binding
+		ctx, err = forwardMutationContext(ctx, s, intent, b, plan.Slot, plan.Capability)
+		if err != nil {
+			return err
+		}
 		if plan.Capability == b.EnsureCapability && (p.GuestRetirementBinding == nil || s.guestOriginal == nil) {
 			return fmt.Errorf("%w: original Guest provisioning step and profile required before create", ErrCapacityConflict)
 		}
@@ -403,6 +416,25 @@ func (s CapacityStore) callbackTransaction(ctx context.Context, id string, fn fu
 	}
 	var record capacityMutationRecord
 	if err = json.Unmarshal(raw, &record); err != nil {
+		return err
+	}
+	// A callback may revalidate the complete owning policy inside the same
+	// transaction. Lock its whole binding roster in the ordinary sorted order
+	// before grant/current-row locks; an old settlement may still be retained
+	// when its policy has been removed, using the immutable grant binding.
+	bindings := []model.CapacityMutationBinding{record.Binding}
+	var policyRaw []byte
+	policyErr := tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND kind='capacity_policy'`, record.PolicyID).Scan(&policyRaw)
+	if policyErr == nil {
+		var lockPolicy model.CapacityPolicySpec
+		if err = json.Unmarshal(policyRaw, &lockPolicy); err != nil {
+			return err
+		}
+		bindings = append(bindings, lockPolicy.MutationBindings...)
+	} else if !errors.Is(policyErr, sql.ErrNoRows) {
+		return policyErr
+	}
+	if err = lockRetirementForwardBindingsTx(ctx, tx, bindings); err != nil {
 		return err
 	}
 	if err = s.guardOriginalHostCallbackTx(ctx, tx, record, ns, p, originalRequest...); err != nil {
@@ -762,6 +794,11 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 			return err
 		}
 		g, b := record.Grant, record.Binding
+		var forwardErr error
+		ctx, forwardErr = forwardMutationContext(ctx, s, current, b, g.Slot, g.Capability)
+		if forwardErr != nil {
+			return forwardErr
+		}
 		if err := lockNativeMutationSlot(ctx, tx, b, g.Slot); err != nil {
 			return err
 		}

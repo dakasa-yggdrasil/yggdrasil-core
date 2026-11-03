@@ -32,7 +32,7 @@ const failedServingBusyIndex89Name = "workflow_runs_workflow_id_idx"
 // No production constraint is removed and no planner option is overridden.
 func failedServingWorkflowBusyIndex89(t *testing.T) {
 	t.Helper()
-	db := failedServingDB(t)
+	db := failedServingDBAtSchema(t, 89)
 	ctx := failedServingContext(t)
 	migrations := filepath.Join(failedServingRepositoryRoot(t), "db", "migrations")
 	failedServingIndex89Catalog(t, ctx, db)
@@ -70,7 +70,7 @@ func failedServingWorkflowBusyIndex89(t *testing.T) {
 	if !before.workflowSequential || before.newIndex {
 		t.Fatal("missing-index baseline did not reproduce the complete UUID-arm scan", before)
 	}
-	if err := goose.UpContext(ctx, db, migrations); err != nil {
+	if err := goose.UpToContext(ctx, db, migrations, 89); err != nil {
 		t.Fatal("real concurrent index89 migration on populated history", err)
 	}
 	failedServingIndex89Catalog(t, ctx, db)
@@ -121,8 +121,8 @@ func failedServingWorkflowBusyIndex89(t *testing.T) {
 			}
 		})
 	}
-	if err := goose.UpContext(ctx, db, migrations); err != nil {
-		t.Fatal("all-applied latest migration replay", err)
+	if err := goose.UpToContext(ctx, db, migrations, 89); err != nil {
+		t.Fatal("all-applied historical schema89 replay", err)
 	}
 	// This is the exact v3.27 Up entry point shipped by the unchanged old
 	// scripts/goose, presented with its old <=88 files and the newer database.

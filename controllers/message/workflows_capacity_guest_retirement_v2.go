@@ -31,6 +31,12 @@ func originalGuestNotifyFloor(ctx context.Context, db *sql.DB, store repository.
 	return nil
 }
 
+// An authentic body does not make a late original caller a normal success.
+// Preserve its actual return; forward recovery uses a separate OFF barrier.
+func originalGuestCallerClosedBeforeDeadlineV2(c repository.GuestOriginalCallerReturn) bool {
+	return !c.OriginalDeadline.IsZero() && !c.DriverReturnedAt.IsZero() && c.DriverReturnedAt.Before(c.OriginalDeadline) && !c.OriginalContextFailed
+}
+
 // Production uses a distinct original clock owner and closed V2 wire. The
 // qualification branch continues to use its own V1 source without projection.
 func executeProductionGuestRetirementV2(ctx context.Context, db *sql.DB, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, step model.WorkflowStepSpec, input guestOriginalStepInput, member model.CapacityGuestRetirementMemberBinding, key ed25519.PrivateKey) (any, error) {
@@ -42,6 +48,9 @@ func executeProductionGuestRetirementV2(ctx context.Context, db *sql.DB, store r
 		return nil, errOriginalGuestStep
 	}
 	store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource()).WithOriginalGuestRetirement(step, capacity.CurrentGuestCoreSource())
+	if forward, handled, err := historicalGuestRetirementForward(ctx, store, policy, input); handled || err != nil {
+		return forward, err
+	}
 	if err = originalGuestNotifyFloor(ctx, db, store, policy, p, input, key, "before_retirement_floor"); err != nil {
 		return nil, err
 	}
@@ -97,8 +106,14 @@ func executeProductionGuestRetirementV2(ctx context.Context, db *sql.DB, store r
 		recordErr = store.RecordGuestObservationV2(retention, request.Intent.RequestID, observed)
 	}
 	stop()
-	if callErr != nil || recordErr != nil || !persisted || capacity.GuestRetirementV2Observation(observed, enrollment, request.Intent, false) != nil {
-		return nil, errOriginalGuestStep
+	if callErr != nil || recordErr != nil || !persisted || !originalGuestCallerClosedBeforeDeadlineV2(retained) || capacity.GuestRetirementV2Observation(observed, enrollment, request.Intent, false) != nil {
+		if recordErr != nil || ctx.Err() != nil {
+			return nil, errOriginalGuestStep
+		}
+		// The failed original caller remains immutable. A distinct Source-owned
+		// forward admission may continue only under this still-live workflow
+		// lease; it never reuses the expired Guest clock or sends Guest work.
+		return liveGuestRetirementForward(ctx, store, policy, input, request.Intent.RequestID)
 	}
 	return struct {
 		RequestID           string                                     `json:"request_id"`

@@ -338,6 +338,13 @@ func (s CapacityStore) guestReconcilePhaseTx(ctx context.Context, tx *sql.Tx, po
 		return ErrCapacityConflict
 	}
 	if s.guestReconcile.mode == "retire" {
+		if retirementForwardActive(&old) {
+			r, _, e := loadRetirementForwardTx(ctx, tx, old.RetirementForward.ID, "admitted")
+			if e != nil {
+				return e
+			}
+			return s.guestForwardCompletionTx(ctx, tx, p, old, r, now)
+		}
 		stored, err := loadGuestRetirementV2Tx(ctx, tx, s.guestReconcile.requestID, true)
 		if err != nil {
 			return err

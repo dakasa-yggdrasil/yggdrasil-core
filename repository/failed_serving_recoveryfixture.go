@@ -57,8 +57,15 @@ func failedServingWire(t *testing.T, value any) []byte {
 	return raw
 }
 
-func failedServingDB(t *testing.T) *sql.DB {
+func failedServingDB(t *testing.T) *sql.DB { t.Helper(); return failedServingDBAtSchema(t, 90) }
+
+// Only the historical index89 proof uses89; operational/new recovery fixtures
+// always use current90. No caller/env can select an arbitrary old schema.
+func failedServingDBAtSchema(t *testing.T, target int64) *sql.DB {
 	t.Helper()
+	if target != 89 && target != 90 {
+		t.Fatal("closed fixture schema89 or90 required")
+	}
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		t.Fatal("explicit disposable fixture gate required")
 	}
@@ -109,12 +116,18 @@ func failedServingDB(t *testing.T) *sql.DB {
 	if err = goose.SetDialect("postgres"); err != nil {
 		t.Fatal(err)
 	}
-	if err = goose.Up(db, filepath.Join(failedServingRepositoryRoot(t), "db", "migrations")); err != nil {
+	migrations := filepath.Join(failedServingRepositoryRoot(t), "db", "migrations")
+	if target == 89 {
+		err = goose.UpTo(db, migrations, 89)
+	} else {
+		err = goose.Up(db, migrations)
+	}
+	if err != nil {
 		t.Fatal("production migrations", err)
 	}
 	version, err := goose.GetDBVersion(db)
-	if err != nil || version != 89 {
-		t.Fatal("exact schema89 fixture required", version, err)
+	if err != nil || version != target {
+		t.Fatal("exact closed fixture schema required", target, version, err)
 	}
 	return db
 }
@@ -186,6 +199,16 @@ func newFailedServingFixture(t *testing.T, provider string) *failedServingFixtur
 
 func newFailedServingFixtureHistory(t *testing.T, provider string, historical bool) *failedServingFixture {
 	t.Helper()
+	return newFailedServingFixtureLease(t, provider, historical, 30)
+}
+
+// Select the declared lease before any initial signed policy/catalog state.
+// This is fixture construction, never a rewrite of an admitted original.
+func newFailedServingFixtureLease(t *testing.T, provider string, historical bool, leaseSeconds int) *failedServingFixture {
+	t.Helper()
+	if leaseSeconds != 30 && leaseSeconds != 300 {
+		t.Fatal("closed declared fixture lease")
+	}
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		t.Fatal("explicit test process and fixture gate required")
 	}
@@ -197,6 +220,7 @@ func newFailedServingFixtureHistory(t *testing.T, provider string, historical bo
 	t.Cleanup(failedServingFixtureMutex.Unlock)
 	capacity.RecoveryFixtureApprovalScope(t)
 	p, binding, reg, receipt, installed, settlement := failedServingOperands(t, provider)
+	p.LeaseSeconds = leaseSeconds
 	f := &failedServingFixture{db: failedServingDB(t), p: p, reg: reg, receipt: receipt, installed: installed}
 	f.pre = reg.Result.ProductionClock.Authority.Preregistration
 	f.policy = model.Manifest{ID: uuid.MustParse(f.pre.PolicyID), Kind: "capacity_policy", Checksum: f.pre.PolicyChecksum, Version: 1, Metadata: model.ManifestMetadata{Namespace: "dakasa-production", Name: "notify-" + provider + "-elastic-capacity", Active: true}, Spec: failedServingWire(t, p)}

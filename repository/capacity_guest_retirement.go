@@ -49,6 +49,9 @@ func (s CapacityStore) guestCreateRedemptionTx(ctx context.Context, tx *sql.Tx, 
 func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Manifest, generation, fence int64, owner, preregistrationID, nonce string, key ed25519.PrivateKey) (model.CapacityGuestRetirementRequest, error) {
 	var result model.CapacityGuestRetirementRequest
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if retirementForwardActive(&current) {
+			return ErrCapacityConflict // A retained forward admission never rearms the Guest caller.
+		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preregistrationID)
 		origin := s.guestRetirementOrigin
 		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
@@ -412,6 +415,9 @@ func (s CapacityStore) RecordGuestNativePoweroff(ctx context.Context, id string,
 }
 
 func (s CapacityStore) guestDestroyEligibilityTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, b model.CapacityMutationBinding, slot int, resourceID, created string, now time.Time, destroyGrantID string) error {
+	if retirementForwardActive(&current) {
+		return s.guestForwardDestroyEligibilityTx(ctx, tx, policy, p, current, b, slot, resourceID, created, now, destroyGrantID)
+	}
 	if p.GuestRetirementBinding == nil || p.GuestRetirementBinding.MutationBindingName != b.Name || capacity.ValidateGuestRetirementBinding(p, p.GuestRetirementBinding) != nil {
 		return ErrCapacityConflict
 	}
@@ -467,6 +473,9 @@ func (s CapacityStore) guestDestroyEligibilityTx(ctx context.Context, tx *sql.Tx
 }
 
 func (s CapacityStore) bindGuestDestroyTx(ctx context.Context, tx *sql.Tx, original capacityMutationRecord, now time.Time) error {
+	if handled, err := s.bindGuestForwardDestroyTx(ctx, tx, original, now); handled {
+		return err
+	}
 	var id string
 	if err := tx.QueryRowContext(ctx, `SELECT id::text FROM public.capacity_vm_retirement_intents WHERE intent_record->'tuple'->>'resource_id'=$1 AND intent_record->'tuple'->>'resource_created_at'=$2 AND intent_record->>'policy_id'=$3 AND intent_record->>'generation'=$4 AND intent_record->>'fence'=$5`, original.Grant.ExpectedResourceID, original.Grant.ExpectedResourceCreatedAt, original.PolicyID.String(), fmt.Sprint(original.Generation), fmt.Sprint(original.FencingToken)).Scan(&id); err != nil {
 		return ErrCapacityConflict

@@ -744,7 +744,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Apply unchanged production migrations through schema89
+      - name: Apply production migrations through schema90
         shell: bash
         run: |
           set -euo pipefail
@@ -760,7 +760,7 @@ jobs:
           import json, os
           from pathlib import Path
           actual=json.loads((Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/database.json').read_text())
-          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':89}:
+          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':90}:
               raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
           PYCHECK
       - name: Qualify exact skip calendar, bounded search and original PG dispatch

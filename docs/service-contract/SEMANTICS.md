@@ -719,3 +719,34 @@ are tolerated alongside the existing pure-assessment/observation effects.
 Stored membership hashes are not fresh native presence, useful capacity or
 quiescence; the next independent tick proves those again. Source review and
 declared PostgreSQL fixtures do not qualify a production Guest or provider.
+
+
+## Authenticated partial-poweroff forward completion (ADR-0101)
+
+A separate Core proof can finish retirement of an owned useful tail in slots
+2–8 when the entire authentic original nonce and contiguous signed journal
+prefix through poweroff admission survived, but its original caller failed.
+An optional genuine fourth record remains part of the authenticated whole
+frame. The normal five-row/caller-200 validator and Guest wire stay unchanged;
+neither physical OFF nor this forward proof supplies a missing Guest ACK.
+
+Ordinary execution admits this proof only under the same live workflow lease
+and epoch. Historical recovery uses the god-mode and CSRF-gated
+`POST /api/v1/ops/capacity/guest-retirement-poweroff-forwards`, with exactly
+`preregistration_id`, `retirement_request_id`, `policy_id`, `policy_checksum`,
+`generation`, `fencing_token` and `intent_sha256`. Core derives the original
+failed run and replacement-process barrier. GET `/{preregistrationId}` returns
+an explicit public summary; original caller bodies and frames remain private.
+The scheduler claims the requested recovery before dead-target coverage.
+
+Separate bounded native reads must prove exact-lifetime OFF. Fresh survivor
+canaries use the existing `after_retirement_floor` usage after the new
+admission/OFF barrier, preserving publication limits. One ordinary owned
+destroy then requires its actual settled receipt and complete target/auxiliary
+absence before slot tombstoning. Fresh reduced membership and coverage remain
+necessary for terminal promotion. An accepted or confirmed parent destroy
+permits only fresh read/confirmation continuation; an unknown issued or
+redeemed destroy remains held. No Guest replay, Stop or second destroy is
+introduced. Migration90 retains append-only admission/read lineage and checks
+the complete terminal intent. Declared recovery fixtures and CI cannot qualify
+a production Guest, provider effect or operational A/B.

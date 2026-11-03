@@ -45,6 +45,9 @@ func (s CapacityStore) IssueGuestRetirementV2(original *capacity.GuestRetirement
 	}
 	ctx := original.Context()
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if retirementForwardActive(&current) {
+			return ErrCapacityConflict // A retained forward admission never rearms the Guest caller.
+		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preregistrationID)
 		origin := s.guestRetirementOrigin
 		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {

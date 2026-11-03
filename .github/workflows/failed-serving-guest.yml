@@ -69,7 +69,7 @@ jobs:
               assert (target in row.get('IgnoredGoFiles',[])) is (not present)
           print('FAILED_SERVING_FIXTURE_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')
           PY
-      - name: Run exact schema89 Source, HTTP and bounded original-read cases
+      - name: Run exact schema90 Source, HTTP and bounded original-read cases
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -135,7 +135,7 @@ jobs:
               summary[name]={'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'failed_serving_guest_Source_exact_CI_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'schema_version':89,'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'race':True,'count':1,'total_roots':16,'summary':summary,'mandatory_schema89_index_subtest':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          value={'schema':'failed_serving_guest_Source_exact_CI_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'schema_version':90,'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'race':True,'count':1,'total_roots':16,'summary':summary,'mandatory_schema89_index_subtest':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY
@@ -145,5 +145,136 @@ jobs:
         with:
           name: failed-serving-source-pg${{ matrix.postgres }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.FAILED_SERVING_LOGS }}
+          if-no-files-found: error
+          retention-days: 14
+
+  retirement-forward:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: failed-serving-ci-only
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 3s --health-timeout 5s --health-retries 30
+    env:
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      GOWORK: 'off'
+      GOFLAGS: -mod=readonly
+      CGO_ENABLED: '1'
+      CAPACITY_RECOVERY_FIXTURE_ONLY: 'true'
+      FAILED_SERVING_FIXTURE_ADMIN_URL: postgres://postgres:failed-serving-ci-only@127.0.0.1:5432/postgres?sslmode=disable
+      FAILED_SERVING_TEST_PG_MAJOR: ${{ matrix.postgres }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Assert exact Source and both recovery fixture exclusions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]]
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+          logs="$RUNNER_TEMP/retirement-forward-source-pg$FAILED_SERVING_TEST_PG_MAJOR"
+          mkdir -m 0700 "$logs"
+          printf 'RETIREMENT_FORWARD_LOGS=%s\n' "$logs" >> "$GITHUB_ENV"
+          go list -json ./repository > "$logs/build-default.json"
+          go list -json -tags=recoveryfixture ./repository > "$logs/build-fixture.json"
+          go list -json -tags=nativequalification ./repository > "$logs/build-native.json"
+          go list -json -tags=recoveryfixture,nativequalification ./repository > "$logs/build-both.json"
+          python3 - "$logs" <<'PY_EXCLUSION'
+          import json,pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          for name,present in [('default',False),('fixture',True),('native',False),('both',False)]:
+              row=json.loads((p/f'build-{name}.json').read_text())
+              assert row['ImportPath']=='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+              for target in ('failed_serving_recoveryfixture.go','guest_retirement_forward_recoveryfixture.go'):
+                  assert (target in row.get('GoFiles',[])) is present,(name,target,'fixture inclusion drift')
+                  assert (target in row.get('IgnoredGoFiles',[])) is (not present)
+          print('BOTH_RECOVERY_FIXTURES_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')
+          PY_EXCLUSION
+      - name: Qualify separate partial-poweroff authority and both original contexts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          record() {
+            local name="$1"; shift
+            set +e
+            "$@" > "$RETIREMENT_FORWARD_LOGS/$name.stdout" 2> "$RETIREMENT_FORWARD_LOGS/$name.stderr"
+            local rc=$?
+            set -e
+            printf '%s\n' "$rc" > "$RETIREMENT_FORWARD_LOGS/$name.exit"
+            return "$rc"
+          }
+          failed=0
+          record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
+          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForward' || failed=1
+          record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^TestGuestRetirementForward' || failed=1
+          record http go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^TestGuestRetirementForward' || failed=1
+          [[ "$failed" == 0 ]]
+          python3 - <<'PY_FORWARD_CENSUS'
+          import collections,json,os,pathlib,subprocess
+          p=pathlib.Path(os.environ['RETIREMENT_FORWARD_LOGS']);base='github.com/dakasa-yggdrasil/yggdrasil-core/'
+          expected={
+            'capacity':('internal/capacity',['TestGuestRetirementForwardAuthenticatedWholePrefix']),
+            'repository':('repository',[
+              'TestGuestRetirementForwardLivePostgres',
+              'TestGuestRetirementForwardHistoricalAndAtomicityPostgres',
+              'TestGuestRetirementForwardLivePendingHistoricalResumePostgres',
+              'TestGuestRetirementForwardClosedGuardsPostgres',
+              'TestGuestRetirementForwardMissingPrefixPostgres',
+              'TestGuestRetirementForwardStorageDecoderIsClosedAndAtomic',
+              'TestGuestRetirementForwardFailedCallerTimeline']),
+            'message':('controllers/message',[
+              'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
+              'TestGuestRetirementForwardWorkflowMetadataNeverInventsCallerSuccess',
+              'TestGuestRetirementForwardLiveWorkflowDoesNotReplayGuestPostgres',
+              'TestGuestRetirementForwardHistoricalPlanClaimsBeforeCoveragePostgres',
+              'TestGuestRetirementForwardFinishOrderingAndOriginalBudgets',
+              'TestGuestRetirementForwardSourceReadClocksPostgres']),
+            'http':('controllers/httpapi',[
+              'TestGuestRetirementForwardClosedHistoricalCAS',
+              'TestGuestRetirementForwardRequiresCurrentAdministrativeHuman',
+              'TestGuestRetirementForwardSummaryPreservesFailureAndHidesOriginals',
+              'TestGuestRetirementForwardHistoricalHTTPPostgres'])}
+          summary={}
+          for name,(package,roots) in expected.items():
+              assert (p/(name+'.exit')).read_text().strip()=='0',name+' original go exit'
+              rows=[json.loads(line) for line in (p/(name+'.stdout')).read_text().splitlines()]
+              assert rows and all(r.get('Package')==base+package for r in rows),name+' package drift'
+              assert not any(r['Action'] in ('skip','fail') for r in rows),name+' skipped/failed mandatory case'
+              assert 'WARNING: DATA RACE' not in (p/(name+'.stderr')).read_text()
+              for action in ('run','pass'):
+                  actual=collections.Counter(r['Test'] for r in rows if r['Action']==action and 'Test' in r and '/' not in r['Test'])
+                  assert actual==collections.Counter(roots),(name,action,actual)
+              assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1,name+' package pass'
+              summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
+          assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
+          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':90,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(value,sort_keys=True))
+          PY_FORWARD_CENSUS
+      - name: Retain original forward qualification outcomes and executed census
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: retirement-forward-source-pg${{ matrix.postgres }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RETIREMENT_FORWARD_LOGS }}
           if-no-files-found: error
           retention-days: 14
