@@ -723,6 +723,47 @@ class G9CASPostgresTests(unittest.TestCase):
         self.pg("INSERT INTO workflow_runs(id,workflow_namespace,workflow_name,status) VALUES('" + uid(102) + "','dakasa-production','notify-hetzner-elastic-capacity','succeeded');")
         self.observe(False, 'busy_runs', 1)
 
+        with self.subTest(psql_count='same-UUID-logical-union-and-null-set'):
+            # The actual psql stdin path executes the production \gset, not a
+            # test-side replacement of its variable, predicate or SQL result.
+            self.pg("INSERT INTO workflow_runs(id,workflow_id,workflow_namespace,workflow_name,status,finished_at) VALUES"
+                    "('" + uid(110) + "','" + self.expected['workflow_id'] + "','dakasa-production','notify-aws-elastic-capacity','running',NULL),"
+                    "('" + uid(111) + "','" + self.expected['workflow_id'] + "','foreign','other-name','running',NULL),"
+                    "('" + uid(112) + "',NULL,'dakasa-production','notify-aws-elastic-capacity',NULL,'2020-01-01T00:00:00Z'),"
+                    "('" + uid(113) + "',NULL,'dakasa-production','notify-aws-elastic-capacity','failed','2020-01-01T00:00:00Z'),"
+                    "('" + uid(114) + "',NULL,'foreign','other-name','running',NULL);")
+            # Defensive NULL status belongs to the declared relevant-column
+            # fixture. It is not a claim that production DDL permits that row.
+            value = self.observe(False, 'busy_runs', 4)
+            self.assertEqual(value['busy_runs'], 4, 'overlap must remain one ID and closed/foreign rows excluded')
+
+        with self.subTest(psql_count='whole-catalog-mismatch-still-refuses'):
+            self.setUp()
+            self.seed()
+            original = self.expected['catalog']['sha256']
+            try:
+                self.expected['catalog']['sha256'] = 'f' * 64 if original != 'f' * 64 else 'e' * 64
+                value = self.observe(False, 'catalog_exact', False)
+                self.assertEqual(value['busy_runs'], 0, 'catalog refusal must not borrow an unrelated busy row')
+            finally:
+                self.expected['catalog']['sha256'] = original
+
+        with self.subTest(psql_count='first-select-error-aborts-before-final-JSON'):
+            self.setUp()
+            self.seed()
+            # Declare a missing-relation negative before the actual read-only
+            # guard. Retain the original rows under a different fixture name.
+            self.pg('ALTER TABLE workflow_runs RENAME TO declared_missing_workflow_runs;')
+            before = self.pg("SELECT encode(sha256(convert_to(COALESCE(jsonb_agg(to_jsonb(w) ORDER BY id),'[]'::jsonb)::text,'UTF8')),'hex') FROM declared_missing_workflow_runs w;").stdout
+            result = old.REAL_RUN(['docker', 'exec', '-i', self.container, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1',
+                                   '-U', 'guardian_ci', '-d', 'yggdrasil', '-At'],
+                                  input=cas.held_database_sql(self.expected).encode(), capture_output=True, timeout=12)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, b'', 'failed first SELECT must not emit any accepted guard projection')
+            self.assertIn(b'workflow_runs', result.stderr)
+            self.assertEqual(self.pg("SELECT encode(sha256(convert_to(COALESCE(jsonb_agg(to_jsonb(w) ORDER BY id),'[]'::jsonb)::text,'UTF8')),'hex') FROM declared_missing_workflow_runs w;").stdout,
+                             before, 'failed read-only query changed declared original rows')
+
     def test_malformed_nonterminal_state_never_counts_as_a_closed_run(self):
         self.seed()
         self.pg("INSERT INTO workflow_runs(id,workflow_namespace,workflow_name,status,finished_at) VALUES('" + uid(105) + "','dakasa-production','notify-aws-elastic-capacity','malformed-declared-CI-state','2020-01-01T00:00:00Z');")

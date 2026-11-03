@@ -1155,11 +1155,22 @@ def held_database_sql(expected):
     survivors = quote(json.dumps(e['historical_survivors'], sort_keys=True, separators=(',',':')))
     profile = e['physical_profile']
     frame_sql = held_original_frame_sql(retirement)
-    return f"""BEGIN READ ONLY;
-SET LOCAL enable_indexscan=off;
+    return f"""BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SET LOCAL enable_indexscan=on;
 SET LOCAL statement_timeout='8000ms';
 SET LOCAL lock_timeout='1000ms';
 SET LOCAL TIME ZONE 'UTC';
+SELECT count(*) AS root_held_busy_runs FROM (
+ SELECT wr.id FROM public.manifests m JOIN public.workflow_runs wr ON wr.workflow_id=m.id
+ WHERE m.kind='workflow' AND m.namespace='dakasa-production' AND m.name IN('notify-aws-elastic-capacity','notify-hetzner-elastic-capacity')
+ AND (COALESCE(wr.status,'') NOT IN('succeeded','failed','cancelled') OR wr.finished_at IS NULL)
+ UNION
+ SELECT wr.id FROM public.workflow_runs wr
+ WHERE wr.workflow_namespace='dakasa-production' AND wr.workflow_name IN('notify-aws-elastic-capacity','notify-hetzner-elastic-capacity')
+ AND (COALESCE(wr.status,'') NOT IN('succeeded','failed','cancelled') OR wr.finished_at IS NULL)
+) AS busy_run_ids
+\\gset
+SET LOCAL enable_indexscan=off;
 WITH scoped AS (SELECT * FROM public.capacity_intents WHERE namespace='dakasa-production' AND environment='production' AND domain='notify' AND dimension IN('original_notify_aws_vm_members','original_notify_hetzner_vm_members')),
  held AS (SELECT * FROM scoped WHERE dimension='original_notify_aws_vm_members' AND encode(digest(intent::text,'sha256'),'hex')={wire}),
  original AS (SELECT * FROM public.capacity_vm_retirement_intents WHERE id={retirement}::uuid AND preregistration_id={prereg}::uuid),
@@ -1274,15 +1285,7 @@ SELECT jsonb_build_object(
  'other_leases',(SELECT count(*) FROM scoped c WHERE NOT(c.dimension='original_notify_aws_vm_members' AND encode(digest(c.intent::text,'sha256'),'hex')={wire}) AND (COALESCE(c.intent->>'lease_owner','')<>'' OR COALESCE(c.intent->>'lease_executor_id','')<>'' OR (c.intent->>'lease_expires_at')::timestamptz>clock_timestamp())),
  'other_nonsteady',(SELECT count(*) FROM scoped c WHERE NOT(c.dimension='original_notify_aws_vm_members' AND encode(digest(c.intent::text,'sha256'),'hex')={wire}) AND (c.intent->>'lease_expires_at' IS NOT NULL OR coalesce((c.intent->>'recovery_only')::boolean,false) OR coalesce(c.intent->>'phase','') NOT IN('promoted','reconciled','reconciled_partial') OR coalesce(c.intent#>>'{{original_notify_window,state}}','original_returns_observed')<>'original_returns_observed')),
  'busy_jobs',(SELECT count(*) FROM dispatch_candidates j WHERE NOT EXISTS(SELECT 1 FROM dispatch_terminal_witnesses d WHERE d.job_id=j.id)),
- 'busy_runs',(SELECT count(*) FROM (
- SELECT wr.id FROM public.manifests m JOIN public.workflow_runs wr ON wr.workflow_id=m.id
- WHERE m.kind='workflow' AND m.namespace='dakasa-production' AND m.name IN('notify-aws-elastic-capacity','notify-hetzner-elastic-capacity')
- AND (COALESCE(wr.status,'') NOT IN('succeeded','failed','cancelled') OR wr.finished_at IS NULL)
- UNION
- SELECT wr.id FROM public.workflow_runs wr
- WHERE wr.workflow_namespace='dakasa-production' AND wr.workflow_name IN('notify-aws-elastic-capacity','notify-hetzner-elastic-capacity')
- AND (COALESCE(wr.status,'') NOT IN('succeeded','failed','cancelled') OR wr.finished_at IS NULL)
- ) AS busy_run_ids),
+ 'busy_runs',:'root_held_busy_runs'::bigint,
  'native_authority',(SELECT count(*) FROM public.capacity_mutation_grants g
  WHERE g.original_disposition_id IS NULL AND g.failed_original_disposition_id IS NULL AND g.native_denied_disposition_id IS NULL AND g.enrolled_failed_disposition_id IS NULL
  AND ((g.namespace='dakasa-production' AND g.environment='production' AND g.domain='notify' AND g.dimension IN('original_notify_aws_vm_members','original_notify_hetzner_vm_members'))

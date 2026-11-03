@@ -2276,5 +2276,116 @@
     "actual_qualified_Core_R_image_and_runtime_C_S_unchanged": true,
     "no_local_functional_test_build_SQL_import_container_or_native_operation": true,
     "production_schema_Core_G9_main_or_AB_qualified": false
+  },
+  "held_guard_same_snapshot_busy_scalar_factoring_source_review_20261103": {
+    "schema": "held_guard_same_snapshot_busy_scalar_source_correction_v1",
+    "original_qualified_Ops_Source": "8f2071c13ec379ea1dcf3d964011c6e3ee7adb63",
+    "actual_original_failure": {
+      "sender_command_id": "17e8f508-3620-4b15-a350-6ac452bc046e",
+      "diagnostic_command_id": "105e1f1f-ee1a-4f50-b874-faabc3f62f56",
+      "diagnostic_original_sha256": "96696cefd77c16c04b22d6c7dbab95fe29acad50b0d25494fb24ddc30ae1ab05",
+      "guard": "EXACT_READONLY_SQL_EXIT0",
+      "phase": "BEFORE-HELD",
+      "return_code": 3,
+      "statement_timeout_ms": 8000,
+      "possible_send": false,
+      "global_Job_create_claim_absent": true
+    },
+    "actual_Root_readonly_measurement": {
+      "command_id": "02d92d67-11a0-41e3-bc69-810ec6764dc3",
+      "original_sha256": "ecda4eb6a86ef1dbb08e81029ec47e64b86a887238f5609e147943f5da9d53d1",
+      "candidate_SQL_sha256": "bfd8a88ba955299e91a66869009f3e763a187fa6ce27c35bdff494d64efefb9d",
+      "return_code": 0,
+      "stderr_bytes": 0,
+      "stdout_bytes": 886,
+      "complete_projection_reviewed_by_Root": true,
+      "schema": 89,
+      "busy_jobs": 1,
+      "busy_runs": 0,
+      "catalog_exact": true,
+      "history_exact": true,
+      "UTC_elapsed_seconds": 3.245355,
+      "cold_cache_controlled_benchmark": false,
+      "general_speedup_percentage_claimed": false,
+      "native_mutation": false,
+      "SQL_shape": "scalar_wrapper_count_not_byte_exact_current_direct_count_Source",
+      "performance_qualification_of_current_Source_claimed": false
+    },
+    "correction": "Only held_database_sql begins one REPEATABLE READ READ ONLY transaction, evaluates its identical complete UUID/logical UNION busy-run count in a first one-row SELECT with enable_indexscan=on and psql gset, then restores enable_indexscan=off before the original complete guard and consumes that SQL-literal-quoted bigint. Both queries share one MVCC snapshot. No status, NULL-finished, logical/UUID identity, deduplication, retained seven/eighth proof, catalog, history or original-row predicate is removed. The separate unmeasured steady function remains unchanged.",
+    "budget": {
+      "per_statement_timeout_ms": 8000,
+      "lock_timeout_ms": 1000,
+      "hard_total_subprocess_seconds": 12,
+      "combined_statement_work_can_exceed_former_single_8s_wall_duration": true,
+      "native_age_and_global_current_runtime_budgets_extended": false
+    },
+    "CI_only_regression_scope": "Preserve the existing method and all original assertions; append actual disposable-PG16 psql stdin subcases for mixed UUID/logical overlap and NULL/finished states, whole-catalog mismatch independent of busy rows, and first-SELECT relation failure aborting before any final JSON. Original rows retained; no validator/hash/result mirror or provider qualification.",
+    "files": {
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "sha256": "fc1c0db11dd2217d21e506caaae05441e37f323aebcfee83aef6b73972c4a6bf",
+        "bytes": 139834
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "sha256": "34730b5431e366354a84b4afcf0abe39f684647eeb009ae604d15b549fb53410",
+        "bytes": 184
+      },
+      "ops/network-guardian/tests/test_g9pair_core_cas.py": {
+        "sha256": "4e6e6393cc36faac2add20b7c5639690851c798776ee0f94bd5aaf22d694d9a9",
+        "bytes": 93769
+      }
+    },
+    "preserved": "Old G8 CAS checksum row, separate steady SQL, Guardian31methods/7helpers, runtime PACKAGE, units, four tools, C/D/S, all799 Go inventory facts, all prior M2 nodes, REVIEW, SCHEDULER, required workflow/test rosters and17 evidence edges.",
+    "new_exact_head_CI": {
+      "status": "pending_new_exact_head",
+      "expected_workflow_events": 19,
+      "expected_jobs": 39,
+      "expected_Owned_methods": 165,
+      "expected_declared_PG16_methods": 25,
+      "prior_8f_CI_transferred": false
+    },
+    "new_qualified_runtime_image_or_production_schema_Core_retirement_AB_main_claimed": false,
+    "Source_author_performed_no_local_target_import_compile_function_test_SQL_container_API_or_native_execution": true,
+    "performance_qualification_status": "SOURCE_ONLY_NEW_EXACT_HEAD_CI_PENDING_RUNTIME_GUARD_MUST_STILL_PASS",
+    "prior_OFF_RR_Source_counterexample": {
+      "command_id": "e4d2248f-c586-4037-8d98-4e13a9a8ea8c",
+      "SQL_sha256": "07edf3d16b8a9223cf86c0b8cffd37d6eb5d8fb4a4182f0e7ba96de9814751ec",
+      "return_code": 3,
+      "elapsed_seconds": 8.153845,
+      "error": "statement_timeout",
+      "Source_performance_qualified": false,
+      "status": "HISTORICAL_OFF_DRAFT_NOT_QUALIFICATION_OF_CURRENT_SCOPED_ON_SOURCE"
+    },
+    "actual_scoped_ON_readonly_observations": [
+      {
+        "command_id": "d9896709-f3c4-475b-9048-d9a75cc7a4b6",
+        "original_sha256": "3979b5ed951c57a7c5619e6464bc1c09b4349b7b7dee019abf62a903ab5a78d2",
+        "SQL_sha256": "cfb99acd3c7f7c503a61a3228cca7f5fda2ad32afbcceb830fc81523db87ca9a",
+        "elapsed_seconds": 2.472012,
+        "return_code": 0,
+        "stderr_bytes": 0,
+        "full_projection_sha256": "8243ee490cafe4c446cce652f9ad046784bb05b4e67de096c4e31398afd13b6a"
+      },
+      {
+        "command_id": "1172e3bc-4725-42b2-a5b0-907241fa78b3",
+        "original_sha256": "ea14308a64731563ad40de62f408d298f384d3ac9b7262c7d8ff9afc0fab23f9",
+        "SQL_sha256": "cfb99acd3c7f7c503a61a3228cca7f5fda2ad32afbcceb830fc81523db87ca9a",
+        "elapsed_seconds": 5.724462,
+        "return_code": 0,
+        "stderr_bytes": 0,
+        "full_projection_sha256": "8243ee490cafe4c446cce652f9ad046784bb05b4e67de096c4e31398afd13b6a",
+        "preceding_OFF_probe_detected_concurrent_busy_jobs": 2,
+        "preceding_OFF_probe_detected_concurrent_busy_runs": 1,
+        "preceding_OFF_probe_was_not_admissible": true
+      }
+    ],
+    "actual_readonly_plan_comparison": {
+      "command_id": "18ef9987-a419-40e4-828a-52f0b383ba00",
+      "original_sha256": "f997f081f6f8e99ae30df5200c7962abfe59e3e8496fa6d9b9213bc2b0885a1b",
+      "analyze_executed": false,
+      "OFF": "three bitmap heap/index accesses",
+      "ON": "three index accesses with identical IndexConds/filters and UNION dedup",
+      "schema_stats_index_global_or_timeout_changed": false,
+      "cold_cache_or_general_percentage_or_guaranteed_runtime_claimed": false
+    }
   }
 }
