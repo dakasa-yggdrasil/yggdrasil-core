@@ -238,8 +238,8 @@ func processScheduledWorkflow(
 	// Walking the baseline back ~1h ensures sched.Next() finds a past tick
 	// for any reasonable cron expression (sub-hourly: */5, */10, */15 — all
 	// have at least one tick within an hour). The fire loop then catches up
-	// one tick per scheduler pass; catchup_policy="skip" callers can rely on
-	// the existing skip handling at the run-dispatch layer.
+	// one tick per scheduler pass only for explicit catch_up. The shared
+	// selector below coalesces skip/default backlog to its latest real due tick.
 	lastFired := state.LastFiredAt
 	if lastFired.IsZero() {
 		if schedule.StartAt != "" {
@@ -252,8 +252,11 @@ func processScheduledWorkflow(
 		}
 	}
 
-	nextFire := sched.Next(lastFired.In(loc))
-	if nextFire.After(now) {
+	nextFire, nextAfterFire, due, err := selectWorkflowScheduleTick(sched, loc, lastFired, now, schedule.CatchupPolicy)
+	if err != nil {
+		return err
+	}
+	if !due {
 		// Not yet time
 		return nil
 	}
@@ -271,7 +274,10 @@ func processScheduledWorkflow(
 	// the run would never dispatch and the tick would be lost forever (next
 	// pass observes a later nextFire). By skipping here — leaving lastFired
 	// untouched — the SAME tick re-fires on the next pass once the broker is
-	// back. nil conn = boot-degraded; closed conn = runtime drop; both skip.
+	// back. Explicit catch_up retains its oldest due tick; skip/default may
+	// select a later actual due tick on recovery, without acknowledging missed
+	// ticks or advancing this persisted cursor on refusal. nil conn =
+	// boot-degraded; closed conn = runtime drop; both leave state untouched.
 	var prepared *httpapi.CapacityDispatchPrepared
 	if service := capacitySchedulerService(ctx); service != nil {
 		id, parseErr := uuid.Parse(manifestID)
@@ -302,9 +308,6 @@ func processScheduledWorkflow(
 		}
 		return nil
 	}
-
-	// Compute the fire time AFTER this one for the next state row.
-	nextAfterFire := sched.Next(nextFire.In(loc))
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -404,6 +407,75 @@ func processScheduledWorkflow(
 		// scheduler pass for a single bad workflow would cascade.
 	}
 	return nil
+}
+
+// selectWorkflowScheduleTick selects one real cron occurrence for both the
+// protected capacity owner and the legacy dispatcher. Explicit catch_up keeps
+// the original oldest-next behavior. Skip (also the declared default) chooses
+// the latest occurrence <= now, rather than draining historical ticks at the
+// scheduler's polling interval. Only the existing admission transaction may
+// subsequently persist that selected tick; this pure selection consumes none.
+//
+// Cron Next is non-decreasing in its input instant, with plateaus between
+// occurrences. Bisection over seconds finds the last plateau ending at
+// now in at most 64 probes, regardless of backlog length or rare cron periods.
+// The five-field parser has minute resolution; converting each probe into the
+// configured location preserves actual instants through DST gaps and repeats.
+func selectWorkflowScheduleTick(schedule cron.Schedule, loc *time.Location, lastFired, now time.Time, catchupPolicy string) (time.Time, time.Time, bool, error) {
+	invalid := func() (time.Time, time.Time, bool, error) {
+		return time.Time{}, time.Time{}, false, errors.New("workflow schedule tick selection invalid")
+	}
+	if schedule == nil || loc == nil || lastFired.IsZero() || now.IsZero() {
+		return invalid()
+	}
+	policy := strings.ToLower(strings.TrimSpace(catchupPolicy))
+	if policy != "" && policy != "skip" && policy != "catch_up" {
+		return invalid()
+	}
+	next := func(after time.Time) (time.Time, bool) {
+		value := schedule.Next(after.In(loc))
+		return value, !value.IsZero() && value.After(after)
+	}
+	first, valid := next(lastFired)
+	if !valid {
+		return invalid()
+	}
+	if first.After(now) {
+		return first, time.Time{}, false, nil
+	}
+	following, valid := next(first)
+	if !valid {
+		return invalid()
+	}
+	if policy == "catch_up" || following.After(now) {
+		return first, following, true, nil
+	}
+
+	// Next(first) is already due, while Next(floor(now)) must be future.
+	// Use unsigned distance so a valid interval crossing the Unix epoch does
+	// not overflow signed subtraction. Every update shrinks that interval.
+	low, high := first.Unix(), now.Unix()
+	if low >= high {
+		return invalid()
+	}
+	selected := following
+	for uint64(high)-uint64(low) > 1 {
+		middle := low + int64((uint64(high)-uint64(low))/2)
+		candidate, valid := next(time.Unix(middle, 0))
+		if !valid {
+			return invalid()
+		}
+		if candidate.After(now) {
+			high = middle
+		} else {
+			low, selected = middle, candidate
+		}
+	}
+	after, valid := next(selected)
+	if !valid || selected.Before(first) || selected.After(now) || !after.After(now) {
+		return invalid()
+	}
+	return selected, after, true, nil
 }
 
 // dispatchScheduledRun resolves the workflow's namespace+name from the

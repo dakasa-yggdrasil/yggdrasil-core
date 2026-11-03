@@ -688,3 +688,135 @@ jobs:
           name: original-notify-canary-runtime-source
           path: ${{ runner.temp }}/capacity-notify-runtime.jsonl
           if-no-files-found: error
+
+  scheduler-skip-kernel:
+    name: Scheduler skip Source kernel (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: scheduler-ci-only
+          POSTGRES_DB: scheduler_skip
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scheduler_skip"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: dispatch
+          RABBITMQ_DEFAULT_PASS: dispatch-ci-only
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 3s --health-timeout 5s --health-retries 30
+    env:
+      GOWORK: "off"
+      PYTHONDONTWRITEBYTECODE: "1"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: scheduler_skip
+      DB_USER: postgres
+      DB_PASSWORD: scheduler-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:scheduler-ci-only@127.0.0.1:5432/scheduler_skip?sslmode=disable
+      CAPACITY_DISPATCH_BROKER_URL: amqp://dispatch:dispatch-ci-only@127.0.0.1:5672/
+      REQUIRE_CAPACITY_POSTGRES: "true"
+      REQUIRE_CAPACITY_DISPATCH_POSTGRES: "true"
+      EXPECTED_POSTGRES_MAJOR: ${{ matrix.postgres }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Prepare original scheduler Source evidence
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/scheduler-skip"
+          git rev-parse HEAD > "$RUNNER_TEMP/scheduler-skip/source-head.txt"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply unchanged production migrations through schema89
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip"
+          set +e
+          go run ./scripts/goose up > "$evidence/migrations.stdout" 2> "$evidence/migrations.stderr"
+          migration_exit=$?
+          set -e
+          printf '%s\n' "$migration_exit" > "$evidence/migrations.exit"
+          test "$migration_exit" -eq 0 || exit "$migration_exit"
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "SELECT jsonb_build_object('postgres_major',current_setting('server_version_num')::integer/10000,'schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied))" > "$evidence/database.json" 2> "$evidence/database.stderr"
+          python3 - <<'PYCHECK'
+          import json, os
+          from pathlib import Path
+          actual=json.loads((Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/database.json').read_text())
+          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':89}:
+              raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
+          PYCHECK
+      - name: Qualify exact skip calendar, bounded search and original PG dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=90s ./addons -run '^(TestWorkflowScheduleSkip(SelectsActualCronTicks|RejectsInvalidSchedules|SearchIsBounded)|TestCapacityDispatchSchedulerSkipPostgres)$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYCENSUS'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip'
+          cases={
+              'TestWorkflowScheduleSkipSelectsActualCronTicks':(
+                  'aws_multiday_skip','aws_multiday_default_empty','aws_multiday_normalized_skip',
+                  'ordinary_current_minute','exact_due_boundary','subsecond_now',
+                  'explicit_catch_up_preserves_first','monthly_not_last_minute_shortcut',
+                  'yearly_rare_gap','leap_day_gap','non_utc_quarter_hour',
+                  'dst_fall_first_occurrence','dst_fall_between_repeated_hours',
+                  'dst_fall_second_occurrence','dst_spring_missing_hour',
+                  'future_cursor_no_due','cross_unix_epoch'),
+              'TestWorkflowScheduleSkipRejectsInvalidSchedules':(
+                  'nil_schedule','nil_location','zero_cursor','zero_now','unknown_policy',
+                  'zero_next','nonadvancing_next','backward_next','following_next_zero','impossible_february_30'),
+              'TestWorkflowScheduleSkipSearchIsBounded':(),
+              'TestCapacityDispatchSchedulerSkipPostgres':(
+                  'protected_initial_start_at_selects_latest',
+                  'protected_multiday_default_skip_is_atomic_and_not_replayed',
+                  'protected_refusal_preserves_original_cursor_and_no_obligations',
+                  'legacy_multiday_skip_uses_same_selected_tick')}
+          expected=set(cases)
+          expected|={parent+'/'+child for parent,children in cases.items() for child in children}
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          runs=[e['Test'] for e in events if e.get('Action')=='run' and e.get('Test')]
+          passes=[e['Test'] for e in events if e.get('Action')=='pass' and e.get('Test')]
+          pkg='github.com/dakasa-yggdrasil/yggdrasil-core/addons'
+          if any(e.get('Package')!=pkg or e.get('Action') in ('skip','fail') for e in events):
+              raise SystemExit('Scheduler kernel failure/skip/foreign package retained')
+          if set(runs)!=expected or set(passes)!=expected or len(runs)!=len(expected) or len(passes)!=len(expected):
+              raise SystemExit('Scheduler kernel exact4-root/31-child census incomplete')
+          if sum(e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+              raise SystemExit('Scheduler kernel package did not complete exactly once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events):
+              raise SystemExit('Scheduler kernel race warning retained')
+          (root/'census.json').write_text(json.dumps({'source_head':(root/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'roots':len(cases),'nodes':len(expected),'failures':0,'skips':0,'native_provider_or_useful_capacity_qualification':False},sort_keys=True)+'\n')
+          PYCENSUS
+      - name: Retain original scheduler kernel returns
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduler-skip-pg${{ matrix.postgres }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/scheduler-skip/
+          if-no-files-found: error

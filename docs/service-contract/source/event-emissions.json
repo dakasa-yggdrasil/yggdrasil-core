@@ -73,7 +73,7 @@
       "callee": "EmitEvent",
       "file": "addons/workflow_scheduler.go",
       "function": "processScheduledWorkflow",
-      "line": 342,
+      "line": 345,
       "type_expressions": [
         "\"workflow.schedule.fired\"",
         "\"system\""

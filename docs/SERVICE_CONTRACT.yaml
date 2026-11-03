@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "02241d59611f8179c006d8a4086e7ea52aeaea93d71e2c07a0d71760662cb047"
+    "sha256": "6456e9fca2569124e390f75bc86f8637ff0f9e780cd0bba8d056b19b414481d1"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "42c08d5b7caba4a5b917eff874344b7ea74526ba8fbb9a9efbad638bd026b645"
+      "sha256": "c1c923b882f53e581401af835e5640e5e30dbdf7857f2e3010c69fc4e8e8e5de"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -40,7 +40,7 @@
     {
       "id": "http_inbound_protocols_and_auth",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "3b5ea3eb1ba9901f1613cb772fe502ab8e7e695c80ecf7f86265777fab8f0496"
+      "sha256": "175d46c25e1ac8f76bec62babdd637b8d6f11bb13da79245a571c6081eb7437f"
     },
     {
       "id": "dependency_versions",
@@ -54,6 +54,11 @@
     },
     {
       "id": "independent_source_review",
+      "evidence": "docs/service-contract/SCHEDULER_SKIP_REVIEW.json",
+      "sha256": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f"
+    },
+    {
+      "id": "prior_accepted_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
       "sha256": "06bfa5c95c047e2f2aa70bf989d106563ad19a47df7b5127eda4e5205c55a56b"
     }
@@ -72,7 +77,7 @@
     {
       "id": "parameterized_destination_families",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "3b5ea3eb1ba9901f1613cb772fe502ab8e7e695c80ecf7f86265777fab8f0496"
+      "sha256": "175d46c25e1ac8f76bec62babdd637b8d6f11bb13da79245a571c6081eb7437f"
     }
   ],
   "exposesREST": [
