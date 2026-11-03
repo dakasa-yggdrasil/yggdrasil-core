@@ -33,6 +33,10 @@ func GuestRetirementV2ObservedReturnAuthentic(o model.CapacityGuestRetirementObs
 // A signature authenticates a source return; it does not supply its missing
 // operation, original caller return, cgroup history or native machine-off.
 func GuestRetirementV2Observation(o model.CapacityGuestRetirementObservationV2, e model.CapacityGuestRetirementEnrollment, i model.CapacityGuestRetirementIntentV2, active bool) error {
+	return guestRetirementV2Observation(o, e, i, active, guestRetirementV2NormalContext)
+}
+
+func guestRetirementV2Observation(o model.CapacityGuestRetirementObservationV2, e model.CapacityGuestRetirementEnrollment, i model.CapacityGuestRetirementIntentV2, active bool, validationContext guestRetirementV2ValidationContext) error {
 	r := o.Record
 	if !guestRetirementV2Clock(r.Clock, e, i, true) || !reflect.DeepEqual(o.Clock, r.Clock) {
 		return fmt.Errorf("original Guest kernel retirement completion required")
@@ -52,7 +56,7 @@ func GuestRetirementV2Observation(o model.CapacityGuestRetirementObservationV2, 
 			return fmt.Errorf("possible-start record fabricated a return")
 		}
 	} else {
-		if r.RuntimeOperation == nil || r.RuntimeReturn == nil || !r.WriterQuiescenceEvidence || !guestPlacementReturned(*r.RuntimeOperation, r.PossibleStartAt, r.RecordedAt) || r.RuntimeReturn.Withdraw.StartedAt.Before(r.RuntimeOperation.StartedAt) || r.RuntimeReturn.ReturnedAt.After(r.RuntimeOperation.WaitReturnedAt) || GuestRetirementV2RuntimeReturn(*r.RuntimeReturn, e, i, r.RecordedAt) != nil {
+		if r.RuntimeOperation == nil || r.RuntimeReturn == nil || !r.WriterQuiescenceEvidence || !guestPlacementReturned(*r.RuntimeOperation, r.PossibleStartAt, r.RecordedAt) || r.RuntimeReturn.Withdraw.StartedAt.Before(r.RuntimeOperation.StartedAt) || r.RuntimeReturn.ReturnedAt.After(r.RuntimeOperation.WaitReturnedAt) || guestRetirementV2RuntimeReturn(*r.RuntimeReturn, e, i, r.RecordedAt, validationContext) != nil {
 			return fmt.Errorf("original withdrawal, drain and worker/connection joins required")
 		}
 		for _, w := range r.RuntimeReturn.Writers {

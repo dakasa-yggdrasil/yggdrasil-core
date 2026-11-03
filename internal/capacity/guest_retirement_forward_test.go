@@ -13,44 +13,69 @@ import (
 // The repository independently authenticates enrollment/nonce/caller/context.
 func TestGuestRetirementForwardAuthenticatedWholePrefix(t *testing.T) {
 	t.Run("enrolled_empty_roster", func(t *testing.T) {
-		r, e, _, observer := retirementV2Unit(t)
-		r.Intent.GuestNonce = retirementV2UnitNonce(r, e, observer)
-		r.Intent.GuestExpiresMonotonicNS = r.Intent.GuestNonce.ExpiresMonotonicNS - 1000000
-		rows := RecoveryFixtureRetirementJournal(t, r.Intent, e)
-		// Construct a distinct signed empty-roster operand before admission.
-		// The repository still authenticates the original enrollment separately.
+		r, e, key, observer := retirementV2Unit(t)
+		// Declare the distinct empty enrollment and intent BEFORE nonce/journal
+		// construction, so every original hash, clock and signature binds it.
 		e.Statement.Writers = []model.CapacityGuestRetirementWriter{}
 		e.Statement.WriterRosterSHA256 = GuestRetirementSHA(e.Statement.Writers)
 		r.Intent.Writers = []model.CapacityGuestRetirementWriter{}
 		r.Intent.WriterRosterSHA256 = e.Statement.WriterRosterSHA256
 		r.Intent.EnrollmentSHA256 = GuestRetirementSHA(e)
 		r.Intent.GuestNonce = retirementV2UnitNonce(r, e, observer)
-		for n := range rows {
-			row := &rows[n]
-			row.Record.Intent = r.Intent
-			row.Record.IntentSHA256 = GuestRetirementSHA(r.Intent)
-			row.Record.EnrollmentSHA256 = GuestRetirementSHA(e)
-			row.Record.Clock.GuestNonceSHA256 = GuestRetirementSHA(r.Intent.GuestNonce)
-			if row.Record.RuntimeReturn != nil {
-				runtime := *row.Record.RuntimeReturn
-				runtime.IntentSHA256 = GuestRetirementSHA(r.Intent)
-				runtime.WriterRosterSHA256 = e.Statement.WriterRosterSHA256
-				runtime.Writers = []model.CapacityGuestRetirementWriterReturn{}
-				runtime.CensusBefore.Processes = []model.CapacityGuestRetirementNativeProcess{}
-				runtime.Clock.GuestNonceSHA256 = GuestRetirementSHA(r.Intent.GuestNonce)
-				row.Record.RuntimeReturn = &runtime
-			}
-			if n > 0 {
-				row.Record.PreviousSHA256 = rows[n-1].RecordSHA256
-			}
-			row.RecordSHA256 = GuestRetirementSHA(row.Record)
-			row.Clock = row.Record.Clock
-			row.ActiveIntentSHA256 = GuestRetirementSHA(r.Intent)
-			row.Signature = ""
-			row.Signature, _ = GuestLifecycleSignature(observer, *row)
-		}
+		r.Intent.GuestExpiresMonotonicNS = r.Intent.GuestNonce.ExpiresMonotonicNS - 1000000
+		r.Signature, _ = GuestLifecycleSignature(key, r.Intent)
+		rows := RecoveryFixtureRetirementJournal(t, r.Intent, e)
 		if !GuestRetirementForwardPrefix(rows[:3], e, r.Intent) || !GuestRetirementForwardPrefix(rows, e, r.Intent) {
 			t.Fatal("a genuinely enrolled empty roster was relabeled as missing evidence")
+		}
+		for _, row := range rows[1:] {
+			if GuestRetirementV2Observation(row, e, r.Intent, true) == nil || GuestRetirementV2RuntimeReturn(*row.Record.RuntimeReturn, e, r.Intent, row.Record.RecordedAt) == nil {
+				t.Fatal("forward-only empty roster changed normal V2 validation")
+			}
+		}
+		nilEnrollment, nilIntent := e, r.Intent
+		nilEnrollment.Statement.Writers, nilIntent.Writers = nil, nil
+		if guestRetirementForwardEnrolledEmptyRoster(nilEnrollment, r.Intent) || guestRetirementForwardEnrolledEmptyRoster(e, nilIntent) {
+			t.Fatal("missing roster was relabeled as an explicitly enrolled empty roster")
+		}
+		wrongRoster := r.Intent
+		wrongRoster.WriterRosterSHA256 = r.Intent.NonceSHA256
+		if guestRetirementForwardEnrolledEmptyRoster(e, wrongRoster) {
+			t.Fatal("foreign roster hash enabled the empty-roster allowance")
+		}
+		for _, invalid := range []string{"missing_writer_return", "missing_before_census", "missing_after_census", "unknown_process"} {
+			wire, err := json.Marshal(rows)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var changed []model.CapacityGuestRetirementObservationV2
+			if err = json.Unmarshal(wire, &changed); err != nil {
+				t.Fatal(err)
+			}
+			for n := range changed {
+				row := &changed[n]
+				if row.Record.RuntimeReturn != nil {
+					switch invalid {
+					case "missing_writer_return":
+						row.Record.RuntimeReturn.Writers = nil
+					case "missing_before_census":
+						row.Record.RuntimeReturn.CensusBefore.Processes = nil
+					case "missing_after_census":
+						row.Record.RuntimeReturn.CensusAfter.Processes = nil
+					case "unknown_process":
+						row.Record.RuntimeReturn.CensusBefore.Processes = []model.CapacityGuestRetirementNativeProcess{{PID: 999, StartTicks: 999}}
+					}
+				}
+				if n > 0 {
+					row.Record.PreviousSHA256 = changed[n-1].RecordSHA256
+				}
+				row.RecordSHA256 = GuestRetirementSHA(row.Record)
+				row.Signature = ""
+				row.Signature, _ = GuestLifecycleSignature(observer, *row)
+			}
+			if GuestRetirementForwardPrefix(changed[:3], e, r.Intent) || GuestRetirementForwardPrefix(changed, e, r.Intent) {
+				t.Fatal("signed empty-roster frame concealed missing/foreign native census", invalid)
+			}
 		}
 	})
 	for _, length := range []int{3, 4} {

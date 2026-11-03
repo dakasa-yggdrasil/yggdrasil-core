@@ -83,11 +83,16 @@ func validateGuestRetirementV2Base(r model.CapacityGuestRetirementRequestV2, e m
 // Validate facts at the retained ORIGINAL recorded-at time. A recent GET may
 // recover a late historical record but cannot move its old operation deadline.
 func GuestRetirementV2RuntimeReturn(r model.CapacityGuestRetirementRuntimeReturnV2, e model.CapacityGuestRetirementEnrollment, i model.CapacityGuestRetirementIntentV2, originalRecordedAt time.Time) error {
+	return guestRetirementV2RuntimeReturn(r, e, i, originalRecordedAt, guestRetirementV2NormalContext)
+}
+
+func guestRetirementV2RuntimeReturn(r model.CapacityGuestRetirementRuntimeReturnV2, e model.CapacityGuestRetirementEnrollment, i model.CapacityGuestRetirementIntentV2, originalRecordedAt time.Time, validationContext guestRetirementV2ValidationContext) error {
 	refuse := fmt.Errorf("original Guest runtime return refused")
 	if r.Schema != GuestRetirementV2RuntimeSchema || r.IntentSHA256 != GuestRetirementSHA(i) || r.AttemptID != i.AttemptID || r.Runtime != e.Statement.Runtime || r.WriterRosterSHA256 != e.Statement.WriterRosterSHA256 || r.WithdrawRequestSHA256 != i.WithdrawRequestSHA256 || r.DrainRequestSHA256 != i.DrainRequestSHA256 || r.UnknownWriters == nil || len(r.UnknownWriters) != 0 || len(r.Writers) != len(e.Statement.Writers) || r.ReturnedAt.IsZero() || r.ReturnedAt.After(originalRecordedAt) || !r.ReturnedAt.Before(r.Clock.GuestLocalDeadline) || !guestRetirementV2Clock(r.Clock, e, i, true) {
 		return refuse
 	}
-	if !guestRetirementOriginalOperation(r.Withdraw, i.WithdrawOperationID, i.WithdrawRequestSHA256, r.ReturnedAt) || !guestRetirementOriginalOperation(r.Drain, i.DrainOperationID, i.DrainRequestSHA256, r.ReturnedAt) || r.Drain.StartedAt.Before(r.Withdraw.OriginalReturnedAt) || !GuestRetirementProtectedCensus(r.CensusBefore, e, r.ReturnedAt, true) || !GuestRetirementProtectedCensus(r.CensusAfter, e, r.ReturnedAt, false) || r.CensusBefore.ObservedAt.After(r.Withdraw.StartedAt) || r.CensusAfter.ObservedAt.Before(r.Drain.OriginalReturnedAt) {
+	allowEmpty := validationContext == guestRetirementV2ForwardContext && r.Writers != nil && guestRetirementForwardEnrolledEmptyRoster(e, i)
+	if !guestRetirementOriginalOperation(r.Withdraw, i.WithdrawOperationID, i.WithdrawRequestSHA256, r.ReturnedAt) || !guestRetirementOriginalOperation(r.Drain, i.DrainOperationID, i.DrainRequestSHA256, r.ReturnedAt) || r.Drain.StartedAt.Before(r.Withdraw.OriginalReturnedAt) || !guestRetirementProtectedCensus(r.CensusBefore, e, r.ReturnedAt, true, allowEmpty) || !guestRetirementProtectedCensus(r.CensusAfter, e, r.ReturnedAt, false, allowEmpty) || r.CensusBefore.ObservedAt.After(r.Withdraw.StartedAt) || r.CensusAfter.ObservedAt.Before(r.Drain.OriginalReturnedAt) {
 		return refuse
 	}
 	for n, w := range r.Writers {

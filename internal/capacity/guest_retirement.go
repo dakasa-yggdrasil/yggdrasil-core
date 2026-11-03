@@ -112,6 +112,10 @@ func guestProtectedWriterCgroup(p model.CapacityPolicySpec, r *model.CapacityGue
 // partial census is not the original pre-admission placement proof; unknown
 // PIDs/start ticks remain HOLD even when a signed envelope says otherwise.
 func GuestRetirementProtectedCensus(c model.CapacityGuestRetirementProtectedCensus, e model.CapacityGuestRetirementEnrollment, returned time.Time, all bool) bool {
+	return guestRetirementProtectedCensus(c, e, returned, all, false)
+}
+
+func guestRetirementProtectedCensus(c model.CapacityGuestRetirementProtectedCensus, e model.CapacityGuestRetirementEnrollment, returned time.Time, all, allowEmpty bool) bool {
 	if c.Schema != "guest_retirement_protected_cgroup_v1" || c.Scope != "fixed_protected_cgroup_v2" || c.SourceCommit != e.Statement.Runtime.SourceCommit || c.Processes == nil || !ValidDigest(c.RawCensusSHA256) || c.ObservedAt.IsZero() || c.ObservedAt.After(returned) {
 		return false
 	}
@@ -129,7 +133,7 @@ func GuestRetirementProtectedCensus(c model.CapacityGuestRetirementProtectedCens
 		}
 		seen[native.PID] = true
 	}
-	return len(known) > 0 && (!all || len(seen) == len(known))
+	return (len(known) > 0 || allowEmpty) && (!all || len(seen) == len(known))
 }
 
 // Qualification binaries are host processes, not invented OCI images. The
