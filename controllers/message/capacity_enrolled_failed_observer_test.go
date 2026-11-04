@@ -222,9 +222,10 @@ func TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority(t *testing
 			if json.Unmarshal(canonicalRaw, &fields) != nil || len(fields) != 5 {
 				t.Fatal("canonical SDK reply shape")
 			}
-			if fault == "unknown_reply_field" {
+			switch fault {
+			case "unknown_reply_field":
 				fields["authority_override"] = json.RawMessage(`true`)
-			} else if fault == "unknown_output_field" {
+			case "unknown_output_field":
 				var inner map[string]json.RawMessage
 				if json.Unmarshal(outputRaw, &inner) != nil {
 					t.Fatal("typed output fixture")
