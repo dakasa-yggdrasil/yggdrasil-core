@@ -1649,7 +1649,10 @@ def canonical(value):
 
 def utc(value):
     need(type(value) is str and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})', value), 'ACTUAL_ZONED_TIMESTAMP')
-    return datetime.datetime.fromisoformat(value.replace('Z', '+00:00'))
+    # Python before 3.11 accepts only 3/6 fractional digits; retain the raw wire
+    # and parse its accepted 1..9 digits at datetime's microsecond precision.
+    normalized = re.sub(r'\.(\d{1,9})(?=Z|[+-])', lambda match: '.' + (match.group(1) + '000000')[:6], value)
+    return datetime.datetime.fromisoformat(normalized.replace('Z', '+00:00'))
 
 
 def input_ref(C, ref):

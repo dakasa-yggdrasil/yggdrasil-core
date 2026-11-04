@@ -75,6 +75,21 @@ class G10CASTests(unittest.TestCase):
         v,c=known_operand();raw=cas.canonical(v)
         self.assertTrue(cas.validate_known_child(v,c,json.loads))
         self.assertEqual(cas.canonical(v),raw)
+        for digits,microseconds in enumerate((100000,120000,123000,123400,123450,123456,123456,123456,123456),1):
+            fraction='123456789'[:digits]
+            expected=cas.datetime.datetime(2026,11,4,19,18,53,microseconds,tzinfo=cas.datetime.timezone.utc)
+            for zone in ('Z','+00:00'):
+                stamp='2026-11-04T19:18:53.'+fraction+zone
+                with self.subTest(fraction_digits=digits,zone=zone):
+                    self.assertEqual(cas.utc(stamp),expected)
+                    declared,config=known_operand();declared['observed_at_pg']=stamp
+                    original=cas.canonical(declared)
+                    self.assertTrue(cas.validate_known_child(declared,config,json.loads))
+                    self.assertEqual(cas.canonical(declared),original)
+        # The real PostgreSQL CI return had five digits; parse a copy only.
+        stamp='2026-11-04T19:18:53.36165+00:00'
+        self.assertEqual(cas.utc(stamp),cas.datetime.datetime(2026,11,4,19,18,53,361650,tzinfo=cas.datetime.timezone.utc))
+        self.assertEqual(stamp,'2026-11-04T19:18:53.36165+00:00')
 
     def test_foreign_child_parent_epoch_lease_and_grant_are_refused(self):
         mutations=(lambda i:i.update(fencing_token=29),lambda i:i.update(generation=15),
