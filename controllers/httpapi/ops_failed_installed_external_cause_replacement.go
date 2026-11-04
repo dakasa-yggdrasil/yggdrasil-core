@@ -85,7 +85,7 @@ func failedInstalledExternalCauseExactJSONString(token []byte) bool {
 		if i+6 > len(token) || token[i] != '\\' || token[i+1] != 'u' {
 			return 0, false
 		}
-		v, err := strconv.ParseUint(string(token[i+2:i+6]), 16, 32)
+		v, err := strconv.ParseUint(string(token[i+2:i+6]), 16, 16)
 		return rune(v), err == nil
 	}
 	for i := 0; i < len(token); i++ {

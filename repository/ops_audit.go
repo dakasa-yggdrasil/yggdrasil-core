@@ -115,7 +115,7 @@ func ListOpsAuditEvents(ctx context.Context, db *sql.DB, f model.ListOpsAuditEve
 	}
 	defer rows.Close()
 
-	out := make([]model.OpsAuditEvent, 0, limit)
+	out := make([]model.OpsAuditEvent, 0)
 	for rows.Next() {
 		var (
 			ev          model.OpsAuditEvent
