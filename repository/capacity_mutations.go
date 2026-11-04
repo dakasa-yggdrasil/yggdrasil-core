@@ -200,6 +200,9 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		return result, err
 	}
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, intent model.CapacityIntent, now time.Time) error {
+		if intent.RetirementForward != nil && intent.RetirementForward.Mode == GuestRetirementForwardContinuationMode {
+			return ErrCapacityConflict
+		}
 		plan, err := capacity.PrepareMutationPlan(p, issue)
 		if err != nil {
 			return err
@@ -518,6 +521,9 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		intent, err := loadCapacityIntent(ctx, tx, ns, scope, true)
 		if err != nil {
 			return err
+		}
+		if intent.RetirementForward != nil && intent.RetirementForward.Mode == GuestRetirementForwardContinuationMode {
+			return ErrCapacityConflict
 		}
 		if failedServingQuarantineBlocks(&intent) {
 			return ErrCapacityConflict

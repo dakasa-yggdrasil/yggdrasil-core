@@ -215,18 +215,27 @@ func retirementForwardQuietTx(ctx context.Context, tx *sql.Tx, x retirementForwa
 	i := x.original.Request.Intent
 	var busy int
 	forwardInspectionStage(ctx, "quiet_workflow_runs")
-	err := tx.QueryRowContext(ctx, `WITH matching AS (SELECT w.id FROM public.workflow_runs w JOIN public.manifests m ON m.id=w.workflow_id AND m.kind='workflow' AND m.namespace=$1 AND m.name=$2 WHERE w.id::text<>$3 AND (w.status NOT IN('succeeded','failed','cancelled') OR w.finished_at IS NULL) UNION SELECT w.id FROM public.workflow_runs w WHERE w.workflow_namespace=$1 AND w.workflow_name=$2 AND w.id::text<>$3 AND (w.status NOT IN('succeeded','failed','cancelled') OR w.finished_at IS NULL)) SELECT count(*) FROM matching`, x.spec.Workflow.Namespace, x.spec.Workflow.Name, ownRun).Scan(&busy)
-	if err != nil || busy != 0 {
+	err := tx.QueryRowContext(ctx, `WITH matching AS (SELECT w.id FROM public.workflow_runs w JOIN public.manifests m ON m.id=w.workflow_id AND m.kind='workflow' AND m.namespace=$1 AND m.name=$2 WHERE w.id::text<>$3 AND (COALESCE(w.status,'') NOT IN('succeeded','failed','cancelled') OR w.finished_at IS NULL) UNION SELECT w.id FROM public.workflow_runs w WHERE w.workflow_namespace=$1 AND w.workflow_name=$2 AND w.id::text<>$3 AND (COALESCE(w.status,'') NOT IN('succeeded','failed','cancelled') OR w.finished_at IS NULL)) SELECT count(*) FROM matching`, x.spec.Workflow.Namespace, x.spec.Workflow.Name, ownRun).Scan(&busy)
+	if err != nil {
+		return err
+	}
+	if busy != 0 {
 		return ErrCapacityConflict
 	}
 	forwardInspectionStage(ctx, "quiet_mutation_grants")
 	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE `+capacityGrantUndisposedSQL+` AND integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, ownDestroy).Scan(&busy)
-	if err != nil || busy != 0 {
+	if err != nil {
+		return err
+	}
+	if busy != 0 {
 		return ErrCapacityConflict
 	}
 	forwardInspectionStage(ctx, "quiet_canaries")
 	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_notify_canary_challenges WHERE policy_id=$1 AND original_deadline>clock_timestamp()`, i.PolicyID).Scan(&busy)
-	if err != nil || busy != 0 {
+	if err != nil {
+		return err
+	}
+	if busy != 0 {
 		return ErrCapacityConflict
 	}
 	return nil

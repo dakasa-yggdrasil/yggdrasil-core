@@ -34,8 +34,8 @@ type httpMaintenanceFixture struct {
 
 func httpMaintenanceDisposableDBAtSchema(t *testing.T, parent *sql.DB, target int64) *sql.DB {
 	t.Helper()
-	if target != 91 && target != 92 {
-		t.Fatal("closed HTTP fixture schema91 or92 required")
+	if target != 91 && target != 92 && target != 93 {
+		t.Fatal("closed HTTP fixture schema91,92 or93 required")
 	}
 	// The parent has already passed originalDispositionPG's explicit Unix socket,
 	// named disposable database and opt-in checks. Never consume generic DB_URL.
@@ -69,9 +69,9 @@ func httpMaintenanceDisposableDBAtSchema(t *testing.T, parent *sql.DB, target in
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	if target == 91 {
+	if target == 91 || target == 92 {
 		// Keep the original old-R4-on91 proof on an actual historical91 DB.
-		err = goose.UpToContext(ctx, db, "../db/migrations", 91)
+		err = goose.UpToContext(ctx, db, "../db/migrations", target)
 	} else {
 		err = goose.UpContext(ctx, db, "../db/migrations")
 	}
@@ -87,7 +87,7 @@ func httpMaintenanceDisposableDBAtSchema(t *testing.T, parent *sql.DB, target in
 
 func httpMaintenancePGFixture(t *testing.T, parent *sql.DB, provider string) httpMaintenanceFixture {
 	t.Helper()
-	return httpMaintenancePGFixtureAtSchema(t, parent, provider, 92)
+	return httpMaintenancePGFixtureAtSchema(t, parent, provider, 93)
 }
 
 func httpMaintenancePGFixtureAtSchema(t *testing.T, parent *sql.DB, provider string, target int64) httpMaintenanceFixture {
@@ -523,9 +523,9 @@ func TestHTTPMaintenanceDispatchMigration91Guards(t *testing.T) {
 		f.assertHTTPUntouched(t, j, w, c)
 	})
 	t.Run("old_r4_up89_after91", func(t *testing.T) {
-		// Preserve the exact historical91 proof and add the current92 case
+		// Preserve the exact historical91 proof and add the historical92 and current93 cases
 		// under the existing reviewed subtest ID. Neither history may change.
-		for _, target := range []int64{91, 92} {
+		for _, target := range []int64{91, 92, 93} {
 			f := httpMaintenancePGFixtureAtSchema(t, db, "aws", target)
 			j, w := f.snapshot(t)
 			c := f.canarySnapshot(t)

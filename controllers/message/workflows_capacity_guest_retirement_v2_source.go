@@ -140,6 +140,9 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 }
 
 func finishProductionGuestNativeDestroyV2Forward(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, stored repository.GuestRetirementOriginalV2, off repository.GuestNativePoweroffReturnV2, existing model.CapacityMutationReceipt, found bool, forward *repository.GuestRetirementForward) (any, error) {
+	if forward != nil && forward.Mode == repository.GuestRetirementForwardContinuationMode && (!found || forward.DestroyGrantID == "" || existing.Grant.GrantID != forward.DestroyGrantID) {
+		return nil, errOriginalGuestStep
+	}
 	b, err := capacity.VMObservationBinding(p, input.BindingName)
 	if err != nil {
 		return nil, err

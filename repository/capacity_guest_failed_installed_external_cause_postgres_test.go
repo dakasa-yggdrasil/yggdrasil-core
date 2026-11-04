@@ -16,7 +16,7 @@ import (
 
 // DECLARED storage histories shaped like production disposal 8ef5f76c
 // (Hetzner gen8, blocked Guest b509.../c9b7...) and its AWS gen10 peer of the
-// same Guest build. Explicitly isolated Unix-socket database (schema92). The
+// same Guest build. Explicitly isolated Unix-socket database (schema93). The
 // rows are synthetic SQL operands, never a signed enrollment, a real canary,
 // provider absence or a compiled production approval; no provider or Guest
 // call is exercised. The Go admission path is only exercised up to its
@@ -288,8 +288,8 @@ func (f externalCauseFixture) admissions(t *testing.T) int {
 func externalCauseSchema85(t *testing.T, db *sql.DB) {
 	t.Helper()
 	var schema int64
-	if err := db.QueryRow(`SELECT max(version_id) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema != 92 {
-		t.Fatal("owning schema92 required", schema, err)
+	if err := db.QueryRow(`SELECT max(version_id) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema != 93 {
+		t.Fatal("owning schema93 required", schema, err)
 	}
 }
 

@@ -40,7 +40,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Qualify schema92, retained originals, strict HTTP and old R4 SQL roster Up noop
+      - name: Qualify schema93, retained originals, strict HTTP and old R4 SQL roster Up noop
         shell: bash
         run: bash .github/scripts/run_http_maintenance_disposition_ci.sh
       - name: Retain original Go, database, census and owned PostgreSQL shutdown returns

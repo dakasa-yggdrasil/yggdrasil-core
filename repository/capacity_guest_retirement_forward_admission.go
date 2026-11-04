@@ -198,7 +198,12 @@ func (s CapacityStore) TryClaimGuestRetirementForward(ctx context.Context, polic
 	if err = s.installedGuestDispatchRunTx(ctx, tx, policy, x.spec, s.OriginalRunID, nil); err != nil {
 		return zero, "", "", false, err
 	}
-	if err = retirementForwardQuietTx(ctx, tx, x, s.OriginalRunID.String(), r.DestroyGrantID); err != nil {
+	if r.Mode == GuestRetirementForwardContinuationMode {
+		err = retirementForwardContinuationQuietTx(ctx, tx, x, r.DestroyGrantID, s.OriginalRunID.String())
+	} else {
+		err = retirementForwardQuietTx(ctx, tx, x, s.OriginalRunID.String(), r.DestroyGrantID)
+	}
+	if err != nil {
 		return zero, "", "", false, err
 	}
 	// Requested original bytes + the one requested marker/updated_at are the

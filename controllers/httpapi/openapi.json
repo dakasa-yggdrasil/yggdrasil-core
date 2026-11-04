@@ -1873,7 +1873,8 @@
             "type": "string",
             "enum": [
               "live",
-              "historical"
+              "historical",
+              "settled_absence_continuation"
             ]
           },
           "preregistration_id": {

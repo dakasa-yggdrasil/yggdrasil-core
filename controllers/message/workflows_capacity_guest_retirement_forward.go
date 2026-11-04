@@ -54,7 +54,20 @@ func planGuestRetirementForward(ctx context.Context, store repository.CapacitySt
 		return nil, false, err
 	}
 	if r.Stage != "requested" {
-		return map[string]any{"mode": "hold", "reason": "partial_poweroff_forward_requires_historical_claim", "retirement_forward_id": r.ID, "native_write_sent": false, "original_failure_preserved": true}, true, nil
+		requested, requestErr := store.TryRequestGuestRetirementForwardContinuation(ctx, policy)
+		if requestErr != nil {
+			return nil, true, requestErr
+		}
+		if !requested {
+			return map[string]any{"mode": "hold", "reason": "partial_poweroff_forward_requires_historical_claim", "retirement_forward_id": r.ID, "native_write_sent": false, "original_failure_preserved": true}, true, nil
+		}
+		r, waiting, err = store.GuestRetirementForwardWaiting(ctx, policy)
+		if err != nil {
+			return nil, true, err
+		}
+		if !waiting || r.Stage != "requested" || r.Mode != repository.GuestRetirementForwardContinuationMode {
+			return nil, true, errOriginalGuestStep
+		}
 	}
 	claimed, preID, retirementID, handled, err := store.TryClaimGuestRetirementForward(ctx, policy)
 	if err != nil {
@@ -67,7 +80,11 @@ func planGuestRetirementForward(ctx context.Context, store repository.CapacitySt
 	if err != nil || captureOriginalGuestReconcileDeadline(ctx, deadline) != nil {
 		return nil, true, errOriginalGuestStep
 	}
-	return originalGuestReconcilePlan{Mode: "retire", Reason: "partial_poweroff_forward", Slot: claimed.Decision.Units + 1, Generation: claimed.Generation, FencingToken: claimed.FencingToken, LeaseOwner: claimed.LeaseOwner, PreregistrationID: preID}, true, nil
+	reason := "partial_poweroff_forward"
+	if r.Mode == repository.GuestRetirementForwardContinuationMode {
+		reason = "settled_absence_continuation"
+	}
+	return originalGuestReconcilePlan{Mode: "retire", Reason: reason, Slot: claimed.Decision.Units + 1, Generation: claimed.Generation, FencingToken: claimed.FencingToken, LeaseOwner: claimed.LeaseOwner, PreregistrationID: preID}, true, nil
 }
 
 // Each read owns a new five-second challenge and its actual return. The
@@ -233,6 +250,8 @@ func guestRetirementForwardFloor(ctx context.Context, db *sql.DB, store reposito
 
 func finishGuestRetirementForward(ctx context.Context, db *sql.DB, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, key ed25519.PrivateKey, stored repository.GuestRetirementOriginalV2, r repository.GuestRetirementForward) (any, error) {
 	return finishGuestRetirementForwardWithCalls(ctx, guestRetirementForwardFinishCalls{
+		knownDestroyOnly: r.Mode == repository.GuestRetirementForwardContinuationMode,
+		destroyGrantID:   r.DestroyGrantID,
 		receipt: func(c context.Context) (model.CapacityMutationReceipt, bool, error) {
 			return store.GuestRetirementForwardDestroyReceipt(c, input.RequestID)
 		},
@@ -251,11 +270,13 @@ func finishGuestRetirementForward(ctx context.Context, db *sql.DB, store reposit
 }
 
 type guestRetirementForwardFinishCalls struct {
-	receipt   func(context.Context) (model.CapacityMutationReceipt, bool, error)
-	off       func(context.Context) error
-	inventory func(context.Context) error
-	floor     func(context.Context) error
-	complete  func(context.Context, model.CapacityMutationReceipt, bool) (any, error)
+	knownDestroyOnly bool
+	destroyGrantID   string
+	receipt          func(context.Context) (model.CapacityMutationReceipt, bool, error)
+	off              func(context.Context) error
+	inventory        func(context.Context) error
+	floor            func(context.Context) error
+	complete         func(context.Context, model.CapacityMutationReceipt, bool) (any, error)
 }
 
 // This ordering seam has no exported setter or wire representation. The live
@@ -268,6 +289,12 @@ func finishGuestRetirementForwardWithCalls(ctx context.Context, calls guestRetir
 	existing, found, err := calls.receipt(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// A continuation has only the already accepted DELETE's read/confirm
+	// authority. Losing or changing its receipt must never enter the OFF or
+	// fresh-mutation branch, even if a later caller changes the orchestration.
+	if calls.knownDestroyOnly && (!found || calls.destroyGrantID == "" || existing.Grant.GrantID != calls.destroyGrantID) {
+		return nil, errOriginalGuestStep
 	}
 	if found && ((existing.Grant.State != "settled" && existing.Grant.State != "confirmed") || existing.Outcome != "accepted" || !existing.TransportCompleted) {
 		return nil, errOriginalGuestStep

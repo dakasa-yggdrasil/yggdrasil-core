@@ -69,7 +69,7 @@ jobs:
               assert (target in row.get('IgnoredGoFiles',[])) is (not present)
           print('FAILED_SERVING_FIXTURE_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')
           PY
-      - name: Run exact schema92 Source, HTTP and bounded original-read cases
+      - name: Run exact schema93 Source, HTTP and bounded original-read cases
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -135,7 +135,7 @@ jobs:
               summary[name]={'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'failed_serving_guest_Source_exact_CI_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'schema_version':92,'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'race':True,'count':1,'total_roots':16,'summary':summary,'mandatory_schema89_index_subtest':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          value={'schema':'failed_serving_guest_Source_exact_CI_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'schema_version':93,'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'race':True,'count':1,'total_roots':16,'summary':summary,'mandatory_schema89_index_subtest':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY
@@ -243,6 +243,7 @@ jobs:
               'TestGuestRetirementForwardReadonlyObserverJoins',
               'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
               'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres',
+              'TestGuestRetirementForwardContinuationPostgres',
               'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn']),
             'message':('controllers/message',[
               'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
@@ -250,6 +251,7 @@ jobs:
               'TestGuestRetirementForwardLiveWorkflowDoesNotReplayGuestPostgres',
               'TestGuestRetirementForwardHistoricalPlanClaimsBeforeCoveragePostgres',
               'TestGuestRetirementForwardFinishOrderingAndOriginalBudgets',
+              'TestGuestRetirementForwardContinuationKnownDestroyOnly',
               'TestGuestRetirementForwardSourceReadClocksPostgres',
               'TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority',
               'TestGuestRetirementForwardOrdinaryReadonlySourceClocksPostgres']),
@@ -268,11 +270,16 @@ jobs:
               for action in ('run','pass'):
                   actual=collections.Counter(r['Test'] for r in rows if r['Action']==action and 'Test' in r and '/' not in r['Test'])
                   assert actual==collections.Counter(roots),(name,action,actual)
+                  if name=='message':
+                      continuation='TestGuestRetirementForwardContinuationKnownDestroyOnly/'
+                      children=['settled','confirmed','missing_receipt','foreign_grant','empty_expected_grant','empty_receipt_grant','issued','uncertain','rejected','transport_incomplete','receipt_error','inventory_error','floor_error','floor_cancelled','completion_error','no_deadline','insufficient_reserve','cancelled']
+                      actual=collections.Counter(r['Test'] for r in rows if r['Action']==action and r.get('Test','').startswith(continuation))
+                      assert actual==collections.Counter(continuation+child for child in children),(name,action,'continuation case census',actual)
               assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1,name+' package pass'
               summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':92,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':93,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_FORWARD_CENSUS

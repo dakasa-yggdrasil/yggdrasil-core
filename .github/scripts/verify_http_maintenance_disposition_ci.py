@@ -62,9 +62,9 @@ def identity(logs):
 def database(logs, phase):
     value = read_json(logs / ("database-" + phase + ".stdout"))
     versions = [int(path.name.split("_", 1)[0]) for path in (ROOT / "db/migrations").glob("*.sql")]
-    need(sorted(versions) == list(range(1, 40)) + list(range(41, 93)), "Source migration roster differs")
+    need(sorted(versions) == list(range(1, 40)) + list(range(41, 94)), "Source migration roster differs")
     history = value["history"]
-    need(value["schema_version"] == 92 and isinstance(history, list), "actual schema92 absent")
+    need(value["schema_version"] == 93 and isinstance(history, list), "actual schema93 absent")
     need([row["version_id"] for row in history] == [0] + sorted(versions), "actual complete Goose history differs")
     need(all(row["is_applied"] is True for row in history), "unapplied Goose row retained")
     return value
@@ -101,7 +101,7 @@ def census(logs):
     result = {"schema": "http_maintenance_dispatch_exact_Source_CI_v1",
               "source_commit": os.environ["SOURCE_COMMIT"], "run_id": os.environ["GITHUB_RUN_ID"],
               "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
-              "postgres_major": int(os.environ["EXPECTED_POSTGRES_MAJOR"]), "schema_version": 92,
+              "postgres_major": int(os.environ["EXPECTED_POSTGRES_MAJOR"]), "schema_version": 93,
               "race": True, "count": 1, "summary": {}, "passed": False,
               "declared_storage_and_transport_fixtures_only": True,
               "native_provider_or_Guest_qualification": False, "production_authority": False}

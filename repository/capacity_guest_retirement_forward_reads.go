@@ -28,6 +28,9 @@ func (s CapacityStore) PrepareGuestRetirementForwardRead(ctx context.Context, id
 	if err != nil {
 		return out, err
 	}
+	if r.Mode == GuestRetirementForwardContinuationMode && (kind != "absence" || destroy != r.DestroyGrantID) {
+		return out, ErrCapacityConflict
+	}
 	if kind == "off" && destroy != "" {
 		return out, ErrCapacityConflict
 	}
@@ -179,10 +182,9 @@ func (s CapacityStore) RecordGuestRetirementForwardRead(ctx context.Context, ret
 	return proof, nil
 }
 
-func retirementForwardAbsenceContent(r GuestRetirementForwardReadReturn, p model.CapacityPolicySpec, original capacityMutationRecord) (model.CapacityMutationProof, error) {
-	var empty model.CapacityMutationProof
+func retirementForwardAbsenceReceiptValid(r GuestRetirementForwardReadReturn, original capacityMutationRecord) bool {
 	if !retirementForwardObserverValid(r, false, RetirementReadonlyAWSObserverSource()) || !forwardReadTransportValid(r) || r.Read.Kind != "absence" || r.Plan != nil || r.Observation == nil || r.OriginalDestroyReceipt == nil || r.Read.DestroyGrantID != original.Grant.GrantID || original.Settlement == nil || !original.Settlement.TransportCompleted || original.Settlement.Outcome != "accepted" {
-		return empty, ErrCapacityConflict
+		return false
 	}
 	receipt := *r.OriginalDestroyReceipt
 	expectedCurrent := receipt
@@ -190,21 +192,28 @@ func retirementForwardAbsenceContent(r GuestRetirementForwardReadReturn, p model
 		expectedCurrent.Grant.State = "confirmed"
 	}
 	if original.Grant.State != "settled" && original.Grant.State != "confirmed" || !reflect.DeepEqual(expectedCurrent, guestMutationReceiptV2(original)) {
-		return empty, ErrCapacityConflict
+		return false
 	}
 	if capacity.AWSOriginalMutationPair(original.Binding) {
 		x := original.Settlement.OriginalProviderDestroyReturn
 		if x == nil || x.Schema != "aws_original_terminate_instances_return_v1" || x.Provider != "aws" || x.AdapterSourceCommit != original.Binding.OriginalProviderSourceCommit || x.GrantID != receipt.Grant.GrantID || x.AttemptID != original.AttemptID || x.RequestSHA256 != receipt.Grant.RequestSHA256 || x.ResourceID != receipt.Grant.ExpectedResourceID || x.ResourceCreatedAt != receipt.Grant.ExpectedResourceCreatedAt || x.ActionID != receipt.ActionID || x.NextActionIDs == nil || len(x.NextActionIDs) != 0 || x.ResponseStatus != 200 || !capacity.ValidDigest(x.ResponseBodySHA256) || x.ResponseBytes < 2 || x.ResponseBytes > 2<<20 {
-			return empty, ErrCapacityConflict
+			return false
 		}
 		called, a := time.Parse(time.RFC3339Nano, x.CalledAt)
 		returned, b := time.Parse(time.RFC3339Nano, x.ReturnedAt)
 		deadline, c := time.Parse(time.RFC3339Nano, x.ContextDeadline)
 		if a != nil || b != nil || c != nil || called.IsZero() || returned.Before(called) || !returned.Before(deadline) || deadline.Sub(called) > 60*time.Second {
-			return empty, ErrCapacityConflict
+			return false
 		}
 	}
-	return capacity.GuestRetirementV2NativeAbsenceContent(p, original.Binding, receipt, *r.Observation, "original-forward-native-absence:"+r.Read.ReadID)
+	return true
+}
+
+func retirementForwardAbsenceContent(r GuestRetirementForwardReadReturn, p model.CapacityPolicySpec, original capacityMutationRecord) (model.CapacityMutationProof, error) {
+	if !retirementForwardAbsenceReceiptValid(r, original) {
+		return model.CapacityMutationProof{}, ErrCapacityConflict
+	}
+	return capacity.GuestRetirementV2NativeAbsenceContent(p, original.Binding, *r.OriginalDestroyReceipt, *r.Observation, "original-forward-native-absence:"+r.Read.ReadID)
 }
 
 // Historical records without the extension keep their original wire and

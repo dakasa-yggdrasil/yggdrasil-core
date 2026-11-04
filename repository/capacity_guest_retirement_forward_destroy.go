@@ -142,7 +142,7 @@ func (s CapacityStore) AdvanceGuestRetirementForwardDrained(ctx context.Context,
 }
 
 func (s CapacityStore) guestForwardDestroyEligibilityTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, b model.CapacityMutationBinding, slot int, resourceID, created string, now time.Time, grantID string) error {
-	if current.RetirementForward == nil {
+	if current.RetirementForward == nil || current.RetirementForward.Mode == GuestRetirementForwardContinuationMode {
 		return ErrCapacityConflict
 	}
 	// Adapter redemption has no workflow request context. Derive the owning
@@ -189,7 +189,7 @@ func (s CapacityStore) bindGuestForwardDestroyTx(ctx context.Context, tx *sql.Tx
 	if err != nil {
 		return true, err
 	}
-	if original.PolicyID != x.policy.ID || original.WorkflowID != s.WorkflowID || original.Generation != r.Generation || original.FencingToken != r.Fence || original.ExecutorID != r.ExecutorID || original.LeaseOwner != r.LeaseOwner || original.Grant.Capability != x.binding.DestroyCapability || original.Grant.ExpectedResourceID != x.original.Request.Intent.Tuple.ResourceID || original.Grant.ExpectedResourceCreatedAt != x.original.Request.Intent.Tuple.CreatedAt {
+	if r.Mode == GuestRetirementForwardContinuationMode || original.PolicyID != x.policy.ID || original.WorkflowID != s.WorkflowID || original.Generation != r.Generation || original.FencingToken != r.Fence || original.ExecutorID != r.ExecutorID || original.LeaseOwner != r.LeaseOwner || original.Grant.Capability != x.binding.DestroyCapability || original.Grant.ExpectedResourceID != x.original.Request.Intent.Tuple.ResourceID || original.Grant.ExpectedResourceCreatedAt != x.original.Request.Intent.Tuple.CreatedAt {
 		return true, ErrCapacityConflict
 	}
 	eligibility, err := s.retirementForwardOffTx(ctx, tx, x, r, sha, now)

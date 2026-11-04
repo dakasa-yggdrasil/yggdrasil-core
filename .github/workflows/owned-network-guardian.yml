@@ -5,12 +5,14 @@ on:
     paths:
       - 'ops/network-guardian/**'
       - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
+      - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
       - '.github/workflows/owned-network-guardian.yml'
   push:
     branches: [main]
     paths:
       - 'ops/network-guardian/**'
       - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
+      - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
       - '.github/workflows/owned-network-guardian.yml'
   workflow_dispatch:
 
