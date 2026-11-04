@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-04T10:43:15-03:00_
+_Generated from HEAD at: 2026-11-04T11:33:59-03:00_
 
 ## Languages
 
@@ -35,7 +35,7 @@ _Generated from HEAD at: 2026-11-04T10:43:15-03:00_
 - internal/capacitynativeqemu: 47 files (298.1 KB)
 - cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
-- ops/network-guardian/tests: 28 files (450.4 KB)
+- ops/network-guardian/tests: 28 files (452.7 KB)
 
 ## Heaviest Files
 
