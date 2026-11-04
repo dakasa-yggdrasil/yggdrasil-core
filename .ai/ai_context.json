@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-04T07:58:10-03:00",
+  "generated_at": "2026-11-04T09:31:39-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1491,
-    ".json": 215,
-    ".py": 83,
+    ".json": 220,
+    ".py": 113,
     ".sql": 93,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "6477e9ffc383530ac9f73aa332b70cb547f137da",
+    "commit": "03b08ebb106bdebe63929d782163ab7dd5dd7976",
     "dirty": true,
     "files": [
       {
@@ -119,9 +119,9 @@
       "kb": 98
     },
     {
-      "path": "controllers/oidc",
-      "files": 25,
-      "kb": 210
+      "path": "ops/network-guardian/tests",
+      "files": 28,
+      "kb": 447
     }
   ],
   "top_files_by_size": [
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 54,
+    "config_files": 59,
     "k8s_manifests": 25
   }
 }

@@ -1,12 +1,12 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-04T07:58:10-03:00_
+_Generated from HEAD at: 2026-11-04T09:31:39-03:00_
 
 ## Languages
 
 - `.go`: 1491 files
-- `.json`: 215 files
-- `.py`: 83 files
+- `.json`: 220 files
+- `.py`: 113 files
 - `.sql`: 93 files
 - `.yaml`: 11 files
 - `.yml`: 37 files
@@ -35,7 +35,7 @@ _Generated from HEAD at: 2026-11-04T07:58:10-03:00_
 - internal/capacitynativeqemu: 47 files (298.1 KB)
 - cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
-- controllers/oidc: 25 files (210.8 KB)
+- ops/network-guardian/tests: 28 files (447.8 KB)
 
 ## Heaviest Files
 
@@ -54,7 +54,7 @@ _Generated from HEAD at: 2026-11-04T07:58:10-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **54**
+- K8s/Config files scanned: **59**
 - Manifests (k8s-ish): **25**
 
 ## Dependencies
