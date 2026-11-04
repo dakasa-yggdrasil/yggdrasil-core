@@ -263,6 +263,38 @@ class G11MaintenanceTests(unittest.TestCase):
         self.assertEqual(len(value['forwards']), 7)
         self.assertTrue(cas.validate_known_child(value, config, json.loads))
         self.assertEqual(cas.canonical(value), original)
+        # Actual PG five-digit spelling must reach the real whole-child guard
+        # unchanged; parsing cannot rewrite the archived PG text or its SHA.
+        actual_pg = '2026-11-04T10:22:17.49656+00:00'
+        six_digits = '2026-11-04T10:22:17.496560+00:00'
+        self.assertEqual(cas.utc(actual_pg), cas.utc(six_digits))
+        self.assertEqual(cas.utc(actual_pg).microsecond, 496560)
+        failed = json.loads(value['failed_run_pgtext'])
+        failed['finished_at'] = actual_pg
+        value['failed_run_pgtext'] = cas.canonical(failed).decode()
+        value['dispatch'][0].update(returned_at=actual_pg, finalization_ack_at='2026-11-04T10:22:17.518138+00:00')
+        config['failed_run_sha256'] = cas.sha(value['failed_run_pgtext'].encode())
+        actual_wire = cas.canonical(value)
+        self.assertTrue(cas.validate_known_child(value, config, json.loads))
+        self.assertEqual(cas.canonical(value), actual_wire)
+        for digits, microseconds in (('1', 100000), ('12', 120000), ('123', 123000),
+                ('1234', 123400), ('12345', 123450), ('123456', 123456),
+                ('1234567', 123456), ('12345678', 123456), ('123456789', 123456)):
+            with self.subTest(fractional_digits=len(digits)):
+                expected = cas.datetime.datetime(2026, 11, 4, 10, 22, 17, microseconds,
+                                                 tzinfo=cas.datetime.timezone.utc)
+                self.assertEqual(cas.utc('2026-11-04T10:22:17.' + digits + '+00:00'), expected)
+                self.assertEqual(cas.utc('2026-11-04T10:22:17.' + digits + 'Z'), expected)
+        whole_second = cas.datetime.datetime(2026, 11, 4, 10, 22, 17, tzinfo=cas.datetime.timezone.utc)
+        self.assertEqual(cas.utc('2026-11-04T10:22:17Z'), whole_second)
+        self.assertEqual(cas.utc('2026-11-04T10:22:17+00:00'), whole_second)
+        self.assertEqual(cas.utc('2026-11-04T12:22:17.49656+02:00'), cas.utc(actual_pg))
+        self.assertEqual(cas.utc('2026-11-04T05:22:17.49656-05:00'), cas.utc(actual_pg))
+        for malformed in ('2026-11-04T10:22:17.49656', '2026-11-04T10:22:17.1234567890Z',
+                '2026-11-04 10:22:17Z', '2026-11-04T10:22:17,Z',
+                '2026-11-04T10:22:17+0000', '2026-11-04T10:22:17+0:00'):
+            with self.subTest(malformed_timestamp=malformed), self.assertRaisesRegex(cas.Hold, 'ACTUAL_ZONED_TIMESTAMP'):
+                cas.utc(malformed)
 
     def test_known_seven_row_child_rejects_old_frame_and_retained_epoch_drift(self):
         value, config = known_operand(); value['forwards'] = value['forwards'][:5]
