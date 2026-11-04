@@ -1,115 +1,115 @@
 {
-  "schema_version": 2,
-  "service": {
-    "name": "yggdrasil-core",
-    "repo": "dakasa-yggdrasil/yggdrasil-core"
-  },
-  "profile": "public-go-module-v1",
-  "scope": "source-contract-with-parameterized-deployment",
-  "review_status": "accepted",
-  "coverage": "complete",
-  "unresolved": [],
-  "source_inventory": {
-    "id": "complete_runtime_source_census",
-    "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "39a5ce44296cf2be9b19ea1fc09060a8c7ed24053a64138a9be21dcb04498f8d"
-  },
-  "produces": [
+  "callsREST": [
     {
-      "id": "transactional_event_emission_sites",
-      "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "bdc6130e4adbb8bf50cf9f1f5f2cf747400b6082d84ac074b299f0d5968f21be"
+      "evidence": "docs/service-contract/source/http-egress.json",
+      "id": "http_and_rpc_egress_callsites",
+      "sha256": "8131e23857477b176ddf4cc9dc7dc9395e56e8135e391f1e6ccc1528ce0983c1"
     },
     {
-      "id": "embedded_event_schema_keys",
-      "evidence": "docs/service-contract/source/event-schemas.json",
-      "sha256": "eb0551010a623e9c7b6bbfa42711c63be4e7751f8f07bef89d80a3bef4d25f00"
+      "evidence": "docs/service-contract/source/provider-sdk-operations.json",
+      "id": "optional_provider_sdk_callsites",
+      "sha256": "2a6ec1c414e5e32535ee05c60c07ba915974aaff9e88475c0cddab90cee8fba8"
     },
     {
-      "id": "event_and_queue_constants",
-      "evidence": "docs/service-contract/source/event-and-queue-constants.json",
-      "sha256": "41938430b08975319d249822bcec9630d47354cc9885d8b4089da298c842bf14"
+      "evidence": "docs/service-contract/SEMANTICS.md",
+      "id": "parameterized_destination_families",
+      "sha256": "95ee106f65bd9f80fb19719d6c5852db3586f0e0bc2cec73fdf3d517d19a8641"
     }
   ],
   "consumes": [
     {
-      "id": "logical_rpc_consumers",
       "evidence": "docs/service-contract/source/rpc-consumers.json",
+      "id": "logical_rpc_consumers",
       "sha256": "40fdd21fa0e42be48ff0a022ab704a25b0b906fb659fd21f767edd0caa807b10"
     },
     {
-      "id": "http_inbound_protocols_and_auth",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "4a08df26f3c27d2da291b0c64c4a04e5a9298914a8a16e7105587b4b2c923362"
+      "id": "http_inbound_protocols_and_auth",
+      "sha256": "95ee106f65bd9f80fb19719d6c5852db3586f0e0bc2cec73fdf3d517d19a8641"
     },
     {
-      "id": "dependency_versions",
       "evidence": "go.mod",
+      "id": "dependency_versions",
       "sha256": "54fd842f05970b55a8b07605246a3f70e4dfe27676a135233c8adcbbcfdb4f32"
     },
     {
-      "id": "shipped_command_ingress_and_database_operations",
       "evidence": "docs/service-contract/source/production-command-operations.json",
+      "id": "shipped_command_ingress_and_database_operations",
       "sha256": "ecff88688b91f7195eb033ffbd27b3d7d856af75bbbc9a0ae534ce8d3b217ccd"
     },
     {
-      "id": "independent_source_review",
       "evidence": "docs/service-contract/M2_SOURCE_REVIEW.json",
+      "id": "independent_source_review",
       "sha256": "11a5c0025091bde075f1c81cc957e3f01bc23d3ac368ae33cdd761ae21f76051"
     },
     {
-      "id": "prior_accepted_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
+      "id": "prior_accepted_source_review",
       "sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710"
     },
     {
-      "id": "readonly_inspection_source_review",
       "evidence": "docs/service-contract/READONLY_INSPECTION_SOURCE_REVIEW.json",
+      "id": "readonly_inspection_source_review",
       "sha256": "8978341181da271918212a1c9be33ff17cb38403170fe72a884647bf87b81082"
     },
     {
-      "id": "scheduler_skip_source_review",
       "evidence": "docs/service-contract/SCHEDULER_SKIP_REVIEW.json",
+      "id": "scheduler_skip_source_review",
       "sha256": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f"
     },
     {
-      "id": "retirement_readonly_observer_source_review",
       "evidence": "docs/service-contract/RETIREMENT_READONLY_OBSERVER_SOURCE_REVIEW.json",
-      "sha256": "c955aff2cb7e626294d8325f6360aef27a69dfc7bd688498c16b140dabe0f4a8"
+      "id": "retirement_readonly_observer_source_review",
+      "sha256": "5ebdecac069cd1b8354629cfb21965fe8cf0f22965a9928cd393c42198e6ef22"
     }
   ],
-  "callsREST": [
-    {
-      "id": "http_and_rpc_egress_callsites",
-      "evidence": "docs/service-contract/source/http-egress.json",
-      "sha256": "8131e23857477b176ddf4cc9dc7dc9395e56e8135e391f1e6ccc1528ce0983c1"
-    },
-    {
-      "id": "optional_provider_sdk_callsites",
-      "evidence": "docs/service-contract/source/provider-sdk-operations.json",
-      "sha256": "2a6ec1c414e5e32535ee05c60c07ba915974aaff9e88475c0cddab90cee8fba8"
-    },
-    {
-      "id": "parameterized_destination_families",
-      "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "4a08df26f3c27d2da291b0c64c4a04e5a9298914a8a16e7105587b4b2c923362"
-    }
-  ],
+  "coverage": "complete",
   "exposesREST": [
     {
-      "id": "http_mux_registrations",
       "evidence": "docs/service-contract/source/http-routes.json",
+      "id": "http_mux_registrations",
       "sha256": "1aaa2934654c3854343cad6b3c7f800d3aa105cf17ad56b1332a7d1ebb35c131"
     },
     {
-      "id": "pre_mux_capacity_dispatch",
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
+      "id": "pre_mux_capacity_dispatch",
       "sha256": "37993f131ec0f198503900b566447600132de1f2526e1459601d14310557a54d"
     },
     {
-      "id": "auth_dispatch_source_functions",
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
+      "id": "auth_dispatch_source_functions",
       "sha256": "115651fd89b0131d8d6fadbba71394b2c2cb71d98b1e4f934be528d6e5e34986"
     }
-  ]
+  ],
+  "produces": [
+    {
+      "evidence": "docs/service-contract/source/event-emissions.json",
+      "id": "transactional_event_emission_sites",
+      "sha256": "bdc6130e4adbb8bf50cf9f1f5f2cf747400b6082d84ac074b299f0d5968f21be"
+    },
+    {
+      "evidence": "docs/service-contract/source/event-schemas.json",
+      "id": "embedded_event_schema_keys",
+      "sha256": "eb0551010a623e9c7b6bbfa42711c63be4e7751f8f07bef89d80a3bef4d25f00"
+    },
+    {
+      "evidence": "docs/service-contract/source/event-and-queue-constants.json",
+      "id": "event_and_queue_constants",
+      "sha256": "41938430b08975319d249822bcec9630d47354cc9885d8b4089da298c842bf14"
+    }
+  ],
+  "profile": "public-go-module-v1",
+  "review_status": "accepted",
+  "schema_version": 2,
+  "scope": "source-contract-with-parameterized-deployment",
+  "service": {
+    "name": "yggdrasil-core",
+    "repo": "dakasa-yggdrasil/yggdrasil-core"
+  },
+  "source_inventory": {
+    "evidence": "docs/service-contract/source/sources.json",
+    "id": "complete_runtime_source_census",
+    "sha256": "13208e699c6074cc37421b387f7d9a1572ad6073509015ecbc1a628556960ba4"
+  },
+  "unresolved": []
 }

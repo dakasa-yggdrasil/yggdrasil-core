@@ -15,9 +15,14 @@ also require strict raw-response interpretation by the provider adapter.
 
 ## Decision
 
-Extend the existing dedicated accepted-failed read-only service with one closed
-retirement-absence operation. Authenticate its actual current Source/version through
-its fixed Describe/execute origin, independently of the historical normal supplier.
+Keep the existing dedicated accepted-failed service and its qualified1.65.7
+Source2f227 identity unchanged for the four historical disposal consumers.
+Migration82 also owns that exact observer pin. Run the independently published
+1.65.8 retirement reader at the separate fixed
+`integration-aws-retirement-readonly.dakasa.svc.cluster.local:8081` service; its
+binary/image is unchanged. Authenticate its actual Source/version and closed
+sixteen-field Describe independently of both the legacy fourteen-field service
+and historical normal supplier. Neither service can substitute for the other.
 Core supplies the exact protected canonical receipt and its genuine owning read identity;
 the observer receives no grant callback bearer and exposes no mutation dispatch.
 Preserve the historical supplier type, instance, config, request digest, grants,
@@ -36,9 +41,12 @@ not invent a forward admission. Their existing1MiB stored-record cap remains;
 forward reads retain their existing2MiB cap. Both preserve the original60s finish
 invocation, each five-second read and separate five-second failure custody.
 
-Use the existing API, workflow store, service, authentication and schema. Keep SDK
-and XML semantics in the provider adapter. Preserve the existing accepted-failed
-operation and all four disposal consumers when binding the new real publication.
+Use the existing read-only API, workflow store, authentication and schema. No
+migration93, historical migration edit, observer relabelling or provider permission
+is needed. Keep SDK/XML semantics in the provider adapter and preserve both the
+legacy service and all four disposal consumers. The separate retirement service
+needs its own genuine deployment/reachability qualification; this Source change
+performs no deployment or operational acceptance.
 
 ## Consequences
 

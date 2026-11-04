@@ -41,7 +41,9 @@ func (s CapacityStore) guestDestroyEligibilityV2Tx(ctx context.Context, tx *sql.
 	if i.PolicyID != policy.ID.String() || i.PolicyChecksum != policy.Checksum || i.WorkflowID != s.WorkflowID.String() || current.Generation < 1 || current.FencingToken < 1 || i.Generation != uint64(current.Generation) || i.Fence != uint64(current.FencingToken) || i.LeaseOwner != current.LeaseOwner || i.Slot != slot || i.Tuple.ResourceID != resourceID || i.Tuple.CreatedAt != created || i.Tuple.InstanceID != b.IntegrationInstanceID || i.Tuple.ScopeChecksum != b.ScopeChecksum {
 		return ErrCapacityConflict
 	}
-	if _, _, _, err = s.guestRetirementV2CurrentTx(ctx, tx, stored, now, false); err != nil {
+	// Adapter callbacks carry only the policy ID/checksum. Retain the full
+	// revalidated policy so the survivor lookup uses its actual namespace.
+	if policy, _, _, err = s.guestRetirementV2CurrentTx(ctx, tx, stored, now, false); err != nil {
 		return err
 	}
 	if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {

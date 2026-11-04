@@ -93,11 +93,6 @@ type enrolledFailedReadonlyDescription struct {
 
 func expectedEnrolledFailedDescription(source string) enrolledFailedReadonlyDescription {
 	out := enrolledFailedReadonlyDescription{nativeDeniedReadonlyDescription: nativeDeniedReadonlyDescription{Schema: "aws_original_enrolled_failed_create_readonly_describe_v1", Provider: "aws-accepted-failed-readonly", Version: "1.65.7", SourceCommit: source, Transport: "http_json", DescribeEndpoint: "/rpc/describe", ExecuteEndpoint: "/rpc/execute", Operation: enrolledFailedReadonlyOperation, RequestSchema: "aws_original_enrolled_failed_create_absence_read_request_v1", OriginalAdapterVersion: "1.65.5", OriginalAdapterSourceCommit: enrolledFailedAWSCreator, NativeMutations: 0, NormalAdapterOperations: false, AMQPRegistered: false}}
-	if source != "" && source == repository.RetirementReadonlyAWSObserverSource() && repository.RetirementReadonlyAWSObserverVersion() != "" {
-		out.Version = repository.RetirementReadonlyAWSObserverVersion()
-		out.RetirementOperation = retirementReadonlyOperation
-		out.RetirementRequestSchema = repository.GuestRetirementReadonlyRequestSchema
-	}
 	return out
 }
 func validateEnrolledFailedDescription(raw []byte, source string) error {
@@ -171,10 +166,54 @@ func enrolledFailedReadonlySourceReady(source string) bool {
 }
 
 const retirementReadonlyOperation = "observe_original_retirement_absence"
+const retirementReadonlyOrigin = "http://integration-aws-retirement-readonly.dakasa.svc.cluster.local:8081"
 
 func retirementReadonlySourceReady() bool {
 	source := repository.RetirementReadonlyAWSObserverSource()
-	return enrolledFailedReadonlySourceReady(source) && source == repository.EnrolledFailedAWSObserverSource() && repository.RetirementReadonlyAWSObserverVersion() != ""
+	return enrolledFailedReadonlySourceReady(source) && source != repository.EnrolledFailedAWSObserverSource() && repository.RetirementReadonlyAWSObserverVersion() != ""
+}
+
+// Migration82 owns the legacy2f observer identity. The independently published
+// retirement reader has a different fixed service and exact16-field Describe;
+// neither reader can stand in for the other or relabel historical observations.
+func expectedRetirementReadonlyDescription() enrolledFailedReadonlyDescription {
+	out := expectedEnrolledFailedDescription(repository.RetirementReadonlyAWSObserverSource())
+	out.Version = repository.RetirementReadonlyAWSObserverVersion()
+	out.RetirementOperation = retirementReadonlyOperation
+	out.RetirementRequestSchema = repository.GuestRetirementReadonlyRequestSchema
+	return out
+}
+
+func validateRetirementReadonlyDescription(raw []byte) error {
+	var typed enrolledFailedReadonlyDescription
+	expected := expectedRetirementReadonlyDescription()
+	if !retirementReadonlySourceReady() || capacity.DecodeGuestLifecycle(raw, &typed) != nil || typed != expected {
+		return errOriginalCreateDisposition
+	}
+	wire, err := json.Marshal(expected)
+	var actual, fields map[string]any
+	if err != nil || json.Unmarshal(raw, &actual) != nil || json.Unmarshal(wire, &fields) != nil || !reflect.DeepEqual(actual, fields) {
+		return errOriginalCreateDisposition
+	}
+	return nil
+}
+
+func describeRetirementReadonly(ctx context.Context) error {
+	if ctx == nil || !retirementReadonlySourceReady() {
+		return errOriginalCreateDisposition
+	}
+	child, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	request := struct {
+		Provider string `json:"provider"`
+		Version  string `json:"expected_version"`
+		Source   string `json:"expected_source_commit"`
+	}{"aws-accepted-failed-readonly", repository.RetirementReadonlyAWSObserverVersion(), repository.RetirementReadonlyAWSObserverSource()}
+	var raw json.RawMessage
+	if newAdapterTransportClient(nil).callNativeHTTPJSON(child, retirementReadonlyOrigin+"/rpc/describe", request, &raw, adapterCallPolicy{detailFreeErrors: true, native: &nativeAdapterHTTPPolicy{limit: 8192, parent: ctx}}) != nil {
+		return errOriginalCreateDisposition
+	}
+	return validateRetirementReadonlyDescription(raw)
 }
 
 // Copy the hydrated credentials; stripping callback authority must not mutate
@@ -244,7 +283,7 @@ func callRetirementReadonly(ctx context.Context, supplier *originalProductionGue
 	// Retain only the closed public response. Later guard/context failure still
 	// records it truthfully, with CallFailed derived by the owning caller.
 	*out = candidate
-	if describeEnrolledFailedReadonly(ctx) != nil || supplier.guard(ctx) != nil || ctx.Err() != nil {
+	if describeRetirementReadonly(ctx) != nil || supplier.guard(ctx) != nil || ctx.Err() != nil {
 		return errOriginalGuestStep
 	}
 	return nil
@@ -256,7 +295,7 @@ func readRetirementReadonly(ctx context.Context, supplier *originalProductionGue
 	var observed repository.GuestRetirementReadonlyReturn
 	fixed := map[string]any{"schema": repository.GuestRetirementReadonlyRequestSchema, "profile": supplier.binding.ProfileName, "slot": supplier.input.Slot, "read_id": readID, "read_sha256": capacity.BusinessCreationSHA256(readRaw), "original_adapter_source_commit": enrolledFailedAWSCreator, "original_receipt": json.RawMessage(receiptRaw), "original_receipt_sha256": capacity.BusinessCreationSHA256(receiptRaw)}
 	envelope, err := retirementReadonlyEnvelope(supplier.resolved, fixed)
-	if err != nil || describeEnrolledFailedReadonly(ctx) != nil {
+	if err != nil || describeRetirementReadonly(ctx) != nil {
 		return observed, nil, errOriginalGuestStep
 	}
 	var reply struct {
@@ -265,7 +304,7 @@ func readRetirementReadonly(ctx context.Context, supplier *originalProductionGue
 		Status     string          `json:"status"`
 		Output     json.RawMessage `json:"output"`
 	}
-	if newAdapterTransportClient(nil).callNativeHTTPJSON(ctx, enrolledFailedReadonlyOrigin+"/rpc/execute", envelope, &reply, adapterCallPolicy{detailFreeErrors: true, native: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}}) != nil || reply.Operation != retirementReadonlyOperation || reply.Capability != retirementReadonlyOperation || reply.Status != "observed" {
+	if newAdapterTransportClient(nil).callNativeHTTPJSON(ctx, retirementReadonlyOrigin+"/rpc/execute", envelope, &reply, adapterCallPolicy{detailFreeErrors: true, native: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}}) != nil || reply.Operation != retirementReadonlyOperation || reply.Capability != retirementReadonlyOperation || reply.Status != "observed" {
 		return observed, nil, errOriginalGuestStep
 	}
 	if capacity.DecodeGuestLifecycle(reply.Output, &observed) != nil {
@@ -306,7 +345,7 @@ func callOrdinaryRetirementReadonly(ctx context.Context, supplier *originalProdu
 		return errOriginalGuestStep
 	}
 	*out = candidate
-	if describeEnrolledFailedReadonly(ctx) != nil || supplier.guard(ctx) != nil || ctx.Err() != nil {
+	if describeRetirementReadonly(ctx) != nil || supplier.guard(ctx) != nil || ctx.Err() != nil {
 		return errOriginalGuestStep
 	}
 	return nil

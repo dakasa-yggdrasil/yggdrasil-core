@@ -109,7 +109,7 @@ func guestNativeAbsenceReceiptContentV2(r GuestNativeAbsenceReturnV2, p model.Ca
 func guestNativeAbsenceObserverValid(r GuestNativeAbsenceReturnV2, fresh bool, source string) bool {
 	paired := r.ObserverSourceCommit != "" || len(r.OriginalObserverReturn) != 0
 	if !paired {
-		return !(fresh && r.Challenge.AdapterSourceCommit == enrolledFailedAWSCreator)
+		return !fresh || r.Challenge.AdapterSourceCommit != enrolledFailedAWSCreator
 	}
 	return r.ObserverSourceCommit == source && retirementReadonlyJoinValid(source, r.Challenge.AdapterSourceCommit, r.Challenge.ReadID, r.Challenge, r.OriginalDestroyReceipt, r.Observation, r.OriginalObserverReturn)
 }

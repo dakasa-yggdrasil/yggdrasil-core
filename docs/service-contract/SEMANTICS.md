@@ -803,12 +803,19 @@ do not qualify an old container, a native provider/Guest or production adoption.
 
 ## Separate observer for a settled historical retirement receipt (ADR-0104)
 
-Fresh AWS c34 ordinary and partial-forward absence reads use the existing dedicated accepted-
-failed read-only HTTP service with the closed `observe_original_retirement_absence`
-operation. The compiled observer Source/version must describe this operation and
-match the existing dedicated observer publication. An unbound publication refuses;
-the normal historical supplier is not a fallback. Its type, instance, configuration,
-creator Source and sealed grant RequestSHA256 remain unchanged.
+Fresh AWS c34 ordinary and partial-forward absence reads use the distinct fixed
+`integration-aws-retirement-readonly.dakasa.svc.cluster.local:8081` HTTP service
+with the closed `observe_original_retirement_absence` operation and genuine1.65.8
+compiler target. Its exact sixteen-field Describe is independent from the legacy
+fourteen-field1.65.7 service at `integration-aws-accepted-failed-readonly`.
+The latter stays pinned to qualified2f227 for all four historical disposal
+consumers and immutable migration82. No source/image is relabelled and no
+migration93 or existing migration change is introduced. The new retirement
+service uses the already published reader code without changing the binary;
+actual image, reachability and rollout qualification remain independent Root
+work. An unbound publication refuses; the normal historical supplier is not a
+fallback. Its type, instance, configuration, creator Source and sealed grant
+RequestSHA256 remain unchanged.
 
 Core captures the original receipt through its existing protected workflow store,
 then sends its canonical bytes and digest with the genuine prepared read ID/digest.

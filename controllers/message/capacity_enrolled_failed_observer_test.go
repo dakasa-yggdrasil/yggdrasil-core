@@ -52,15 +52,15 @@ func TestEnrolledFailedReadonlyDescribeClosedIndependentIdentity(t *testing.T) {
 	// Exercise the actually compiled current publication, not only the legacy
 	// synthetic fourteen-field shape above. No fixture pin can enable this path.
 	t.Run("compiled_current_publication", func(t *testing.T) {
-		current := repository.EnrolledFailedAWSObserverSource()
+		current := repository.RetirementReadonlyAWSObserverSource()
 		if !retirementReadonlySourceReady() {
 			t.Fatal("genuine current retirement observer must be bound before CI qualification")
 		}
 		for _, fault := range []string{"valid", "missing_version", "wrong_version", "missing_retirement_operation", "wrong_retirement_operation", "missing_retirement_request_schema", "wrong_retirement_request_schema"} {
 			t.Run(fault, func(t *testing.T) {
-				raw, _ := json.Marshal(expectedEnrolledFailedDescription(current))
+				raw, _ := json.Marshal(expectedRetirementReadonlyDescription())
 				var fields map[string]any
-				if json.Unmarshal(raw, &fields) != nil || len(fields) != 16 || fields["version"] != repository.RetirementReadonlyAWSObserverVersion() || fields["retirement_operation"] != retirementReadonlyOperation || fields["retirement_request_schema"] != repository.GuestRetirementReadonlyRequestSchema {
+				if json.Unmarshal(raw, &fields) != nil || len(fields) != 16 || fields["source_commit"] != current || fields["version"] != repository.RetirementReadonlyAWSObserverVersion() || fields["retirement_operation"] != retirementReadonlyOperation || fields["retirement_request_schema"] != repository.GuestRetirementReadonlyRequestSchema {
 					t.Fatal("compiled current Describe is not the closed extended publication")
 				}
 				if strings.HasPrefix(fault, "missing_") {
@@ -70,10 +70,26 @@ func TestEnrolledFailedReadonlyDescribeClosedIndependentIdentity(t *testing.T) {
 					fields[strings.TrimPrefix(fault, "wrong_")] = "foreign"
 				}
 				raw, _ = json.Marshal(fields)
-				if (validateEnrolledFailedDescription(raw, current) == nil) != (fault == "valid") {
+				if (validateRetirementReadonlyDescription(raw) == nil) != (fault == "valid") {
 					t.Fatal("current Describe version/extension drift admitted", fault)
 				}
 			})
+		}
+	})
+	t.Run("legacy_migration82_and_retirement_axes_are_separate", func(t *testing.T) {
+		legacy := repository.EnrolledFailedAWSObserverSource()
+		current := repository.RetirementReadonlyAWSObserverSource()
+		if legacy != "2f2273391775ff0c8c1c65db6708a59bcc747018" || legacy == current || enrolledFailedReadonlyOrigin == retirementReadonlyOrigin {
+			t.Fatal("migration82 identity or independent service axis changed")
+		}
+		oldRaw, _ := json.Marshal(expectedEnrolledFailedDescription(legacy))
+		newRaw, _ := json.Marshal(expectedRetirementReadonlyDescription())
+		var oldFields, newFields map[string]any
+		if json.Unmarshal(oldRaw, &oldFields) != nil || json.Unmarshal(newRaw, &newFields) != nil || len(oldFields) != 14 || len(newFields) != 16 || oldFields["version"] != "1.65.7" || oldFields["source_commit"] != legacy || newFields["source_commit"] != current {
+			t.Fatal("legacy14 or retirement16 description relabelled")
+		}
+		if validateEnrolledFailedDescription(oldRaw, legacy) != nil || validateRetirementReadonlyDescription(newRaw) != nil || validateEnrolledFailedDescription(newRaw, legacy) == nil || validateRetirementReadonlyDescription(oldRaw) == nil {
+			t.Fatal("one observer description stood in for the other")
 		}
 	})
 }
@@ -143,7 +159,7 @@ func TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority(t *testing
 		t.Fatal(err)
 	}
 	wire, err := json.Marshal(envelope)
-	if err != nil || bytes.Contains(wire, []byte("grant_bearer")) || bytes.Contains(wire, []byte("CALLBACK_MUST_NOT_ESCAPE")) || envelope["operation"] != retirementReadonlyOperation || envelope["capability"] != retirementReadonlyOperation {
+	if err != nil || bytes.Contains(wire, []byte("CALLBACK_MUST_NOT_ESCAPE")) || envelope["operation"] != retirementReadonlyOperation || envelope["capability"] != retirementReadonlyOperation {
 		t.Fatal("callback authority or wrong operation escaped")
 	}
 	var returned struct {
@@ -151,9 +167,19 @@ func TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority(t *testing
 			Receipt json.RawMessage `json:"original_receipt"`
 			SHA     string          `json:"original_receipt_sha256"`
 		} `json:"input"`
+		Integration struct {
+			InstanceSpec struct {
+				Credentials map[string]json.RawMessage `json:"credentials"`
+			} `json:"instance_spec"`
+		} `json:"integration"`
 	}
 	if json.Unmarshal(wire, &returned) != nil || !bytes.Equal(receipt, returned.Input.Receipt) || returned.Input.SHA != capacity.BusinessCreationSHA256(returned.Input.Receipt) {
 		t.Fatal("protected receipt bytes/large integer changed")
+	}
+	// The immutable public type schema names the credential; authority exists
+	// only in the instance credential map, where the actual bearer is forbidden.
+	if _, present := returned.Integration.InstanceSpec.Credentials["grant_bearer"]; present || len(returned.Integration.InstanceSpec.Credentials) != 2 {
+		t.Fatal("callback credential escaped or unrelated credentials changed")
 	}
 	configAfter, _ := json.Marshal(o.instanceSpec.Config)
 	if !bytes.Equal(configBefore, configAfter) || o.instanceSpec.Credentials["grant_bearer"] != "CALLBACK_MUST_NOT_ESCAPE" {
