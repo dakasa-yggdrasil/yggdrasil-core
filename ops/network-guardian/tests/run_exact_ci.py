@@ -56,7 +56,10 @@ def main():
     g11 = json.loads((HERE / 'EXPECTED-TESTS-G11.json').read_bytes())
     if type(g11) is not list or len(g11) != 7 or len(set(g11)) != 7:
         raise RuntimeError('exact additive G11 maintenance roster required')
-    expected = historical + current + r6 + index92 + goose92 + g10 + g11
+    goose93 = json.loads((HERE / 'EXPECTED-TESTS-GOOSE93.json').read_bytes())
+    if type(goose93) is not list or len(goose93) != 7 or len(set(goose93)) != 7:
+        raise RuntimeError('exact additive Goose93 companion roster required')
+    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + goose93
     if len(set(expected)) != len(expected):
         raise RuntimeError('all preserved and additive test rosters must be disjoint')
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
@@ -68,7 +71,7 @@ def main():
             'discovery_errors': discovery_errors}, indent=2) + '\n')
         for error in discovery_errors:
             print(error, file=sys.stderr, flush=True)
-        raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8+G9+R6+index92+Goose92+G10+G11 roster')
+        raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8+G9+R6+index92+Goose92+G10+G11+Goose93 roster')
     result = unittest.TextTestRunner(verbosity=2, resultclass=Outcomes).run(suite)
     success = (result.wasSuccessful() and not result.skipped and not result.expectedFailures
                and not result.unexpectedSuccesses and result.testsRun == len(expected)
@@ -77,11 +80,11 @@ def main():
     clean_source = (subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == actual_commit
                     and not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all']))
     success = success and clean_source
-    value = {'schema': 'owned_network_guardian_g6_g7_g8_g9_r6_index92_goose92_g10_g11_exact_CI_census_v1',
+    value = {'schema': 'owned_network_guardian_g6_g7_g8_g9_r6_index92_goose92_g10_g11_goose93_exact_CI_census_v1',
              'source_commit': os.environ['SOURCE_COMMIT'], 'success': success,
              'expected': expected, 'historical_expected': historical, 'g9_expected': current, 'r6_expected': r6,
              'historical_count': len(historical), 'g9_count': len(current), 'r6_count': len(r6),
-             'index92_expected': index92, 'goose92_expected': goose92, 'g10_expected': g10, 'g10_count': len(g10), 'g11_expected': g11, 'g11_count': len(g11),
+             'index92_expected': index92, 'goose92_expected': goose92, 'g10_expected': g10, 'g10_count': len(g10), 'g11_expected': g11, 'g11_count': len(g11), 'goose93_expected': goose93, 'goose93_count': len(goose93),
              'index92_count': len(index92), 'goose92_count': len(goose92),
              'executed': result.runs, 'passed': result.passes,
              'failures': [test.id() for test, _ in result.failures],

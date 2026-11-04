@@ -81,7 +81,11 @@ jobs:
           sha256sum --check SHA256SUMS
           cd ../../rollout
           sha256sum --check SHA256SUMS-G11
-      - name: Run exact preserved200 and additive G11 maintenance census
+      - name: Verify additive Goose93 companion Source
+        run: |
+          cd ops/network-guardian/rollout
+          sha256sum --check SHA256SUMS-GOOSE93
+      - name: Run exact preserved207 plus Goose93 companion7 census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
@@ -103,6 +107,7 @@ jobs:
           path: |
             ops/network-guardian/
             db/migrations/00092_workflow_runs_busy_logical_index.sql
+            db/migrations/00093_guest_retirement_settled_absence_continuation.sql
             ${{ runner.temp }}/owned-network-guardian/
           if-no-files-found: error
           retention-days: 30
