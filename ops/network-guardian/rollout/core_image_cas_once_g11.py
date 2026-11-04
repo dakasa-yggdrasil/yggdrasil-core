@@ -206,7 +206,7 @@ def api_read(api, C, run, name, uri):
 
 
 def core_before(d, ps, C):
-    need(C.OLD_DIGEST == '7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6', 'EXACT_OLD_C025_AMD64')
+    need(C.OLD_DIGEST == '4fa5525f3b4bdac22a83260bac4fdd655106720b73ede11300f6f034451a6181', 'EXACT_CURRENT_R1_AMD64')
     m, s = d['metadata'], d['status']
     need(d['apiVersion'] == 'apps/v1' and d['kind'] == 'Deployment' and m['namespace'] == 'dakasa'
          and m['name'] == 'yggdrasil' and m['uid'] == UID and m['generation'] == GENERATION

@@ -111,6 +111,36 @@ class G11MaintenanceTests(unittest.TestCase):
         self.assertEqual((cas.OLD_SOURCE, C.OLD_CORE_SOURCE), ('d7d7adcff71807e60b782f50c8473bbb5981b9c9',) * 2)
         self.assertEqual((cas.GENERATION, C.OLD_CORE_GENERATION), (274, 274))
         self.assertEqual((cas.OLD_POD, C.OLD_CORE_POD_UID), ('f352ab92-7ff4-4f08-9699-46037ca64375',) * 2)
+        # Declared current-R1 objects exercise the actual reachable guard;
+        # the image, deployment and Pod validators are not patched or mirrored.
+        image = C.IMAGE_PREFIX + '4fa5525f3b4bdac22a83260bac4fdd655106720b73ede11300f6f034451a6181'
+        deployment = {'apiVersion': 'apps/v1', 'kind': 'Deployment',
+            'metadata': {'namespace': 'dakasa', 'name': 'yggdrasil', 'uid': cas.UID,
+                         'generation': 274, 'resourceVersion': '1',
+                         'annotations': {'dakasa.io/core-source-commit': C.OLD_CORE_SOURCE}},
+            'spec': {'replicas': 1, 'template': {'spec': {'containers': [{'name': 'core', 'image': image}]}}},
+            'status': {'observedGeneration': 274, 'readyReplicas': 1, 'updatedReplicas': 1, 'availableReplicas': 1}}
+        pod = {'metadata': {'uid': cas.OLD_POD, 'name': 'declared-current-r1'},
+               'spec': {'containers': [{'name': 'core', 'image': image}]},
+               'status': {'phase': 'Running', 'podIP': '192.0.2.1', 'containerStatuses': [{
+                   'name': 'core', 'ready': True, 'restartCount': 0,
+                   'state': {'running': {'startedAt': '2026-11-04T09:45:44Z'}},
+                   'imageID': image, 'containerID': 'containerd://' + 'a' * 64}]}}
+        current = cas.core_before(deployment, {'items': [pod]}, C)
+        self.assertEqual((current['generation'], current['pod_uid'], current['image'], current['containerID']),
+                         (274, cas.OLD_POD, image, 'containerd://' + 'a' * 64))
+        with patch.object(C, 'OLD_DIGEST', '7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6'):
+            with self.assertRaisesRegex(cas.Hold, 'EXACT_CURRENT_R1_AMD64'):
+                cas.core_before(deployment, {'items': [pod]}, C)
+        for axis in ('source', 'deployment_image', 'pod_uid', 'pod_image', 'image_id'):
+            wrong_d, wrong_p = copy.deepcopy(deployment), copy.deepcopy(pod)
+            if axis == 'source': wrong_d['metadata']['annotations']['dakasa.io/core-source-commit'] = '0' * 40
+            elif axis == 'deployment_image': wrong_d['spec']['template']['spec']['containers'][0]['image'] = C.IMAGE_PREFIX + '1' * 64
+            elif axis == 'pod_uid': wrong_p['metadata']['uid'] = '11111111-1111-4111-8111-111111111111'
+            elif axis == 'pod_image': wrong_p['spec']['containers'][0]['image'] = C.IMAGE_PREFIX + '1' * 64
+            else: wrong_p['status']['containerStatuses'][0]['imageID'] = C.IMAGE_PREFIX + '1' * 64
+            with self.subTest(current_r1_axis=axis), self.assertRaises(cas.Hold):
+                cas.core_before(wrong_d, {'items': [wrong_p]}, C)
         # Force False even after a later release binds these modules.
         with patch.object(G, 'PROPOSAL_BOUND', False), patch.object(C, 'PROPOSAL_BOUND', False), \
                 patch.object(G, 'read') as read, patch.object(C, 'read') as contract_read:
