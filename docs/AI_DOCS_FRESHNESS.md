@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: c9d2851c5c17bd63fa17612888bcf39132c76025
-verified_diff_sha256: 32f4e9451b5966ab3501fa207b82ec0b72ba7decfbad2f28755f8da99186bba4
+verified_at_commit: 42839792d19fde206eb6a0541676b729c171a14e
+verified_diff_sha256: 2261b5ab32712cba02c8040ae3eea98782739ff4dd8b04af354e1c16dfac8f4c
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -26,7 +26,7 @@ qualification_floor_terminal_decoder_review: The qualification-only failed-floor
 qualification_failed_probe_challenge_review: The two probe HOLD cases bind the original validated and consumed challenge by signed Guest hash and committed Core hash; Guest owner timing retains its actual monotonic-derived deadline. Other native cases and production qualification are not claimed. Independent source review completed; Linux and native QEMU validation remain required.
 canonical_postloss_compensation_review: Reviewed the qualification-only canonical postloss compensation chain: recovery cleanup epoch binding and closed refusal stages, closed qualification decoders for the native read, source cleanup body/physical record and private capacity intent, unredacted recovery proof, child-bound unscoped redeem, single stored read settle, and the CI PostgreSQL service admitted as the local PG16 owner. Production validators unchanged; no prose docs needed changes. No local tests ran; LAB native QEMU passed both postloss cases, CI remains the gate.
 public_workflow_identity_review: Reviewed the public idempotent writer nullable fields and full resolved workflow identity join. LAB Linux PostgreSQL 16 with schema 82 passed the writer and nine negative cases, including explicit NULL checks; integrated native CI remains required.
-verified_at: 2026-11-03
+verified_at: 2026-11-04
 by: Giomaster
 pidfd_and_retirement_diagnostic_review: Reviewed acceptance of readable pidfd with or without hangup after original Wait and the closed qualification-only retirement diagnostics. Actual end-to-end Guest and full capacity checks remain required.
 unique_probe_diagnostic_review: Reviewed immutable diagnostic names derived from actual challenge IDs, duplicate and invalid path refusals, and preservation of the source inventory. Linux compilation passed; integrated native CI remains required.
