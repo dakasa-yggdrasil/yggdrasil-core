@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-04T05:32:16-03:00",
+  "generated_at": "2026-11-04T07:58:10-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1491,
-    ".json": 218,
-    ".py": 99,
+    ".json": 215,
+    ".py": 83,
     ".sql": 93,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "8e0f70d2a117c730982355133b847be71c197388",
+    "commit": "6477e9ffc383530ac9f73aa332b70cb547f137da",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "8323ea8881857a3d3120852bae25ebe82af955285f2c76ce17599eb7a9dc1bed"
+        "sha256": "c0b0392eac270a59e4c38c4bc95eaa1011966b98fd33d2f3ed4e4fdc10c0445a"
       },
       {
         "path": "AGENTS.md",
@@ -76,7 +76,7 @@
     {
       "path": "controllers/message",
       "files": 193,
-      "kb": 1677
+      "kb": 1682
     },
     {
       "path": "internal/capacity",
@@ -119,9 +119,9 @@
       "kb": 98
     },
     {
-      "path": "ops/network-guardian/tests",
-      "files": 26,
-      "kb": 430
+      "path": "controllers/oidc",
+      "files": 25,
+      "kb": 210
     }
   ],
   "top_files_by_size": [
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 57,
+    "config_files": 54,
     "k8s_manifests": 25
   }
 }

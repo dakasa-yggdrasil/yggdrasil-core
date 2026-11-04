@@ -303,6 +303,7 @@ func readRetirementReadonly(ctx context.Context, supplier *originalProductionGue
 		Capability string          `json:"capability"`
 		Status     string          `json:"status"`
 		Output     json.RawMessage `json:"output"`
+		Metadata   map[string]any  `json:"metadata,omitempty"` // SDK diagnostics only; never absence authority.
 	}
 	if newAdapterTransportClient(nil).callNativeHTTPJSON(ctx, retirementReadonlyOrigin+"/rpc/execute", envelope, &reply, adapterCallPolicy{detailFreeErrors: true, native: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}}) != nil || reply.Operation != retirementReadonlyOperation || reply.Capability != retirementReadonlyOperation || reply.Status != "observed" {
 		return observed, nil, errOriginalGuestStep

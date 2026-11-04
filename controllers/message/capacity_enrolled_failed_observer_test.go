@@ -4,14 +4,21 @@ package message
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestEnrolledFailedReadonlyDescribeClosedIndependentIdentity(t *testing.T) {
@@ -187,5 +194,102 @@ func TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority(t *testing
 	}
 	if len(envelope["input"].(map[string]any)) != 8 || envelope["auth"] != nil || envelope["metadata"] != nil {
 		t.Fatal("extra authority/input")
+	}
+
+	// Exercise the production read function through its HTTP/SDK/strict-data
+	// decoders. The adapter's canonical response includes these three diagnostics;
+	// a hand-written four-field reply fixture hid this compatibility failure.
+	for _, fault := range []string{"canonical_sdk_metadata", "unknown_reply_field", "unknown_output_field"} {
+		t.Run(fault, func(t *testing.T) {
+			output := repository.GuestRetirementReadonlyReturn{
+				Schema: repository.GuestRetirementReadonlyReturnSchema, ObserverSourceCommit: repository.RetirementReadonlyAWSObserverSource(),
+				OriginalAdapterSourceCommit: enrolledFailedAWSCreator, ReadID: "declared-read",
+				ReadSHA256: strings.Repeat("a", 64), OriginalReceiptSHA256: capacity.BusinessCreationSHA256(receipt),
+				Observation: model.CapacityVMRetirementObservation{NextActions: []model.CapacityVMActionObservation{}, AuxiliaryResources: []model.CapacityVMAuxiliaryObservation{}, HoldReasons: []string{}},
+			}
+			outputRaw, err := json.Marshal(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Match integration-aws ExecuteNativeRetirementReadonly's actual DTO.
+			canonical := model.AdapterExecuteIntegrationResponse{Operation: retirementReadonlyOperation, Capability: retirementReadonlyOperation, Status: "observed", Output: output,
+				Metadata: map[string]any{"provider": "aws", "native_mutations": 0, "Guest_admission_or_business_or_savings_authority": false}}
+			canonicalRaw, err := json.Marshal(canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(canonicalRaw, &fields) != nil || len(fields) != 5 {
+				t.Fatal("canonical SDK reply shape")
+			}
+			switch fault {
+			case "unknown_reply_field":
+				fields["authority_override"] = json.RawMessage(`true`)
+			case "unknown_output_field":
+				var inner map[string]json.RawMessage
+				if json.Unmarshal(outputRaw, &inner) != nil {
+					t.Fatal("typed output fixture")
+				}
+				inner["authority_override"] = json.RawMessage(`true`)
+				fields["output"], err = json.Marshal(inner)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			var describes, executes atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.Host != "integration-aws-retirement-readonly.dakasa.svc.cluster.local:8081" || r.Header.Get("Authorization") != "" {
+					t.Error("fixed readonly HTTP request changed")
+					http.Error(w, "unexpected request", http.StatusBadRequest)
+					return
+				}
+				var value any
+				switch r.URL.Path {
+				case "/rpc/describe":
+					describes.Add(1)
+					value = expectedRetirementReadonlyDescription()
+				case "/rpc/execute":
+					executes.Add(1)
+					value = fields
+				default:
+					t.Error("unexpected readonly endpoint")
+					http.NotFound(w, r)
+					return
+				}
+				inner, marshalErr := json.Marshal(struct {
+					OK   bool `json:"ok"`
+					Data any  `json:"data"`
+				}{true, value})
+				if marshalErr != nil {
+					t.Error(marshalErr)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if err := json.NewEncoder(w).Encode(rpc.Envelope{ContentType: "application/json", Body: inner}); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer server.Close()
+			transport := &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+			}}
+			previous := http.DefaultTransport
+			http.DefaultTransport = transport
+			defer func() { http.DefaultTransport = previous; transport.CloseIdleConnections() }()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			supplier := &originalProductionGuestSupplier{resolved: o, binding: model.CapacityMutationBinding{ProfileName: "declared"}, input: guestOriginalStepInput{Slot: 3}}
+			got, retained, callErr := readRetirementReadonly(ctx, supplier, "declared-read", []byte(`{}`), receipt)
+			if describes.Load() != 1 || executes.Load() != 1 {
+				t.Fatal("production Describe/execute path not exercised", describes.Load(), executes.Load())
+			}
+			if fault == "canonical_sdk_metadata" {
+				if callErr != nil || !reflect.DeepEqual(got, output) || !bytes.Equal(retained, outputRaw) || bytes.Contains(retained, []byte("native_mutations")) {
+					t.Fatal("canonical diagnostic metadata rejected or became retained absence authority", callErr)
+				}
+			} else if callErr == nil || len(retained) != 0 {
+				t.Fatal("unknown reply/output field bypassed the strict decoder", fault)
+			}
+		})
 	}
 }
