@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -651,6 +652,161 @@ func TestGuestRetirementForwardMissingPrefixPostgres(t *testing.T) {
 			}
 			if forwardTestRowCount(t, f, "capacity_guest_retirement_forwards") != 0 || !reflect.DeepEqual(before, f.PreservedOriginals()) {
 				t.Fatal("missing prefix changed originals")
+			}
+		})
+	}
+}
+
+func TestGuestRetirementForwardReadonlyFreshCustodyPostgres(t *testing.T) {
+	f := NewGuestRetirementForwardRecoveryFixture(t, "aws", 2, 3)
+	ctx := forwardTestContext(t)
+	before := f.PreservedOriginals()
+	if _, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID); err != nil {
+		t.Fatal(err, f.AdmissionDiagnostics())
+	}
+	receipt := forwardTestSettledDestroy(t, f, ctx, true)
+	originalReceipt, _ := json.Marshal(receipt)
+	finish := f.FinishStore()
+	for _, fault := range []string{"absent_pair", "source_only", "wrapper_only", "wrong_source", "wrong_purpose", "failed_without_wrapper"} {
+		t.Run(fault, func(t *testing.T) {
+			read, err := finish.PrepareGuestRetirementForwardRead(ctx, f.Request.Intent.RequestID, "absence", receipt.Grant.GrantID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ret := f.NativeAbsenceReturn(read, receipt)
+			switch fault {
+			case "absent_pair":
+				ret.ObserverSourceCommit = ""
+				ret.OriginalObserverReturn = nil
+			case "source_only":
+				ret.OriginalObserverReturn = nil
+			case "wrapper_only":
+				ret.ObserverSourceCommit = ""
+			case "wrong_source":
+				ret.ObserverSourceCommit = strings.Repeat("e", 40)
+			case "wrong_purpose":
+				var v GuestRetirementReadonlyReturn
+				_ = json.Unmarshal(ret.OriginalObserverReturn, &v)
+				v.Schema = GuestRetirementReadonlyRequestSchema
+				ret.OriginalObserverReturn, _ = json.Marshal(v)
+			case "failed_without_wrapper":
+				ret.ObserverSourceCommit = ""
+				ret.OriginalObserverReturn = nil
+				ret.Observation = nil
+				ret.Status = ""
+				ret.CallFailed = true
+			}
+			if _, err = finish.RecordGuestRetirementForwardRead(ctx, ret); err == nil || errors.Is(err, ErrGuestRetirementForwardNativePending) {
+				t.Fatal("invalid read qualified absence or continuation", err)
+			}
+			var raw []byte
+			if f.DB.QueryRow(`SELECT original_wire FROM public.capacity_guest_retirement_forward_reads WHERE id=$1 AND stage='returned'`, read.ReadID).Scan(&raw) != nil {
+				t.Fatal("actual refusal erased")
+			}
+			want, _ := json.Marshal(ret)
+			if !reflect.DeepEqual(raw, want) {
+				t.Fatal("failure custody rewritten")
+			}
+		})
+	}
+	read, err := finish.PrepareGuestRetirementForwardRead(ctx, f.Request.Intent.RequestID, "absence", receipt.Grant.GrantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, err := finish.RecordGuestRetirementForwardRead(ctx, f.NativeAbsenceReturn(read, receipt))
+	if err != nil || !proof.ResourceAbsent {
+		t.Fatal("complete matched fresh wrapper refused", err)
+	}
+	current, found, err := finish.GuestRetirementForwardDestroyReceipt(ctx, f.Request.Intent.RequestID)
+	currentRaw, _ := json.Marshal(current)
+	if err != nil || !found || !reflect.DeepEqual(originalReceipt, currentRaw) || forwardTestRowCount(t, f, "capacity_vm_retirement_delete_bindings") != 1 || !reflect.DeepEqual(before, f.PreservedOriginals()) {
+		t.Fatal("read changed old grant/request/original authority")
+	}
+}
+
+func TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres(t *testing.T) {
+	for _, provider := range []string{"aws", "hetzner"} {
+		t.Run(provider, func(t *testing.T) {
+			f := NewGuestRetirementOrdinaryRecoveryFixture(t, provider)
+			before := f.PreservedOriginals()
+			receipt := f.SettledOrdinaryDestroy()
+			finish := f.FinishStore()
+			originalReceipt, _ := json.Marshal(receipt)
+			faults := []string{"failed_without_wrapper"}
+			if provider == "aws" {
+				faults = append(faults, "absent_pair", "source_only", "wrapper_only", "wrong_source", "wrong_purpose", "oversized_pair")
+			}
+			for _, fault := range faults {
+				t.Run(fault, func(t *testing.T) {
+					ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+					defer stop()
+					read, err := finish.PrepareGuestNativePoweroffReadV2(ctx, f.Request.Intent.RequestID)
+					if err != nil {
+						t.Fatal("real ordinary challenge", err)
+					}
+					ret := f.OrdinaryAbsenceReturn(read, receipt)
+					switch fault {
+					case "failed_without_wrapper":
+						ret.ObserverSourceCommit, ret.OriginalObserverReturn, ret.Observation, ret.Status, ret.CallFailed = "", nil, nil, "", true
+					case "absent_pair":
+						ret.ObserverSourceCommit, ret.OriginalObserverReturn = "", nil
+					case "source_only":
+						ret.OriginalObserverReturn = nil
+					case "wrapper_only":
+						ret.ObserverSourceCommit = ""
+					case "wrong_source":
+						ret.ObserverSourceCommit = strings.Repeat("e", 40)
+					case "wrong_purpose":
+						var v GuestRetirementReadonlyReturn
+						_ = json.Unmarshal(ret.OriginalObserverReturn, &v)
+						v.Schema = GuestRetirementReadonlyRequestSchema
+						ret.OriginalObserverReturn, _ = json.Marshal(v)
+					case "oversized_pair":
+						ret.OriginalObserverReturn = []byte(strings.Repeat(" ", 1<<20))
+					}
+					proof, recordErr := finish.RecordGuestNativeAbsenceV2(ctx, ret)
+					if recordErr == nil || !reflect.DeepEqual(proof, model.CapacityMutationProof{}) {
+						t.Fatal("invalid ordinary read returned authority with refusal", fault, recordErr, proof)
+					}
+					var raw []byte
+					err = f.DB.QueryRow(`SELECT original_wire FROM public.capacity_vm_retirement_native_readbacks WHERE destroy_grant_id=$1 AND original_observation_record->'challenge'->>'read_id'=$2`, receipt.Grant.GrantID, read.ReadID).Scan(&raw)
+					if fault == "oversized_pair" {
+						if !errors.Is(err, sql.ErrNoRows) {
+							t.Fatal("existing1MiB cap widened", err)
+						}
+						return
+					}
+					ret.Observation = nil // Existing failed-record storage omits unqualified observation.
+					want, _ := json.Marshal(ret)
+					if err != nil || !reflect.DeepEqual(raw, want) {
+						t.Fatal("ordinary failure custody/clocks/pair changed", err)
+					}
+				})
+			}
+			ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+			defer stop()
+			read, err := finish.PrepareGuestNativePoweroffReadV2(ctx, f.Request.Intent.RequestID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ret := f.OrdinaryAbsenceReturn(read, receipt)
+			if provider == "aws" {
+				// Declared SDK result for an explicit empty exact-ID response. The
+				// actual raw-reader/SDK path is separately tested by the adapter.
+				ret.Observation.AWSRetirementLifecycle.EC2State = "not_found"
+				var v GuestRetirementReadonlyReturn
+				_ = json.Unmarshal(ret.OriginalObserverReturn, &v)
+				v.Observation = *ret.Observation
+				ret.OriginalObserverReturn, _ = json.Marshal(v)
+			}
+			proof, err := finish.RecordGuestNativeAbsenceV2(ctx, ret)
+			if err != nil || !proof.ResourceAbsent {
+				t.Fatal("matched ordinary absence refused", err)
+			}
+			current, err := finish.NativeMutationReceipt(ctx, f.Policy, f.Spec.MutationBindings[0], receipt.Grant.GrantID)
+			currentRaw, _ := json.Marshal(current)
+			if err != nil || !reflect.DeepEqual(originalReceipt, currentRaw) || forwardTestRowCount(t, f, "capacity_guest_retirement_forwards") != 0 || forwardTestRowCount(t, f, "capacity_vm_retirement_delete_bindings") != 1 || !reflect.DeepEqual(before, f.PreservedOriginals()) {
+				t.Fatal("ordinary read invented forward admission or rewrote originals", err)
 			}
 		})
 	}

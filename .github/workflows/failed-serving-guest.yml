@@ -223,7 +223,7 @@ jobs:
           }
           failed=0
           record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
-          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForward' || failed=1
+          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn$)' || failed=1
           record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^TestGuestRetirementForward' || failed=1
           record http go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^TestGuestRetirementForward' || failed=1
           [[ "$failed" == 0 ]]
@@ -239,14 +239,20 @@ jobs:
               'TestGuestRetirementForwardClosedGuardsPostgres',
               'TestGuestRetirementForwardMissingPrefixPostgres',
               'TestGuestRetirementForwardStorageDecoderIsClosedAndAtomic',
-              'TestGuestRetirementForwardFailedCallerTimeline']),
+              'TestGuestRetirementForwardFailedCallerTimeline',
+              'TestGuestRetirementForwardReadonlyObserverJoins',
+              'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
+              'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres',
+              'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn']),
             'message':('controllers/message',[
               'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
               'TestGuestRetirementForwardWorkflowMetadataNeverInventsCallerSuccess',
               'TestGuestRetirementForwardLiveWorkflowDoesNotReplayGuestPostgres',
               'TestGuestRetirementForwardHistoricalPlanClaimsBeforeCoveragePostgres',
               'TestGuestRetirementForwardFinishOrderingAndOriginalBudgets',
-              'TestGuestRetirementForwardSourceReadClocksPostgres']),
+              'TestGuestRetirementForwardSourceReadClocksPostgres',
+              'TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority',
+              'TestGuestRetirementForwardOrdinaryReadonlySourceClocksPostgres']),
             'http':('controllers/httpapi',[
               'TestGuestRetirementForwardClosedHistoricalCAS',
               'TestGuestRetirementForwardRequiresCurrentAdministrativeHuman',

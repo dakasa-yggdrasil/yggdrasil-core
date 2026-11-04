@@ -160,6 +160,7 @@ type GuestRetirementForwardRecoveryFixture struct {
 	envelope           CapacityDispatchEnvelope
 	t                  *testing.T
 	fractionalOriginal bool
+	ordinarySuccess    bool
 }
 
 // NewGuestRetirementForwardRecoveryFixture accepts only the same test-process,
@@ -167,23 +168,30 @@ type GuestRetirementForwardRecoveryFixture struct {
 // mutex/cleanup gates enforced by newFailedServingFixtureHistory. It cannot
 // accept an existing database, URL, signing key, clock or proof from its caller.
 func NewGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords int) *GuestRetirementForwardRecoveryFixture {
-	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 30, false)
+	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 30, false, false)
 }
 
 // NewGuestRetirementForwardLiveWorkflowFixture declares a live workflow lease
 // of300s BEFORE its first policy/intent insert and retirement frame. It never
 // extends an existing original timer. Historical tests use the30s constructor.
 func NewGuestRetirementForwardLiveWorkflowFixture(tb testing.TB, provider string, tail, prefixRecords int) *GuestRetirementForwardRecoveryFixture {
-	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 300, false)
+	return newGuestRetirementForwardRecoveryFixture(tb, provider, tail, prefixRecords, 300, false, false)
 }
 
 // NewGuestRetirementForwardFractionalOriginalFixture declares one short original
 // before its first Issue. No caller can supply a clock, deadline or prior frame.
 func NewGuestRetirementForwardFractionalOriginalFixture(tb testing.TB, provider string) *GuestRetirementForwardRecoveryFixture {
-	return newGuestRetirementForwardRecoveryFixture(tb, provider, 2, 3, 30, true)
+	return newGuestRetirementForwardRecoveryFixture(tb, provider, 2, 3, 30, true, false)
 }
 
-func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords, initialLeaseSeconds int, fractionalOriginal bool) *GuestRetirementForwardRecoveryFixture {
+// NewGuestRetirementOrdinaryRecoveryFixture declares a complete original Guest
+// success before its first caller insert. It creates no forward admission and
+// never rewrites a failed caller, ACK, journal, original clock or lease.
+func NewGuestRetirementOrdinaryRecoveryFixture(tb testing.TB, provider string) *GuestRetirementForwardRecoveryFixture {
+	return newGuestRetirementForwardRecoveryFixture(tb, provider, 2, 4, 300, false, true)
+}
+
+func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords, initialLeaseSeconds int, fractionalOriginal, ordinarySuccess bool) *GuestRetirementForwardRecoveryFixture {
 	tb.Helper()
 	t, ok := tb.(*testing.T)
 	if !ok || !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
@@ -196,7 +204,7 @@ func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, ta
 		t.Fatal("closed initial fractional original fixture")
 	}
 	base := newFailedServingFixtureLease(t, provider, true, initialLeaseSeconds)
-	f := &GuestRetirementForwardRecoveryFixture{DB: base.db, Store: base.store, Policy: base.policy, Workflow: base.workflow, Spec: base.p, private: base, t: t, members: []*failedServingFixture{base}, fractionalOriginal: fractionalOriginal}
+	f := &GuestRetirementForwardRecoveryFixture{DB: base.db, Store: base.store, Policy: base.policy, Workflow: base.workflow, Spec: base.p, private: base, t: t, members: []*failedServingFixture{base}, fractionalOriginal: fractionalOriginal, ordinarySuccess: ordinarySuccess}
 	// Complete declared read catalog for actual bounded message supplier calls;
 	// version0.1.0 remains explicitly synthetic, never an enrolled adapter claim.
 	typeSpec := failedServingTypeSpec(provider, f.Spec.MutationBindings[0])
@@ -641,6 +649,21 @@ func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 	}
 	start := time.Now().UTC()
 	f.Caller = GuestOriginalCallerReturn{RequestID: f.Request.Intent.RequestID, AttemptID: f.Request.Intent.AttemptID, StartedAt: callerStarted, DoStartedAt: callerStarted.Add(time.Millisecond), DoReturnedAt: start.Add(2 * time.Millisecond), DriverReturnedAt: start.Add(3 * time.Millisecond), OriginalDeadline: f.Request.Intent.OriginalDeadline, DoFailed: true, Body: []byte{}, ResponseBodyScope: capacity.GuestOriginalBodyNoRead, RetainedPrefixSHA256: capacity.BusinessCreationSHA256(nil)}
+	if f.ordinarySuccess {
+		if count != 4 {
+			t.Fatal("ordinary fixture requires complete original journal before caller success")
+		}
+		body := failedServingWire(t, f.Journal[3])
+		sha := capacity.BusinessCreationSHA256(body)
+		f.Caller.DoFailed, f.Caller.Status, f.Caller.BodyPersisted = false, 200, true
+		f.Caller.Body = body
+		f.Caller.ReadReturnedAt = start.Add(3 * time.Millisecond)
+		f.Caller.CloseReturnedAt = start.Add(4 * time.Millisecond)
+		f.Caller.DriverReturnedAt = start.Add(5 * time.Millisecond)
+		f.Caller.ReceivedBodyBytes, f.Caller.RetainedPrefixBytes = len(body), len(body)
+		f.Caller.ResponseSHA256, f.Caller.RetainedPrefixSHA256 = sha, sha
+		f.Caller.ResponseBodyScope = capacity.GuestOriginalBodyCompleteRead
+	}
 	time.Sleep(time.Until(f.Caller.DriverReturnedAt) + time.Millisecond)
 	if err = store.RecordGuestCallerReturnV2(ctx, f.Caller); err != nil {
 		t.Fatal("real failed caller retained", err)
@@ -781,6 +804,28 @@ func (f *GuestRetirementForwardRecoveryFixture) DestroySettlement(grant model.Ca
 	return s
 }
 func (f *GuestRetirementForwardRecoveryFixture) NativeAbsenceReturn(read GuestRetirementForwardRead, receipt model.CapacityMutationReceipt) GuestRetirementForwardReadReturn {
+	o, at := f.nativeAbsenceObservation(receipt)
+	returned := GuestRetirementForwardReadReturn{Schema: GuestRetirementForwardReadReturnSchema, Read: read, Status: "observed", Observation: &o, OriginalDestroyReceipt: &receipt, StartedAtCore: at, OriginalReturnedAtCore: at}
+	if read.Tuple.Provider == "aws" && read.AdapterSourceCommit == enrolledFailedAWSCreator {
+		// Declared fresh response, never a publication claim or fallback fixture
+		// pin. CI must run only after Root binds the actual qualified publication.
+		source := RetirementReadonlyAWSObserverSource()
+		if !originalDispositionHex(source, 40) {
+			f.t.Fatal("actual dedicated retirement observer Source must be bound before qualification")
+		}
+		wire := GuestRetirementReadonlyReturn{Schema: GuestRetirementReadonlyReturnSchema, ObserverSourceCommit: source, OriginalAdapterSourceCommit: read.AdapterSourceCommit, ReadID: read.ReadID, ReadSHA256: capacity.GuestRetirementSHA(read), OriginalReceiptSHA256: capacity.GuestRetirementSHA(receipt), Observation: o}
+		returned.ObserverSourceCommit = source
+		var err error
+		returned.OriginalObserverReturn, err = json.Marshal(wire)
+		if err != nil {
+			f.t.Fatal(err)
+		}
+	}
+	return returned
+}
+
+// A shared declared provider DTO has no read/admission identity of its own.
+func (f *GuestRetirementForwardRecoveryFixture) nativeAbsenceObservation(receipt model.CapacityMutationReceipt) (model.CapacityVMRetirementObservation, time.Time) {
 	at := time.Now().UTC()
 	stamp := at.Format(time.RFC3339Nano)
 	g := receipt.Grant
@@ -798,7 +843,79 @@ func (f *GuestRetirementForwardRecoveryFixture) NativeAbsenceReturn(read GuestRe
 		}
 		o.BillingExposure = x
 	}
-	return GuestRetirementForwardReadReturn{Schema: GuestRetirementForwardReadReturnSchema, Read: read, Status: "observed", Observation: &o, OriginalDestroyReceipt: &receipt, StartedAtCore: at, OriginalReturnedAtCore: at}
+	return o, at
+}
+
+func (f *GuestRetirementForwardRecoveryFixture) OrdinaryAbsenceReturn(read GuestNativePoweroffReadV2, receipt model.CapacityMutationReceipt) GuestNativeAbsenceReturnV2 {
+	f.t.Helper()
+	o, at := f.nativeAbsenceObservation(receipt)
+	r := GuestNativeAbsenceReturnV2{Schema: "original_core_guest_native_absence_return_v2", Challenge: read, DestroyGrantID: receipt.Grant.GrantID, OriginalDestroyReceiptSHA256: capacity.GuestRetirementSHA(receipt), OriginalDestroyReceipt: &receipt, Status: "observed", Observation: &o, StartedAtCore: at, OriginalReturnedAtCore: at}
+	if read.AdapterSourceCommit == enrolledFailedAWSCreator {
+		source := RetirementReadonlyAWSObserverSource()
+		if !originalDispositionHex(source, 40) {
+			f.t.Fatal("actual dedicated ordinary retirement observer Source must be bound before qualification")
+		}
+		v := GuestRetirementReadonlyReturn{Schema: GuestRetirementReadonlyReturnSchema, ObserverSourceCommit: source, OriginalAdapterSourceCommit: read.AdapterSourceCommit, ReadID: read.ReadID, ReadSHA256: capacity.GuestRetirementSHA(read), OriginalReceiptSHA256: capacity.GuestRetirementSHA(receipt), Observation: o}
+		r.ObserverSourceCommit = source
+		r.OriginalObserverReturn = failedServingWire(f.t, v)
+	}
+	return r
+}
+
+// SettledOrdinaryDestroy exercises existing original success, fresh OFF,
+// survivor floor, drain, grant, redeem and settlement APIs in CI only. No
+// forward admission or provider call is used, and no stored original changes.
+func (f *GuestRetirementForwardRecoveryFixture) SettledOrdinaryDestroy() model.CapacityMutationReceipt {
+	f.t.Helper()
+	if !f.ordinarySuccess {
+		f.t.Fatal("ordinary successful caller constructor required")
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stop()
+	finish := f.FinishStore()
+	f.Canaries("after_retirement_floor")
+	if members, pending, err := f.PlanStore().OriginalGuestReconcileMembers(ctx, f.Policy); err != nil || pending || len(members) != len(f.members) {
+		f.t.Fatal("ordinary current native inventory", err)
+	}
+	read, err := finish.PrepareGuestNativePoweroffReadV2(ctx, f.Request.Intent.RequestID)
+	if err != nil {
+		f.t.Fatal("ordinary signed success native OFF prepare", err)
+	}
+	plan := capacity.RecoveryFixtureNativeOffPlan(f.t, f.Spec, f.Pre, f.Receipt.Enrollment.Statement.Tuple)
+	if f.Spec.Profiles[0].Provider == "aws" {
+		plan.DesiredSpec.Capability, plan.Server.Status = "observe_ec2_instance", "stopped"
+		plan.RequestSHA256 = f.Spec.MutationBindings[0].Slots[f.Pre.Slot-1].DesiredSpecSHA256
+	}
+	at := time.Now().UTC()
+	if err = finish.RecordGuestNativePoweroffV2(ctx, GuestNativePoweroffReturnV2{Schema: "original_core_guest_native_poweroff_read_return_v2", Challenge: read, Status: "observed", Plan: &plan, StartedAtCore: at, OriginalReturnedAtCore: at}); err != nil {
+		f.t.Fatal("ordinary original OFF join", err)
+	}
+	f.Intent, err = finish.AdvanceGuestRetirementDrainedV2(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID, f.Pre.PreregistrationID, f.Pre.Slot)
+	if err != nil {
+		f.t.Fatal("ordinary original drain", err)
+	}
+	b := f.Spec.MutationBindings[0]
+	spec := *b.Slots[f.Pre.Slot-1].DesiredSpec
+	spec.Capability, spec.ExpectedResourceID, spec.ExpectedResourceCreatedAt = b.DestroyCapability, f.Request.Intent.Tuple.ResourceID, f.Request.Intent.Tuple.CreatedAt
+	grant, err := finish.IssueMutation(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: failedServingWire(f.t, spec)})
+	if err != nil {
+		f.t.Fatal("ordinary one destroy grant", err)
+	}
+	callback := CapacityStore{DB: f.DB, ExecutionEnabled: true}
+	nonce := uuid.NewString()
+	request := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: grant.Slot, RequestSHA256: grant.RequestSHA256, AttemptID: uuid.NewString(), SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), ExpectedResourceID: grant.ExpectedResourceID, ExpectedResourceCreatedAt: grant.ExpectedResourceCreatedAt, CompensationOf: grant.CompensationOf}
+	permit, err := callback.RedeemMutation(ctx, b.AdapterPrincipalID, request)
+	if err != nil || permit.Mode != "write_once" {
+		f.t.Fatal("ordinary single redemption", err)
+	}
+	if _, err = callback.SettleMutation(ctx, b.AdapterPrincipalID, nonce, f.DestroySettlement(grant, request.AttemptID)); err != nil {
+		f.t.Fatal("ordinary settled original destroy", err)
+	}
+	receipt, err := finish.NativeMutationReceipt(ctx, f.Policy, b, grant.GrantID)
+	if err != nil || receipt.Grant.State != "settled" {
+		f.t.Fatal("ordinary actual settled receipt", err)
+	}
+	return receipt
 }
 
 // CompletionOperands is explicitly declared memberCoverage30/Demand300 input,

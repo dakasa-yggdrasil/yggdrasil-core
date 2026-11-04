@@ -280,7 +280,7 @@ real `manifest/*.json` files.
   registry or publish only to GHCR, so read the adapter's `release.yml`
   and the image its deploy references before assuming one.
 - Core release catalog convergence is a dakasa-system change. Under its
-  accepted ADR-0343, each release adds one manual, named-human
+  accepted ADR-0344, each release adds one manual, named-human
   `pin-yggdrasil-core-<sha7>-production` workflow
   under `yggdrasil/dakasa/workflows/`, retires the previous pin to an
   inactive read-only tombstone with its RBAC grants removed, and aligns

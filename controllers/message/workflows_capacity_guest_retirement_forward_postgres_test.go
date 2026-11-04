@@ -182,6 +182,22 @@ func TestGuestRetirementForwardSourceReadClocksPostgres(t *testing.T) {
 				}
 				ids = append(ids, returned.Read.ReadID)
 			}
+			t.Run("failed_before_wrapper", func(t *testing.T) {
+				returned, _, err := sourceGuestRetirementForwardReadWithCall(ctx, f.FinishStore(), input, "off", model.CapacityMutationReceipt{}, func(read context.Context, out *repository.GuestRetirementForwardReadReturn) error {
+					if out.StartedAtCore.IsZero() || out.StartedAtCore.Before(out.Read.IssuedAtCore) {
+						t.Fatal("actual start missing before resolution")
+					}
+					return errors.New("declared unavailable read")
+				})
+				if err == nil || !returned.CallFailed || returned.OriginalContextFailed || returned.ObserverSourceCommit != "" || len(returned.OriginalObserverReturn) != 0 || returned.OriginalReturnedAtCore.Before(returned.StartedAtCore) {
+					t.Fatal("failed read fabricated or discarded provenance")
+				}
+				var failed bool
+				if f.DB.QueryRow(`SELECT original_record->>'call_failed'='true' AND NOT (original_record ? 'observer_source_commit') AND NOT (original_record ? 'original_observer_return') FROM public.capacity_guest_retirement_forward_reads WHERE id=$1 AND stage='returned'`, returned.Read.ReadID).Scan(&failed) != nil || !failed {
+					t.Fatal("failure without wrapper not retained")
+				}
+				ids = append(ids, returned.Read.ReadID)
+			})
 			short, cancel := context.WithTimeout(ctx, time.Second)
 			returned, _, err := sourceGuestRetirementForwardReadWithCall(short, f.FinishStore(), input, "off", model.CapacityMutationReceipt{}, func(read context.Context, out *repository.GuestRetirementForwardReadReturn) error {
 				out.StartedAtCore = time.Now().UTC()
@@ -196,16 +212,88 @@ func TestGuestRetirementForwardSourceReadClocksPostgres(t *testing.T) {
 				t.Fatal("expired original read gained OFF authority", err, returned.CallFailed, returned.OriginalContextFailed)
 			}
 			ids = append(ids, returned.Read.ReadID)
-			if ids[0] == ids[1] || ids[1] == ids[2] || ids[0] == ids[2] {
-				t.Fatal("a fresh read reused an earlier challenge")
+			seen := map[string]bool{}
+			for _, id := range ids {
+				if id == "" || seen[id] {
+					t.Fatal("a fresh read reused an earlier challenge")
+				}
+				seen[id] = true
 			}
 			var retained, failed, grants int
-			if err = f.DB.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_guest_retirement_forward_reads WHERE stage='returned'),(SELECT count(*) FROM public.capacity_guest_retirement_forward_reads WHERE id=$1 AND stage='returned' AND original_record->>'call_failed'='true' AND original_record->>'original_context_failed'='true'),(SELECT count(*) FROM public.capacity_vm_retirement_delete_bindings)`, returned.Read.ReadID).Scan(&retained, &failed, &grants); err != nil || retained != 3 || failed != 1 || grants != 0 {
+			if err = f.DB.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_guest_retirement_forward_reads WHERE stage='returned'),(SELECT count(*) FROM public.capacity_guest_retirement_forward_reads WHERE id=$1 AND stage='returned' AND original_record->>'call_failed'='true' AND original_record->>'original_context_failed'='true'),(SELECT count(*) FROM public.capacity_vm_retirement_delete_bindings)`, returned.Read.ReadID).Scan(&retained, &failed, &grants); err != nil || retained != 4 || failed != 1 || grants != 0 {
 				t.Fatal("failed actual return was lost or promoted", retained, failed, grants, err)
 			}
 			if !reflect.DeepEqual(before, f.PreservedOriginals()) {
 				t.Fatal("new read rewrote old Guest/frame/caller evidence")
 			}
 		})
+	}
+}
+
+func TestGuestRetirementForwardOrdinaryReadonlySourceClocksPostgres(t *testing.T) {
+	f := repository.NewGuestRetirementOrdinaryRecoveryFixture(t, "aws")
+	receipt := f.SettledOrdinaryDestroy()
+	before := f.PreservedOriginals()
+	input := forwardFixtureInput(f)
+	input.RequestID = f.Request.Intent.RequestID
+	ids := map[string]bool{}
+	for _, mode := range []string{"failed_before_wrapper", "original_timeout", "authenticated_pending", "complete_not_found"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+			if mode == "original_timeout" {
+				stop()
+				ctx, stop = context.WithTimeout(context.Background(), 300*time.Millisecond)
+			}
+			defer stop()
+			var entered time.Time
+			returned, proof, pending, err := sourceProductionNativeAbsenceV2WithCall(ctx, f.FinishStore(), input, receipt, func(read context.Context, out *repository.GuestNativeAbsenceReturnV2) error {
+				entered = time.Now().UTC()
+				if out.StartedAtCore.IsZero() || out.StartedAtCore.After(entered) || out.Challenge.IntentID != input.RequestID {
+					t.Fatal("ordinary owning clock/challenge missing before resolution")
+				}
+				if mode == "failed_before_wrapper" {
+					return errOriginalGuestStep
+				}
+				if mode == "original_timeout" {
+					<-read.Done()
+					return read.Err()
+				}
+				declared := f.OrdinaryAbsenceReturn(out.Challenge, receipt)
+				declared.Observation.AWSRetirementLifecycle.EC2State = "not_found"
+				if mode == "authenticated_pending" {
+					declared.Observation.BillableResourcesAbsent, declared.Observation.RetirementComplete = false, false
+					declared.Observation.AuxiliaryResources[0].Absent = false
+					declared.Observation.HoldReasons = []string{"aws_ebs_volume_still_present"}
+				}
+				var wrapper repository.GuestRetirementReadonlyReturn
+				if json.Unmarshal(declared.OriginalObserverReturn, &wrapper) != nil {
+					t.Fatal("declared current wrapper")
+				}
+				wrapper.Observation = *declared.Observation
+				out.Status, out.Observation = declared.Status, declared.Observation
+				out.ObserverSourceCommit = declared.ObserverSourceCommit
+				out.OriginalObserverReturn, _ = json.Marshal(wrapper)
+				return nil
+			})
+			if returned.Challenge.ReadID == "" || ids[returned.Challenge.ReadID] || returned.StartedAtCore.After(entered) || returned.OriginalReturnedAtCore.Before(entered) || returned.Challenge.OriginalDeadlineCore.Sub(returned.Challenge.IssuedAtCore) > 5*time.Second {
+				t.Fatal("ordinary original read identity/clocks reset")
+			}
+			ids[returned.Challenge.ReadID] = true
+			if (err == nil) != (mode == "complete_not_found") || pending != (mode == "authenticated_pending") || proof.ResourceAbsent != (mode == "complete_not_found") || returned.CallFailed != (mode == "failed_before_wrapper" || mode == "original_timeout") || returned.OriginalContextFailed != (mode == "original_timeout") {
+				t.Fatal("ordinary pending/failure became success or timing was relabeled", mode, err, pending)
+			}
+			var raw []byte
+			if f.DB.QueryRow(`SELECT original_wire FROM public.capacity_vm_retirement_native_readbacks WHERE destroy_grant_id=$1 AND original_observation_record->'challenge'->>'read_id'=$2`, receipt.Grant.GrantID, returned.Challenge.ReadID).Scan(&raw) != nil {
+				t.Fatal("ordinary failed/late return not retained")
+			}
+			var stored repository.GuestNativeAbsenceReturnV2
+			if capacity.DecodeGuestLifecycle(raw, &stored) != nil || stored.StartedAtCore != returned.StartedAtCore || stored.OriginalReturnedAtCore != returned.OriginalReturnedAtCore || stored.CallFailed != returned.CallFailed || stored.OriginalContextFailed != returned.OriginalContextFailed || !reflect.DeepEqual(stored.OriginalObserverReturn, returned.OriginalObserverReturn) {
+				t.Fatal("ordinary storage changed actual clocks/flags/public wrapper")
+			}
+		})
+	}
+	var admissions, bindings, readbacks int
+	if f.DB.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_guest_retirement_forwards),(SELECT count(*) FROM public.capacity_vm_retirement_delete_bindings),(SELECT count(*) FROM public.capacity_vm_retirement_native_readbacks WHERE destroy_grant_id=$1)`, receipt.Grant.GrantID).Scan(&admissions, &bindings, &readbacks) != nil || admissions != 0 || bindings != 1 || readbacks != 4 || len(ids) != 4 || !reflect.DeepEqual(before, f.PreservedOriginals()) {
+		t.Fatal("ordinary read introduced a forward child/DELETE or changed original Guest evidence")
 	}
 }

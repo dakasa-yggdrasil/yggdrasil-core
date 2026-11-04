@@ -83,6 +83,9 @@ func sourceGuestRetirementForwardRead(ctx context.Context, store repository.Capa
 // package-global setter, workflow input, URL, caller fact or proof constructor.
 func callGuestRetirementForwardNative(read context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, stored repository.GuestRetirementOriginalV2, kind string, receipt model.CapacityMutationReceipt, out *repository.GuestRetirementForwardReadReturn) error {
 	b, err := capacity.VMObservationBinding(p, input.BindingName)
+	if err == nil && kind == "absence" && b.OriginalProviderSourceCommit == enrolledFailedAWSCreator && !retirementReadonlySourceReady() {
+		return errOriginalGuestStep
+	}
 	if err == nil {
 		var supplier *originalProductionGuestSupplier
 		supplier, err = productionRetirementSupplierV2(read, store, policy, p, b, input)
@@ -91,7 +94,6 @@ func callGuestRetirementForwardNative(read context.Context, store repository.Cap
 		}
 		if err == nil {
 			fixed := map[string]any{"profile": b.ProfileName, "slot": input.Slot, "grant_id": stored.Preregistration.OriginalCreateGrantID, "expected_resource_id": stored.Request.Intent.Tuple.ResourceID, "expected_resource_created_at": stored.Request.Intent.Tuple.CreatedAt}
-			out.StartedAtCore = time.Now().UTC()
 			if kind == "off" && supplier.provider == "aws" {
 				var returned struct {
 					Plan      model.CapacityVMFleetPlan          `json:"plan"`
@@ -113,6 +115,8 @@ func callGuestRetirementForwardNative(read context.Context, store repository.Cap
 				if err == nil {
 					out.Plan = &plan
 				}
+			} else if kind == "absence" && supplier.provider == "aws" && b.OriginalProviderSourceCommit == enrolledFailedAWSCreator {
+				err = callRetirementReadonly(read, supplier, out)
 			} else if kind == "absence" {
 				fixed["grant_id"] = receipt.Grant.GrantID
 				fixed["expected_resource_id"], fixed["expected_resource_created_at"] = receipt.ResourceID, receipt.ResourceCreatedAt
@@ -151,6 +155,7 @@ func sourceGuestRetirementForwardReadWithCall(ctx context.Context, store reposit
 		return out, proof, err
 	}
 	out.Schema, out.Read = repository.GuestRetirementForwardReadReturnSchema, challenge
+	out.StartedAtCore = time.Now().UTC()
 	err = call(read, &out)
 	out.OriginalReturnedAtCore = time.Now().UTC()
 	out.CallFailed = err != nil

@@ -109,7 +109,7 @@ func (s CapacityStore) RecordGuestRetirementForwardRead(ctx context.Context, ret
 	defer tx.Rollback()
 	x, r, sha, currentErr := s.retirementForwardCurrentTx(ctx, tx, challenge.RetirementRequestID)
 	accepted, pending := false, false
-	if currentErr == nil && r.ID == challenge.AdmissionID && sha == challenge.AdmissionSHA256 && r.PrefixSHA256 == challenge.PrefixSHA256 && r.OriginalCallerSHA256 == challenge.OriginalCallerSHA256 && challenge.Tuple == x.original.Request.Intent.Tuple && challenge.MutationBindingSHA256 == capacity.GuestRetirementSHA(x.binding) && challenge.AdapterSourceCommit == x.binding.OriginalProviderSourceCommit && recordedPG.Sub(issuedPG) >= 0 && recordedPG.Sub(issuedPG)+5*time.Second <= time.Duration(x.spec.MaxEvidenceAgeSeconds)*time.Second && forwardReadTransportValid(returned) {
+	if currentErr == nil && r.ID == challenge.AdmissionID && sha == challenge.AdmissionSHA256 && r.PrefixSHA256 == challenge.PrefixSHA256 && r.OriginalCallerSHA256 == challenge.OriginalCallerSHA256 && challenge.Tuple == x.original.Request.Intent.Tuple && challenge.MutationBindingSHA256 == capacity.GuestRetirementSHA(x.binding) && challenge.AdapterSourceCommit == x.binding.OriginalProviderSourceCommit && recordedPG.Sub(issuedPG) >= 0 && recordedPG.Sub(issuedPG)+5*time.Second <= time.Duration(x.spec.MaxEvidenceAgeSeconds)*time.Second && forwardReadTransportValid(returned) && retirementForwardObserverValid(returned, true, RetirementReadonlyAWSObserverSource()) {
 		switch challenge.Kind {
 		case "off":
 			original, e := guestOriginalCreateReceiptV2Tx(ctx, tx, x.original)
@@ -181,7 +181,7 @@ func (s CapacityStore) RecordGuestRetirementForwardRead(ctx context.Context, ret
 
 func retirementForwardAbsenceContent(r GuestRetirementForwardReadReturn, p model.CapacityPolicySpec, original capacityMutationRecord) (model.CapacityMutationProof, error) {
 	var empty model.CapacityMutationProof
-	if !forwardReadTransportValid(r) || r.Read.Kind != "absence" || r.Plan != nil || r.Observation == nil || r.OriginalDestroyReceipt == nil || r.Read.DestroyGrantID != original.Grant.GrantID || original.Settlement == nil || !original.Settlement.TransportCompleted || original.Settlement.Outcome != "accepted" {
+	if !retirementForwardObserverValid(r, false, RetirementReadonlyAWSObserverSource()) || !forwardReadTransportValid(r) || r.Read.Kind != "absence" || r.Plan != nil || r.Observation == nil || r.OriginalDestroyReceipt == nil || r.Read.DestroyGrantID != original.Grant.GrantID || original.Settlement == nil || !original.Settlement.TransportCompleted || original.Settlement.Outcome != "accepted" {
 		return empty, ErrCapacityConflict
 	}
 	receipt := *r.OriginalDestroyReceipt
@@ -205,4 +205,43 @@ func retirementForwardAbsenceContent(r GuestRetirementForwardReadReturn, p model
 		}
 	}
 	return capacity.GuestRetirementV2NativeAbsenceContent(p, original.Binding, receipt, *r.Observation, "original-forward-native-absence:"+r.Read.ReadID)
+}
+
+// Historical records without the extension keep their original wire and
+// validation. Every fresh c34 absence return must have the complete pair, even
+// when its authenticated result is pending. Failures are stored before this.
+func retirementForwardObserverValid(r GuestRetirementForwardReadReturn, fresh bool, source string) bool {
+	paired := r.ObserverSourceCommit != "" || len(r.OriginalObserverReturn) != 0
+	required := fresh && r.Read.Kind == "absence" && r.Read.Tuple.Provider == "aws" && r.Read.AdapterSourceCommit == enrolledFailedAWSCreator
+	if !paired {
+		return !required
+	}
+	if r.Read.Kind != "absence" || r.Read.Tuple.Provider != "aws" || r.Read.AdapterSourceCommit != enrolledFailedAWSCreator || r.ObserverSourceCommit != source || !originalDispositionHex(source, 40) || source == enrolledFailedAWSCreator || source == "836ef8b0a864c07761d1f5e59d11a14d03ebf823" || r.OriginalDestroyReceipt == nil || r.Observation == nil {
+		return false
+	}
+	return retirementReadonlyJoinValid(source, r.Read.AdapterSourceCommit, r.Read.ReadID, r.Read, r.OriginalDestroyReceipt, r.Observation, r.OriginalObserverReturn)
+}
+
+// Each owner supplies its own genuine prepared challenge, never a synthetic
+// forward admission. The protocol hashes that exact typed challenge and receipt.
+func retirementReadonlyJoinValid(source, creator, readID string, challenge any, original *model.CapacityMutationReceipt, observation *model.CapacityVMRetirementObservation, raw []byte) bool {
+	if !originalDispositionHex(source, 40) || source == enrolledFailedAWSCreator || source == "836ef8b0a864c07761d1f5e59d11a14d03ebf823" || creator != enrolledFailedAWSCreator || original == nil || observation == nil {
+		return false
+	}
+	var v GuestRetirementReadonlyReturn
+	if len(raw) > 2<<20 || capacity.DecodeGuestLifecycle(raw, &v) != nil {
+		return false
+	}
+	receipt, a := json.Marshal(original)
+	read, b := json.Marshal(challenge)
+	return a == nil && b == nil && v.Schema == GuestRetirementReadonlyReturnSchema && v.ObserverSourceCommit == source && v.OriginalAdapterSourceCommit == creator && v.ReadID == readID && v.ReadSHA256 == capacity.BusinessCreationSHA256(read) && v.OriginalReceiptSHA256 == capacity.BusinessCreationSHA256(receipt) && reflect.DeepEqual(v.Observation, *observation)
+}
+
+// Transport callers use the same closed join as the persistent qualifier. The
+// compiled pin is the only production Source; callers cannot supply a pin.
+func ValidateGuestRetirementReadonlyReturn(r GuestRetirementForwardReadReturn) error {
+	if !retirementForwardObserverValid(r, true, RetirementReadonlyAWSObserverSource()) {
+		return ErrCapacityConflict
+	}
+	return nil
 }

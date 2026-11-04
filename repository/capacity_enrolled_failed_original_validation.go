@@ -12,9 +12,18 @@ import (
 
 // Bound only to a genuinely published dedicated observer before production
 // admission. An unpublished Source always refuses; no normal supplier alias.
-const enrolledFailedAWSObserverSource = "2f2273391775ff0c8c1c65db6708a59bcc747018"
+const enrolledFailedAWSObserverSource = "d8cbbf48873d24439216f98c30afe2669a525b54"
 
 func EnrolledFailedAWSObserverSource() string { return enrolledFailedAWSObserverSource }
+
+// This separate published compiler target must pass its CI/image and rollout
+// qualification before production use. Both read-only owners share the exact
+// target; normal historical supplier/catalog/config/grant identities never change.
+const retirementReadonlyAWSObserverSource = "d8cbbf48873d24439216f98c30afe2669a525b54"
+const retirementReadonlyAWSObserverVersion = "1.65.8"
+
+func RetirementReadonlyAWSObserverSource() string  { return retirementReadonlyAWSObserverSource }
+func RetirementReadonlyAWSObserverVersion() string { return retirementReadonlyAWSObserverVersion }
 
 func validateEnrolledFailedOriginalObservation(c model.CapacityOriginalCreateDispositionCandidate, o model.CapacityOriginalCreateDispositionObservation, began, now time.Time, maxAge time.Duration) error {
 	return validateEnrolledFailedOriginalObservationForSource(c, o, began, now, maxAge, enrolledFailedAWSObserverSource)

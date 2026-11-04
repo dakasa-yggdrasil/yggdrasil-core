@@ -30,6 +30,7 @@ func nativeAbsenceV2Unit() (GuestNativeAbsenceReturnV2, model.CapacityPolicySpec
 	return out, p, original
 }
 func TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn(t *testing.T) {
+	t.Run("ordinary_readonly_observer_provenance", testOrdinaryRetirementReadonlyObserverJoins)
 	t.Run("authority_diagnostic_preserves_and_rehydrates_actual_transport", testGuestAuthorityDiagnosticV2)
 	t.Run("actual_lifecycle_DTO_closed_roundtrips", testGuestLifecycleActualDTOClosedRoundtrips)
 	t.Run("confirmed_state_keeps_actual_original_settled_receipt", testGuestConfirmedNativeAbsenceContentV2)
@@ -314,4 +315,77 @@ func testGuestLifecycleActualDTOClosedRoundtrips(t *testing.T) {
 			})
 		}
 	})
+}
+
+// Protocol operands only: Source literals below test joins, not a publication.
+// Real DB fixtures independently require the actual compiled observer Source.
+func testOrdinaryRetirementReadonlyObserverJoins(t *testing.T) {
+	source := strings.Repeat("d", 40)
+	for _, fault := range []string{"exact", "absent_pair", "source_only", "wrapper_only", "wrong_source", "wrong_creator", "wrong_read", "wrong_read_sha", "wrong_receipt_sha", "wrong_observation", "wrong_schema", "unknown", "duplicate", "missing", "null", "trailing"} {
+		t.Run(fault, func(t *testing.T) {
+			r, _, original := nativeAbsenceV2Unit()
+			r.Challenge.AdapterSourceCommit = enrolledFailedAWSCreator
+			receipt := guestMutationReceiptV2(original)
+			r.OriginalDestroyReceipt, r.ObserverSourceCommit = &receipt, source
+			v := GuestRetirementReadonlyReturn{Schema: GuestRetirementReadonlyReturnSchema, ObserverSourceCommit: source, OriginalAdapterSourceCommit: enrolledFailedAWSCreator, ReadID: r.Challenge.ReadID, ReadSHA256: capacity.GuestRetirementSHA(r.Challenge), OriginalReceiptSHA256: capacity.GuestRetirementSHA(receipt), Observation: *r.Observation}
+			switch fault {
+			case "wrong_creator":
+				v.OriginalAdapterSourceCommit = strings.Repeat("c", 40)
+			case "wrong_read":
+				v.ReadID = "foreign-read"
+			case "wrong_read_sha":
+				v.ReadSHA256 = strings.Repeat("e", 64)
+			case "wrong_receipt_sha":
+				v.OriginalReceiptSHA256 = strings.Repeat("e", 64)
+			case "wrong_observation":
+				v.Observation.ServerAbsent = false
+			case "wrong_schema":
+				v.Schema = GuestRetirementReadonlyRequestSchema
+			}
+			r.OriginalObserverReturn, _ = json.Marshal(v)
+			switch fault {
+			case "absent_pair":
+				r.ObserverSourceCommit, r.OriginalObserverReturn = "", nil
+			case "source_only":
+				r.OriginalObserverReturn = nil
+			case "wrapper_only":
+				r.ObserverSourceCommit = ""
+			case "wrong_source":
+				r.ObserverSourceCommit = strings.Repeat("c", 40)
+			case "unknown":
+				r.OriginalObserverReturn = append(r.OriginalObserverReturn[:len(r.OriginalObserverReturn)-1], []byte(`,"extra":true}`)...)
+			case "duplicate":
+				r.OriginalObserverReturn = append(r.OriginalObserverReturn[:len(r.OriginalObserverReturn)-1], []byte(`,"schema":"`+GuestRetirementReadonlyReturnSchema+`"}`)...)
+			case "missing":
+				r.OriginalObserverReturn = bytes.Replace(r.OriginalObserverReturn, []byte(`"schema":"`+GuestRetirementReadonlyReturnSchema+`",`), nil, 1)
+			case "null":
+				r.OriginalObserverReturn = bytes.Replace(r.OriginalObserverReturn, []byte(`"read_id":"`+r.Challenge.ReadID+`"`), []byte(`"read_id":null`), 1)
+			case "trailing":
+				r.OriginalObserverReturn = append(r.OriginalObserverReturn, []byte(` {}`)...)
+			}
+			if guestNativeAbsenceObserverValid(r, true, source) != (fault == "exact") {
+				t.Fatal("ordinary fresh protocol join", fault)
+			}
+			if fault == "exact" && RetirementReadonlyAWSObserverSource() == "" && ValidateGuestNativeRetirementReadonlyReturn(r) == nil {
+				t.Fatal("unbound production Source accepted a declared literal")
+			}
+		})
+	}
+	for _, failed := range []bool{false, true} {
+		r, _, _ := nativeAbsenceV2Unit()
+		r.Challenge.AdapterSourceCommit = enrolledFailedAWSCreator
+		r.CallFailed = failed
+		wire, _ := json.Marshal(r)
+		if bytes.Contains(wire, []byte(`observer_source_commit`)) || bytes.Contains(wire, []byte(`original_observer_return`)) || !guestNativeAbsenceObserverValid(r, false, source) || guestNativeAbsenceObserverValid(r, true, source) {
+			t.Fatal("legacy return rewritten or gained fresh authority")
+		}
+		var again GuestNativeAbsenceReturnV2
+		if capacity.DecodeGuestLifecycle(wire, &again) != nil {
+			t.Fatal("legacy decode")
+		}
+		roundtrip, _ := json.Marshal(again)
+		if !bytes.Equal(wire, roundtrip) {
+			t.Fatal("legacy wire changed")
+		}
+	}
 }

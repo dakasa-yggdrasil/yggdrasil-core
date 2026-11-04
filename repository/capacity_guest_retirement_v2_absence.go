@@ -24,6 +24,8 @@ type GuestNativeAbsenceReturnV2 struct {
 	OriginalReturnedAtCore       time.Time                              `json:"original_returned_at_core"`
 	CallFailed                   bool                                   `json:"call_failed"`
 	OriginalContextFailed        bool                                   `json:"original_context_failed"`
+	ObserverSourceCommit         string                                 `json:"observer_source_commit,omitempty"`
+	OriginalObserverReturn       []byte                                 `json:"original_observer_return,omitempty"`
 }
 
 func guestMutationReceiptV2(r capacityMutationRecord) model.CapacityMutationReceipt {
@@ -77,6 +79,9 @@ func guestConfirmedNativeAbsenceContentV2(r GuestNativeAbsenceReturnV2, p model.
 }
 
 func guestNativeAbsenceReceiptContentV2(r GuestNativeAbsenceReturnV2, p model.CapacityPolicySpec, original capacityMutationRecord, receipt model.CapacityMutationReceipt) (model.CapacityMutationProof, error) {
+	if !guestNativeAbsenceObserverValid(r, false, RetirementReadonlyAWSObserverSource()) {
+		return model.CapacityMutationProof{}, ErrCapacityConflict
+	}
 	c := r.Challenge
 	g := receipt.Grant
 	b := original.Binding
@@ -96,6 +101,25 @@ func guestNativeAbsenceReceiptContentV2(r GuestNativeAbsenceReturnV2, p model.Ca
 		}
 	}
 	return capacity.GuestRetirementV2NativeAbsenceContent(p, b, receipt, *r.Observation, "original-core-v2-native-absence:"+c.ReadID)
+}
+
+// Old unextended returns retain their original validation and exact wire.
+// A fresh c34 ordinary read must authenticate the same complete public pair
+// for success or pending; the creator and prepared ordinary challenge stay old.
+func guestNativeAbsenceObserverValid(r GuestNativeAbsenceReturnV2, fresh bool, source string) bool {
+	paired := r.ObserverSourceCommit != "" || len(r.OriginalObserverReturn) != 0
+	if !paired {
+		return !(fresh && r.Challenge.AdapterSourceCommit == enrolledFailedAWSCreator)
+	}
+	return r.ObserverSourceCommit == source && retirementReadonlyJoinValid(source, r.Challenge.AdapterSourceCommit, r.Challenge.ReadID, r.Challenge, r.OriginalDestroyReceipt, r.Observation, r.OriginalObserverReturn)
+}
+
+// The compiled actual reader pin is the only production provenance operand.
+func ValidateGuestNativeRetirementReadonlyReturn(r GuestNativeAbsenceReturnV2) error {
+	if !guestNativeAbsenceObserverValid(r, true, RetirementReadonlyAWSObserverSource()) {
+		return ErrCapacityConflict
+	}
+	return nil
 }
 
 // Original native timestamps stay inside the immutable source return. The
@@ -133,8 +157,9 @@ func (s CapacityStore) RecordGuestNativeAbsenceV2(ctx context.Context, r GuestNa
 			return err
 		}
 		proof, err = guestNativeAbsenceContentV2(r, p, original)
-		accepted = err == nil
+		accepted = err == nil && guestNativeAbsenceObserverValid(r, true, RetirementReadonlyAWSObserverSource())
 		if !accepted {
+			proof = model.CapacityMutationProof{}
 			r.Observation = nil
 		}
 		raw, err := json.Marshal(r)

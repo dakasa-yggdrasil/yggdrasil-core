@@ -89,7 +89,24 @@ type GuestRetirementForwardReadReturn struct {
 	OriginalReturnedAtCore time.Time                              `json:"original_returned_at_core"`
 	CallFailed             bool                                   `json:"call_failed"`
 	OriginalContextFailed  bool                                   `json:"original_context_failed"`
+	ObserverSourceCommit   string                                 `json:"observer_source_commit,omitempty"`
+	OriginalObserverReturn []byte                                 `json:"original_observer_return,omitempty"`
 }
+
+// Public read-only response only: no hydrated request, credential or callback
+// bearer is persisted. The original creator Source remains in Read unchanged.
+type GuestRetirementReadonlyReturn struct {
+	Schema                      string                                `json:"schema"`
+	ObserverSourceCommit        string                                `json:"observer_source_commit"`
+	OriginalAdapterSourceCommit string                                `json:"original_adapter_source_commit"`
+	ReadID                      string                                `json:"read_id"`
+	ReadSHA256                  string                                `json:"read_sha256"`
+	OriginalReceiptSHA256       string                                `json:"original_receipt_sha256"`
+	Observation                 model.CapacityVMRetirementObservation `json:"observation"`
+}
+
+const GuestRetirementReadonlyRequestSchema = "original_settled_retirement_absence_read_request_v1"
+const GuestRetirementReadonlyReturnSchema = "original_settled_retirement_absence_read_return_v1"
 
 type retirementForwardScopeKey struct{}
 type retirementForwardScope struct {

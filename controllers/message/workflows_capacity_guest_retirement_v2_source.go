@@ -268,6 +268,34 @@ func finishProductionGuestNativeDestroyV2Forward(ctx context.Context, store repo
 }
 
 func sourceProductionNativeAbsenceV2(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, b model.CapacityMutationBinding, input guestOriginalStepInput, receipt model.CapacityMutationReceipt) (repository.GuestNativeAbsenceReturnV2, model.CapacityMutationProof, bool, error) {
+	return sourceProductionNativeAbsenceV2WithCall(ctx, store, input, receipt, func(read context.Context, out *repository.GuestNativeAbsenceReturnV2) error {
+		if b.OriginalProviderSourceCommit == enrolledFailedAWSCreator && !retirementReadonlySourceReady() {
+			return errOriginalGuestStep
+		}
+		reader, err := productionRetirementSupplierV2(read, store, policy, p, b, input)
+		if err != nil || !productionRetirementCatalogV2(reader.provider, reader.resolved.typeSpec) {
+			return errOriginalGuestStep
+		}
+		if reader.provider == "aws" && b.OriginalProviderSourceCommit == enrolledFailedAWSCreator {
+			return callOrdinaryRetirementReadonly(read, reader, out)
+		}
+		operation := capacity.VMObserveRetirement
+		fixed := map[string]any{"profile": b.ProfileName, "slot": input.Slot, "grant_id": receipt.Grant.GrantID, "expected_resource_id": receipt.ResourceID, "expected_resource_created_at": receipt.ResourceCreatedAt}
+		if reader.provider == "aws" {
+			operation, fixed["retirement"] = "observe_ec2_instance", true
+		}
+		var observed model.CapacityVMRetirementObservation
+		out.Status, err = reader.call(read, operation, fixed, &observed)
+		if err == nil {
+			out.Observation = &observed
+		}
+		return err
+	})
+}
+
+// One original context starts before Prepare. Every later resolution or call
+// failure retains real clocks through the unchanged separate custody budget.
+func sourceProductionNativeAbsenceV2WithCall(ctx context.Context, store repository.CapacityStore, input guestOriginalStepInput, receipt model.CapacityMutationReceipt, call func(context.Context, *repository.GuestNativeAbsenceReturnV2) error) (repository.GuestNativeAbsenceReturnV2, model.CapacityMutationProof, bool, error) {
 	var returned repository.GuestNativeAbsenceReturnV2
 	var proof model.CapacityMutationProof
 	read, stop := context.WithTimeout(ctx, 5*time.Second)
@@ -276,28 +304,11 @@ func sourceProductionNativeAbsenceV2(ctx context.Context, store repository.Capac
 	if err != nil {
 		return returned, proof, false, err
 	}
-	reader, err := productionRetirementSupplierV2(read, store, policy, p, b, input)
-	if err != nil {
-		return returned, proof, false, err
-	}
 	returned = repository.GuestNativeAbsenceReturnV2{Schema: "original_core_guest_native_absence_return_v2", Challenge: challenge, DestroyGrantID: receipt.Grant.GrantID, OriginalDestroyReceiptSHA256: capacity.GuestRetirementSHA(receipt), OriginalDestroyReceipt: &receipt, StartedAtCore: time.Now().UTC()}
-	var observed model.CapacityVMRetirementObservation
-	if !productionRetirementCatalogV2(reader.provider, reader.resolved.typeSpec) {
-		return returned, proof, false, errOriginalGuestStep
-	}
-	operation := capacity.VMObserveRetirement
-	fixed := map[string]any{"profile": b.ProfileName, "slot": input.Slot, "grant_id": receipt.Grant.GrantID, "expected_resource_id": receipt.ResourceID, "expected_resource_created_at": receipt.ResourceCreatedAt}
-	if reader.provider == "aws" {
-		operation = "observe_ec2_instance"
-		fixed["retirement"] = true
-	}
-	returned.Status, err = reader.call(read, operation, fixed, &observed)
+	err = call(read, &returned)
 	returned.OriginalReturnedAtCore = time.Now().UTC()
 	returned.CallFailed = err != nil
 	returned.OriginalContextFailed = read.Err() != nil || !returned.OriginalReturnedAtCore.Before(challenge.OriginalDeadlineCore)
-	if err == nil {
-		returned.Observation = &observed
-	}
 	retain, stopRetain := context.WithTimeout(context.WithoutCancel(read), 5*time.Second)
 	proof, recordErr := store.RecordGuestNativeAbsenceV2(retain, returned)
 	stopRetain()
@@ -305,9 +316,12 @@ func sourceProductionNativeAbsenceV2(ctx context.Context, store repository.Capac
 		return returned, proof, false, errOriginalGuestStep
 	}
 	if recordErr != nil {
-		pending := originalAWSRetirementPendingV2(observed, receipt)
-		if reader.provider == "hetzner" {
-			pending = originalHetznerRetirementPendingV2(observed, receipt)
+		pending := false
+		if returned.Observation != nil && repository.ValidateGuestNativeRetirementReadonlyReturn(returned) == nil {
+			pending = originalAWSRetirementPendingV2(*returned.Observation, receipt)
+			if challenge.Tuple.Provider == "hetzner" {
+				pending = originalHetznerRetirementPendingV2(*returned.Observation, receipt)
+			}
 		}
 		return returned, proof, returned.Status == "observed" && pending, errOriginalGuestStep
 	}

@@ -799,3 +799,37 @@ route and any upgrade exception do not reset a lease, cursor, budget or original
 ACK. A later ordinary tick must independently satisfy current admission and
 publication limits. Declared Source/PG tests and SQL migration-view compatibility
 do not qualify an old container, a native provider/Guest or production adoption.
+
+
+## Separate observer for a settled historical retirement receipt (ADR-0104)
+
+Fresh AWS c34 ordinary and partial-forward absence reads use the existing dedicated accepted-
+failed read-only HTTP service with the closed `observe_original_retirement_absence`
+operation. The compiled observer Source/version must describe this operation and
+match the existing dedicated observer publication. An unbound publication refuses;
+the normal historical supplier is not a fallback. Its type, instance, configuration,
+creator Source and sealed grant RequestSHA256 remain unchanged.
+
+Core captures the original receipt through its existing protected workflow store,
+then sends its canonical bytes and digest with the genuine prepared read ID/digest.
+Ordinary retirement hashes its own GuestNativePoweroffReadV2 challenge; no forward
+admission or forward-read identity is synthesized. The existing ordinary1MiB and
+forward2MiB returned-record caps remain distinct. The
+hydrated request omits `grant_bearer`; no callback principal or permission is added.
+The complete original five-second context encloses catalog/receipt resolution,
+Describe, execution and post-read guards. The separately authenticated current
+observer returns only the closed public observation wrapper, joined to the original
+creator, prepared read and receipt. Core retains its exact bytes separately from
+the decoded observation. Neither the wrapper nor a pending result authorizes a
+second destroy, lease reset, Guest replay or automatic recovery admission.
+
+Forward returned-record custody commits before its subsequent qualifier; ordinary
+readbacks retain the existing transactional failure record, with an unqualified
+observation omitted. Both preserve exact public wrapper bytes when bounded.
+Resolution, Describe, transport, decoding and deadline failures retain actual
+failure flags and clocks even without a usable wrapper. A partial or foreign pair
+cannot qualify fresh success or pending continuation. Historical unextended records
+keep their original encoding and historical validation. No migration or change to
+original grants, callback authentication, protected survivor floors or the four
+existing disposal consumers is introduced. SDK/XML interpretation remains owned
+by the adapter; declared Source fixtures do not prove a native provider outcome.
