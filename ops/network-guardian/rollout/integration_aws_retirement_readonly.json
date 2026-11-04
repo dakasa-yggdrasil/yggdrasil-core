@@ -1,0 +1,184 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "integration-aws-retirement-readonly",
+        "namespace": "dakasa",
+        "labels": {
+          "app": "integration-aws-retirement-readonly"
+        },
+        "annotations": {
+          "dakasa.io/adapter-source-commit": "d8cbbf48873d24439216f98c30afe2669a525b54",
+          "dakasa.io/readonly-purpose": "original-settled-retirement-absence"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "selector": {
+          "app": "integration-aws-retirement-readonly"
+        },
+        "ports": [
+          {
+            "name": "http",
+            "port": 8081,
+            "protocol": "TCP",
+            "targetPort": 8081
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "integration-aws-retirement-readonly",
+        "namespace": "dakasa",
+        "labels": {
+          "app": "integration-aws-retirement-readonly"
+        },
+        "annotations": {
+          "dakasa.io/adapter-source-commit": "d8cbbf48873d24439216f98c30afe2669a525b54",
+          "dakasa.io/readonly-purpose": "original-settled-retirement-absence"
+        }
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "integration-aws-retirement-readonly"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "integration-aws-retirement-readonly"
+            }
+          },
+          "spec": {
+            "automountServiceAccountToken": false,
+            "dnsPolicy": "ClusterFirst",
+            "enableServiceLinks": false,
+            "imagePullSecrets": [
+              {
+                "name": "ecr-pull-sa-east-1"
+              }
+            ],
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {
+              "runAsGroup": 65532,
+              "runAsNonRoot": true,
+              "runAsUser": 65532,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            },
+            "terminationGracePeriodSeconds": 30,
+            "containers": [
+              {
+                "env": [
+                  {
+                    "name": "YGGDRASIL_TRANSPORT",
+                    "value": "http_json"
+                  },
+                  {
+                    "name": "ADAPTER_PORT",
+                    "value": "8081"
+                  },
+                  {
+                    "name": "AWS_METADATA_DISABLED",
+                    "value": "true"
+                  },
+                  {
+                    "name": "AWS_EC2_METADATA_DISABLED",
+                    "value": "true"
+                  },
+                  {
+                    "name": "AWS_CONFIG_FILE",
+                    "value": "/dev/null"
+                  },
+                  {
+                    "name": "AWS_SHARED_CREDENTIALS_FILE",
+                    "value": "/dev/null"
+                  },
+                  {
+                    "name": "AWS_MAX_ATTEMPTS",
+                    "value": "1"
+                  },
+                  {
+                    "name": "GOMAXPROCS",
+                    "value": "1"
+                  },
+                  {
+                    "name": "GOMEMLIMIT",
+                    "value": "192MiB"
+                  }
+                ],
+                "image": "153828470928.dkr.ecr.sa-east-1.amazonaws.com/integration-aws@sha256:3c5d75d3a5eb564c90f5fc3cf9293d0deccf4fda8dc33ac8cf55d3ee638b2269",
+                "imagePullPolicy": "Always",
+                "livenessProbe": {
+                  "failureThreshold": 6,
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": 8081,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 5,
+                  "periodSeconds": 5,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 2
+                },
+                "name": "readonly",
+                "ports": [
+                  {
+                    "containerPort": 8081,
+                    "name": "http",
+                    "protocol": "TCP"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/readyz",
+                    "port": 8081,
+                    "scheme": "HTTP"
+                  },
+                  "periodSeconds": 3,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 2
+                },
+                "resources": {
+                  "limits": {
+                    "cpu": "500m",
+                    "memory": "256Mi"
+                  },
+                  "requests": {
+                    "cpu": "10m",
+                    "memory": "64Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  },
+                  "privileged": false,
+                  "readOnlyRootFilesystem": true
+                },
+                "command": [
+                  "/app/accepted-failed-readonly"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

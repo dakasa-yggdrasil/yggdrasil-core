@@ -50,7 +50,10 @@ def main():
             or type(index92) is not list or len(index92) != 6 or len(set(index92)) != 6
             or type(goose92) is not list or len(goose92) != 9 or len(set(goose92)) != 9):
         raise RuntimeError('closed original106/G9-47/R6-12/index92-6/Goose92-9 rosters required')
-    expected = historical + current + r6 + index92 + goose92
+    g10 = json.loads((HERE / 'EXPECTED-TESTS-G10.json').read_bytes())
+    if type(g10) is not list or len(g10) != 20 or len(set(g10)) != 20:
+        raise RuntimeError('exact additive G10 roster required')
+    expected = historical + current + r6 + index92 + goose92 + g10
     if len(set(expected)) != len(expected):
         raise RuntimeError('all preserved and additive test rosters must be disjoint')
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
@@ -62,7 +65,7 @@ def main():
             'discovery_errors': discovery_errors}, indent=2) + '\n')
         for error in discovery_errors:
             print(error, file=sys.stderr, flush=True)
-        raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8+G9+R6+index92+Goose92 roster')
+        raise RuntimeError('discovered tests differ from reviewed exact G6+G7+G8+G9+R6+index92+Goose92+G10 roster')
     result = unittest.TextTestRunner(verbosity=2, resultclass=Outcomes).run(suite)
     success = (result.wasSuccessful() and not result.skipped and not result.expectedFailures
                and not result.unexpectedSuccesses and result.testsRun == len(expected)
@@ -71,11 +74,11 @@ def main():
     clean_source = (subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == actual_commit
                     and not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all']))
     success = success and clean_source
-    value = {'schema': 'owned_network_guardian_g6_g7_g8_g9_r6_index92_goose92_exact_CI_census_v1',
+    value = {'schema': 'owned_network_guardian_g6_g7_g8_g9_r6_index92_goose92_g10_exact_CI_census_v1',
              'source_commit': os.environ['SOURCE_COMMIT'], 'success': success,
              'expected': expected, 'historical_expected': historical, 'g9_expected': current, 'r6_expected': r6,
              'historical_count': len(historical), 'g9_count': len(current), 'r6_count': len(r6),
-             'index92_expected': index92, 'goose92_expected': goose92,
+             'index92_expected': index92, 'goose92_expected': goose92, 'g10_expected': g10, 'g10_count': len(g10),
              'index92_count': len(index92), 'goose92_count': len(goose92),
              'executed': result.runs, 'passed': result.passes,
              'failures': [test.id() for test, _ in result.failures],
