@@ -1,0 +1,64 @@
+name: Failed installed Guest administrative HTTP Source
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closed-administrative-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      GOFLAGS: -mod=readonly
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run the actual HTTP boundary tests and census original returns
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]]
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+          logs="$RUNNER_TEMP/failed-installed-disposal-http"
+          mkdir -m 0700 "$logs"
+          printf 'DISPOSAL_HTTP_LOGS=%s\n' "$logs" >> "$GITHUB_ENV"
+          set +e
+          go test -p=1 -race -count=1 -json ./controllers/httpapi -run '^(TestFailedInstalledDisposalRequiresExplicitAdministrativeIdentity|TestFailedInstalledDisposalAcceptsOnlyTwoOriginalIDsAndSafeSummary)$' > "$logs/original.stdout" 2> "$logs/original.stderr"
+          rc=$?
+          printf '%s\n' "$rc" > "$logs/original.exit"
+          set -e
+          [[ "$rc" == 0 ]]
+          python3 - "$logs" <<'PY'
+          import collections, json, os, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          roots=['TestFailedInstalledDisposalRequiresExplicitAdministrativeIdentity','TestFailedInstalledDisposalAcceptsOnlyTwoOriginalIDsAndSafeSummary']
+          rows=[json.loads(line) for line in (p/'original.stdout').read_text().splitlines()]
+          assert rows and all(x.get('Package')=='github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi' for x in rows)
+          assert not any(x['Action'] in ('skip','fail') for x in rows)
+          for action in ('run','pass'):
+              assert collections.Counter(x['Test'] for x in rows if x['Action']==action and 'Test' in x and '/' not in x['Test'])==collections.Counter(roots)
+          assert sum(x['Action']=='pass' and 'Test' not in x for x in rows)==1
+          value={'schema':'failed_installed_disposal_HTTP_Source_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'original_exit':0,'roots':roots,'race':True,'count':1,'production_authority':False}
+          (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          PY
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+      - name: Retain original HTTP test outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: failed-installed-disposal-http-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.DISPOSAL_HTTP_LOGS }}
+          if-no-files-found: error
+          retention-days: 14

@@ -100,7 +100,7 @@ func TestConsoleRoutesAreFullyMapped(t *testing.T) {
 // new ops route lands without a permission wrapper.
 //
 // Why two tests instead of one: the /api/v1/ops/* namespace is the
-// older console-style surface (~22 routes); /api/v1/console/* is the
+// older console-style surface (~41 routes); /api/v1/console/* is the
 // newer canonical namespace (~89 routes). Keeping the assertions split
 // makes regressions on either group surface in the failing-test name
 // without ambiguity.
@@ -147,11 +147,15 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 			len(missing), strings.Join(missing, "\n  "))
 	}
 
-	// Phase 5B inventory found 22 ops routes. Allow a band [18, 40] — narrower
-	// would be brittle (each PR that adds an ops route would have to bump),
-	// wider defeats the purpose of catching subtree deletions.
-	if routeCount < 18 || routeCount > 40 {
-		t.Errorf("ops route count = %d, expected ~22 — investigate before merging", routeCount)
+	// The exact reviewed inventory has 62 ops routes, including dispatch
+	// dispositions, retirement recovery, failed-installed replacement/native OFF,
+	// and the four distinct failed-serving quarantine/read/native-OFF/complete
+	// routes, the historical retirement-forward admission/read pair and the
+	// separate recorded HTTP-maintenance disposition/read pair.
+	// Count drift requires review; every route still needs the permission
+	// wrapper asserted above, independently of this complete census.
+	if routeCount != 62 {
+		t.Errorf("ops route count = %d, expected exactly 62 — investigate before merging", routeCount)
 	}
 }
 

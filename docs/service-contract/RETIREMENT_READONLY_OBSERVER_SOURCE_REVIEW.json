@@ -1,0 +1,134 @@
+{
+  "CI": {
+    "additional_existing_root_mandatory": "TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn (historical root plus strict ordinary paired-provenance/legacy-wire subcases)",
+    "existing_clocks_root_additions": "One declared failed-before-wrapper owning-caller case retains its actual PG return; existing timeout case unchanged. This does not assert stage-specific transport integration coverage.",
+    "existing_describe_root_additions": "Keep all existing H/version/extension cases and pure legacy14 cases; add actual legacy2f14/currentH16 cross-axis refusal in the same existing root. Root counts remain24.",
+    "existing_roots_preserved": 18,
+    "existing_workflow": ".github/workflows/failed-serving-guest.yml",
+    "focused_total_roots": 24,
+    "local_functional_execution": false,
+    "new_roots": [
+      "TestGuestRetirementForwardReadonlyObserverJoins",
+      "TestGuestRetirementForwardReadonlyFreshCustodyPostgres",
+      "TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority",
+      "TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres",
+      "TestGuestRetirementForwardOrdinaryReadonlySourceClocksPostgres"
+    ],
+    "ordinary_scope": "Declared real repository ordinary success/journal/caller/floor/OFF/Issue/Redeem/Settle; failed/late custody, authenticated pending and not_found DTO. Raw AWS SDK execution is separately owned by the new adapter tests, not asserted here.",
+    "regression_required": "Existing failed-original-disposition-source workflow and all four legacy disposal consumer suites remain required.",
+    "scope": "Declared Source/PG fixtures only, no cloud SDK/native qualification claim."
+  },
+  "boundaries": {
+    "failure_custody": "Forward first-return commit precedes qualification; ordinary keeps existing transactional failure row with unqualified observation omitted. Real source clocks and bounded exact public pair remain; no private credentials/request bodies retained.",
+    "fresh_historical_split": "Fresh AWS c34 successful/pending reads require complete pair. Historical unextended wire is unchanged.",
+    "historical_supplier_config_and_RequestSHA_changed": false,
+    "legacy_four_consumers": "Legacy qualified2f2273391775ff0c8c1c65db6708a59bcc747018 /1.65.7/existing accepted-failed service remains unchanged, matching immutable migration82. Retirement Source d8/1.65.8 has a different fixed service; no shared-pin substitution.",
+    "new_API_or_principal": false,
+    "new_mutation_or_callback_dispatch": false,
+    "new_observer_Source_and_version": "Actually published Git targetd8cbbf48873d24439216f98c30afe2669a525b54/version1.65.8 remains retirement-only. No adapter rebuild or historical observer source relabel. Root owns actual CI/image/deployment/acceptance.",
+    "ordinary_genuine_challenge": "GuestNativePoweroffReadV2 ReadID/hash; no synthetic forward admission. Old ordinary non-AWS and historical unextended content remain unchanged.",
+    "original_challenge_seconds": 5,
+    "original_finish_seconds": 60,
+    "raw_public_response": "Optional []byte keeps exact public wrapper bytes; canonical receipt RawMessage survives envelope projection, no grant_bearer.",
+    "returned_record_limit_bytes": {
+      "ordinary": 1048576,
+      "partial_forward": 2097152
+    },
+    "schema_change": false,
+    "separate_custody_seconds": 5,
+    "separate_fixed_services": {
+      "actual_retirement_deployment_or_acceptance_claimed": false,
+      "legacy": "http://integration-aws-accepted-failed-readonly.dakasa.svc.cluster.local:8081",
+      "legacy_Describe_fields": 14,
+      "retirement": "http://integration-aws-retirement-readonly.dakasa.svc.cluster.local:8081",
+      "retirement_Describe_fields": 16
+    },
+    "transport_limit_bytes": 2097152
+  },
+  "preserved_historical_reviews": {
+    "docs/service-contract/M2_SOURCE_REVIEW.json": "11a5c0025091bde075f1c81cc957e3f01bc23d3ac368ae33cdd761ae21f76051",
+    "docs/service-contract/READONLY_INSPECTION_SOURCE_REVIEW.json": "8978341181da271918212a1c9be33ff17cb38403170fe72a884647bf87b81082",
+    "docs/service-contract/REVIEW.json": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710",
+    "docs/service-contract/SCHEDULER_SKIP_REVIEW.json": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f"
+  },
+  "schema": "core_service_source_review_supplement_v1",
+  "scope": "Author Source V6 correction: preserve V5 legacy82/2f versus retirement1.65.8 service isolation, retain the canonical policy in ordinary retirement redemption, and express existing UTF16/audit bounds directly for the actual6d CodeQL findings.",
+  "source_baseline": "00e20ce57ec37a486ceae5a586ed31dd50c2158d",
+  "source_inventory": {
+    "added": {},
+    "bytes": 130911,
+    "changed": {
+      "controllers/httpapi/ops_failed_installed_external_cause_replacement.go": {
+        "build_constraint": "",
+        "bytes": 7920,
+        "sha256": "7907e13c7bcc2c9e4862e48b39d4b3efa7370cb92b5505926c10176f63229191"
+      },
+      "controllers/message/capacity_enrolled_failed_observer.go": {
+        "build_constraint": "!nativequalification",
+        "bytes": 18296,
+        "sha256": "f6050d9c6ce7577b160c726c4313f9c86a282921a4a8c08bcfb9370c10c4c91e"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_forward.go": {
+        "build_constraint": "!nativequalification",
+        "bytes": 15935,
+        "sha256": "6de0385470191c8f0cbc4cea7cae9f02185e7d083309f19edd6b01b043edc370"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
+        "build_constraint": "!nativequalification",
+        "bytes": 22571,
+        "sha256": "0b95dc000deb2063ac1fd6d002377cd3580910ab616ddc4d25d8fa331b89c054"
+      },
+      "repository/capacity_enrolled_failed_original_validation.go": {
+        "build_constraint": "",
+        "bytes": 11349,
+        "sha256": "afbcdbcfe81c7d91a95788d186d9ff5f65fd4d0222d0d67460aa382c9b85d505"
+      },
+      "repository/capacity_guest_retirement_forward.go": {
+        "build_constraint": "",
+        "bytes": 19871,
+        "sha256": "297d47d0b9fe3b6d4f26ce33fd3cfe0fa3887b2258537e084c4b2e50b2f7f61e"
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "build_constraint": "",
+        "bytes": 14228,
+        "sha256": "4b1510e1d18414af6d4cb8789be50f01bb4b88d77ad660bad2847c06b460eb5f"
+      },
+      "repository/capacity_guest_retirement_v2_absence.go": {
+        "build_constraint": "",
+        "bytes": 15641,
+        "sha256": "fcfd2ca6e6ea56be89e410aecbeaf1434c81a358069bce15a3bc1d2266142819"
+      },
+      "repository/capacity_guest_retirement_v2_destroy.go": {
+        "build_constraint": "",
+        "bytes": 6739,
+        "sha256": "24d2cdd0d72a4811c7bce750d30bf7c1fe76756efbca62d7296d7fd17a2986ed"
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "build_constraint": "recoveryfixture && !nativequalification",
+        "bytes": 57225,
+        "sha256": "552b253edf4dd3397bd22345b82098ace956725b4f2cf209ba1c4a1d488bbd30"
+      },
+      "repository/ops_audit.go": {
+        "build_constraint": "",
+        "bytes": 4139,
+        "sha256": "1178e0167892388c76dcc6eb2bc6c33a877e8bd0a3a1866419b0a666613ce92b"
+      }
+    },
+    "complete_source_count": 801,
+    "path": "docs/service-contract/source/sources.json",
+    "prior_records_preserved": 790,
+    "removed": [],
+    "sha256": "13208e699c6074cc37421b387f7d9a1572ad6073509015ecbc1a628556960ba4"
+  },
+  "validation": {
+    "V4_refused_proof_boundary": "On the existing ordinary !accepted branch, zero the full proof before preserving the unchanged rejected record. Existing negative PG vectors require both refusal error and full zero proof. Owner already checked error; no actual authority credit was demonstrated. No gate/timer/status/receipt or test-ID change.",
+    "V5_remote_failure_correction": "Actual6d third failure is migration82 exact2f observer versus new sharedH pin, not provider absence or timing; service/Source split preserves migration82 and all four legacy consumers. Root callback test correction distinguishes public schema key from actual bearer; Root QF1001 DeMorgan rewrite is semantically equivalent and its file is untouched by this author.",
+    "V6_CodeQL_bounds": "Exactly four hexadecimal digits already bound each parsed JSON UTF16 code unit; ParseUint now explicitly uses bitSize16 rather than32. The audit query retains its existing limit<=1000 clamp and exact SQL arguments but initializes its empty result slice without user-derived capacity. Existing surrogate/UTF8 and audit roundtrip CI coverage remains unchanged; no suppression or new authority.",
+    "V6_remote_failure_correction": "Actual6d PG16/17 ordinary repository AWS/HZ and message fixtures fail at single redemption. RedeemMutation passes an ID/checksum-only Manifest. Existing guestRetirementV2CurrentTx reloads and validates the full policy under the same transaction; V6 retains its policy return instead of discarding it before the existing after_retirement_floor survivor lookup. Incoming original ID/checksum/workflow/epoch/owner/slot/resource/binding checks remain before reload; floor, original/callback custody, timers, fixture assertions and migrations are unchanged.",
+    "data_only_existing_census_generator": true,
+    "functional_CI_pass_claimed": false,
+    "gofmt_and_diff_check": true,
+    "native_or_production_claimed": false,
+    "own_review": "Full V5 boundary review plus exact three Root runtime deltas/call-chain review and all801 runtime pins/19 descriptor edges. No local tests/target imports/compile/SQL/API/Native. Root service deployment and fresh full CI remain separate."
+  }
+}

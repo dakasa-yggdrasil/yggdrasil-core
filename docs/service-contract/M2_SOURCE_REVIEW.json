@@ -1,0 +1,2604 @@
+{
+  "schema": "core_service_source_review_composition_v1",
+  "scope": "Local convergence of two independently Source-reviewed deltas. Preserve both original reviews and their historical source hashes; this composition does not reattribute the historical review to the scheduler correction.",
+  "source_inventory": {
+    "path": "docs/service-contract/source/sources.json",
+    "sha256": "9a9a664140ace89bf02fd0b8ec1549b12dbcfc124e50775281d972af1105dd6e",
+    "complete_source_count": 784
+  },
+  "source_baseline": {
+    "commit": "d06f2f9157fd2333032e6e4f8e687dd7352676da",
+    "source_inventory_sha256": "02241d59611f8179c006d8a4086e7ea52aeaea93d71e2c07a0d71760662cb047"
+  },
+  "preserved_reviews": {
+    "historical_and_m2_eof": {
+      "path": "docs/service-contract/REVIEW.json",
+      "sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710",
+      "original_historical_nodes": 109,
+      "total_nodes": 110,
+      "m2_eof_source_inventory_sha256": "829f925379dc9f3a5a905be99cb1ff9d16d43732eaf3a3937cf2a270b6e8f080",
+      "scope": "Root accepted only the two terminal LF removals and their complete static source census. Existing historical review nodes remain unchanged."
+    },
+    "scheduler_skip": {
+      "commit": "d451ac07c6e412bd2eae06f648935799e046ea31",
+      "path": "docs/service-contract/SCHEDULER_SKIP_REVIEW.json",
+      "sha256": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f",
+      "source_inventory_sha256": "6456e9fca2569124e390f75bc86f8637ff0f9e780cd0bba8d056b19b414481d1",
+      "scope": "Preserved exact P4 Source review; its source inventory hash describes P4 before the two M2 EOF cleanups."
+    }
+  },
+  "composition": {
+    "only_source_facts_changed_from_baseline": {
+      "addons/workflow_scheduler.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 17302,
+          "sha256": "b5778f60d04d31062553e7041eff9ef4b74d6057b63a3487ef8bb252ec35f94c"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 20149,
+          "sha256": "c6e39fc3f88e1cd201a89dced02dfd716b03959aa9258bcb3e58836322c1d0ea"
+        }
+      },
+      "cmd/native-guest-lifecycle-fixture/source_compensation.go": {
+        "before": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15230,
+          "sha256": "a8f85764bdca22172347d686ba8b2db0b555be62429f99826012c22483798625"
+        },
+        "after": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15229,
+          "sha256": "562a7ce6cc52509da5072e591e211698be14c3078ba42b13641640878b329916"
+        }
+      },
+      "repository/capacity_failed_floor_source.go": {
+        "before": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15344,
+          "sha256": "9e16c56fe2b89266c89de110cb7a1d801902e6c7658ba380cad08175d39d38fd"
+        },
+        "after": {
+          "build_constraint": "linux && nativequalification",
+          "bytes": 15343,
+          "sha256": "166a61cd49d18f7ae6151396b0622577b6ef28c50e517b53f9eaf0829bb1bd8c"
+        }
+      }
+    },
+    "all_other_source_facts_unchanged": 781,
+    "runtime_scheduler_byte_identical_to_P4": true,
+    "two_other_source_files_remove_exactly_one_terminal_LF": true
+  },
+  "validation": {
+    "static_source_census_only": true,
+    "new_local_functional_execution": false,
+    "M2_exact_head_CI_pass_claimed": false,
+    "new_runtime_native_or_ADR_acceptance_claimed": false,
+    "final_M2_candidate_exact_head_CI_required": true
+  },
+  "final_architecture_acceptance_review_20261103": {
+    "schema": "Root_final_elastic_architecture_acceptance_v1",
+    "scope": "Acceptance of ADR0095 through ADR0100 architectural Source contracts under the explicit authorized Root decision. Operational A/B and overall task completion are separate and not asserted.",
+    "decision_authority": "Root explicitly accepted these six architectural scopes in the authorized session; this draft records no independently invented human approval or acceptance timestamp.",
+    "architecture_statuses": {
+      "0095": "Accepted",
+      "0096": "Accepted",
+      "0097": "Accepted",
+      "0098": "Accepted",
+      "0099": "Accepted",
+      "0100": "Accepted"
+    },
+    "historical_review_preservation": {
+      "prior_M2_composition_commit": "491f693b06d31fc59ac146911a3f4e6fc24112af",
+      "prior_M2_composition_sha256": "424367556bd2df3cf7c29fa633475bcab04a6a0b5f987a8099eaaf4bb60eab1f",
+      "all_prior_top_level_nodes_and_validation_facts_preserved": true,
+      "prior_validation_scope_is_historical_pre_G8_Source_composition": true,
+      "historical_REVIEW_sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710",
+      "historical_REVIEW_bytes": 131070
+    },
+    "source_facts": {
+      "ops_P": "c4b2c76dec71ca8afa8780a3b8524d725e86f40a",
+      "Core_R": "d451ac07c6e412bd2eae06f648935799e046ea31",
+      "Core_amd64_D": "0970e1188ceb5fa3ba52a1a11337f5fae7ac0657a66a69e08d24f9888f813826",
+      "operational_manifest_sha256": "f0194023aef71d2e912e6fe064f6e1640c6880e46bb2b53bf4b7d6d841df0753",
+      "controller_config_sha256": "42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5",
+      "Guardian_source_sha256": "8259638127d811079d6a461d3bd7407f8a53ff3ebb75e8061bf8538dcf6508b9",
+      "runtime_package_sha256": "b87e3bedfa87a178fd5749812cb1575dff34e44c0ab693bb4c085218ab42d36d",
+      "operational_tools_roster_sha256": "939afab9e5746499a12df50cae676841592b1d2918d646c80b9eee606649f73a",
+      "typed_Core_CAS_source_sha256": "a6c54605c98636f673e0d6115471d78d9d32a82ee3bd858b051a18531fb9e349",
+      "non_test_Go_source_count": 784,
+      "non_test_Go_inventory_sha256": "9a9a664140ace89bf02fd0b8ec1549b12dbcfc124e50775281d972af1105dd6e",
+      "corrected_test0601_is_excluded_by_existing_non_test_selection": true
+    },
+    "qualified_Source_CI": {
+      "Root_original_acceptance_sha256": "953c95d982e1d73b48cc4c07f76ff9603453d142c09b4029d408202de7415a5c",
+      "head": "c4b2c76dec71ca8afa8780a3b8524d725e86f40a",
+      "actual_required_runs": 18,
+      "actual_jobs": 35,
+      "all_success_exact_head_attempt1": true,
+      "Native_8roots_114RUNPASS": true,
+      "Owned106_and_real_PG16": true,
+      "focused_PG16_PG17_each310_nodes": true,
+      "qualified_head_is_not_a_future_M2_CI_result": true
+    },
+    "actual_G8": {
+      "swap": {
+        "command_id": "f5d29a1c-46f7-4dc6-bf10-eb99a5606a50",
+        "receipt_sha256": "2db92c4c41873a8c37b8e8cb68b636c01bd2ae095447a08d6453e589142de75b",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "return_sha256": "2e26bef01ff324c4676f9a96ca38ae8673a4362001de09c75cc5492c5510a6b8",
+      "independent_closure": {
+        "command_id": "5d148564-46a9-4d51-b724-b70d7042372d",
+        "receipt_sha256": "97b7698e4b765c8d985b48298611cc40a238e666f27d80c6e479fe678059ec17",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "standing_sha256": "a02690f5e7a8c000478ceca6c4f4715e7b589814bf93fc5cbefe3bd9126e08d3",
+      "new_original_full120_sha256": "68f5b3bcd33a9ab8e1ad29f3fdbf52a83166b694b81f5bce474e2fe85afecce3",
+      "own_daemon_current15_sha256": "e406648a4ecd503ff8231e5fde8d6969a091fe9327c4e8e0927815eb929711c4",
+      "controller": {
+        "ExecMainStartTimestampMonotonic": "41794761090",
+        "InvocationID": "1f0c1c3947874f649671e1c212c23127",
+        "boot_id": "2b7e9be2-e45a-4cd5-86f2-6f0a3372576d",
+        "pid": 1462752,
+        "start_ticks": 4179475
+      },
+      "guardian": {
+        "ExecMainStartTimestampMonotonic": "41797894088",
+        "InvocationID": "a1826878088e4dbaa5e7adfb67cba5c6",
+        "boot_id": "2b7e9be2-e45a-4cd5-86f2-6f0a3372576d",
+        "pid": 1463003,
+        "start_ticks": 4179788
+      },
+      "independent_current15": true,
+      "all_original_refs_and_budget_unchanged": true,
+      "conservative_per_role_gap_seconds": {
+        "backend:broker": 0,
+        "backend:core": 0,
+        "backend:rds": 0,
+        "backend:redis": 0,
+        "core_ready4:10.42.0.83": 0,
+        "prometheus_ready4:10.42.0.37": 0
+      },
+      "Cold_Hub_or_Core_or_provider_mutation_by_swap": false
+    },
+    "actual_typed_Core_rollout": {
+      "CAS": {
+        "command_id": "d3c7ed22-6032-4a14-81c0-b8e34b03000a",
+        "receipt_sha256": "aea54edf2f5d3085af0edc20088c07fceff07cfd344a0e3c1ccad9d89dd3cf18",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "CAS_original_return_sha256": "262abc95aae82704004945647dc6bb3a281427677e8634f5104fac82420237d2",
+      "independent_post_rollout": {
+        "command_id": "170b54f0-69ab-47a7-9698-0b5464ae21c8",
+        "receipt_sha256": "1b9532c2e67db65903a7ebf6dd30e2751284139784ec30b4c21ab77841ac6770",
+        "response_code": 0,
+        "status": "Success"
+      },
+      "Core": {
+        "annotations_sha256": "fb596df428a08bb26daaaaffbfef4eabb4de6fe1cc17b5e7c3aaccb4670ad6ea",
+        "containerID": "containerd://827a685085e245ed453e58c61de991576f106463ff8ad37e037146369751e465",
+        "deployment_uid": "a58ab8c2-da48-46c1-ae62-a650141eeb86",
+        "generation": 272,
+        "image": "153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:0970e1188ceb5fa3ba52a1a11337f5fae7ac0657a66a69e08d24f9888f813826",
+        "imageID": "153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:0970e1188ceb5fa3ba52a1a11337f5fae7ac0657a66a69e08d24f9888f813826",
+        "node": "ip-172-31-9-242",
+        "pod_ip": "10.42.0.96",
+        "pod_name": "yggdrasil-9c4866c66-8nvk5",
+        "pod_spec_sha256": "e5f88a196c9ebd8446453bcb8ed0ee307aa3136fa24a160152d1356fa15ae7cd",
+        "pod_uid": "30695e40-3349-4186-90e4-6db3951e34c2",
+        "replicaset_name": "yggdrasil-9c4866c66",
+        "replicaset_uid": "77d7d999-3989-4e4d-8007-09eb06903afe",
+        "revision": "269",
+        "spec_sha256": "1ecb33f80d5471d761723e7c4e6372577c21f9ea4566a027494d0c0817798014"
+      },
+      "schema": 89,
+      "complete_Goose_history_preserved": true,
+      "direct_ready_broker": {
+        "rabbitmq_status": "ok",
+        "status": "ready"
+      },
+      "SAML_OIDC_identity_preserved": true,
+      "fresh_independent_current15_all4": true,
+      "protected_ref_count": 39,
+      "recovery_budget_spent": 1,
+      "Cold_Hub_lifetimes_unchanged": true,
+      "read_only_observation_did_not_create_Root_approval_or_AB_acceptance": true
+    },
+    "actual_post_Core_four_E2E": {
+      "Root_original_acceptance_sha256": "447fec4d4622608b00f9f62a44cc26133a116722fe02e465643f48f9e559b6ae",
+      "System_test_source": "a5c23a7f533b8ff182b3454e2161142893861baf",
+      "runs": [
+        41578778045,
+        41578794326,
+        41578807942,
+        41578821236
+      ],
+      "workflows_success": 4,
+      "required_jobs_success": 12,
+      "scenario_RUN_PASS": 27,
+      "only_expected_Chat_detector_skipped": 1,
+      "isolated_CI_is_not_native_or_AB_qualification": true
+    },
+    "acceptance_boundaries": {
+      "ADR0095_accepts_Source_architecture_and_honest_CI_scope_only": true,
+      "ADR0095_failed_tail_production_lane_qualification_claimed": false,
+      "normal_AB_is_not_an_induced_failure_or_failed_tail_disposal": true,
+      "actual_historical_unknown_and_failed_serving_closures_remain_separate_immutable_Root_reviewed_records": true,
+      "original_NULL_ACKs_failures_business_effects_and_budget_are_not_rewritten": true,
+      "ADR0099_remains_G7_f809_d689_and_is_not_renamed_or_superseded_by_G8": true,
+      "canonical_G6_boot_v2_and_G7_authorities_remain_distinct": true,
+      "Decision_Consequence_date_scope_and_prior_source_reviews_not_rewritten": true,
+      "operational_AB_acceptance": "not_asserted",
+      "M2_main_adoption_requires_separate_actual_AB_acceptance": true,
+      "future_M2_exact_head_CI_main_merge_or_new_main_image_qualification_claimed": false,
+      "future_main_image_is_not_automatically_admitted_by_current_G8": true
+    },
+    "local_preparation_validation": {
+      "read_existing_local_originals_and_public_Root_acceptances_only": true,
+      "new_native_API_SQL_test_build_product_ops_import_or_official_CLI_execution": false,
+      "Source_worktree_or_git_refs_changed_by_this_preparation": false
+    }
+  },
+  "partial_poweroff_forward_source_review_20261103": {
+    "schema": "ADR0101_current_complete_Source_contract_review_v1",
+    "scope": "Root review of the current complete source inventory plus the distinct Core forward proof; all previous review nodes above retain their original historical scope and hashes.",
+    "base_commit": "08c17fbfcdcddb31cdf8e4d9afd408bb0199ef86",
+    "preserved_composition_sha256": "96b6294123c8ff52716aa7eac7d938ad75c76ee6f9969be63d9fcdb2cae077e4",
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "ccbd5c50de13d07a31b8271edb6a1e52ea60b3790f687f9df8b4891df9ecdeb5",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "changed_source_facts": {
+      "controllers/httpapi/ops_guest_retirement_forward.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 5245,
+          "sha256": "0c7d85a2902cd6caa3f9ef994669cc44e6fe3f99c9c620fd3acde83c2f031b31"
+        }
+      },
+      "controllers/httpapi/server.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 187997,
+          "sha256": "15f07f91be5d82b5bd35550cb3ff26497a5fdecf1a439edd62048382d0d8a0a0"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 188368,
+          "sha256": "6f357a12e332df55a4817df0f4a06792f4c1ba0dbedef8980e0a6e5b9bf53a30"
+        }
+      },
+      "controllers/message/workflows_capacity_guest.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 25190,
+          "sha256": "1753c714edea2ba3cc01a24b98ffdbb392862a02552db4330417e2af0eb8035b"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 25239,
+          "sha256": "dbf7b9ad0bf0c4b7db8b4eb049feb82ef6cdfcee3d750c67041d5b3f2cf1f67a"
+        }
+      },
+      "controllers/message/workflows_capacity_guest_reconcile.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 24254,
+          "sha256": "798263e761d34004b81da48467d8f65f0ec3c32a66cdd87a5a2617db1f496d5c"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 24919,
+          "sha256": "edda47a200b3cf3c843f9808bb4d7aa23385150a33c5d0b343acde60b80b0017"
+        }
+      },
+      "controllers/message/workflows_capacity_guest_retirement_forward.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "!nativequalification",
+          "bytes": 15589,
+          "sha256": "44d1ba2428c2f109b95cd5a24b201c89b89e247f0edffe2fc8ad4b7f8e6613e2"
+        }
+      },
+      "controllers/message/workflows_capacity_guest_retirement_forward_nativequalification.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "nativequalification",
+          "bytes": 777,
+          "sha256": "3be936f83bd98fcdb497a69efcd6761b129f8c5d38753699e57ecd405b24ddb7"
+        }
+      },
+      "controllers/message/workflows_capacity_guest_retirement_v2.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 5581,
+          "sha256": "17a6fb449e5d0ce309e68b441a47b67e33055da94195ab91505300baca177bf7"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 6530,
+          "sha256": "7292c51e1f29341e4e4b62e407b67ad2eefa0cf0118e7ba5ad2284c9b53a2f4b"
+        }
+      },
+      "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
+        "before": {
+          "build_constraint": "!nativequalification",
+          "bytes": 19181,
+          "sha256": "d3a4812124d6a1d20e42d6d4de6dc88785966329ed3dd88a03b8ddd192168d6f"
+        },
+        "after": {
+          "build_constraint": "!nativequalification",
+          "bytes": 21486,
+          "sha256": "0de175052e4c15291025edd1479c966222baf462bb27dd07f537024fbb15f7c3"
+        }
+      },
+      "internal/capacity/guest_retirement_forward.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 1265,
+          "sha256": "5daa9f819cb7167b57c54107852c9a9cb98f93aeb930e0c84631577f71a220d2"
+        }
+      },
+      "model/capacity.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 32797,
+          "sha256": "051eee9ce92e4fa85e2394a676b21ebe0b57aba678f7f5b33b1cf80120a3e6b9"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 32948,
+          "sha256": "ccfec90b3d9b12077942c7f7eb63e9cf06c8ab6262a725a1f10387345fe6ba85"
+        }
+      },
+      "model/capacity_guest_retirement_forward.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 1266,
+          "sha256": "bfa6f64984679dcd86860b6a762e443453cf1c59791ec915476da4feb6885e28"
+        }
+      },
+      "repository/capacity.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 33740,
+          "sha256": "374f45a2cef3667f2323621f90636a8b69ebbc9f909280ec0f1ebf4567b6519f"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 34006,
+          "sha256": "fda10a88ae20a763f74dff85d2e2345b77dfbd54463a64a7e6a082c2519edd6d"
+        }
+      },
+      "repository/capacity_guest_notify_canary.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 19282,
+          "sha256": "ae5bbfb7f6a7f93f0a3dd54f741f5d0d68648b83947d12147f11ec8b5cb376f2"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 19795,
+          "sha256": "9bb6c01cb46126fa93aa541d13bb7f0b7e740a20c28dcf2c370553006907b4e8"
+        }
+      },
+      "repository/capacity_guest_notify_phase.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 2906,
+          "sha256": "bc32292da79d5f0929538658cf98148a69562552de2dee56be5c64fa061b8f45"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 3519,
+          "sha256": "0be7e275ec0be5b9edcbc42b593f4338c38ab2442a15048f4fa49087d6af5e01"
+        }
+      },
+      "repository/capacity_guest_provider_readback.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 6436,
+          "sha256": "4c323d0762858e81f817862cfbb8cad9484dbaf6843be601fec1a4b89a933083"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 6550,
+          "sha256": "96d2e9fd07b0fb7cacc5ac0f213b9a433807d450e9919f0d50b3e65bc0c60258"
+        }
+      },
+      "repository/capacity_guest_reconcile.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 17903,
+          "sha256": "26d177fc7a148cfa1aab634fedb0a699dbc4dd5934bbae6139e804bf3117fd57"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 18126,
+          "sha256": "68791bb0bf52a8eb24e11d55bee17074173175eefd4e8998223bf74f15e2cc6e"
+        }
+      },
+      "repository/capacity_guest_retirement.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 29832,
+          "sha256": "5fdfb63550869e8b7fa0a66d7624af7ee8d4804349a281463bff3c904a69ffbb"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 30236,
+          "sha256": "e68482a826599cdbec4c8d0b3217e3c94440029a04221dde3d4d680dd6559fbd"
+        }
+      },
+      "repository/capacity_guest_retirement_forward.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 17609,
+          "sha256": "956839151e4bfef51f2c253f65ae79a70e57e933abef67b7672a460474b8f389"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_admission.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 16399,
+          "sha256": "89824a0e9b07b8a9fec979618d72fe8ad300866cc3babcd5b46c7dec7459ca92"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 21733,
+          "sha256": "fbca916bfcdf89e46efc9aa352670ca7b8b49696e59cd68246be946b6dcb91e0"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 12938,
+          "sha256": "39f5fedc090ca3bb3daa2c948291df4704429ea53641a23e59ddaba31c3d157e"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 11824,
+          "sha256": "428569c4f57ebae6d8333defe8bcea0bc3447acc5e634dc8e74d5236d364f84d"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_pending.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 4487,
+          "sha256": "e3b9ef1a6989f5da9d6f1316f9a27f4c54b0369e502e6f1008a66cf0c99ad3d4"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "",
+          "bytes": 11438,
+          "sha256": "e9280bb4269fce8bcb7e448e00e27386973cd13a942bbf50d0b9c9600688aaa3"
+        }
+      },
+      "repository/capacity_guest_retirement_v2.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 18978,
+          "sha256": "f09c32cd0a86c2c5fed588f44ed186e50aaa9fab934f9619ee7ce2ddd7bbf900"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 19116,
+          "sha256": "6b0b3a333a4c27693eca92efbb33d5b5e4934649aee6b5881e63506a8cd32784"
+        }
+      },
+      "repository/capacity_guest_retirement_v2_absence.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 13984,
+          "sha256": "753acffbe81ba3b5aefe7f4eb9f1e6011a1a01689b1e3eb190a4063bd581d564"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 14120,
+          "sha256": "d22291c6e86a34a4129e71369bf78adb25d14b11544872d4d0c3cb9b0fe7c67f"
+        }
+      },
+      "repository/capacity_mutations.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 46509,
+          "sha256": "b93f239caaf709ec066f0ccb86a4ddd689b42a1d36fe5681ed16126327177806"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 47960,
+          "sha256": "4b59a5aa5016d512197d9d081be75aa353d841162050fe83a7c28a9729c477b3"
+        }
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 50251,
+          "sha256": "f8396ccb2e58a9c4d4d8486abecf4c2ef6d7eafc1bd57ba9438b00a4ff063b87"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 51210,
+          "sha256": "05b658074c003c63bf2be3f6ec4e0716a9e829bd729bbb180b5d7dbbe84c863d"
+        }
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": null,
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 41583,
+          "sha256": "9deac11d7d3030505baab6ead46332c34a88929c8f3287f2e7d87e55a3d743b0"
+        }
+      }
+    },
+    "all_other_source_facts_unchanged": 768,
+    "reviewed_changed_files": {
+      ".github/workflows/capacity-postgres.yml": {
+        "bytes": 56655,
+        "sha256": "f764332e7e13371f1ea672d238198be9194ab1064a8a52baa4a0af7722b23d4f"
+      },
+      ".github/workflows/failed-original-disposition-source.yml": {
+        "bytes": 27329,
+        "sha256": "0ead461376aad130f380b1c86e280078a78d6150f2ccdc56c2c8fee48511bcc7"
+      },
+      ".github/workflows/failed-serving-guest.yml": {
+        "bytes": 16790,
+        "sha256": "44f8212b1f96fc33f294ee9c38f917c2c18a7f1402cd256c0f8227c02f04b766"
+      },
+      ".github/workflows/installed-reconcile-source.yml": {
+        "bytes": 21638,
+        "sha256": "2533591720af2bdd37fb62b18c30e8c939ebbbd19d459a69834e01906d364e68"
+      },
+      ".github/workflows/partial-nativeoff-reconciliation-source.yml": {
+        "bytes": 11980,
+        "sha256": "1d7136dfc02ac93a528712df750c3365ea8bd01fb514ab1da583552013570a54"
+      },
+      "README.md": {
+        "bytes": 22532,
+        "sha256": "60310d788b034631600f5a471326ec52781122299313502a6ee1e8a756f9793e"
+      },
+      "controllers/httpapi/openapi.json": {
+        "bytes": 116195,
+        "sha256": "28ee8e8a825370deb66c823ed98db6a4dd4b9dd8aa0a7f1991c799de6a85d169"
+      },
+      "controllers/httpapi/ops_guest_retirement_forward.go": {
+        "bytes": 5245,
+        "sha256": "0c7d85a2902cd6caa3f9ef994669cc44e6fe3f99c9c620fd3acde83c2f031b31"
+      },
+      "controllers/httpapi/ops_guest_retirement_forward_postgres_test.go": {
+        "bytes": 7488,
+        "sha256": "da7139ab8d8660b299e85404042e1d6dafb3ba54547fd03b42856ca53bf22283"
+      },
+      "controllers/httpapi/ops_guest_retirement_forward_test.go": {
+        "bytes": 6833,
+        "sha256": "1db274142ff6fae83145b0b088fe7cfa69fec5e828ff0c9e7be4eaf666fa8ebd"
+      },
+      "controllers/httpapi/ops_rbac_inventory_test.go": {
+        "bytes": 19527,
+        "sha256": "d85a4d3d7dd8190005f51ff0f9a7c43bdf1764a24d614455c245a606259a57c9"
+      },
+      "controllers/httpapi/server.go": {
+        "bytes": 188368,
+        "sha256": "6f357a12e332df55a4817df0f4a06792f4c1ba0dbedef8980e0a6e5b9bf53a30"
+      },
+      "controllers/message/workflows_capacity_guest.go": {
+        "bytes": 25239,
+        "sha256": "dbf7b9ad0bf0c4b7db8b4eb049feb82ef6cdfcee3d750c67041d5b3f2cf1f67a"
+      },
+      "controllers/message/workflows_capacity_guest_reconcile.go": {
+        "bytes": 24919,
+        "sha256": "edda47a200b3cf3c843f9808bb4d7aa23385150a33c5d0b343acde60b80b0017"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_forward.go": {
+        "bytes": 15589,
+        "sha256": "44d1ba2428c2f109b95cd5a24b201c89b89e247f0edffe2fc8ad4b7f8e6613e2"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_forward_nativequalification.go": {
+        "bytes": 777,
+        "sha256": "3be936f83bd98fcdb497a69efcd6761b129f8c5d38753699e57ecd405b24ddb7"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_forward_postgres_test.go": {
+        "bytes": 10845,
+        "sha256": "d8602fc87945ae1603848c196889a4cc3a6d3dc5abdd76ac44f20398e5c57c84"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_forward_test.go": {
+        "bytes": 8430,
+        "sha256": "58e2ddd835262ed3c6f8a7d449aa327ac9c9a01ccabdaf4f54a198735fa6b76d"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_v2.go": {
+        "bytes": 6530,
+        "sha256": "7292c51e1f29341e4e4b62e407b67ad2eefa0cf0118e7ba5ad2284c9b53a2f4b"
+      },
+      "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
+        "bytes": 21486,
+        "sha256": "0de175052e4c15291025edd1479c966222baf462bb27dd07f537024fbb15f7c3"
+      },
+      "db/migrations/00090_guest_partial_poweroff_forward.sql": {
+        "bytes": 27321,
+        "sha256": "1708d29501b23f88ceb118f9bda0b5c7a177a0977014a46b33a54012f9b37d53"
+      },
+      "docs/adr/0101-finish-an-authenticated-partial-poweroff-with-a-separate-native-forward-proof.md": {
+        "bytes": 6491,
+        "sha256": "dbe70aa62438ad303662391daebf26d343fc1bb7e674b40fed78afee5cdf254d"
+      },
+      "docs/adr/README.md": {
+        "bytes": 26037,
+        "sha256": "fd6ad614cc7cee52d0ae4b301f2011f80e5ceece0cb6ebfa46a8858ae0febf08"
+      },
+      "docs/api-reference/openapi.json": {
+        "bytes": 116195,
+        "sha256": "28ee8e8a825370deb66c823ed98db6a4dd4b9dd8aa0a7f1991c799de6a85d169"
+      },
+      "docs/service-contract/SEMANTICS.md": {
+        "bytes": 62808,
+        "sha256": "1d248fb08167bb6b006e1b5d0fb165917b05a9dcbc4acbabc8b34903b8efae9a"
+      },
+      "docs/service-contract/source/authentication-dispatch.json": {
+        "bytes": 2372,
+        "sha256": "52bb19719c4af644d070db2c7971a8e2bdda6219a74e6fa2eb8991f7c8dbf331"
+      },
+      "docs/service-contract/source/event-emissions.json": {
+        "bytes": 25703,
+        "sha256": "ecdc11cb9deb912f5ec5df5406c9fb715be2d750c9a30ea292b078a088b46285"
+      },
+      "docs/service-contract/source/http-routes.json": {
+        "bytes": 117685,
+        "sha256": "f4e7ffec9c3ca98fcd2e8e6a4f35b919b7e49cc7305dec7e8bbb72a2fb2a1e8b"
+      },
+      "docs/service-contract/source/sources.json": {
+        "bytes": 130225,
+        "sha256": "ccbd5c50de13d07a31b8271edb6a1e52ea60b3790f687f9df8b4891df9ecdeb5"
+      },
+      "internal/capacity/guest_retirement_forward.go": {
+        "bytes": 1265,
+        "sha256": "5daa9f819cb7167b57c54107852c9a9cb98f93aeb930e0c84631577f71a220d2"
+      },
+      "internal/capacity/guest_retirement_forward_test.go": {
+        "bytes": 4792,
+        "sha256": "bc317fe2e110bbcf9ef4c086ee0806ff612e14ac77b7001de78e7b36851f9d49"
+      },
+      "model/capacity.go": {
+        "bytes": 32948,
+        "sha256": "ccfec90b3d9b12077942c7f7eb63e9cf06c8ab6262a725a1f10387345fe6ba85"
+      },
+      "model/capacity_guest_retirement_forward.go": {
+        "bytes": 1266,
+        "sha256": "bfa6f64984679dcd86860b6a762e443453cf1c59791ec915476da4feb6885e28"
+      },
+      "repository/capacity.go": {
+        "bytes": 34006,
+        "sha256": "fda10a88ae20a763f74dff85d2e2345b77dfbd54463a64a7e6a082c2519edd6d"
+      },
+      "repository/capacity_dispatch_finalization_lost_disposition_postgres_test.go": {
+        "bytes": 23108,
+        "sha256": "1323fa44035024327d69d5450bdc8ace7eca3552d2294a833d672f0b1b93a0b0"
+      },
+      "repository/capacity_guest_failed_installed_external_cause_postgres_test.go": {
+        "bytes": 30353,
+        "sha256": "74aa2f636ded0c997e1d7c27f558d184205d93ca29d867d2501f3d100d90f765"
+      },
+      "repository/capacity_guest_notify_canary.go": {
+        "bytes": 19795,
+        "sha256": "9bb6c01cb46126fa93aa541d13bb7f0b7e740a20c28dcf2c370553006907b4e8"
+      },
+      "repository/capacity_guest_notify_phase.go": {
+        "bytes": 3519,
+        "sha256": "0be7e275ec0be5b9edcbc42b593f4338c38ab2442a15048f4fa49087d6af5e01"
+      },
+      "repository/capacity_guest_partial_nativeoff_postgres_test.go": {
+        "bytes": 14978,
+        "sha256": "6aabf8923045de3fb04d3c6a9b9b9b41c33fe77d3f61a468e8d9e6bd745e34f9"
+      },
+      "repository/capacity_guest_provider_readback.go": {
+        "bytes": 6550,
+        "sha256": "96d2e9fd07b0fb7cacc5ac0f213b9a433807d450e9919f0d50b3e65bc0c60258"
+      },
+      "repository/capacity_guest_reconcile.go": {
+        "bytes": 18126,
+        "sha256": "68791bb0bf52a8eb24e11d55bee17074173175eefd4e8998223bf74f15e2cc6e"
+      },
+      "repository/capacity_guest_retirement.go": {
+        "bytes": 30236,
+        "sha256": "e68482a826599cdbec4c8d0b3217e3c94440029a04221dde3d4d680dd6559fbd"
+      },
+      "repository/capacity_guest_retirement_forward.go": {
+        "bytes": 17609,
+        "sha256": "956839151e4bfef51f2c253f65ae79a70e57e933abef67b7672a460474b8f389"
+      },
+      "repository/capacity_guest_retirement_forward_admission.go": {
+        "bytes": 16399,
+        "sha256": "89824a0e9b07b8a9fec979618d72fe8ad300866cc3babcd5b46c7dec7459ca92"
+      },
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "bytes": 21733,
+        "sha256": "fbca916bfcdf89e46efc9aa352670ca7b8b49696e59cd68246be946b6dcb91e0"
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "bytes": 12938,
+        "sha256": "39f5fedc090ca3bb3daa2c948291df4704429ea53641a23e59ddaba31c3d157e"
+      },
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "bytes": 11824,
+        "sha256": "428569c4f57ebae6d8333defe8bcea0bc3447acc5e634dc8e74d5236d364f84d"
+      },
+      "repository/capacity_guest_retirement_forward_pending.go": {
+        "bytes": 4487,
+        "sha256": "e3b9ef1a6989f5da9d6f1316f9a27f4c54b0369e502e6f1008a66cf0c99ad3d4"
+      },
+      "repository/capacity_guest_retirement_forward_postgres_test.go": {
+        "bytes": 22743,
+        "sha256": "5325dca49b59ac5a936e6ab9359ae2eeace344173d699083c1f8aefd963c4e1a"
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "bytes": 11438,
+        "sha256": "e9280bb4269fce8bcb7e448e00e27386973cd13a942bbf50d0b9c9600688aaa3"
+      },
+      "repository/capacity_guest_retirement_forward_test.go": {
+        "bytes": 3338,
+        "sha256": "f30eadeecbd10b5e89434c552e37d971d82d3fca13b5da2e2a6d4a3935c96138"
+      },
+      "repository/capacity_guest_retirement_v2.go": {
+        "bytes": 19116,
+        "sha256": "6b0b3a333a4c27693eca92efbb33d5b5e4934649aee6b5881e63506a8cd32784"
+      },
+      "repository/capacity_guest_retirement_v2_absence.go": {
+        "bytes": 14120,
+        "sha256": "d22291c6e86a34a4129e71369bf78adb25d14b11544872d4d0c3cb9b0fe7c67f"
+      },
+      "repository/capacity_guest_v2_refused_nativeoff_postgres_test.go": {
+        "bytes": 28526,
+        "sha256": "1a8ec8d1af93f52ee1cc52279a95cf82b7b749a6691742321d77b0c5fb0248f8"
+      },
+      "repository/capacity_mutations.go": {
+        "bytes": 47960,
+        "sha256": "4b59a5aa5016d512197d9d081be75aa353d841162050fe83a7c28a9729c477b3"
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "bytes": 51210,
+        "sha256": "05b658074c003c63bf2be3f6ec4e0716a9e829bd729bbb180b5d7dbbe84c863d"
+      },
+      "repository/failed_serving_workflow_busy_index_postgres_test.go": {
+        "bytes": 12214,
+        "sha256": "c5890eb70699877196a5f7ced9fa3e2da8ef0fe7d98903c18ce8d2d0ca90d725"
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "bytes": 41583,
+        "sha256": "9deac11d7d3030505baab6ead46332c34a88929c8f3287f2e7d87e55a3d743b0"
+      }
+    },
+    "reviewers": [
+      "Root full new implementation and changed integration paths",
+      "slot_n_safety independent whole signed-prefix/caller/ABI and ADR/API/docs contracts",
+      "release_audit independent full migration90/Go bindings"
+    ],
+    "invariants": [
+      "unchanged Guest V2 and normal five-row/caller200 proof",
+      "authenticate the whole retained prefix including genuine fourth record",
+      "automatic same-live-lease admission and separately fenced historical recovery",
+      "fresh committed bounded native reads and new survivor after-floor barrier",
+      "one original owned destroy; accepted or confirmed parent permits read-only continuation",
+      "unknown destroy remains held; no Guest replay/Stop/clock or budget reset",
+      "append-only complete-frame/lineage and deferred terminal full-intent linkage"
+    ],
+    "migration90_sha256": "1708d29501b23f88ceb118f9bda0b5c7a177a0977014a46b33a54012f9b37d53",
+    "historical_migrations_unchanged": 88,
+    "mandatory_source_CI": {
+      "new_roots": 18,
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "race": true,
+      "old16roots_and_9_index89_children_preserved": true,
+      "historical_index89_reapply_bound_to89": true,
+      "fixtures_excluded_from_default_and_nativequalification": true
+    },
+    "qualification": {
+      "local_functional_execution": false,
+      "exact_head_CI_pass_claimed": false,
+      "native_Guest_or_provider_qualification": false,
+      "production_rollout_or_AB_acceptance": false,
+      "ADR_status": "Proposed"
+    }
+  },
+  "partial_poweroff_forward_compile_correction_source_review_20261103": {
+    "schema": "ADR0101_import_correction_Source_review_v1",
+    "base_commit": "ceb577558ba9ba491ebc3c0d845b769390a1cb54",
+    "preserved_previous_complete_review_sha256": "351e1a838ef514f3cffc539db4a5ecb1d01397d90529dc7073a61537d7e25a53",
+    "scope": "Correct two compiler-reported imports. No runtime branch, query, test condition or proof contract changes. All prior complete Source review nodes remain historical and unchanged.",
+    "actual_failed_CI": {
+      "run_id": 41589515183,
+      "job_id": 125762752664,
+      "head": "ceb577558ba9ba491ebc3c0d845b769390a1cb54",
+      "log_sha256": "d4b6f3b865d4fe36d05079f09fbd891a952041fc46af3bcd8660d38db2ba8196",
+      "errors": [
+        "repository/capacity_guest_notify_phase.go:49:13: undefined: capacity",
+        "repository/capacity_guest_retirement_forward_reads.go:5:2: database/sql imported and not used"
+      ]
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "357d837a5e790da12d53715f5312d3293a39d7bb85da45a860f8e90cacabfc81",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "changed_source_facts": {
+      "repository/capacity_guest_notify_phase.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 3519,
+          "sha256": "0be7e275ec0be5b9edcbc42b593f4338c38ab2442a15048f4fa49087d6af5e01"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 3583,
+          "sha256": "b027259c979fd8292df7449dff9473e40522990f46798b120cc99855d0c7653c"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 11438,
+          "sha256": "e9280bb4269fce8bcb7e448e00e27386973cd13a942bbf50d0b9c9600688aaa3"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 11422,
+          "sha256": "0b564ac9cb5badd6cad551dc2c76fb70ba6be838579651681a3c1438aed19082"
+        }
+      }
+    },
+    "all_other_source_facts_unchanged": 795,
+    "local_functional_execution": false,
+    "corrected_exact_head_CI_required": true,
+    "exact_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_integration_correction_source_review_20261103": {
+    "schema": "ADR0101_original_CI_integration_corrections_Source_review_v1",
+    "base_commit": "0d1578d53c71f1d323e9d97d017d3d16bd727606",
+    "preserved_previous_complete_review_sha256": "7f1ae6dc3da61e38ea0c009482d92fb6d5f595e590b0df7f951f6a49ffe6127a",
+    "scope": "Correct original CI failures while retaining all prior Source review nodes and exact historical outcomes.",
+    "original_CI_failed_head": "0d1578d53c71f1d323e9d97d017d3d16bd727606",
+    "original_CI_evidence_runs": [
+      41590109879,
+      41590109886,
+      41590109823,
+      41590109835,
+      41590109878
+    ],
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "5e8fc9d08b50beaab0db20e531a57a820eb3382cce895df83a0119f2a8349e44",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "changed_source_facts": {
+      "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
+        "before": {
+          "build_constraint": "!nativequalification",
+          "bytes": 21486,
+          "sha256": "0de175052e4c15291025edd1479c966222baf462bb27dd07f537024fbb15f7c3"
+        },
+        "after": {
+          "build_constraint": "!nativequalification",
+          "bytes": 21485,
+          "sha256": "16bc88aa6ec11c4e053b55a80ff0019ab18ea672945c8653c8ffae1b91440ea3"
+        }
+      },
+      "internal/capacity/guest_recovery_fixture_retirement.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 8004,
+          "sha256": "8655d1531f2fc29bf9d9a404b5aad45b515af77916e1bf4a0eee80ed1ea094fe"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 8459,
+          "sha256": "2a4b1bdbe9453909c6bfae5c877f79b62a9f6551618be134186addfcf3acdfda"
+        }
+      },
+      "internal/capacity/guest_retirement.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 9503,
+          "sha256": "3e4f84bd3ea640e6757362b59895f6762200722cbaed3ea13f77bbb44027fa4e"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 9765,
+          "sha256": "3b4febd741340dcc6191f0fc26d8ab074f0e9d4ee17061b12e1b57d3b29d437f"
+        }
+      },
+      "internal/capacity/guest_retirement_forward.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 1265,
+          "sha256": "5daa9f819cb7167b57c54107852c9a9cb98f93aeb930e0c84631577f71a220d2"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 1909,
+          "sha256": "636224a423fa901b3a707bdfe20a38be6fb63f470912f48eab35476d61412fbc"
+        }
+      },
+      "internal/capacity/guest_retirement_v2_observation.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 7241,
+          "sha256": "8e22aa75c8fede88cf7d9f4e02a8c057702c912a9d2c351a1191597fce884416"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 7588,
+          "sha256": "55f15c8cd2002c9e9f9b580946bdabb6a1370f5b9aa2c1543aad652052672214"
+        }
+      },
+      "internal/capacity/guest_retirement_v2_wire.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 8473,
+          "sha256": "2865f4d41e77a4709e0f023b93d67ba8919787671e4dd5f60fcbeb80235dff0f"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 8999,
+          "sha256": "f5341cb29d3329f0e4cb8ca763b0b4ba3ee9c908945215633adc9f27f3a7890c"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 21733,
+          "sha256": "fbca916bfcdf89e46efc9aa352670ca7b8b49696e59cd68246be946b6dcb91e0"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 21768,
+          "sha256": "d91fdd9ee4666f312339aa1866c795e4647f2c10c39b222b86b24447128f29c4"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 12938,
+          "sha256": "39f5fedc090ca3bb3daa2c948291df4704429ea53641a23e59ddaba31c3d157e"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 12973,
+          "sha256": "5962ded54e3cebd721b58a80388db4c3d10c84962f9775ad391a7a04928615d8"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 11824,
+          "sha256": "428569c4f57ebae6d8333defe8bcea0bc3447acc5e634dc8e74d5236d364f84d"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 13124,
+          "sha256": "0e4f96fd1778a0004b10ee2add2e1ebc9f951576de8c4ef2cc0cacfa4410a638"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 11422,
+          "sha256": "0b564ac9cb5badd6cad551dc2c76fb70ba6be838579651681a3c1438aed19082"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 11407,
+          "sha256": "09ff8c0327472fbf23930cab545656b23dc1a56d6ac6eece743554ffef40bd91"
+        }
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 41583,
+          "sha256": "9deac11d7d3030505baab6ead46332c34a88929c8f3287f2e7d87e55a3d743b0"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 41870,
+          "sha256": "c78f55cfeaece5f594ed529eab17ebfc495f928d5b2e3114a9bb62b981b7ea7e"
+        }
+      }
+    },
+    "all_other_source_facts_unchanged": 786,
+    "reviewed_changed_Go_files": {
+      "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
+        "bytes": 21485,
+        "sha256": "16bc88aa6ec11c4e053b55a80ff0019ab18ea672945c8653c8ffae1b91440ea3"
+      },
+      "internal/capacity/guest_recovery_fixture_retirement.go": {
+        "bytes": 8459,
+        "sha256": "2a4b1bdbe9453909c6bfae5c877f79b62a9f6551618be134186addfcf3acdfda"
+      },
+      "internal/capacity/guest_retirement.go": {
+        "bytes": 9765,
+        "sha256": "3b4febd741340dcc6191f0fc26d8ab074f0e9d4ee17061b12e1b57d3b29d437f"
+      },
+      "internal/capacity/guest_retirement_forward.go": {
+        "bytes": 1909,
+        "sha256": "636224a423fa901b3a707bdfe20a38be6fb63f470912f48eab35476d61412fbc"
+      },
+      "internal/capacity/guest_retirement_forward_test.go": {
+        "bytes": 5913,
+        "sha256": "d3e00734c8abcf72d55aca9e324932befb9cc7ff542f6c208dbeaf4f6354b743"
+      },
+      "internal/capacity/guest_retirement_v2_observation.go": {
+        "bytes": 7588,
+        "sha256": "55f15c8cd2002c9e9f9b580946bdabb6a1370f5b9aa2c1543aad652052672214"
+      },
+      "internal/capacity/guest_retirement_v2_wire.go": {
+        "bytes": 8999,
+        "sha256": "f5341cb29d3329f0e4cb8ca763b0b4ba3ee9c908945215633adc9f27f3a7890c"
+      },
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "bytes": 21768,
+        "sha256": "d91fdd9ee4666f312339aa1866c795e4647f2c10c39b222b86b24447128f29c4"
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "bytes": 12973,
+        "sha256": "5962ded54e3cebd721b58a80388db4c3d10c84962f9775ad391a7a04928615d8"
+      },
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "bytes": 13124,
+        "sha256": "0e4f96fd1778a0004b10ee2add2e1ebc9f951576de8c4ef2cc0cacfa4410a638"
+      },
+      "repository/capacity_guest_retirement_forward_postgres_test.go": {
+        "bytes": 22679,
+        "sha256": "3beb346d868afcb28ead9cfc7feaa02d93a7306368896c590698e9b3d25ecd87"
+      },
+      "repository/capacity_guest_retirement_forward_reads.go": {
+        "bytes": 11407,
+        "sha256": "09ff8c0327472fbf23930cab545656b23dc1a56d6ac6eece743554ffef40bd91"
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "bytes": 41870,
+        "sha256": "c78f55cfeaece5f594ed529eab17ebfc495f928d5b2e3114a9bb62b981b7ea7e"
+      },
+      "repository/capacity_guest_retirement_forward_guard_test.go": {
+        "bytes": 2736,
+        "sha256": "c292ba87a08e8ec31aee9a0d2e5ddeea3a099af656fd4157b381d1177d9d8a40"
+      }
+    },
+    "corrections": [
+      "Fixture-only canonical provider label encoder replaces an inaccessible private-package helper; unused test import removed.",
+      "Canonical four-disposition unresolved-grant predicate propagated into both new profile-wide pending counts; existing contract test unchanged.",
+      "No-marker slot guard reads the existing capacity_intents table first; every present marker requires its complete immutable ledger match, malformed/missing rows fail closed, exact terminal records remain historical. The intentional schema86 HTTP fixture stays unchanged.",
+      "Normal V2 public signatures and criteria remain fixed-normal private-context wrappers. Only the distinct forward context admits explicitly enrolled nonnil empty rosters with exact hashes and complete signed nonnil empty censuses; nonce/signature/clock/operation guards stay shared.",
+      "Empty test operands are constructed before hashes/signatures; normal-wrapper refusal and missing/foreign evidence negatives are retained.",
+      "Two lint transformations preserve all branch conditions and retained read/error outcomes."
+    ],
+    "normal_validator_current_byte_identity_claimed": false,
+    "prior_normal_byte_identity_records_are_historical_only": true,
+    "normal_public_API_and_success_criteria_unchanged": true,
+    "new_default_unit_root": "TestRetirementForwardSlotGuardRequiresLedgerForMarkers",
+    "focused_new_root_census": 18,
+    "focused_old_root_census": 16,
+    "local_functional_execution": false,
+    "new_exact_head_CI_required": true,
+    "exact_head_CI_pass_claimed": false,
+    "production_or_AB_acceptance": false,
+    "additional_original_CapacityPG_failure": {
+      "job_id": 125764650459,
+      "log_sha256": "e74dcbcd5828d372f5d9345130db8def81ed7ad28e512aeb2163342c1e398c98",
+      "error": "synthetic baseline registration: relation public.capacity_guest_retirement_forwards does not exist (42P01)",
+      "correction": "Same existing-intent no-marker guard path; no fixture schema or gate changed."
+    }
+  },
+  "partial_poweroff_forward_declared_member_binding_correction_20261103": {
+    "schema": "ADR0101_declared_member_binding_Source_correction_v1",
+    "base_commit": "988e751e74b1aaceee6009ffe2ff3efac3f416ba",
+    "preserved_previous_complete_review_sha256": "7eee400ab795035a86805b20f0ec5ea6e4ea9612014df43e8d7500aa4137782f",
+    "actual_failed_CI": {
+      "run_id": 41591962056,
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "error": "new declared member signed registration: explicit original production clock required",
+      "new_roots_run": 18,
+      "new_roots_passed": 9,
+      "new_roots_failed": 9,
+      "nodes_run_each": 149,
+      "nodes_failed_each": 37,
+      "skipped_each": 0
+    },
+    "cause": "Recursive target-slot fixture substitution also changed the complete approved profile queues/bootstraps and binding slots; the original signed clock correctly rejected that mismatch. The changed bootstrap journal also needed its enclosing hash recomputed.",
+    "correction": "Restore the exact approved typed Binding and Authority.Profile, then rehash the rebound bootstrap journal before the original result/signature cascade and first insert.",
+    "changed_source_facts": {
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 41870,
+          "sha256": "c78f55cfeaece5f594ed529eab17ebfc495f928d5b2e3114a9bb62b981b7ea7e"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 42055,
+          "sha256": "a71ff6f503a82b96f1dbd2e9654c2115534e9676b459a26e27807112866a1f79"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "b522aab55c4c003a623061edbf774c0fe29528cae7c5931250d2db1900739fed",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 796,
+    "fixture_only": true,
+    "runtime_validators_tests_assertions_clocks_leases_stored_frames_changed": false,
+    "root_reviewed_three_assignment_diff": true,
+    "local_functional_execution": false,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_declared_member_roster_correction_20261103": {
+    "schema": "ADR0101_declared_member_roster_Source_correction_v1",
+    "base_commit": "3af747d5598816f9f11693ffa2f31d4505c5df0e",
+    "preserved_previous_complete_review_sha256": "a045f24773517e7830e075e0e8125efc8986ba38304799b570529c4323da6d7b",
+    "actual_failed_CI": {
+      "run_id": 41593319433,
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "error": "new declared member signed registration: complete original protected provisioning required",
+      "new_roots_run": 18,
+      "new_roots_passed": 9,
+      "new_roots_failed": 9,
+      "nodes_run_each": 149,
+      "nodes_failed_each": 37,
+      "skipped_each": 0
+    },
+    "cause": "Distinct declared birth substitutes the original boot ID in writer identities. The two enclosing writer roster digests still described the old birth, so the original protected registration validator correctly rejected it.",
+    "correction": "Recompute Result.WriterRosterSHA256 from the rebound Writers and bind EnrollmentStatement.WriterRosterSHA256 to it before the original result and signature cascade and first insert.",
+    "changed_source_facts": {
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "bytes": 42055,
+          "sha256": "a71ff6f503a82b96f1dbd2e9654c2115534e9676b459a26e27807112866a1f79"
+        },
+        "after": {
+          "bytes": 42212,
+          "sha256": "e6d78c139ecfb7fc158207d978dc6a561228aa35827033c35be99b0243616129"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "cf79cefef9696b139936b5224b531896283bb3dbcd9770302f4c001869a1d785",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 796,
+    "fixture_only": true,
+    "runtime_validators_test_assertions_clocks_leases_stored_frames_changed": false,
+    "root_reviewed_two_assignment_diff": true,
+    "signature_cascade_review": "Writer roster and bootstrap journal hashes are recomputed before clock/result/registration/receipt/enrollment/installation signatures. No additional affected derived hash was found.",
+    "local_functional_execution": false,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_policy_clock_and_fixture_corrections_20261103": {
+    "schema": "ADR0101_policy_clock_fixture_Source_corrections_v1",
+    "base_commit": "1b73f995217198391ed3042d15a87fcddfefce51",
+    "preserved_previous_complete_review_sha256": "846a97177832646306b27259a4d3d9962e51af46298576ffd6aba0ac7840bd0d",
+    "reviewed_Source_commits": [
+      "86b7579cd9b15dcb9af08d0edd33f5d6142fc5f1",
+      "70b5463f2617eee15907683743746755dfe1b88f",
+      "032e21b565e4d72c32433f52befa9ccb8a26d089",
+      "c24f0a2c5180e7cded5a2e100cdf091b7bc3bfc3"
+    ],
+    "actual_failed_CI": {
+      "run_id": 41594624644,
+      "original_failure_manifest_sha256": "11cad5c0e4bd876607dd90232198f4bd5e6f266e255bade91f4662a53a4c936d",
+      "postgres16": {
+        "roots_run": 18,
+        "roots_passed": 11,
+        "roots_failed": 7,
+        "nodes_run": 161,
+        "nodes_passed": 132,
+        "nodes_failed": 29,
+        "skipped": 0
+      },
+      "postgres17": {
+        "roots_run": 18,
+        "roots_passed": 10,
+        "roots_failed": 8,
+        "nodes_run": 161,
+        "nodes_passed": 128,
+        "nodes_failed": 33,
+        "skipped": 0
+      },
+      "provider_specific_deterministic_cause_claimed": false
+    },
+    "findings_and_changes": [
+      "The actual HZ issued DELETE receipt reader rebuilt a policy without Kind or stored Name, which deterministically failed parseCapacityPolicy. The exact stored name and fixed kind are now loaded under the same ID/checksum plus exact namespace. All original eligibility, native time, source, tuple and ownership checks remain.",
+      "The original HTTP child rejected the database server representation behind its admitted loopback connection. It now requires exact equality with the complete nonsecret parent-captured database/canonical server address/port/major, retaining URL loopback/Unix, owned-name and explicit PostgreSQL16/17 gates.",
+      "The forward evidence reader compared PostgreSQL microsecond deadlines directly to signed nanosecond values. Its upper bound now compares both operands in PostgreSQL representation with the full signed RFC3339Nano input, while the raw authority observation must also precede the exact native original deadline. No epsilon or original data normalization is introduced. This defect follows from the types and conversions; the exact earlier CI failing branch is not claimed measured.",
+      "Default fixture owners now start with the actual production30s parent cap before first Issue; tail8 keeps its original declared300s lease. Retained canary windows close naturally before live admission. No stored clocks, leases, ACKs, counters or rows are reset.",
+      "The tail2 real authority ingress deliberately retains an initial short future fractional789ns deadline before first Issue. It requires four actual PostgreSQL authority rows, all within the signed PostgreSQL bound and at least one numerically after the raw signed nanoseconds, followed by real live admission. Six additional clock children comprise one positive and five negative strict-bound cases inside the existing root.",
+      "Bounded failure diagnostics run only after failed existing assertions in the excluded fixture, close all result sets and roll back; they are later observations, expose no raw wires or keys and do not attribute earlier refusal branches."
+    ],
+    "changed_source_facts": {
+      "repository/capacity_guest_retirement_forward_destroy.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 21768,
+          "sha256": "d91fdd9ee4666f312339aa1866c795e4647f2c10c39b222b86b24447128f29c4"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 21859,
+          "sha256": "d00784b70a575fc3c60772c484582348aac7e33a973fce50b4edbcb681ed9fdb"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 12973,
+          "sha256": "5962ded54e3cebd721b58a80388db4c3d10c84962f9775ad391a7a04928615d8"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 13801,
+          "sha256": "1caaf480fd57b5d3269b9b9e5d7c1926fe7d3cd5b6a54c84a4fd2845831f5431"
+        }
+      },
+      "repository/guest_retirement_forward_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 42212,
+          "sha256": "e6d78c139ecfb7fc158207d978dc6a561228aa35827033c35be99b0243616129"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 49899,
+          "sha256": "8afc501fd596f8f2258fe0e205f99bd410317d2034413fed203ba07b82a3002c"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "9f92af7f674eb7198c6f870ca2a3683697e4d5b6d5b1f28121759b4c3539aca5",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 794,
+    "new_tests_roots_preserved": 18,
+    "new_clock_children_total": 6,
+    "new_clock_children_positive": 1,
+    "new_clock_children_negative": 5,
+    "independent_source_peers": [
+      "Slot full runtime deadline diff and complete final fixture/test paths exact hashes",
+      "Brain complete final fixture/test paths and bounded diagnostic helper exact hashes"
+    ],
+    "root_review": "Complete current Source deltas and all final modified functions reviewed; every prior complete review node is retained.",
+    "normal_V2_and_original_authority_owner_source_changed": false,
+    "per_authority_read_max_seconds": 5,
+    "local_functional_execution": false,
+    "original_failure_preserved": true,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_callback_custody_correction_20261103": {
+    "schema": "ADR0101_callback_custody_Source_correction_v1",
+    "base_commit": "517588f4a2d30678271adaad06099a6905b3493a",
+    "preserved_previous_complete_review_sha256": "a42ac545ca8dc336d6e584c0640638dffbb8e72a14673e36ac7d3f48039e6e2c",
+    "reviewed_Source_commits": [
+      "3fb1228b96d641422273148bb31b9b9b15be6015",
+      "6f53d095697b919efcf2c16ea7fbf017a929c898"
+    ],
+    "actual_failed_CI": {
+      "run_id": 41598294791,
+      "failure_manifest_sha256": "a106161c31d63acc483848c93385cc9c3ea7aa9ad7ec1fcc221bbc14da886be5",
+      "postgres16": {
+        "roots_run": 18,
+        "roots_passed": 14,
+        "roots_failed": 4,
+        "nodes_run": 184,
+        "nodes_passed": 164,
+        "nodes_failed": 20,
+        "skipped": 0
+      },
+      "postgres17": {
+        "roots_run": 18,
+        "roots_passed": 14,
+        "roots_failed": 4,
+        "nodes_run": 184,
+        "nodes_passed": 164,
+        "nodes_failed": 20,
+        "skipped": 0
+      },
+      "originals_preserved": true
+    },
+    "findings_and_changes": [
+      "Fourteen actual repository callback refusals reached the deterministic active-slot guard without private forward context. The callback now reconstructs only that internal scope from exact server-retained current marker, owning same-admission DELETE and complete immutable custody, under the existing scope/profile lock order.",
+      "Genuine no-marker callbacks read only the existing intent table and retain schema86 compatibility. Present malformed or missing ledger, foreign epoch/tuple/grant/binding and historical parent-as-child custody remain HOLD; terminal history is still checked by the original slot guard.",
+      "The reconstruction issues no grant, performs no DML and supplies no mutation authority. Every existing host guard, principal/request, execution, policy, lease, state, nonce, original-return and eligibility check remains. Current grant state is reloaded FOR UPDATE, preserving the no-resend boundary.",
+      "The HTTP preservation baseline moves after legitimate original failed-run finalization and the natural historical barrier, before admission. The full preserved-original equality remains unchanged.",
+      "Thirteen default marker/ledger cases and thirteen additional children per provider inside the existing PG ClosedGuards root cover one exact owning scope, seven forged in-memory records and five real DB-only redemption refusals. Existing-grant bad principal/target/slot/request cases require the exact unchanged authorization error, rather than accepting an earlier generic refusal. All grant bytes, ledgers, reads, bindings and originals remain checked unchanged."
+    ],
+    "changed_source_facts": {
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 13124,
+          "sha256": "0e4f96fd1778a0004b10ee2add2e1ebc9f951576de8c4ef2cc0cacfa4410a638"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 17137,
+          "sha256": "7a13fb981863ab4758a481ddecf7bc860a803a6499aed2614b4a2d96012ce3aa"
+        }
+      },
+      "repository/capacity_mutations.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 47960,
+          "sha256": "4b59a5aa5016d512197d9d081be75aa353d841162050fe83a7c28a9729c477b3"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 48064,
+          "sha256": "8a5acf4e1f647afc02c55ddfaae96dac7196a9480b9858a165a633eddfb8d6ac"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "f9bab0259e29ea85c7354e2109f8dd6e28250de66680dcbeb45d54a46aef971a",
+      "complete_source_count": 797,
+      "bytes": 130225
+    },
+    "all_other_source_facts_unchanged": 795,
+    "new_default_unit_root": "TestRetirementForwardCallbackRequiresExactMarkerLedger",
+    "new_default_unit_children": 13,
+    "strict_forward_top_level_roots_preserved": 18,
+    "new_strict_forward_top_level_roots": 0,
+    "additional_PG_children_per_provider": {
+      "private_owning_scope_positive": 1,
+      "private_scope_negative": 7,
+      "real_redeem_negative": 5
+    },
+    "root_static_review_sha256": "ba6d568c73def2720b30eecfa06bb8c7d04bc004341fce0e9cc4176bc918c941",
+    "author_freeze_sha256": "401a888809497799691d0ba59c53185f465f04b9de8716616ac2bee04bdeadc8",
+    "independent_source_peers": {
+      "Slot": "Complete runtime and default unit at exact frozen hashes PASS",
+      "Brain": "Complete final real PG negative cases and exact authorization error assertions PASS"
+    },
+    "normal_V2_and_original_authority_owner_source_changed": false,
+    "original_clocks_budgets_rows_or_ack_reset": false,
+    "local_functional_execution": false,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_or_AB_acceptance": false
+  },
+  "partial_poweroff_forward_complete_policy_custody_correction_20261103": {
+    "schema": "ADR0101_complete_policy_terminal_Source_correction_v1",
+    "base_commit": "5a975a3e7edb9d2991af2cd5b5c8615d9e9f5414",
+    "preserved_previous_complete_review_sha256": "e9d8405c8a5e52c76964fe867d82d1b8a962d15baa752db04e377253a33f7e97",
+    "reviewed_Source_commit": "ff157cfc2c533f52683b9efeeff3963d21c44e5f",
+    "actual_failed_CI": {
+      "run_id": 41601567480,
+      "failure_manifest_sha256": "0a19411c13981e11f3d691d6c8e939b46a2fcd399d977de6b10988b62327acc3",
+      "both_postgres_majors": [
+        16,
+        17
+      ],
+      "per_major": {
+        "roots_run": 18,
+        "roots_pass": 15,
+        "roots_fail": 3,
+        "nodes_run": 210,
+        "nodes_pass": 193,
+        "nodes_fail": 17,
+        "skip": 0
+      },
+      "fourteen_final_terminal_refusals_per_major": true,
+      "actual_callback_children_pass_per_major": 26,
+      "capacity_message_http_original_go_exits_zero": true,
+      "no_transfer_of_prior_head_qualification": true
+    },
+    "cause": "The final completion helper discarded the validated policy name by constructing a partial Manifest. Its useful survivor path queries guestMemberPreregistrationTx by exact namespace/name, so the empty name cannot locate any enrolled survivor. All actual failing cases had advanced through redemption, settlement, absence and confirmation before the final refusal.",
+    "correction": "Pass the complete owning policy already validated and locked by capacity.transaction through the two private completion functions and all three callsites. Remove the partial reconstruction. Public signatures, SQL and every existing guard stay unchanged.",
+    "changed_source_facts": {
+      "repository/capacity.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 34006,
+          "sha256": "fda10a88ae20a763f74dff85d2e2345b77dfbd54463a64a7e6a082c2519edd6d"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 34014,
+          "sha256": "28d21ce8f93633ed1d1605828675aafa90e25a7ab54bbcf38304cb864b799ec1"
+        }
+      },
+      "repository/capacity_guest_reconcile.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 18126,
+          "sha256": "68791bb0bf52a8eb24e11d55bee17074173175eefd4e8998223bf74f15e2cc6e"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 18134,
+          "sha256": "6a75bc3566a5c7b156baf1893680a50f520b50240da7ec1395d139adf9f7ff2c"
+        }
+      },
+      "repository/capacity_guest_retirement_forward_guards.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 17137,
+          "sha256": "7a13fb981863ab4758a481ddecf7bc860a803a6499aed2614b4a2d96012ce3aa"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 17045,
+          "sha256": "652f89d0cab187e548e2215ff799fe71be0c28e13dc5d7f3ba284f526afbee25"
+        }
+      }
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "06538fe916e60a3266315f7aa6a66c4dd52da5693692a27bd560affc57abe958",
+      "bytes": 130225,
+      "complete_source_count": 797
+    },
+    "all_other_source_facts_unchanged": 794,
+    "source_freeze_sha256": "73089427076945d00dfa7f8d302458913240483a9c584b7228d9f0ac34e751d0",
+    "independent_peers": {
+      "Slot": "Full minimal three-file diff, all private definitions/calls, reverse whole-file equality and production/controller origin PASS",
+      "Release": "Complete fixture/production operand comparison confirms no assessment, timing or test correction needed"
+    },
+    "root_full_diff_and_call_chain_review": true,
+    "private_definitions_changed": 2,
+    "private_calls_changed": 3,
+    "test_or_public_API_or_SQL_changed": false,
+    "normal_V2_or_original_authority_owner_changed": false,
+    "timers_budgets_ACKs_or_rows_reset": false,
+    "old_and_new_root_rosters_preserved": true,
+    "strict_forward_roots_per_major": 18,
+    "local_functional_execution": false,
+    "exact_new_head_CI_required": true,
+    "exact_new_head_CI_pass_claimed": false,
+    "native_AB_or_main_acceptance": false
+  },
+  "held_original_network_G9_Source_review_20261103": {
+    "schema": "ADR0102_bound_G9_and_held_original_image_only_Source_review_v1",
+    "reviewed_Source_commit": "28fab4289057494a966a752cf4fd3ea657b6731b",
+    "normal_merge_of_qualified_Core_R": "da3598658d6f51d6f72283fe84509e336dca8927",
+    "qualified_Core_R": "ed76cef2d66d7f5368b96b41aaa22fc80a2233c4",
+    "qualified_AMD64_D": "68518595394601e92320f1ff074c1a85b8685ff6a810ddabab3bd649afd4de69",
+    "Root_accepted_controller_C": "bd7707a1a1cc0fd9a59ae567493ccb19023c9310a7d5e6840e10355618f7f338",
+    "Guardian_S": "c5d6a86f0741686382e10257ce880734d65b38da6b2c96fea35444ee6ccbf6eb",
+    "scope": "Preserve canonical G6, boot-v2, G7 and exact G8 authorities, helpers, original records and recovery limits while admitting only the independently qualified R5 platform image. Keep a separate image-only CAS for one fixed held original, with stable closed late-input custody and fresh native OFF/running evidence. The original failed caller and intent are unchanged; this operation grants no retirement authority. ADR0101 still requires its own fresh survivor business proofs before DELETE.",
+    "files": {
+      ".github/workflows/owned-network-guardian.yml": {
+        "sha256": "1dfe7c3b489ae21a922f3389cd81d9da4caece86ddc96b39e14282e7e009c2c6",
+        "bytes": 3076
+      },
+      "docs/adr/0102-preserve-g8-authority-for-a-held-original-core-image-rollout.md": {
+        "sha256": "0b124cbe11285f880cdbaab974c119e2feb40cd2ddb4d7d02e4489a5deb142ef",
+        "bytes": 7244
+      },
+      "docs/adr/README.md": {
+        "sha256": "81672a7c9012bf39fbc97c756841e530150168034722fb6eb96fd5cc4e8eda73",
+        "bytes": 26309
+      },
+      "ops/network-guardian/g9pair/PACKAGE.json": {
+        "sha256": "d66e0ecdd0ddc47e6ee1ca4a1a1b858657d6822492a9487d8cd3f5cbdcd25ca3",
+        "bytes": 8114
+      },
+      "ops/network-guardian/g9pair/SHA256SUMS": {
+        "sha256": "4e4c7bf501033f81efb608fddd64e739ee64a7dec652576032def39a27543b73",
+        "bytes": 1089
+      },
+      "ops/network-guardian/g9pair/source/coverage.py": {
+        "sha256": "eb7ed1fcbcc665cdc3603812a10103b4e19dd0b66693b99dc8cfeb15adceeb88",
+        "bytes": 16776
+      },
+      "ops/network-guardian/g9pair/source/current15_bounded_reader.py": {
+        "sha256": "1124dfbfbd57c60decc4fdcb0233c03253e87a941f50c8fa5b6aad3e28ae30cd",
+        "bytes": 4713
+      },
+      "ops/network-guardian/g9pair/source/current15_bounded_tail_contract.py": {
+        "sha256": "c18809987960f9aea524240f7ea6886a1ed782e5c4001e68edac875bbbe3431d",
+        "bytes": 4477
+      },
+      "ops/network-guardian/g9pair/source/initial_boot_Cold_read_adoption.py": {
+        "sha256": "0e690f4b74303da774aa7d5a651444e7f74c8445428af38002192bf1079b5799",
+        "bytes": 7381
+      },
+      "ops/network-guardian/g9pair/source/journal_contract.py": {
+        "sha256": "b0c153b69cc8275e1e330cb3c584b498c1685c1b999c4b5c7b972f164c96db6c",
+        "bytes": 6588
+      },
+      "ops/network-guardian/g9pair/source/network_guardian.py": {
+        "sha256": "c5d6a86f0741686382e10257ce880734d65b38da6b2c96fea35444ee6ccbf6eb",
+        "bytes": 114213
+      },
+      "ops/network-guardian/g9pair/source/proof_cache.py": {
+        "sha256": "c2e0b981a2843c15dd5907cc186e4c23a7d844a78c1ce4f7e2e3578704eb5b4b",
+        "bytes": 6061
+      },
+      "ops/network-guardian/g9pair/source/qualification_initializer.py": {
+        "sha256": "d73ade12564ba7b672a4dbdf8225e99af13a64a9b8aff4a41fb1a0225bef9ec8",
+        "bytes": 7571
+      },
+      "ops/network-guardian/g9pair/tools/SHA256SUMS": {
+        "sha256": "bd39b834112fda5dd643a0ee83109f83d57a05b470f1063e7cf66bd27e7555e5",
+        "bytes": 358
+      },
+      "ops/network-guardian/g9pair/tools/derive_g9pair_controller_config.py": {
+        "sha256": "967f7d8c01aad882a6158a38bfbdb04a24161a0b9b5400be0a2d70d4c8bafa7c",
+        "bytes": 16679
+      },
+      "ops/network-guardian/g9pair/tools/derive_standing_config.py": {
+        "sha256": "f151cff807091fd205fdd24f67bccfa9ca9557209176c4e187ffeafafc7821c9",
+        "bytes": 9746
+      },
+      "ops/network-guardian/g9pair/tools/g9cut.py": {
+        "sha256": "9cf7995b2a63e6b395c71ef46f574d90872404b3dcd815c53bc45a19daa91dec",
+        "bytes": 56269
+      },
+      "ops/network-guardian/g9pair/tools/pair_change_contract.py": {
+        "sha256": "0ef83ad2d4bbb28ad3d2319193bf3d9434ff04abbcf5c9b77c5993644f605a0a",
+        "bytes": 28662
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-cold-transport.service": {
+        "sha256": "074fe0a9024ba1bb91206600b5f975c2181b03eab0290546b96d0b7d765f502d",
+        "bytes": 815
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-guardian.service": {
+        "sha256": "66b0eecf531f31cd4a656321299f62e003a1dc0064cb1a44b79f09f55cea35fe",
+        "bytes": 725
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "sha256": "ad993f5a9a190984f67752a615fdd391db78384841bf02463250eab80de6010c",
+        "bytes": 184
+      },
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "sha256": "56bd498fbce7428c84852978d42f56571c4932db208e78021f74a56b664c8321",
+        "bytes": 85238
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-G9.json": {
+        "sha256": "992dceefa6833858ba41fa8737823d0b97322ff9dc9dbc5437041821a6528627",
+        "bytes": 5170
+      },
+      "ops/network-guardian/tests/fixtures/held-original-g9/identity.PUBLIC.json": {
+        "sha256": "950ff4a5a22145bafd7ceb6b8644c3075a9def04806d9a39a8e0582d3cb8b3cb",
+        "bytes": 5841
+      },
+      "ops/network-guardian/tests/fixtures/historical-standing-g8/ROOT-READ-CUSTODY.PUBLIC.json": {
+        "sha256": "b9d126cb4088aa67cf0cef4588ef367525b6816c0dbafcc0f42bb5bb0da3a3a7",
+        "bytes": 987
+      },
+      "ops/network-guardian/tests/fixtures/historical-standing-g8/g8pair.PUBLIC.json": {
+        "sha256": "a02690f5e7a8c000478ceca6c4f4715e7b589814bf93fc5cbefe3bd9126e08d3",
+        "bytes": 7853
+      },
+      "ops/network-guardian/tests/run_exact_ci.py": {
+        "sha256": "005f04f6b763f2eed80d769d37b1786ec0debaab74f4f5d2463f7a0adb74a96d",
+        "bytes": 4048
+      },
+      "ops/network-guardian/tests/test_g9pair_core_cas.py": {
+        "sha256": "33be7bd6bc772570b062c51167dadc822e7617a02930f8753edce29bf96e8e8e",
+        "bytes": 54203
+      },
+      "ops/network-guardian/tests/test_g9pair_cutover.py": {
+        "sha256": "4b0fb1ff0b5a730aef0edbdea9bae3ddfb5be8fe11397621fc2e2d16790ff2de",
+        "bytes": 7494
+      },
+      "ops/network-guardian/tests/test_g9pair_source.py": {
+        "sha256": "cb12b65c01d65bc6e4e6e8c2556aa8c7ec5d49461e8b2986175b1461892c5878",
+        "bytes": 10818
+      },
+      "ops/network-guardian/tests/test_g9pair_tools.py": {
+        "sha256": "9a1d2e75e1f8e8e06481a704220b224f8c42e6d0e90bdd922f4de875d02ded84",
+        "bytes": 9529
+      }
+    },
+    "complete_Go_Source_census": {
+      "path": "docs/service-contract/source/sources.json",
+      "sha256": "06538fe916e60a3266315f7aa6a66c4dd52da5693692a27bd560affc57abe958",
+      "records": 797,
+      "bytes": 130225,
+      "all_SHA_bytes_and_explicit_build_constraints_rechecked": true,
+      "all_records_unchanged_from_qualified_R5": true
+    },
+    "preserved_reviews": {
+      "previous_complete_review_sha256": "3f4c1e9cd453c9b8ffe9ee4fb5d976fdb0d904dc0c0c9d25eaba95ce6185b211",
+      "previous_top_level_nodes": 16,
+      "runtime_Root_review_sha256": "9fa38ae0087e7fc21c809403970f6d7e563ed9839c9e5d63b9603d920b6aa54b",
+      "runtime_independent_peer_sha256": "4f73759b883a09a7b47a55e0fc81616b6a544e9240efa4d9a656aef8a59993f1",
+      "tools_CAS_Root_review_sha256": "c0b3025895bc1253a67fcc8e4b3acfb30fd271bd008ac051247a200b88f934cc",
+      "tools_CAS_independent_peer_sha256": "660361d402d519d7b0bf554a08a1e1b27f49042de2edd11d5b2bc7935b5f8947",
+      "final_tests_independent_peer_sha256": "adf10a5fc565479cab27f59a635c9d07d376b0d25bed7fe9398964972c7ba3de",
+      "Owned_integration_independent_peer_sha256": "92b20ae430af0555c5e1dadac997e41de881f3279b2f82ba9296154fad710084"
+    },
+    "static_review": {
+      "runtime_files": 10,
+      "runtime_integrity_rows_including_PACKAGE": 11,
+      "separate_tools": 4,
+      "Owner_methods_and_helpers_unchanged": [
+        31,
+        7
+      ],
+      "literal_historical_field_counts": [
+        19,
+        21,
+        23,
+        25
+      ],
+      "current_fields": 27,
+      "fixed_original_identity_keys": 23,
+      "original_G8_roster_and_all_old_test_files_preserved": true,
+      "late_loader_and_all_guard_function_bodies_byte_unchanged_during_binding": true,
+      "only_new_rollout_integrity_entry_appended": true
+    },
+    "required_exact_head_CI": {
+      "applicable_workflow_event_pairs": 18,
+      "Owned_historical106_and_new47": 153,
+      "Owned_real_PostgreSQL_held_cases": 20,
+      "ordinary_forward_roots_per_PG_major": 18,
+      "ordinary_forward_nodes_per_PG_major": 210,
+      "old_kernel_roots_and_nodes_per_PG_major": [
+        16,
+        310
+      ],
+      "index89_cases_per_PG_major": 9,
+      "native_roots_and_nodes": [
+        8,
+        114
+      ],
+      "production_Docker_build": true,
+      "all_required_counters_no_skips_or_failures_clean_Source": true,
+      "outcomes_pending": true
+    },
+    "local_functional_execution": false,
+    "operational_package_stage_swap_or_Core_CAS_performed": false,
+    "native_recovery_main_or_AB_acceptance": false
+  },
+  "G9_discovery_error_retention_review_20261103": {
+    "schema": "G9_exact_census_original_discovery_error_retention_Source_review_v1",
+    "reviewed_Source_commit": "f3205f7e28a5d960d60de9e4ea89c139f93d2957",
+    "previous_complete_review_sha256": "02d384b4e2abe819e21e27aca3c7a029a91275b50e392f3e5941104968c6df8b",
+    "previous_top_level_nodes": 17,
+    "actual_failed_head": "21f870e03d33f0f73727195e38c7e21765eca25c",
+    "actual_failed_run": 41613602440,
+    "actual_failed_job": 125841385987,
+    "original_refusal_sha256": "736091a683fabdac3cf78cef2301259d3d79043b5b0b93dcfccc9e020e409619",
+    "actual_counts": {
+      "expected": 153,
+      "discovered": 124,
+      "failed_loader_placeholders": 1,
+      "missing_G9_CAS_methods": 30,
+      "tests_executed": 0
+    },
+    "cause_limit": "The original runner preserved the census refusal but omitted the underlying module-import exception. Static Source review did not establish its cause; no runtime predicate change or import-cause claim is made.",
+    "correction": "In the existing mismatch branch only, retain unittest.defaultTestLoader.errors in the refusal artifact and print those original strings before the unchanged RuntimeError. Preserve the default loader, discovery arguments and order, both rosters, all counters, clean-source checks and refusal before any test execution.",
+    "changed_Source": {
+      "path": "ops/network-guardian/tests/run_exact_ci.py",
+      "sha256": "b6c6705bb6441d23765945e050cbf8eb127b4a49e82298ce59c7673d7b2fa127",
+      "bytes": 4258
+    },
+    "Root_full_diff_and_entire_file_reverse_check": true,
+    "independent_Source_peer_sha256": "53ebffbdff4bbc2d00141e680165cce753458fa0d76ea29cdf830c194b8ccfe0",
+    "runtime_Guardian_tools_CAS_and_Go_Source_changed": false,
+    "historical106_plus_new47_criteria_unchanged": true,
+    "all_prior_Source_review_nodes_preserved": true,
+    "local_functional_execution": false,
+    "new_exact_head18_workflows37_jobs_required": true,
+    "CI_or_native_or_AB_acceptance_claimed": false
+  },
+  "G9_exact_test_context_nesting_correction_20261103": {
+    "schema": "G9_identical_context_operands_ExitStack_Source_correction_v1",
+    "reviewed_Source_commit": "0565d6ac314b0ead863569ca3689cf94a282b0e5",
+    "previous_complete_review_sha256": "46f0203a34987b6acee5cd62ca28dec81699fb40c1ac5c45ad57b292226e4ef9",
+    "previous_top_level_nodes": 18,
+    "actual_failed_head": "39f5bd0542214fb2d726fac6081e5204d30595b2",
+    "actual_failed_run": 41614698183,
+    "actual_failed_job": 125845105042,
+    "original_refusal_sha256": "d62a9fc8e682d5296c75838eb25a8fe7f27671fcbc60a5c1c6725b0c44f03cd0",
+    "actual_cause": "Python3.12.15 compilation rejected too many statically nested blocks at the final context manager of the nineteen-manager fixture block. Discovery stopped with153 expected and124 discovered, including one failed-module placeholder; no tests ran. AST parsing alone had not exercised this compiler check.",
+    "correction": "Use one contextlib.ExitStack and enter the same nineteen existing managers in their original lexical order, preserving all six aliases and reverse cleanup semantics. Entire original with-body and surrounding bytes are unchanged. No test ID, assertion, validator, runtime operand, roster or success criterion changes.",
+    "changed_Source": {
+      "path": "ops/network-guardian/tests/test_g9pair_core_cas.py",
+      "sha256": "d04ee4fe63cbe8207b09db17a7ba476998b678549e409f9cd2bcbdae36014648",
+      "bytes": 54606
+    },
+    "Root_full_diff_and_ordered_AST_operand_alias_body_comparison": true,
+    "independent_Source_peer_sha256": "5227b198019f854643818ac92468cdb8030342934fd31134069b012233bc60bd",
+    "old106_plus_new47_method_IDs_unchanged": true,
+    "runtime_Guardian_tools_CAS_SQL_and_Go_Source_changed": false,
+    "original_failure_and_diagnostic_review_preserved": true,
+    "local_compile_import_test_or_functional_execution": false,
+    "compile_or_test_success_claimed": false,
+    "new_exact_head18_workflows37_jobs_and153_cases_required": true,
+    "native_main_or_AB_acceptance": false
+  },
+  "recorded_context_refused_HTTP_maintenance_Source_review_20261103": {
+    "schema": "ADR0103_recorded_context_refused_HTTP_maintenance_Source_review_v1",
+    "source_baseline": "ed76cef2d66d7f5368b96b41aaa22fc80a2233c4",
+    "scope": "Distinct Source contract for one recorded context-refused HTTP maintenance dispatch; no executed outcome or deployment qualification asserted.",
+    "preserved_previous_complete_review_sha256": "3f4c1e9cd453c9b8ffe9ee4fb5d976fdb0d904dc0c0c9d25eaba95ce6185b211",
+    "preserved_prior_top_level_nodes": 16,
+    "preserved_historical_evidence": {
+      "REVIEW": {
+        "path": "docs/service-contract/REVIEW.json",
+        "bytes": 131070,
+        "sha256": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710"
+      },
+      "SCHEDULER_SKIP_REVIEW": {
+        "path": "docs/service-contract/SCHEDULER_SKIP_REVIEW.json",
+        "bytes": 3068,
+        "sha256": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f"
+      },
+      "all_previous_review_nodes_unchanged": true
+    },
+    "current_source_inventory": {
+      "path": "docs/service-contract/source/sources.json",
+      "bytes": 130582,
+      "sha256": "80aa2fbf1e712af4430a6d40bd8d9dd9fe9b1352522f14b63f80e1856ecfc426",
+      "complete_source_count": 799,
+      "format": "core_source_interface_census_v1",
+      "maximum_bytes_unchanged": 131072
+    },
+    "new_source_facts": {
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition.go": {
+        "build_constraint": "",
+        "bytes": 3979,
+        "sha256": "a30ed5c68e3c6cba9f6873f7dec9a691fa29200f82e88be48a7426a96442cfa6"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition.go": {
+        "build_constraint": "",
+        "bytes": 21186,
+        "sha256": "bb134d14777a937d0c965c597f3b4f0db099f41600295cd067eab2aee2c497f6"
+      }
+    },
+    "changed_source_facts": {
+      "controllers/httpapi/server.go": {
+        "before": {
+          "build_constraint": "",
+          "bytes": 188368,
+          "sha256": "6f357a12e332df55a4817df0f4a06792f4c1ba0dbedef8980e0a6e5b9bf53a30"
+        },
+        "after": {
+          "build_constraint": "",
+          "bytes": 188759,
+          "sha256": "00036d7b0b47b05d6c21084515fa954de993b4925112b1dbbd1f20d0a82d99d8"
+        }
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "before": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 51210,
+          "sha256": "05b658074c003c63bf2be3f6ec4e0716a9e829bd729bbb180b5d7dbbe84c863d"
+        },
+        "after": {
+          "build_constraint": "recoveryfixture && !nativequalification",
+          "bytes": 51210,
+          "sha256": "130eacf91a3c6ddd60081c4762aef2217fa134c22166cf8c962d01b12a105598"
+        }
+      }
+    },
+    "unchanged_prior_source_facts": 795,
+    "source_fact_deletions": 0,
+    "reviewed_source_and_document_pins": {
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition.go": {
+        "bytes": 3979,
+        "sha256": "a30ed5c68e3c6cba9f6873f7dec9a691fa29200f82e88be48a7426a96442cfa6"
+      },
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition_test.go": {
+        "bytes": 10045,
+        "sha256": "131dc4d942840fdec9b3cd56e4ae5fe39d09763d46ba09c4f7bbd744c2a8344d"
+      },
+      "controllers/httpapi/server.go": {
+        "bytes": 188759,
+        "sha256": "00036d7b0b47b05d6c21084515fa954de993b4925112b1dbbd1f20d0a82d99d8"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition.go": {
+        "bytes": 21186,
+        "sha256": "bb134d14777a937d0c965c597f3b4f0db099f41600295cd067eab2aee2c497f6"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition_test.go": {
+        "bytes": 7729,
+        "sha256": "080bb806cabb6c3f39f77c562c668e679b2c89dd3941a08b1b9e30202ec9dfd2"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition_postgres_test.go": {
+        "bytes": 35798,
+        "sha256": "b7b5dfbe5a15588e0d2a45c9ae0b3e632a8b1bf69e46f7ccd1c59267992eaa90"
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "bytes": 51210,
+        "sha256": "130eacf91a3c6ddd60081c4762aef2217fa134c22166cf8c962d01b12a105598"
+      },
+      "db/migrations/00091_recorded_http_maintenance_dispatch_dispositions.sql": {
+        "bytes": 40476,
+        "sha256": "6ea7ce084db9dbdb7d9443acd8af94876aff6b126fdf7652bf975982d512f240"
+      },
+      "ops/http-maintenance/http_maintenance_pre91.sql": {
+        "bytes": 53392,
+        "sha256": "1b47644164bf2d6dd6cabe0a04bd75b88cf68c0fbeede9966e5d34b67e1021f1"
+      },
+      ".github/scripts/render_http_maintenance_pre91.py": {
+        "bytes": 14733,
+        "sha256": "5bbb75d06d96ad8fee5ee61e640bcebc7fe50a8157f79be55356ebc3e8b495ac"
+      },
+      ".github/workflows/http-maintenance-disposition.yml": {
+        "bytes": 1744,
+        "sha256": "a3dc92cbe719d1115ef4575672f8d05ca71eb891d75abbf0d793c057c8deed38"
+      },
+      ".github/scripts/run_http_maintenance_disposition_ci.sh": {
+        "bytes": 5864,
+        "sha256": "e36b738ff2d72d22e491632340ba2530d5e8758b290e1d329e028b57f6996e6f"
+      },
+      ".github/scripts/verify_http_maintenance_disposition_ci.py": {
+        "bytes": 9570,
+        "sha256": "2edb7a89f587f43e74ecfde6a889266319ad8799140813152c2652532dfa22ce"
+      },
+      ".github/scripts/http_maintenance_disposition_expected.json": {
+        "bytes": 4381,
+        "sha256": "084d705c5e1d8201f0ebc42286c7f5dbc4e2ad7b54b4729c99eb7c970a91c80a"
+      },
+      "docs/adr/0103-dispose-recorded-context-refused-http-maintenance-without-replay.md": {
+        "bytes": 5855,
+        "sha256": "dcdfd90859fe41246208b3b3e41715136f4f1090a506cf031266ad4e5a07bca4"
+      },
+      "controllers/httpapi/openapi.json": {
+        "bytes": 127843,
+        "sha256": "f37623ad7c846fe6ba23e63e3822ca22aa4850125ace6809218a5281ecb40fa0"
+      },
+      "docs/api-reference/openapi.json": {
+        "bytes": 127843,
+        "sha256": "f37623ad7c846fe6ba23e63e3822ca22aa4850125ace6809218a5281ecb40fa0"
+      },
+      "README.md": {
+        "bytes": 23196,
+        "sha256": "29e4944f4739970f4fd3986568405f6aa1c8fac44e5e1eb917d48e6f25122c5c"
+      },
+      "docs/service-contract/SEMANTICS.md": {
+        "bytes": 66143,
+        "sha256": "2733d7ce9c099ce0d003e766ba9580521e63dacddc9a998461ea6a620ec4805d"
+      }
+    },
+    "Source_contract": {
+      "HTTP": [
+        "POST /api/v1/ops/capacity/http-maintenance-dispatch-dispositions",
+        "GET /api/v1/ops/capacity/http-maintenance-dispatch-dispositions/{jobId}"
+      ],
+      "closed_request_fields": [
+        "job_id",
+        "expected_run_id",
+        "expected_envelope_sha256",
+        "expected_fencing_token",
+        "expected_lease_owner",
+        "expected_pending_wake_count",
+        "expected_returned_at",
+        "expected_run_sha256",
+        "expected_members_sha256"
+      ],
+      "request_body_cap_bytes": 8192,
+      "request_timeout_seconds": 20,
+      "issuer_and_process_barrier": "server-owned; never caller fields",
+      "authorization": "existing authenticated human/current GodMode plus manage_workflows; existing session CSRF and verified human OIDC bearer behavior unchanged; current operator rechecked before insertion and commit",
+      "new_receipt_table": "capacity_dispatch_http_maintenance_dispositions",
+      "new_terminal": "http_maintenance_disposed",
+      "reason": "recorded_context_refused_http_maintenance_dispatch_disposed",
+      "guarded_original_preservation": {
+        "job_mutations_permitted": [
+          "state",
+          "updated_at"
+        ],
+        "new_job_columns": 0,
+        "old_disposition_pointers_required_NULL": 6,
+        "original_finalization_ACK_required_NULL": true,
+        "workflow_and_canary_rows": "retained unchanged; no fabricated success ACK or replay",
+        "whole_job_hash": "UTC PG JSONB with receipt-retained original updated_at for historical reconstruction"
+      },
+      "SQL_and_Go_continuity": "SQL derives stricter raw complete-contract projection/equality and stored row lineage; API DAO separately executes the unchanged full typed Go ADR0094 validator. SQL is not described as a duplicate full typed validator.",
+      "membership": "one installed slot1 with same tuple/workflow/epoch and undisposed confirmed create; current policy or complete continuous stored policy lineage",
+      "canary": "one complete steady-useful publish challenge, nonce, possible send and held NULL-wire/no-business return; exact original time windows and enumerated other effects",
+      "HELD_upgrade_boundary": "Any image-maintenance HELD admission remains a separate explicit Source-qualified operational guard with exact original and honest total/held/unrelated counts. It is neither a terminal/no-busy proof nor publication, business, Guest or provider authority."
+    },
+    "review_and_corrections": {
+      "Root_full_Source_review_reported": true,
+      "independent_Slot_SQL_DAO_peer": {
+        "path": "docs/superpowers/http-maintenance-disposition-r6-20261103/ci-source-preparation-v1/SQL-DAO-INDEPENDENT-PEER.PUBLIC.json",
+        "sha256": "1bc5754699c8f9d49e722527dae26b95f5c3aa911de35aea937b2091786459f3",
+        "scope": "full migration91/DAO and conditional UUID/explicit realm deltas; no open scoped finding"
+      },
+      "independent_Release_HTTP_peer_reported": true,
+      "independent_Brain_CI_peer_reported": true,
+      "findings_fixed": [
+        "Explicit production realm in new admission, retaining narrower scope.",
+        "Physical workflow_id may remain NULL; a nonnull value must equal the original workflow UUID.",
+        "Fixture construction is per declared isolated history and parity uses fresh state-local READ ONLY repeatable snapshots."
+      ],
+      "old_common_job_guard": "removing only the new leading HTTP-maintenance branch reproduces migration87 guard bytes",
+      "old87_API_DAO_migration_and_criteria": "unchanged",
+      "old_R4_SQL_view_compatibility": "mandatory PG case uses original88files versions1..39+41..89 and real Goose Up after91, compares full history/originals; no old container execution claimed",
+      "canonical_pre91_query": "data-only derived Source; CI must check exact regenerated bytes and compare same-snapshot effect_scan/admission against functions91 for both providers and five states",
+      "final_SQL_format_correction": "Remove one extra final LF reported by staged diff --check; all seven SQL function bodies and guards remain byte-identical. The derived pre91 query changes only its whole-migration Source SHA header."
+    },
+    "validation_performed": {
+      "inventory_generator": {
+        "path": "scripts/ci/service_contract_inventory.py",
+        "bytes": 7706,
+        "sha256": "a8f4cdfb883f9fd55d0d9f7064b91c393bbabb598bd9b1f5926056a8bc2c5518",
+        "artifact_only_execution_authorized": true
+      },
+      "complete_source_fact_hash_bytes_and_build_constraints": "799 actual files; two additions/two changes; no deletion or cap increase",
+      "HTTP_gofmt_parse_only": true,
+      "CI_Python_AST_and_Bash_syntax_parse_only": true,
+      "local_functional_tests": false,
+      "local_builds_or_product_ops_imports": false,
+      "local_SQL_or_native_API_execution": false
+    },
+    "required_future_CI": {
+      "status": "pending_exact_final_head",
+      "postgres_majors": [
+        16,
+        17
+      ],
+      "per_major_roots": 12,
+      "per_major_nodes": 114,
+      "repository_roots": 8,
+      "repository_nodes": 110,
+      "HTTP_roots": 4,
+      "HTTP_nodes": 4,
+      "strict_all_nodes_once_RUN_PASS_no_skip_fail_race": true,
+      "original_Go_tee_and_checker_exits_retained": true,
+      "schema91_full_history_and_owned_PG_shutdown_required": true,
+      "all_prior_selected_workflows_remain_mandatory": true,
+      "provisional_literal_workflow_cohort": {
+        "events": 18,
+        "jobs": 38,
+        "base": "ed76cef2d66d7f5368b96b41aaa22fc80a2233c4"
+      }
+    },
+    "exact_final_head_CI_pass_claimed": false,
+    "native_Guest_provider_or_business_qualification_claimed": false,
+    "migration_application_or_deployment_or_main_adoption_claimed": false,
+    "old_publication_deadlines_budgets_cursors_ACKs_or_markers_reset": false
+  },
+  "recorded_HTTP_maintenance_remote_validation_correction_20261103": {
+    "schema": "ADR0103_actual_remote_validation_Source_correction_v1",
+    "source_baseline": "30eda227356e4ddea601f2d8e4b23a322680d13f",
+    "actual_failed_CI": [
+      {
+        "run_id": 41650982606,
+        "stage": "workflow_validation_before_any_job",
+        "original_error": "(Line:30,Col:30): Unrecognized named-value: 'runner'. Located at position1 within expression: runner.temp",
+        "original_HTML_sha256": "f11a4dc8f4325eee363f23481407bfb3e0965fe7e64e6b8330d4d37b71d85a34"
+      },
+      {
+        "run_id": 41651126976,
+        "job_id": 125969250498,
+        "stage": "apply_schema91",
+        "original_error": "pq: syntax error at or near \")\" at position65:150 (42601)"
+      },
+      {
+        "run_id": 41651126698,
+        "job_id": 125969247544,
+        "stage": "unit_route_inventory",
+        "original_error": "TestOpsRoutesAreFullyMapped: ops route count=62, expected exactly60"
+      },
+      {
+        "run_id": 41651126698,
+        "job_id": 125969246448,
+        "stage": "lint",
+        "original_error": "QF1003 could use tagged switch on token (ops_http_maintenance_dispatch_disposition_test.go:150:4)"
+      }
+    ],
+    "causes_and_minimal_corrections": [
+      "Move one closing parenthesis from before CASE END to after it, retaining the complete jsonb_build_object and every scalar predicate. Six other SQL function bodies remain byte-identical.",
+      "Initialize the evidence path in the first runner step through GITHUB_ENV, using actual RUNNER_TEMP; remove the unsupported runner context from job-level env. The same fixed path and all existing test, retention and shutdown gates remain.",
+      "Regenerate only the deterministic pre91 SQL artifact from the corrected seven Source bodies; its mandatory --check passed as an artifact operation, without executing SQL.",
+      "The independently rederived source inventory preserves every original60 ops registration and adds exactly the two reviewed manage-workflows HTTP-maintenance routes. Update the same strict fixed census to62; the complete permission wrapper checks remain.",
+      "Use a tagged switch for the unchanged CSRF test token cases, satisfying QF1003 without changing any case or assertion."
+    ],
+    "changed_source_pins": {
+      ".github/workflows/http-maintenance-disposition.yml": {
+        "before": {
+          "bytes": 1744,
+          "sha256": "a3dc92cbe719d1115ef4575672f8d05ca71eb891d75abbf0d793c057c8deed38"
+        },
+        "after": {
+          "bytes": 1867,
+          "sha256": "2e40f634fa927a58557a87258e90f160a5a857677d2ac6f0e7298c58ba9f7923"
+        }
+      },
+      "db/migrations/00091_recorded_http_maintenance_dispatch_dispositions.sql": {
+        "before": {
+          "bytes": 40476,
+          "sha256": "6ea7ce084db9dbdb7d9443acd8af94876aff6b126fdf7652bf975982d512f240"
+        },
+        "after": {
+          "bytes": 40476,
+          "sha256": "a1195e5765bf840dd8f6a49b1e32cb4b5a315f7c0bab1a87f219a2e5cdf0c2ef"
+        }
+      },
+      "ops/http-maintenance/http_maintenance_pre91.sql": {
+        "before": {
+          "bytes": 53392,
+          "sha256": "1b47644164bf2d6dd6cabe0a04bd75b88cf68c0fbeede9966e5d34b67e1021f1"
+        },
+        "after": {
+          "bytes": 53392,
+          "sha256": "ef9cc17ac3551ecbb5dea4f73e866e1e7194c78e497f5599e9cd7b994fda3a7d"
+        }
+      },
+      "controllers/httpapi/ops_rbac_inventory_test.go": {
+        "before": {
+          "bytes": 19527,
+          "sha256": "d85a4d3d7dd8190005f51ff0f9a7c43bdf1764a24d614455c245a606259a57c9"
+        },
+        "after": {
+          "bytes": 19584,
+          "sha256": "3bd683432ba92b6fbc61684a922570d5ffe6a63b2e334f7ff0ab0a124fe7852d"
+        }
+      },
+      "controllers/httpapi/ops_http_maintenance_dispatch_disposition_test.go": {
+        "before": {
+          "bytes": 10045,
+          "sha256": "131dc4d942840fdec9b3cd56e4ae5fe39d09763d46ba09c4f7bbd744c2a8344d"
+        },
+        "after": {
+          "bytes": 10040,
+          "sha256": "aa59f84a5267feb0b550bcba23d1fd63792296e644f0831c00ecc985cb0e4d05"
+        }
+      }
+    },
+    "primary_GitHub_context_reference": "https://docs.github.com/en/actions/reference/workflows-and-actions/contexts",
+    "all_previous_review_values_preserved": true,
+    "all_old_migrations_through90_preserved": true,
+    "no_admission_predicate_or_test_or_exit_gate_weakened": true,
+    "local_SQL_or_product_tests_executed": false,
+    "new_exact_head_CI_required": {
+      "events": 18,
+      "jobs": 38,
+      "focused_PostgreSQL_majors": [
+        16,
+        17
+      ],
+      "roots_per_major": 12,
+      "nodes_per_major": 114,
+      "status": "pending"
+    },
+    "production_rollout_or_native_effects_claimed": false
+  },
+  "recorded_HTTP_maintenance_storage_boundary_fixture_correction_20261103": {
+    "schema": "ADR0103_actual_storage_CHECK_fixture_Source_correction_v1",
+    "source_baseline": "062758dcdd8da75a183079ddcdccafc45ab23ff3",
+    "actual_failed_CI": {
+      "run_id": 41653551690,
+      "postgres16_job_id": 125977747317,
+      "postgres17_job_id": 125977747873,
+      "per_major": {
+        "nodes_run": 114,
+        "nodes_passed": 111,
+        "nodes_failed": 3,
+        "failed_children": [
+          "TestHTTPMaintenanceDispatchPostgresRefusals/ack_present",
+          "TestHTTPMaintenanceDispatchPostgresRefusals/late_send"
+        ],
+        "parent_refusals_failed": true,
+        "migration91_and_renderer_check_exit": 0,
+        "HTTP_and_tee_exits": 0,
+        "owned_PostgreSQL_shutdown_closed_zero": true
+      },
+      "failure_taxonomy_sha256": "7ce8f474c5a5b60536c42eb3942723677b3c252efbe6b836b56ecaa0136140c7"
+    },
+    "cause": "The two declared negative setup UPDATEs attempted states forbidden by existing PostgreSQL CHECK constraints, including replica mode, before the repository assertion could execute. A valid baseline fixture is independently required first.",
+    "correction": "Keep the same two children. Require pq.Error SQLSTATE23514 and its exact existing constraint name, successful rollback, complete unchanged job/run/canary snapshots and zero disposition rows. Return only after every assertion. All26 other negative repository paths and the28-case table remain unchanged. No constraint is relaxed and no arbitrary setup failure is accepted.",
+    "exact_constraints": {
+      "ack_present": "capacity_dispatch_jobs_original_ack_v2_check",
+      "late_send": "capacity_guest_notify_canary_sends_check"
+    },
+    "changed_file": {
+      "path": "repository/capacity_dispatch_http_maintenance_disposition_postgres_test.go",
+      "before_sha256": "b7b5dfbe5a15588e0d2a45c9ae0b3e632a8b1bf69e46f7ccd1c59267992eaa90",
+      "after_sha256": "079027c4c34fcb8e7c17bdd159199a3f4ff34686056cbd02b71aacd61a1031c2",
+      "after_bytes": 36982
+    },
+    "all_prior_review_values_preserved": true,
+    "runtime_Go_or_SQL_or_CI_gate_change": false,
+    "roots_and_nodes_unchanged": [
+      12,
+      114
+    ],
+    "local_functional_tests_or_SQL_executed": false,
+    "new_complete_exact_head_CI_still_required": true,
+    "production_or_native_qualification_claimed": false
+  },
+  "recorded_HTTP_maintenance_R6_bound_G9_Source_review_20261103": {
+    "schema": "R6_G9_exact_HELD_upgrade_and_retained_terminal_Source_review_v1",
+    "reviewed_parent_commit": "7ed950f4bf0acfc1c50c715b7f2dd0d18ed70e81",
+    "qualified_Core_R": "c02512e9d11d29cad4e4ff67186602d3485d6fa3",
+    "qualified_AMD64_D": "7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6",
+    "Root_accepted_controller_C": "3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111",
+    "Guardian_S": "6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765",
+    "actual_G8_predecessor_C": "42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5",
+    "Root_image_qualification_sha256": "35c8baff8632fba879c345633c1f95719244cea5367327fa2bc61f42d3774b0a",
+    "Root_implementation_Source_review_sha256": "2f434e2fc2ed3576f5d0173e8e5a20be29f60d4bb6c821d475426f36a1701eef",
+    "Root_complete_33_owner_spans_and_fixed31_segments_seven_helpers_review_sha256": "9c6b463d2f31e0d7fdf84b52746b731432d5c6921f4f9aaa34fe2ad95cf1e0af",
+    "independent_V3_CAS_Source_review_sha256": "cadc588633b2bb5d6f3eeeed0f4f20f446b6c8f660766f1e882b33a941fb25aa",
+    "independent_V3_other7_Source_review_sha256": "9069f55f096dce5e3be1e0b1af548568be78101e5eea4ceda3904dff9c0b7c21",
+    "independent_V3_unit7_Source_review_sha256": "6702c0846d41cf3c4ac30effc66066d93f062aa7ab443be88ef65bf6141edbbb",
+    "scope": "Bind only actual qualified R6 image directly after ACTUAL installed G8, preserving all historical authorities, whole33 Owner bodies including fixed31 method segment hashes, seven helpers, units behavior, original recovery budget and Cold/Hub. Preserve exact schema89 seven terminal lanes; schema91 adds only a retained same-job/run reconstructed-original receipt lane, never fresh current-policy rescan for terminal history. A distinct explicit recorded HTTP UNKNOWN9e/5154 admission additionally preserves original AWS S3 HELD, full canonical semantics and PG clock0..15 at preflight/presend/afterACK before exact total1/held1/unrelated0 counts. No closure, quietness, provider quiescence or fresh business authority is inferred. All existing timer, once-marker, ACK/framing, failure and no-replay/rollback guards remain. Actual final-bound-head CI and future native/Goose/Core/E2E operations remain mandatory. Declared CI PG/transport fixtures are not installed/provider/Guest qualification.",
+    "expected_current_bound_head_CI": {
+      "workflow_events": 19,
+      "jobs": 39,
+      "Source_methods": 165,
+      "original_methods": 106,
+      "prior_G9_methods": 47,
+      "new_R6_methods": 12,
+      "actual_PG_methods": 25,
+      "status": "pending_exact_current_head",
+      "prior_R6_product_or_P96_success_transferred": false
+    },
+    "files": {
+      ".github/workflows/owned-network-guardian.yml": {
+        "sha256": "2868d4250d7ba3b18071e689d26706209a0e68f29825c2922fce9a37443680e6",
+        "bytes": 3133
+      },
+      "ops/network-guardian/g9pair/PACKAGE.json": {
+        "sha256": "ba6b625f73f372d954e094bba1b2deb1b9f46dd5059f4157fb5be835feba6d98",
+        "bytes": 8114
+      },
+      "ops/network-guardian/g9pair/SHA256SUMS": {
+        "sha256": "a980c69b0c0cbd8dc211e959e90e144d69567257442f845061e81d76960d1921",
+        "bytes": 1089
+      },
+      "ops/network-guardian/g9pair/source/network_guardian.py": {
+        "sha256": "6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765",
+        "bytes": 114213
+      },
+      "ops/network-guardian/g9pair/tools/SHA256SUMS": {
+        "sha256": "09cb572afbd786333839dabaa23917211f15a163504df59e70f5a058f6b8de95",
+        "bytes": 358
+      },
+      "ops/network-guardian/g9pair/tools/derive_g9pair_controller_config.py": {
+        "sha256": "2b6c9e9a0ec27dd359799ceeaaae261d06d0aa9cbfcede19251ef60a0d4e0948",
+        "bytes": 16679
+      },
+      "ops/network-guardian/g9pair/tools/pair_change_contract.py": {
+        "sha256": "bf42b8073ac4c08807cb0ea6ad728a3681e975c4df2619bed05385ec2ab75bdb",
+        "bytes": 28743
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-cold-transport.service": {
+        "sha256": "4b49a3ec10cb131242e7a17d8c0026aa6a48e1e0d2d1ec3c3610ae3763406879",
+        "bytes": 815
+      },
+      "ops/network-guardian/g9pair/units/dakasa-capacity-network-guardian.service": {
+        "sha256": "038d72711a76ccd98d71127f7746a41dc0c4fda27f255f566bee6161aa8a2531",
+        "bytes": 725
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "sha256": "b3a010f01e8d8ca349f76312d2a7511aafef0f8f54eea1e72ef06280c51ddfc2",
+        "bytes": 184
+      },
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "sha256": "4f8a08ce3daf612912e6a0f5f3a719299c55de42e8f83cd36fd9823db510a2f0",
+        "bytes": 139701
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-R6.json": {
+        "sha256": "9349da4bc15bdbfeff2944231f203e330d554947fdfce605791a08b6f9c464e9",
+        "bytes": 1503
+      },
+      "ops/network-guardian/tests/run_exact_ci.py": {
+        "sha256": "0cca0427c3f7ea5bbd885a6b05d8cb3fb95b8332e192e044088fc2628ccda80f",
+        "bytes": 4486
+      },
+      "ops/network-guardian/tests/test_g9pair_core_cas.py": {
+        "sha256": "35f1af2bb2e379c105150b200ef9b68f28cc48a84642b3b6457d7c3fec88d5f5",
+        "bytes": 90488
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_postgres.py": {
+        "sha256": "22acb671aa8c52360f8de65aa00391b60dda354e10a74aea7a9746d1faf6a04d",
+        "bytes": 19158
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_unit.py": {
+        "sha256": "c29968fc0eebe96fc7a3c7ed3b4519e9e183c389bc42fee0fd9821a2713a33b7",
+        "bytes": 30335
+      }
+    },
+    "no_local_functional_tests_SQL_build_import_container_or_native_operation": true,
+    "production_schema_rollout_Core_main_or_AB_qualified": false
+  },
+  "recorded_HTTP_R6_G9_declared_CI_fixture_roster_correction_20261103": {
+    "schema": "R6_G9_independent_declared_CI_roster_fixture_correction_v1",
+    "failed_owning_Source": "cfbd147062df4e029308e77e97acedd20bc06b42",
+    "actual_Owned_run_id": 41668402136,
+    "actual_Owned_job_id": 126029852627,
+    "actual_attempt": 1,
+    "actual_failure": "Declared G9 manifest inherited only18 G8 CI entries; unchanged production REQUIRED_CI correctly requires19. The positive test errored at ROOT_REVIEWED_EXACT_G9_CI before its outdated old18 equality assertion.",
+    "actual_failed_run_census": {
+      "executed": 165,
+      "passed": 164,
+      "errors": 1,
+      "failures": 0,
+      "skips": 0,
+      "actual_PostgreSQL_methods_passed": 25,
+      "clean_Source_before_and_after": true,
+      "qualified": false
+    },
+    "correction": "Only the declared G9 test operands append the independently fixed recorded HTTP maintenance workflow/event and unique simulated ID19 after retained original IDs1..18. The same test now strictly compares preserved old18 plus exact new event to the production19 set and additionally rejects the original18-only manifest. All prior refusal scenarios and every test ID remain. No runtime validator, gate, image binding, package, timer, CAS, SQL, historical fixture, required test roster or workflow is changed.",
+    "files": {
+      "ops/network-guardian/tests/test_g9pair_tools.py": {
+        "sha256": "3df11b34de947a64f9cea5f3747f7d3378abb8d0ebb018431663637f8ad41d99",
+        "bytes": 10417
+      }
+    },
+    "new_exact_current_head_CI": {
+      "workflow_events": 19,
+      "jobs": 39,
+      "Source_methods": 165,
+      "PostgreSQL_methods": 25,
+      "status": "pending_new_exact_head",
+      "failed_cohort_outcomes_transferred": false
+    },
+    "actual_qualified_Core_R_image_and_runtime_C_S_unchanged": true,
+    "no_local_functional_test_build_SQL_import_container_or_native_operation": true,
+    "production_schema_Core_G9_main_or_AB_qualified": false
+  },
+  "held_guard_same_snapshot_busy_scalar_factoring_source_review_20261103": {
+    "schema": "held_guard_same_snapshot_busy_scalar_source_correction_v1",
+    "original_qualified_Ops_Source": "8f2071c13ec379ea1dcf3d964011c6e3ee7adb63",
+    "actual_original_failure": {
+      "sender_command_id": "17e8f508-3620-4b15-a350-6ac452bc046e",
+      "diagnostic_command_id": "105e1f1f-ee1a-4f50-b874-faabc3f62f56",
+      "diagnostic_original_sha256": "96696cefd77c16c04b22d6c7dbab95fe29acad50b0d25494fb24ddc30ae1ab05",
+      "guard": "EXACT_READONLY_SQL_EXIT0",
+      "phase": "BEFORE-HELD",
+      "return_code": 3,
+      "statement_timeout_ms": 8000,
+      "possible_send": false,
+      "global_Job_create_claim_absent": true
+    },
+    "actual_Root_readonly_measurement": {
+      "command_id": "02d92d67-11a0-41e3-bc69-810ec6764dc3",
+      "original_sha256": "ecda4eb6a86ef1dbb08e81029ec47e64b86a887238f5609e147943f5da9d53d1",
+      "candidate_SQL_sha256": "bfd8a88ba955299e91a66869009f3e763a187fa6ce27c35bdff494d64efefb9d",
+      "return_code": 0,
+      "stderr_bytes": 0,
+      "stdout_bytes": 886,
+      "complete_projection_reviewed_by_Root": true,
+      "schema": 89,
+      "busy_jobs": 1,
+      "busy_runs": 0,
+      "catalog_exact": true,
+      "history_exact": true,
+      "UTC_elapsed_seconds": 3.245355,
+      "cold_cache_controlled_benchmark": false,
+      "general_speedup_percentage_claimed": false,
+      "native_mutation": false,
+      "SQL_shape": "scalar_wrapper_count_not_byte_exact_current_direct_count_Source",
+      "performance_qualification_of_current_Source_claimed": false
+    },
+    "correction": "Only held_database_sql begins one REPEATABLE READ READ ONLY transaction, evaluates its identical complete UUID/logical UNION busy-run count in a first one-row SELECT with enable_indexscan=on and psql gset, then restores enable_indexscan=off before the original complete guard and consumes that SQL-literal-quoted bigint. Both queries share one MVCC snapshot. No status, NULL-finished, logical/UUID identity, deduplication, retained seven/eighth proof, catalog, history or original-row predicate is removed. The separate unmeasured steady function remains unchanged.",
+    "budget": {
+      "per_statement_timeout_ms": 8000,
+      "lock_timeout_ms": 1000,
+      "hard_total_subprocess_seconds": 12,
+      "combined_statement_work_can_exceed_former_single_8s_wall_duration": true,
+      "native_age_and_global_current_runtime_budgets_extended": false
+    },
+    "CI_only_regression_scope": "Preserve the existing method and all original assertions; append actual disposable-PG16 psql stdin subcases for mixed UUID/logical overlap and NULL/finished states, whole-catalog mismatch independent of busy rows, and first-SELECT relation failure aborting before any final JSON. Original rows retained; no validator/hash/result mirror or provider qualification.",
+    "files": {
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "sha256": "fc1c0db11dd2217d21e506caaae05441e37f323aebcfee83aef6b73972c4a6bf",
+        "bytes": 139834
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "sha256": "34730b5431e366354a84b4afcf0abe39f684647eeb009ae604d15b549fb53410",
+        "bytes": 184
+      },
+      "ops/network-guardian/tests/test_g9pair_core_cas.py": {
+        "sha256": "4e6e6393cc36faac2add20b7c5639690851c798776ee0f94bd5aaf22d694d9a9",
+        "bytes": 93769
+      }
+    },
+    "preserved": "Old G8 CAS checksum row, separate steady SQL, Guardian31methods/7helpers, runtime PACKAGE, units, four tools, C/D/S, all799 Go inventory facts, all prior M2 nodes, REVIEW, SCHEDULER, required workflow/test rosters and17 evidence edges.",
+    "new_exact_head_CI": {
+      "status": "pending_new_exact_head",
+      "expected_workflow_events": 19,
+      "expected_jobs": 39,
+      "expected_Owned_methods": 165,
+      "expected_declared_PG16_methods": 25,
+      "prior_8f_CI_transferred": false
+    },
+    "new_qualified_runtime_image_or_production_schema_Core_retirement_AB_main_claimed": false,
+    "Source_author_performed_no_local_target_import_compile_function_test_SQL_container_API_or_native_execution": true,
+    "performance_qualification_status": "SOURCE_ONLY_NEW_EXACT_HEAD_CI_PENDING_RUNTIME_GUARD_MUST_STILL_PASS",
+    "prior_OFF_RR_Source_counterexample": {
+      "command_id": "e4d2248f-c586-4037-8d98-4e13a9a8ea8c",
+      "SQL_sha256": "07edf3d16b8a9223cf86c0b8cffd37d6eb5d8fb4a4182f0e7ba96de9814751ec",
+      "return_code": 3,
+      "elapsed_seconds": 8.153845,
+      "error": "statement_timeout",
+      "Source_performance_qualified": false,
+      "status": "HISTORICAL_OFF_DRAFT_NOT_QUALIFICATION_OF_CURRENT_SCOPED_ON_SOURCE"
+    },
+    "actual_scoped_ON_readonly_observations": [
+      {
+        "command_id": "d9896709-f3c4-475b-9048-d9a75cc7a4b6",
+        "original_sha256": "3979b5ed951c57a7c5619e6464bc1c09b4349b7b7dee019abf62a903ab5a78d2",
+        "SQL_sha256": "cfb99acd3c7f7c503a61a3228cca7f5fda2ad32afbcceb830fc81523db87ca9a",
+        "elapsed_seconds": 2.472012,
+        "return_code": 0,
+        "stderr_bytes": 0,
+        "full_projection_sha256": "8243ee490cafe4c446cce652f9ad046784bb05b4e67de096c4e31398afd13b6a"
+      },
+      {
+        "command_id": "1172e3bc-4725-42b2-a5b0-907241fa78b3",
+        "original_sha256": "ea14308a64731563ad40de62f408d298f384d3ac9b7262c7d8ff9afc0fab23f9",
+        "SQL_sha256": "cfb99acd3c7f7c503a61a3228cca7f5fda2ad32afbcceb830fc81523db87ca9a",
+        "elapsed_seconds": 5.724462,
+        "return_code": 0,
+        "stderr_bytes": 0,
+        "full_projection_sha256": "8243ee490cafe4c446cce652f9ad046784bb05b4e67de096c4e31398afd13b6a",
+        "preceding_OFF_probe_detected_concurrent_busy_jobs": 2,
+        "preceding_OFF_probe_detected_concurrent_busy_runs": 1,
+        "preceding_OFF_probe_was_not_admissible": true
+      }
+    ],
+    "actual_readonly_plan_comparison": {
+      "command_id": "18ef9987-a419-40e4-828a-52f0b383ba00",
+      "original_sha256": "f997f081f6f8e99ae30df5200c7962abfe59e3e8496fa6d9b9213bc2b0885a1b",
+      "analyze_executed": false,
+      "OFF": "three bitmap heap/index accesses",
+      "ON": "three index accesses with identical IndexConds/filters and UNION dedup",
+      "schema_stats_index_global_or_timeout_changed": false,
+      "cold_cache_or_general_percentage_or_guaranteed_runtime_claimed": false
+    }
+  },
+  "workflow_busy_logical_index92_and_companion_source_review_20261103": {
+    "schema": "workflow_busy_logical_index92_and_companion_source_review_v1",
+    "baseline_Ops_P": "44588c8328a8326d3bd2cbfb88cf2614f16da382",
+    "scope": "Canonical additive workflow busy index and exact schema92 R6 held operator, with separately qualified companion migration Job. Source review only; installed G9 and selected runtime Core have independent provenance.",
+    "actual_pre_mutation_HOLDs": {
+      "first_CAS_command_id": "5fef77fd-f1dd-4b6d-8233-ceecc8f1c15a",
+      "second_CAS_command_id": "0d642a59-8b65-424e-bd77-e5826beddfed",
+      "error": "statement_timeout on first complete busy-count SELECT",
+      "statement_timeout_ms": 8000,
+      "independent_global_image_possible_claim_absent": true,
+      "mutating_Core_PATCH_sent": false
+    },
+    "readonly_diagnosis": {
+      "exact_original_SQL_sha256": "d89691e689489b6fcf6f08eaac295615758ec560e2f12f347c92fcbeb8accfdc",
+      "actual_unchanged_command_id": "e88ea21f-6951-4302-966d-f049088a5462",
+      "complete_elapsed_seconds": 9.47596,
+      "bounded_observation": "The first complete busy count spent approximately7.9 seconds reading relation blocks; the later full guard took approximately1.4 seconds. This is an observation, not a controlled-cache benchmark.",
+      "sequential_variant_command_id": "4dd70435-4986-43e1-af37-1e3dd8d3f8e2",
+      "sequential_variant_statement_timeout": true,
+      "planner_variant_shipped": false,
+      "actual_index_catalog_command_id": "1ce0ff10-17c9-47e9-aca4-b5f0eff01e0d",
+      "estimated_workflow_runs": 951944,
+      "index_missing_in_observed_schema91": true,
+      "performance_improvement_or_guarantee_claimed": false
+    },
+    "migration92": "Nonunique concurrent btree on exactly public.workflow_runs(workflow_namespace,workflow_name,id), with the complete COALESCE-status OR NULL-finished predicate. Wrong/invalid existing same-name indexes require HOLD; no automatic drop or repair.",
+    "CAS_contract": "Require exact schema92, max of all Goose versions92, one applied92 row, whole accepted history and valid/ready/live exact index. Complete UUID/logical busy UNION, deduplication, all other original proofs, closed89/91 retained protocol factory, legacy branches, Source/image/runtime pins, claims and budgets remain unchanged.",
+    "companion_contract": "Source-boundFalse and all future pinsNone before IO. A separately CI/image-qualified Q companion ships canonical SQL1..39+41..92. One UUID Job, backoff0/restartNever, disjoint app label, normal /app/goose up. Durable possible marker before exactly one POST; uncertain ACK only GET. Full old91 history byte-exact plus one actual92 row, unchanged90/91 catalog and exact92 index, unchanged Core/G9 required. No ordinary quiet/business assertion, Core/provider/Guest mutation, Down, cleanup, index repair or retry.",
+    "preserved_runtime": {
+      "installed_G9_Ops_P": "44588c8328a8326d3bd2cbfb88cf2614f16da382",
+      "selected_Core_R": "c02512e9d11d29cad4e4ff67186602d3485d6fa3",
+      "selected_Core_amd64_D": "7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6",
+      "runtime10_tools4_and_old_checksum_row_unchanged": true,
+      "companion_is_not_selected_runtime_Core": true
+    },
+    "budgets": {
+      "held_per_statement_ms": 8000,
+      "held_lock_ms": 1000,
+      "held_process_seconds": 12,
+      "companion_job_seconds": 240,
+      "companion_DDL_ms": 120000,
+      "companion_parent_seconds": 595,
+      "raised": false
+    },
+    "current_latest_fixture_reconciliation": "Full-Up fixtures require92. Actual historical89/index89 remains; unchanged old_r4_up89_after91 ID now verifies both actual91 and92 with the original88 old-R4 SQL files, full history and row snapshots unchanged. All historical test IDs and literal subtest names remain.",
+    "closed_CI_rosters": {
+      "original_historical": 106,
+      "G9": 47,
+      "R6": 12,
+      "new_actual_M18_M92_and_complete_busy_PG16": 6,
+      "new_companion_declared_transport_unit": 9,
+      "total": 180,
+      "preserved_original_test_IDs": true,
+      "exact_discovery_RUN_PASS_no_skip_required": true,
+      "index_helper_PG17_acceptance_claimed": false,
+      "separate_full_Goose_and_protocol_PG16_PG17_required": true,
+      "current_head_results": "pending_new_exact_head_no_outcome_transfer"
+    },
+    "complete_non_test_Go_inventory": {
+      "count": 799,
+      "sha256": "485b1ff740f6e8336ec36a2c193d5bc2e06607acddc72190fb19011d975ead35",
+      "only_changed_fact": "repository/failed_serving_recoveryfixture.go",
+      "build_constraint": "recoveryfixture && !nativequalification",
+      "other798_facts_unchanged": true
+    },
+    "files": {
+      ".github/scripts/verify_http_maintenance_disposition_ci.py": {
+        "bytes": 9570,
+        "sha256": "0e6ab9dc38688f48a6f84e0824117a4c85fe93005217cfbbdb859abc9fd543ab"
+      },
+      ".github/workflows/capacity-postgres.yml": {
+        "bytes": 56655,
+        "sha256": "ede89bd3a9d703d95572a09d3e7e63ec7845a3202435f94c5ddc2e15c4452b65"
+      },
+      ".github/workflows/failed-original-disposition-source.yml": {
+        "bytes": 27329,
+        "sha256": "ccd4063047e95247316a822e7a5bd5d089ad5577a717ba8a2a58f458431b7102"
+      },
+      ".github/workflows/failed-serving-guest.yml": {
+        "bytes": 16790,
+        "sha256": "a20a8df7cfc3869671db635d0854d41517b1ce6c4ea06eb30fb845de43f619ab"
+      },
+      ".github/workflows/http-maintenance-disposition.yml": {
+        "bytes": 1867,
+        "sha256": "c2429609e941a1fe372aeb677f5ce2c4b97ceec25d46b1ed7ed75c5de784d575"
+      },
+      ".github/workflows/installed-reconcile-source.yml": {
+        "bytes": 21638,
+        "sha256": "f326dca41e744544ddb153e1405c6494facd4708ddea8814cc86ced209078cda"
+      },
+      ".github/workflows/owned-network-guardian.yml": {
+        "bytes": 3317,
+        "sha256": "a12c412d6ad3f31db856a659c813802d6c6972b18e79a9b6398c60dcbb26bb96"
+      },
+      ".github/workflows/partial-nativeoff-reconciliation-source.yml": {
+        "bytes": 11980,
+        "sha256": "9cab3bd1093fbc67766c41bcb94800be6359a812673f8c344eb9b5a115096947"
+      },
+      "db/migrations/00092_workflow_runs_busy_logical_index.sql": {
+        "bytes": 1062,
+        "sha256": "ddc3be6589b6bc55ae786f75752f69e20f5241e25d053f3d817fb6b1caeb9f33"
+      },
+      "docs/service-contract/source/sources.json": {
+        "bytes": 130582,
+        "sha256": "485b1ff740f6e8336ec36a2c193d5bc2e06607acddc72190fb19011d975ead35"
+      },
+      "ops/network-guardian/rollout/README.md": {
+        "bytes": 4068,
+        "sha256": "2e8dcf3ffab3df26799664a2c8e80a1c1b0e275552b58a48d8d11e825394cbbc"
+      },
+      "ops/network-guardian/rollout/SHA256SUMS": {
+        "bytes": 273,
+        "sha256": "47de21f7f37e6cdbb2a1d9ba918bdd3283dfd8364b0300585fae8b1a0c92f3dc"
+      },
+      "ops/network-guardian/rollout/core_image_cas_once_g9.py": {
+        "bytes": 141609,
+        "sha256": "6a810e1c408ec597657e55464603666ce7e4c2c6e8808d999cf36d453f09cc06"
+      },
+      "ops/network-guardian/rollout/goose92_native_once.py": {
+        "bytes": 35837,
+        "sha256": "1c258c6db23c657a91c0330065a7ed78ac294525edaf7be4c264d43dfadceba8"
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-GOOSE92.json": {
+        "bytes": 922,
+        "sha256": "298a1c46c48874f237d7ae03d42e390146f5487d4c9e5f7314f3c94f59942d6b"
+      },
+      "ops/network-guardian/tests/EXPECTED-TESTS-INDEX92.json": {
+        "bytes": 821,
+        "sha256": "a79c06801a8d79fa5fd5b58788b30e429e718e3a46b6157c1d4f5ac6d30a1238"
+      },
+      "ops/network-guardian/tests/run_exact_ci.py": {
+        "bytes": 5054,
+        "sha256": "9411517db020983f856a39e8cc9a983456d48c90560499a0ccddedb8feeca5ab"
+      },
+      "ops/network-guardian/tests/test_goose92_native_once.py": {
+        "bytes": 20564,
+        "sha256": "299d1e72291cfcbd36e210d7a171164a94c55b48e01701e8f6bace6bbffe46ef"
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_postgres.py": {
+        "bytes": 24516,
+        "sha256": "20106584c61c2d7797160313d0b9d7b4fd96fdddd830b7f2e2d389dd8897644a"
+      },
+      "ops/network-guardian/tests/test_r6pair_core_cas_unit.py": {
+        "bytes": 32798,
+        "sha256": "0b876e74e4f51e2ea6b15d4054d65b2b05ef311437931eef2e71ef736dc5a395"
+      },
+      "ops/network-guardian/tests/test_workflow_busy_index92_postgres.py": {
+        "bytes": 12774,
+        "sha256": "1a04d2a35ca421b6ee16096bc01d6a47141c0b89578818fc0be7fa4a3c067efd"
+      },
+      "repository/capacity_dispatch_finalization_lost_disposition_postgres_test.go": {
+        "bytes": 23108,
+        "sha256": "e5478714a3624c0e5cce5641d92bb9e7f441c4a6c5824b29ef938403d359b6cf"
+      },
+      "repository/capacity_dispatch_http_maintenance_disposition_postgres_test.go": {
+        "bytes": 37848,
+        "sha256": "aafe5a4101ad1dd5671e9311c7e40ef56e7092d22f5fa888f7c446115beaa1bd"
+      },
+      "repository/capacity_guest_failed_installed_external_cause_postgres_test.go": {
+        "bytes": 30353,
+        "sha256": "1f22033e52b98a5256542346e7b0f220391632eb42cf0ec772f2f03784bb1709"
+      },
+      "repository/capacity_guest_partial_nativeoff_postgres_test.go": {
+        "bytes": 14978,
+        "sha256": "215b18c1f9439e9c2d94a01c9219f82bc9ee0321470a5e38110c362d9ee6db57"
+      },
+      "repository/capacity_guest_v2_refused_nativeoff_postgres_test.go": {
+        "bytes": 28526,
+        "sha256": "920b21e90e4a3de78448c6b283693af50dc951410119513b78b4a67a25991999"
+      },
+      "repository/failed_serving_recoveryfixture.go": {
+        "bytes": 51210,
+        "sha256": "b61630c043c8fc0063bd4c53b82aaef7b1d6f4d05cdd11b1a1656c7b57453952"
+      }
+    },
+    "validation": {
+      "source_review_and_static_parse_only": true,
+      "local_functional_tests_import_build_SQL_container_execution": false,
+      "production_migration92_Core_rollout_retirement_cycles_main_or_completion_claimed": false,
+      "new_exact_head_CI_and_independent_native_acceptance_required": true
+    }
+  },
+  "workflow_busy_index92_CI_unique_violation_fixture_correction_20261103": {
+    "schema": "workflow_busy_index92_CI_expected_SQLSTATE_fixture_correction_v1",
+    "failed_Source": "6ff3983362a8283210f7ceaa07c08f4043aa366a",
+    "original_Owned_CI": {
+      "run_id": 41724308646,
+      "job_id": 126224939104,
+      "attempt": 1,
+      "artifact_id": 13273059859,
+      "artifact_SHA256": "6f5dfcd0754da22d557252e9b742ab278bf56271b7a37b8d04069ac8b94a7557",
+      "stderr_SHA256": "f55935e9e868481fac31cbc873150b45f5ce742a32fc7d8b90e45ff8db00bf16",
+      "executed": 180,
+      "passed": 179,
+      "failures": 1,
+      "errors": 0,
+      "skips": 0,
+      "clean_Source": true,
+      "qualified": false
+    },
+    "failure": "The invalid-index test expected the English substring duplicate key, but PostgreSQL16 concurrent index creation returned could not create unique index with detail is duplicated. The test stopped before the remaining invalid-index and reapplication assertions.",
+    "correction": "Only this test requests verbose psql errors, requires the exact ON_ERROR_STOP SQL-error exit3, and checks the unique_violation SQLSTATE23505 error prefix. Actual failed concurrent index creation, invalid catalog state, unchanged reapplication and strict helper refusal assertions remain. Every existing test ID, production Source, migration, CAS, runtime package, timing bound and roster is unchanged.",
+    "file": {
+      "path": "ops/network-guardian/tests/test_workflow_busy_index92_postgres.py",
+      "bytes": 12820,
+      "sha256": "08694c559b141ccaa5bd4b868a2ceb32bcf195027a8fb243d34ae0fb90acee84"
+    },
+    "CI_applicability": "This PR changes no CLAUDE.md, AGENTS.md or docs/adr path, so Context Freshness is not triggered. The complete applicable cohort is18 events/38 jobs. No missing event is dispatched or labelled a pass. Installed G9 and historical Goose91 retain their separately qualified19/39 cohorts.",
+    "preserved_prior_M2_values": 26,
+    "current_successor_CI_status": "pending_new_exact_head_no_old_outcome_transfer",
+    "local_functional_test_import_SQL_build_or_Native_execution": false,
+    "production_schema92_Core_retirement_AB_main_or_completion_claimed": false
+  }
+}

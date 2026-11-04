@@ -1,0 +1,120 @@
+name: Owned Network Guardian
+
+on:
+  pull_request:
+    paths:
+      - 'ops/network-guardian/**'
+      - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
+      - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
+      - '.github/workflows/owned-network-guardian.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/network-guardian/**'
+      - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
+      - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
+      - '.github/workflows/owned-network-guardian.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-source-and-historical-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: guardian_ci
+          POSTGRES_PASSWORD: disposable-guardian-ci-only
+          POSTGRES_DB: yggdrasil
+        options: >-
+          --health-cmd "pg_isready -U guardian_ci -d yggdrasil"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Verify original G6 operational package
+        working-directory: ops/network-guardian/g6pair-boot-v2
+        run: sha256sum --check SHA256SUMS
+      - name: Verify exact G7 runtime package and separate real operational tools
+        run: |
+          cd ops/network-guardian/g7pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+      - name: Verify exact G8 runtime package and separate real operational tools
+        run: |
+          cd ops/network-guardian/g8pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+      - name: Verify exact G9 runtime package and separate real operational tools
+        run: |
+          cd ops/network-guardian/g9pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+          cd ../../rollout
+          sha256sum --check SHA256SUMS
+      - name: Verify additive G10 inert source and separate operational tools
+        run: |
+          cd ops/network-guardian/g10pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+          cd ../../rollout
+          sha256sum --check SHA256SUMS-G10
+      - name: Verify additive G11 inert source and separate operational tools
+        run: |
+          cd ops/network-guardian/g11pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+          cd ../../rollout
+          sha256sum --check SHA256SUMS-G11
+      - name: Verify additive G12 inert source and separate operational tools
+        run: |
+          cd ops/network-guardian/g12pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+      - name: Verify separate additive G12 Core CAS and Goose93 companion Source
+        run: |
+          cd ops/network-guardian/rollout
+          sha256sum --check SHA256SUMS-G12
+          sha256sum --check SHA256SUMS-GOOSE93
+      - name: Run exact preserved207 plus G12 network6 CoreCAS6 Goose93 companion7 census
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
+          GUARDIAN_CI_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          mkdir -p "$GUARDIAN_CI_EVIDENCE"
+          set +e
+          python3 -I -B ops/network-guardian/tests/run_exact_ci.py > "$GUARDIAN_CI_EVIDENCE/unittest.stdout" 2> "$GUARDIAN_CI_EVIDENCE/unittest.stderr"
+          result=$?
+          printf '%s\n' "$result" > "$GUARDIAN_CI_EVIDENCE/unittest.exit"
+          cat "$GUARDIAN_CI_EVIDENCE/unittest.stdout"
+          cat "$GUARDIAN_CI_EVIDENCE/unittest.stderr"
+          exit "$result"
+      - name: Retain reviewed exact source, units and fixture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owned-network-guardian-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ops/network-guardian/
+            db/migrations/00092_workflow_runs_busy_logical_index.sql
+            db/migrations/00093_guest_retirement_settled_absence_continuation.sql
+            ${{ runner.temp }}/owned-network-guardian/
+          if-no-files-found: error
+          retention-days: 30

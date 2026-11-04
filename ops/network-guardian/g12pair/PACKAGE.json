@@ -1,0 +1,126 @@
+{
+  "amd64_Core_manifest_digest": "sha256:b0ee27bd53443260e8e05123f9474454e8108310c4b94a7e72b6bae107cf1ac2",
+  "base_Core_source": "ee8e3377ba91ff3efc3fde3a9751790608ac7066",
+  "controller_config_path": "/etc/dakasa/capacity-network/controller.r13-netlink-g12pair.production.json",
+  "controller_config_sha256": "7c05da2f2ab22a08abd57d5e514e71c7c378e03387a532a8189e1845e3865879",
+  "controller_unit_sha256": "85202467a404116ee883d06347a3d80bd3c89e7519f08d41d4f4ddcb3ecf21c3",
+  "files": {
+    "source/coverage.py": "eb7ed1fcbcc665cdc3603812a10103b4e19dd0b66693b99dc8cfeb15adceeb88",
+    "source/current15_bounded_reader.py": "1124dfbfbd57c60decc4fdcb0233c03253e87a941f50c8fa5b6aad3e28ae30cd",
+    "source/current15_bounded_tail_contract.py": "c18809987960f9aea524240f7ea6886a1ed782e5c4001e68edac875bbbe3431d",
+    "source/initial_boot_Cold_read_adoption.py": "0e690f4b74303da774aa7d5a651444e7f74c8445428af38002192bf1079b5799",
+    "source/journal_contract.py": "b0c153b69cc8275e1e330cb3c584b498c1685c1b999c4b5c7b972f164c96db6c",
+    "source/network_guardian.py": "67f8a8ffed5af5acbf3523c6d83bf0a5422e9ddaae984e75b4d322cc2dba79db",
+    "source/proof_cache.py": "c2e0b981a2843c15dd5907cc186e4c23a7d844a78c1ce4f7e2e3578704eb5b4b",
+    "source/qualification_initializer.py": "d73ade12564ba7b672a4dbdf8225e99af13a64a9b8aff4a41fb1a0225bef9ec8",
+    "units/dakasa-capacity-network-cold-transport.service": "bf7bd7b2e65cc549f5bf24895a78fbdefb934d1a3ff3c9cd685f6d0d1ba492f0",
+    "units/dakasa-capacity-network-guardian.service": "6a6cf26d314437a206d9f17bec7a4c728466edb81b937511907a163b64b28494"
+  },
+  "historical_g10_controller_config_sha256": "7b11191f9840a6ebf92f6f9332a438198d7b34b5546e69ca4869b624f8e7d6ed",
+  "historical_g10_controller_unit_sha256": "bd738a47c5157f4d913df1629352ba472ef4b8fa3bad2fe57d33ffc60c1e5312",
+  "historical_g10_pair_chain_ast_sha256": "2c3426e1ed400105c33366e55be792edb0b832714efa8c6aa3216e59e39f29c7",
+  "historical_g11_pair_chain_ast_sha256": "3d5ee4ec175fc831b1fb63261ae1d3be2d02108d26826841e7197bc778494c7e",
+  "historical_g6_controller_config_sha256": "8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e",
+  "historical_g6_controller_unit_sha256": "12671f666b11b6176701735e08c9e6f53280f145fe19c7ec9add9fe1fc2b2327",
+  "historical_g6_pair_chain_ast_sha256": "416a430b03206cfd7d8650599d726437754235dcabe7e52a703e3fc0210c4ce3",
+  "historical_g7_controller_config_sha256": "d68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf",
+  "historical_g7_controller_unit_sha256": "85b8dcd254d46755fdbd568d7d01c2c2cf2d7e309bf3b0b7ac751ef9cb680ec9",
+  "historical_g7_pair_chain_ast_sha256": "856072a84aa6051b17498e725cc5b0b664f708867ad6c76f13eca309a480dd3d",
+  "historical_g8_controller_config_sha256": "42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5",
+  "historical_g8_controller_unit_sha256": "131f34b8dbb59a2d46d94fb7a403671f106d9cb4d8b299a6a10ac61189f0dc50",
+  "historical_g8_pair_chain_ast_sha256": "04b1dd9f504a9c06dfa522204e27c525cdece1418786f5a4f38ae05f31e48d01",
+  "historical_g9_pair_chain_ast_sha256": "6bbbacb786d53a180a1c43b0587697c1688a2c45ec324f62e0d3e41e6a852f6e",
+  "inert_source_only": false,
+  "inert_unit_source_sha_argument": "67f8a8ffed5af5acbf3523c6d83bf0a5422e9ddaae984e75b4d322cc2dba79db",
+  "installed_source_directory": "/opt/dakasa/capacity-network/network-boot-recovery-r13-g12pair-source-v1",
+  "operational_ci_qualified": false,
+  "operational_source_commit": null,
+  "pair_chain_ast_sha256": "00da01b186b11a1dbf807363036513674649f24ba80fc87bc85c1dc4214ab8f2",
+  "predecessors": {
+    "canonical_g6": {
+      "controller_config_sha256": "8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e",
+      "source_sha256": "6c2cc19f1f962d9d8eaec0cd5e6f813bf49004f8ff6fef9c9fe9f8f0310d8f1b",
+      "standing_config_sha256": "be5b25495056bd25e1512827b5ccbe7236f84928b4d20515f5000383771dcc79"
+    },
+    "g10pair": {
+      "controller_config_sha256": "7b11191f9840a6ebf92f6f9332a438198d7b34b5546e69ca4869b624f8e7d6ed",
+      "source_sha256": "4283341a25e1a9c344cdf564f06604f560c14a7dc7e3738039f17cb9ee3c9bb7",
+      "standing_config_sha256": "71647d59c2ea21c5d0dafd38d266e34d0f360c3aaf50bf5a628947a244e879ce"
+    },
+    "g11pair": {
+      "controller_config_sha256": "a3706d21323a4cce2ef1d0746a9daffd81c1dad538f028635765bcbc116c7777",
+      "source_sha256": "243fe177ed4be0ea7fe8be1e4472b1eee5c73db1cfd109c929cb297622959710",
+      "standing_config_sha256": "b0baa40b8a479528882e352e190e17ce53989a702972edb60d36c60aeb471465"
+    },
+    "g6_boot_v2": {
+      "controller_config_sha256": "8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e",
+      "source_sha256": "f3152cc6d8c5d7edee2e5349db17fac4b8650a18423dfc207c04fcc116955e6d",
+      "standing_config_sha256": "faa6b2cb3132ce2e0ee4304bd833d7f0f999850244014d355f1c33ed176ebb83"
+    },
+    "g7pair": {
+      "controller_config_sha256": "d68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf",
+      "source_sha256": "2379e9cb0fcf36faf7dfe58e930d0eb6ae97ba4d177db6610a23583d0a00a8aa",
+      "standing_config_sha256": "dd7d449ea8fdba60a43d6badb138ea9496e1342572f90633e62d7b87d9b44866"
+    },
+    "g8pair": {
+      "controller_config_sha256": "42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5",
+      "source_sha256": "8259638127d811079d6a461d3bd7407f8a53ff3ebb75e8061bf8538dcf6508b9",
+      "standing_config_sha256": "a02690f5e7a8c000478ceca6c4f4715e7b589814bf93fc5cbefe3bd9126e08d3"
+    },
+    "g9pair": {
+      "controller_config_sha256": "3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111",
+      "source_sha256": "6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765",
+      "standing_config_sha256": "af0ae4a82c5ee7504025cf4564b67ea941cc99122677aa1fa8a82f96c6a44a87"
+    }
+  },
+  "schema": "owned_network_guardian_g12pair_inert_source_package_v1",
+  "source_bound": true,
+  "standing_config_path": "/etc/dakasa/capacity-network/network-recovery.r13-g12pair.production.json",
+  "standing_config_sha256": null,
+  "standing_schema": "Root_standing_R13_g12pair_successor_Core262_R43_network_boot_terminal_recovery_v1",
+  "unchanged_assignments_sha256": {
+    "PAIR_STANDING_CHAIN": "c89059da00a5e226eb723865e7349609df6ceb457daa39bc8a08cc0e7a966206"
+  },
+  "unchanged_helpers_sha256": {
+    "source/coverage.py": "eb7ed1fcbcc665cdc3603812a10103b4e19dd0b66693b99dc8cfeb15adceeb88",
+    "source/current15_bounded_reader.py": "1124dfbfbd57c60decc4fdcb0233c03253e87a941f50c8fa5b6aad3e28ae30cd",
+    "source/current15_bounded_tail_contract.py": "c18809987960f9aea524240f7ea6886a1ed782e5c4001e68edac875bbbe3431d",
+    "source/initial_boot_Cold_read_adoption.py": "0e690f4b74303da774aa7d5a651444e7f74c8445428af38002192bf1079b5799",
+    "source/journal_contract.py": "b0c153b69cc8275e1e330cb3c584b498c1685c1b999c4b5c7b972f164c96db6c",
+    "source/proof_cache.py": "c2e0b981a2843c15dd5907cc186e4c23a7d844a78c1ce4f7e2e3578704eb5b4b",
+    "source/qualification_initializer.py": "d73ade12564ba7b672a4dbdf8225e99af13a64a9b8aff4a41fb1a0225bef9ec8"
+  },
+  "unchanged_owner_methods_sha256": {
+    "actual_R42_anchor": "4fb7e73ab83af033a38595ec8050023d21c965acdef1743bc822f02547e886f9",
+    "boot_start_service_once": "ba94e6ff72e5e8b426f0660045ca672db57e8f2b300e10f4a243b9d9cbd26ec7",
+    "boot_terminal_predecessor": "42bc8e848032ae5bb4499294302128b4e3cebfa9e66dbd89176d38826deb7341",
+    "bootstrap_never_started": "9d9de2b8027019884ed9ef17797857f8aa7c8eed024455b8de8b46f826573842",
+    "call": "591442d6e383f97656aa337e752e71d9dbc28a3181a7be1758c9a6795cb8bd8f",
+    "cold_guard": "0b54215236e310bc2c2bd27da25dcd0a004e647b7763104f35812b74cb5b6f3e",
+    "cold_restore": "5010526bbb7cffdeeb5e99a0c4f2a222caced69483173473ee00d9d0c91f890b",
+    "current15_context": "1509bc3056d094e2d7c3fa74813dae933ec6316f5d2ca01f65d6e3e6ee749a9c",
+    "current15_readonly": "a4251eaf5263dec21d07e2914b15a7d1c57681871a1c848cd372c771ffb28f78",
+    "failed": "c7df59f6bbe771972abf6b46afff0c593d42ac1a87c7e7095078512d1ac65c17",
+    "full_journal": "4e798233980bb7024b3e72f93c7c0394e76ddf838dbaab7c58fcb2b5d39c865f",
+    "hub_seal": "419b6d18e1465e1867dfa9cdaff8dc7773f2e2adb39a15da0a8bf7731abe23ff",
+    "identity": "77f1af0a2211fd9fd75f5cfcd9a055906595f4a0e64ee726b8a8d79e479897b3",
+    "initial_boot_read_adoption": "9cb7e6dd3841c96c1e1c44e5362e2c135b052170ecc89f72abb10251ac7c10db",
+    "joined_unit": "81a80b111a4c772a0f285e68263a2be5922f8edc158f844a0eddd986a20fc06c",
+    "journal_argv": "b23100fd16a79946c35e76e05ccf364112f5289373152cf3e353fb8e2efb0580",
+    "kernel": "499d2cdebdba9a22d9f54fec34adb4d653f1dab9b56c72d0ea811d84b5f74e86",
+    "key": "1385cd67178ddeebf77b5466d448e9576ad7a86a92b033a336a9236fdb99320a",
+    "maintenance": "4aa03e44e0f39eed504f48b41d296e8c9a0dc8ef4ccd27c0de039a43366368ca",
+    "never_started": "29cd442ae840b4dd7e0359cd5ee98f087b520e8e36089d1ca8e5d22924684484",
+    "original_qualification_exists": "de01cdc7820bb453681f9f4bd487a8bdc2bd9f223c4e36c9cddb589275f33d72",
+    "original_qualification_measurement": "b27ae110adb537909c86367081139d1d88ea70f57507e3464a34c9953651ebd7",
+    "properties": "8b4ae36a5db8dbcb9753742cf9afeb9ddb5818ebd6b3d8dfcdb1dba9c1e8d14a",
+    "qualify_new_lifetime": "39a28e8a67dff1fece727dd37915a65fec6bbb882e90ddd88f571b8b2cf75db4",
+    "recover_terminal": "262521700329560dca1e6804c1726f09e80ff1817d3310e80059883f98f7b38d",
+    "successful_boot_unit": "97a223c50fb366e9487c7c4ce09d605507295e229d60a0303b9e6f7cd7d58c8a",
+    "terminal_after_own_START": "dea3f69fb9b7d076aca0cdf4902e2a442c12bf875bb8f9f9ad0ef839821529aa",
+    "transport": "be58131d24105e824e121c9a70f2a624c322d2f6b101a583fed118e9c4a4d04e",
+    "watch": "de50824b15535c6da733abd92071a080207c01cf43a2148251c6eda2f27afe0b",
+    "wg": "ae8067b1c10039916f0d9edabca04389ea24ac47adba911fdd9a17e8cdfc3d16",
+    "wg_snapshot": "4ed15ae3a70b6b33339794d6b952c9f50b53279deb0689e35e7d19e7a0f25b42"
+  }
+}

@@ -136,6 +136,7 @@ func cleanupStaleWorkflowRuns(ctx context.Context, db *sql.DB, timeout time.Dura
 		    error = $2,
 		    updated_at = NOW()
 		WHERE status IN ('pending', 'running')
+		  AND NOT EXISTS (SELECT 1 FROM public.capacity_dispatch_jobs d WHERE d.run_id=workflow_runs.id)
 		  AND COALESCE(started_at, created_at) < NOW() - ($1::text || ' seconds')::interval
 	`, fmt.Sprintf("%.0f", timeout.Seconds()), errMsg)
 	if err != nil {

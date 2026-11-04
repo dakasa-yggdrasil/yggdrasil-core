@@ -1,0 +1,137 @@
+{
+  "schema": "http_maintenance_dispatch_expected_Source_tests_v1",
+  "packages": {
+    "repository": {
+      "package": "repository",
+      "cases": {
+        "TestHTTPMaintenanceDispositionRetainedScanBoundary": [
+          "old87_schema",
+          "missing_epoch",
+          "wrong_result",
+          "invalid_canary",
+          "no_member",
+          "multiple_members",
+          "missing_challenge",
+          "extra_nonce",
+          "negative_send",
+          "missing_return",
+          "native_command",
+          "provider_read",
+          "open_grant",
+          "unproved_assessment"
+        ],
+        "TestHTTPMaintenanceDispositionMembersRemainClosed": [
+          "null",
+          "empty",
+          "foreign_slot",
+          "extra_field",
+          "duplicate_field",
+          "nonliteral_key",
+          "missing_policy",
+          "foreign_UUID_shape",
+          "bad_enrollment_SHA"
+        ],
+        "TestHTTPMaintenanceDispositionAdmissionOperands": [
+          "missing_job",
+          "missing_run",
+          "missing_owner",
+          "missing_return",
+          "bad_members",
+          "bad_run",
+          "invalid_fence",
+          "invalid_wakes",
+          "machine_issuer"
+        ],
+        "TestHTTPMaintenanceDispatchPostgresLifecycle": [
+          "aws",
+          "hetzner"
+        ],
+        "TestHTTPMaintenanceDispatchPostgresRefusals": [
+          "wrong_realm",
+          "foreign_workflow_uuid",
+          "wrong_error",
+          "missing_finalization_error",
+          "different_finalization_error",
+          "ack_present",
+          "unexpired_lease",
+          "wrong_plan_reason",
+          "other_refusal_stage",
+          "retire_executed",
+          "owner_present",
+          "request_present",
+          "epoch_changed",
+          "pending_forward",
+          "pending_disposal",
+          "accepted_return",
+          "unexpected_return_wire",
+          "unexpected_business",
+          "missing_nonce",
+          "missing_send",
+          "missing_return",
+          "late_nonce",
+          "late_return",
+          "late_send",
+          "altered_send_deadline",
+          "challenge_wire_changed",
+          "wrong_tuple",
+          "slot_authority"
+        ],
+        "TestHTTPMaintenanceDispatchPostgresLineage": [
+          "changed_prior_contract",
+          "changed_intermediate_contract",
+          "prior_newer",
+          "different_name",
+          "different_namespace",
+          "missing_prior",
+          "prior_checksum_forged",
+          "current_inactive",
+          "missing_binding",
+          "malformed_binding",
+          "duplicate_profile"
+        ],
+        "TestHTTPMaintenanceDispatchPostgresCASAndConcurrency": [
+          "member_digest",
+          "run_digest",
+          "envelope_digest",
+          "dispatch_fence",
+          "lease_owner",
+          "wake_count",
+          "returned_at",
+          "old_process",
+          "future_process",
+          "permission_lost",
+          "one_winner"
+        ],
+        "TestHTTPMaintenanceDispatchMigration91Guards": [
+          "terminal_without_receipt",
+          "immutable_and_no_pointer",
+          "current_workflow_uuid",
+          "receipt_without_transition",
+          "old_r4_up89_after91",
+          "pre91_literal_equivalence",
+          "pre91_literal_equivalence/aws",
+          "pre91_literal_equivalence/aws/positive",
+          "pre91_literal_equivalence/aws/wrong_realm",
+          "pre91_literal_equivalence/aws/wrong_stage",
+          "pre91_literal_equivalence/aws/discontinuous_policy",
+          "pre91_literal_equivalence/aws/accepted_return",
+          "pre91_literal_equivalence/hetzner",
+          "pre91_literal_equivalence/hetzner/positive",
+          "pre91_literal_equivalence/hetzner/wrong_realm",
+          "pre91_literal_equivalence/hetzner/wrong_stage",
+          "pre91_literal_equivalence/hetzner/discontinuous_policy",
+          "pre91_literal_equivalence/hetzner/accepted_return"
+        ]
+      }
+    },
+    "http": {
+      "package": "controllers/httpapi",
+      "cases": {
+        "TestHTTPMaintenanceDispatchDispositionClosedCASRequest": [],
+        "TestHTTPMaintenanceDispatchDispositionRequiresCurrentAdministrativeHuman": [],
+        "TestHTTPMaintenanceDispatchDispositionSessionCSRF": [],
+        "TestHTTPMaintenanceDispatchDispositionSummaryPreservesOriginal": []
+      }
+    }
+  }
+}

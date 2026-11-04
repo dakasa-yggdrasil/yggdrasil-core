@@ -42,6 +42,7 @@ type workflowDispatcher func(ctx context.Context, db *sql.DB, conn *amqp.Connect
 // On a leader drop (connection lost, process dies), Postgres releases the
 // lock automatically and another worker takes over.
 func bootstrapWorkflowEventTriggers(ctx context.Context, app *runtime.ServiceApp) error {
+	ctx = withBrokerConnection(ctx, app)
 	db, ok := Postgres(app)
 	if !ok {
 		return nil
@@ -104,6 +105,7 @@ func runWorkflowEventTriggersPass(
 	logger *zap.Logger,
 	dispatch workflowDispatcher,
 ) {
+	conn = brokerConnectionFor(ctx, conn)
 	leader, err := repository.TryAcquireWorkflowEventTriggerLeadership(ctx, db)
 	if err != nil {
 		if logger != nil {
@@ -111,12 +113,15 @@ func runWorkflowEventTriggersPass(
 		}
 		return
 	}
-	if !leader {
+	if leader == nil {
 		// Another worker is the leader; skip this pass.
 		return
 	}
+	// Unlock on the same pinned session that took the session-level lock.
 	defer func() {
-		_ = repository.ReleaseWorkflowEventTriggerLeadership(ctx, db)
+		if err := leader.Release(ctx); err != nil && logger != nil {
+			logger.Warn("workflow_event_triggers: release leader lock failed", zap.Error(err))
+		}
 	}()
 
 	// Load the event-trigger workflows once per pass.
@@ -385,12 +390,17 @@ func processMatchedTrigger(
 	trigger eventTriggerWorkflow,
 	event model.Event,
 ) error {
-	// Check before workflow.event.matched is committed. That event is the
-	// dedup marker, so writing it while locked would discard the trigger.
+	// The original lock is checked before any database read or dedup marker.
 	if err := workflowdispatchlock.CheckEnvironment(trigger.namespace, trigger.name); err != nil {
 		return err
 	}
-
+	// Protected capacity graphs never enter the legacy async owner. Demand is
+	// consumed independently by the SAME private service and original job queue.
+	// This refusal precedes the legacy dedup marker even with no current binding.
+	protected, ownerErr := capacityScheduleRequiresOwner(ctx, db, trigger.manifestID)
+	if ownerErr != nil || protected {
+		return fmt.Errorf("protected capacity event requires private demand admission")
+	}
 	already, err := repository.HasWorkflowEventMatched(ctx, db, trigger.manifestID, event.EventID.String())
 	if err != nil {
 		return fmt.Errorf("dedup check: %w", err)

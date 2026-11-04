@@ -1,0 +1,14 @@
+{
+  "schema": "Root_G8_public_standing_original_custody_v1",
+  "ssm_command_id": "836cb96e-8720-429f-8127-e160e96f1148",
+  "ssm_original_path": "/Volumes/DaKasa/Users/dakasa/projects/dakasa/yggdrasil/yggdrasil-core/docs/superpowers/elastic-codex-20261102/evidence/g8-standing-public-readonly-v1-836cb96e-8720-429f-8127-e160e96f1148.json",
+  "ssm_original_sha256": "07dc8ad0b28b87c63c745c8d4adc8f7832cde5fbb3ed20e1d8d2be705088fa88",
+  "native_source": "/etc/dakasa/capacity-network/network-recovery.r13-g8pair.production.json",
+  "raw_path": "/Volumes/DaKasa/Users/dakasa/projects/dakasa/yggdrasil/yggdrasil-core/docs/superpowers/elastic-codex-20261102/g9-held-preimage-readonly-v3-preparation-20261103/G8-STANDING-NATIVE-PUBLIC.original.json",
+  "raw_sha256": "a02690f5e7a8c000478ceca6c4f4715e7b589814bf93fc5cbefe3bd9126e08d3",
+  "raw_bytes": 7853,
+  "fields": 25,
+  "status": "Success",
+  "response_code": 0,
+  "purpose": "Source fixture custody only; not a new native authorization"
+}

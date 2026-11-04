@@ -1,0 +1,9 @@
+[
+  "test_g11pair_maintenance.G11MaintenanceTests.test_forced_unbound_entrypoints_refuse_before_io",
+  "test_g11pair_maintenance.G11MaintenanceTests.test_controller_derivation_extends_exact_g10_prefix",
+  "test_g11pair_maintenance.G11MaintenanceTests.test_standing_derivation_retains_g10_and_all_ancestor_axes",
+  "test_g11pair_maintenance.G11MaintenanceTests.test_runtime_g10_predecessor_requires_full_bytes_and_mixed_axes_refuse",
+  "test_g11pair_maintenance.G11MaintenanceTests.test_protected_union_preserves_all_43_no_reset",
+  "test_g11pair_maintenance.G11MaintenanceTests.test_known_seven_row_child_preserves_original_bytes_and_ancestry",
+  "test_g11pair_maintenance.G11MaintenanceTests.test_known_seven_row_child_rejects_old_frame_and_retained_epoch_drift"
+]

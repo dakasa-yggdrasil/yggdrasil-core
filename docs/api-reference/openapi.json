@@ -11,6 +11,8 @@
     {"url": "https://yggdrasil.example.com", "description": "Adopter-hosted instance"}
   ],
   "tags": [
+    {"name": "capacity-recovery", "description": "Private named-human, history-preserving recovery; no provider write or business-readiness authority."},
+    {"name":"capacity-mutations","description":"Private one-time provider mutation authority; disabled without operator principal inventory and bindings."},
     {"name": "health", "description": "Liveness / readiness"},
     {"name": "manifests", "description": "Manifest CRUD"},
     {"name": "integrations", "description": "Integration instances and runtime state"},
@@ -21,6 +23,768 @@
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
   ],
   "paths": {
+    "/api/v1/ops/capacity/http-maintenance-dispatch-dispositions": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Dispose an exact recorded context-refused maintenance return without replay",
+        "description": "Core requires the retained failed seven-step capacity-boundary refresh, one held publication with no original Guest wire, exact stored member/policy lineage, full typed policy validation, a lease expired for fifteen minutes and a real later Core process. Only one receipt and the job state/update time change; the failed workflow, NULL ACK and all canary records remain unchanged. No provider action, useful capacity or replay is inferred. Cookie sessions require X-CSRF-Token; verified OIDC bearer authentication retains the existing middleware exemption.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "description": "Required for cookie-session POST; obtained from the authenticated session.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HTTPMaintenanceDispatchDispositionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable public receipt; original failed return and NULL ACK preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPMaintenanceDispatchDispositionSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed canonical job UUID or closed nine-field CAS request."
+          },
+          "401": {
+            "description": "Authenticated human collaborator required."
+          },
+          "403": {
+            "description": "Current manage-workflows and GodMode permission required; cookie-session POST also requires valid CSRF."
+          },
+          "503": {
+            "description": "Current operator authorization could not be established."
+          },
+          "409": {
+            "description": "Stale expectations, ineligible recorded failure, changed evidence or absent later-process barrier. Recover an uncertain POST response by GET only."
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/http-maintenance-dispatch-dispositions/{jobId}": {
+      "get": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Read the immutable recorded HTTP maintenance disposition",
+        "description": "Read the stored receipt and preserved-original hashes. Does not rescan membership, replay work or infer native presence, quiescence or useful capacity.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated historical public receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPMaintenanceDispatchDispositionSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Canonical non-nil lowercase job UUID required."
+          },
+          "401": {
+            "description": "Authenticated human collaborator required."
+          },
+          "403": {
+            "description": "Current manage-workflows and GodMode permission required; cookie-session POST also requires valid CSRF."
+          },
+          "503": {
+            "description": "Current operator authorization could not be established."
+          },
+          "404": {
+            "description": "No valid stored disposition for this exact job."
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/guest-retirement-poweroff-forwards": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Admit historical forward recovery of a partially powered-off useful tail",
+        "description": "Named-human admission only. Core authenticates the entire retained original retirement frame and failed scheduled run, derives its own process barrier and appends a separately referenced claim. The seven-field body supplies no native facts, clocks or replacement success. A later ordinary protected workflow may use fresh survivor canaries and bounded source-owned OFF/absence reads before its existing one-time exact destroy authority. Original caller failure and all Guest records remain unchanged; this operation does not replay Guest work or issue a provider mutation.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestRetirementForwardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable public admission summary. No normal Guest success, native OFF or deletion is inferred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestRetirementForwardSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not the exact closed original-retirement/current-frame request."
+          },
+          "401": {
+            "description": "An authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and current administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Original lineage, failed run, expired lease/process barrier, current frame or outstanding authority conflicts. No Guest command or provider write was sent."
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/guest-retirement-poweroff-forwards/{preregistrationId}": {
+      "get": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Read stored partial-poweroff forward recovery lineage",
+        "description": "Pure stored read of all immutable stages and linked admissions for the exact preregistration. Returns only public UUIDs, hashes, stage and truthful flags; no native I/O or private original wires.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "preregistrationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered immutable public summaries, including historical parent lineage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GuestRetirementForwardSummary"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not the exact closed original-retirement/current-frame request."
+          },
+          "401": {
+            "description": "An authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and current administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "404": {
+            "description": "Stored original lineage is unavailable or invalid."
+          }
+        }
+      }
+    } ,
+    "/api/v1/ops/capacity/failed-serving-guest-disposals": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Quarantine an original single member that previously served",
+        "description": "Named-human recovery for the sole original slot-one Notify AWS or Hetzner member. Core derives the original life, validates the exact current epoch/full-frame CAS and obtains a bounded authenticated inventory GET. It appends quarantine, increments the fence once and blocks ordinary authority. The operator separately owns power-off and deletion. No caller native facts, URLs or health are accepted.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Frozen frame, live authority, lineage, source-owned observation or native state conflict. Reconcile an uncertain action before any later action."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "Not the exact closed request object."
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSRF value for the same authenticated human session. A machine bearer cannot inherit recovery authority."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "At most 4096 bytes. Duplicate, unknown, missing, null, noncanonical identity/hash/epoch members and trailing data are refused.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailedServingGuestDisposalRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/failed-serving-guest-disposals/{preregistrationId}": {
+      "get": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Read retained serving-member recovery summaries",
+        "description": "Reads stored facts only, without a provider or Guest request. An empty array means no retained admission for the original preregistration.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "A canonical original preregistration UUID is required."
+          },
+          "404": {
+            "description": "The retained recovery records could not be read."
+          }
+        },
+        "parameters": [
+          {
+            "name": "preregistrationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ops/capacity/failed-serving-guest-disposals/native-off": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Observe the quarantined original native in OFF state",
+        "description": "After separate exact operator power-off, Core makes one fresh bounded authenticated GET and revalidates the frozen frame. AWS joins the instance/lifecycle read to the original CREATE action. The quiescent record claims only observed native OFF; no stop/delete, Guest drain, cause or operator native action ACK is claimed.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Frozen frame, live authority, lineage, source-owned observation or native state conflict. Reconcile an uncertain action before any later action."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "Not the exact closed request object."
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSRF value for the same authenticated human session. A machine bearer cannot inherit recovery authority."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "At most 4096 bytes. Duplicate, unknown, missing, null, noncanonical identity/hash/epoch members and trailing data are refused.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailedServingGuestDisposalReference"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ops/capacity/failed-serving-guest-disposals/complete": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Record complete original absence and an observed floor deficit",
+        "description": "After separate exact operator cleanup, Core reads the original CREATE tuple and every required owned auxiliary, plus an independent fresh complete same-profile inventory of zero members/all eight missing slots. It atomically appends terminal and tombstones only the original slot, preserving historical use/uncertain effects. Only ordinary later new-generation floor repair with a new life/enrollment may restore readiness.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Stored public recovery facts; no provider mutation or Guest/business-readiness authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedServingGuestDisposalSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A canonical authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Frozen frame, live authority, lineage, source-owned observation or native state conflict. Reconcile an uncertain action before any later action."
+          },
+          "503": {
+            "description": "Administrative authorization or required storage is unavailable."
+          },
+          "400": {
+            "description": "Not the exact closed request object."
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSRF value for the same authenticated human session. A machine bearer cannot inherit recovery authority."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "At most 4096 bytes. Duplicate, unknown, missing, null, noncanonical identity/hash/epoch members and trailing data are refused.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailedServingGuestDisposalReference"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/capacity/mutations/native/redeem": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Consume exactly one protected native command permission",
+        "description": "Private independent adapter bearer scope plus a one-use native command authority token. Exact five ASCII JSON members, or seven when an operator-approved release recovery binding adds both release_protocol and adapter_source_commit (never one alone), at most 32KiB; duplicate, unknown, aliased, null members, query parameters and encoded paths refused. A bound release permit additionally returns the same release_protocol, adapter_source_commit and a one-use return_nonce. The locked current policy, workflow, instance/type checksums, executor lease and command tuple are rechecked before consumption. Success is transport permission, not an atomic Kubernetes snapshot, readiness or a provider fence. Replay is refused; recover through fixed native reads rather than a second mutation.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityNativeAuthorityRedeemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed one-use permission. No authority secret is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityNativeAuthorityPermit"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          },
+          "400": {
+            "description": "Body is not the exact canonical five-member, or seven-member release-bound, native authority object."
+          }
+        }
+      }
+    },
+    "/api/v1/capacity/mutations/native/result": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Retain the original adapter result of one release-bound finalizer PUT",
+        "description": "Private independent adapter bearer scope over verified TLS. Exact closed native_release_result_v1 object, at most 32KiB, carrying the one-use return nonce of the redeemed release-bound permission. It retains only the adapter's original result; it never represents the Core caller return, a Pod witness, retry authority or provider quiescence. Identical duplicates are read-only and a different result for the same attempt is refused.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityNativeReleaseResult"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Original adapter result durably retained. No authority is granted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "recorded"
+                  ],
+                  "properties": {
+                    "recorded": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not the exact closed original result object, or the request did not arrive over TLS."
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance, capability, command or return nonce denied, or the original result is incomplete."
+          },
+          "409": {
+            "description": "Command state, attempt, principal, source, lease or previously retained result conflict; nothing new is retained."
+          },
+          "503": {
+            "description": "Result storage unavailable or the original deadline passed; nothing is retained."
+          }
+        }
+      }
+    },
+    "/api/v1/capacity/mutations/redeem": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Redeem exactly one provider transport send; every replay is read-only",
+        "description": "Private operator-configured machine surface. Exact JSON object up to 32KiB; unknown fields, query parameters and encoded paths refused. Human sessions and other machine credential families cannot authorize this route.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityMutationRedeemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable authority readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityMutationRedeemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          }
+        }
+      }
+    },
+    "/api/v1/capacity/mutations/settle": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Settle the owning transport without claiming native readiness",
+        "description": "Private operator-configured machine surface. Exact JSON object up to 32KiB; unknown fields, query parameters and encoded paths refused. Human sessions and other machine credential families cannot authorize this route.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityMutationSettleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable authority readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityMutationSettleResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Capacity-Mutation-Settlement",
+            "required": true,
+            "description": "Private nonce created before redemption; its SHA-256 must match the owning attempt. Never returned by Core.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/capacity/mutations/{grant_id}": {
+      "get": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Read scoped durable grant and native transport receipt",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable authority readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityMutationReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          }
+        }
+      }
+    },
     "/api/v1/auth/mfa/contact/options": {
       "get": {
         "tags": [
@@ -736,6 +1500,7 @@
   },
   "components": {
     "securitySchemes": {
+      "CapacityMutationAdapter": {"type":"http","scheme":"bearer","description":"Independent hashed adapter principal configured in YGGDRASIL_CAPACITY_MUTATION_PRINCIPALS_JSON; one exact integration instance and capability allowlist."},
       "BearerAuth": {"type": "http", "scheme": "bearer", "description": "Route-appropriate console session or machine bearer in the Authorization header"},
       "EventPublishToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Event-Token", "description": "Mutation-event publisher bearer whose SHA-256 digest and exact or logical grants are configured in YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON, or the explicit time-bounded mutation-only plaintext migration bridge"},
       "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Workflow machine bearer whose SHA-256 digest and exact allowlist are configured in YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON, or the explicit time-bounded legacy workflow bridge"},
@@ -753,6 +1518,1377 @@
       }
     },
     "schemas": {
+      "HTTPMaintenanceDispatchDispositionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Exactly nine non-null CAS expectations, at most 8192 bytes. Duplicate or unknown keys, trailing JSON and caller-supplied proof are rejected. Core derives the evidence and issuer.",
+        "required": [
+          "job_id",
+          "expected_run_id",
+          "expected_lease_owner",
+          "expected_envelope_sha256",
+          "expected_run_sha256",
+          "expected_members_sha256",
+          "expected_fencing_token",
+          "expected_pending_wake_count",
+          "expected_returned_at"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_lease_owner": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_envelope_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_run_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_members_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expected_fencing_token": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "expected_pending_wake_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "expected_returned_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "HTTPMaintenanceDispatchDispositionSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "job_id",
+          "run_id",
+          "original_dispatch_sha256",
+          "original_run_sha256",
+          "current_members_sha256",
+          "original_dispatch_updated_at",
+          "original_returned_at",
+          "disposing_core_process_started_at",
+          "recorded_at",
+          "schema",
+          "current_member_count",
+          "executor_barrier",
+          "minimum_lease_age_seconds",
+          "reason",
+          "historical_return",
+          "dispatch_state",
+          "disposing_core_hostname",
+          "disposing_core_pid",
+          "disposing_core_source_commit",
+          "issuer",
+          "finalization_ack_at",
+          "provider_mutation_evidence",
+          "original_return_recorded",
+          "workflow_run_preserved",
+          "new_current_admission_required",
+          "original_finalization_ack_present",
+          "replayed",
+          "provider_read_performed",
+          "provider_quiescence_proved",
+          "other_core_replicas_excluded"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "original_dispatch_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "original_run_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "current_members_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "original_dispatch_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "original_returned_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "disposing_core_process_started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schema": {
+            "type": "string",
+            "enum": [
+              "capacity_dispatch_http_maintenance_disposition_v1"
+            ]
+          },
+          "current_member_count": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "executor_barrier": {
+            "type": "string",
+            "enum": [
+              "disposing_core_process_started_after_lease_expiry_v1"
+            ]
+          },
+          "minimum_lease_age_seconds": {
+            "type": "integer",
+            "enum": [
+              900
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "recorded_context_refused_http_maintenance_dispatch_disposed"
+            ]
+          },
+          "historical_return": {
+            "type": "string",
+            "enum": [
+              "unknown"
+            ]
+          },
+          "dispatch_state": {
+            "type": "string",
+            "enum": [
+              "http_maintenance_disposed"
+            ]
+          },
+          "disposing_core_hostname": {
+            "type": "string"
+          },
+          "disposing_core_pid": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "disposing_core_source_commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "issuer": {
+            "type": "string",
+            "pattern": "^collaborator:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "finalization_ack_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          },
+          "provider_mutation_evidence": {
+            "type": "object",
+            "description": "Retained aggregate effect counts and truthful flags; excludes original wires and member records."
+          },
+          "original_return_recorded": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "workflow_run_preserved": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "new_current_admission_required": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "original_finalization_ack_present": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "replayed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "provider_read_performed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "provider_quiescence_proved": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "other_core_replicas_excluded": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        }
+      },
+      "GuestRetirementForwardRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preregistration_id",
+          "retirement_request_id",
+          "policy_id",
+          "policy_checksum",
+          "generation",
+          "fencing_token",
+          "intent_sha256"
+        ],
+        "properties": {
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retirement_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policy_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policy_checksum": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "fencing_token": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "GuestRetirementForwardSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "id",
+          "root_admission_id",
+          "parent_admission_id",
+          "parent_admission_sha256",
+          "stage",
+          "mode",
+          "preregistration_id",
+          "retirement_request_id",
+          "admission_sha256",
+          "prefix_sha256",
+          "original_caller_sha256",
+          "native_off_sha256",
+          "destroy_grant_id",
+          "native_absence_sha256",
+          "recorded_at",
+          "original_failure_preserved",
+          "normal_guest_success_claimed",
+          "guest_command_replayed",
+          "native_off_observed",
+          "native_absence_observed"
+        ],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "original_guest_partial_poweroff_forward_v1"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "root_admission_id": {
+            "type": "string"
+          },
+          "parent_admission_id": {
+            "type": "string"
+          },
+          "parent_admission_sha256": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "admitted",
+              "off_qualified",
+              "terminal"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "historical",
+              "settled_absence_continuation"
+            ]
+          },
+          "preregistration_id": {
+            "type": "string"
+          },
+          "retirement_request_id": {
+            "type": "string"
+          },
+          "admission_sha256": {
+            "type": "string"
+          },
+          "prefix_sha256": {
+            "type": "string"
+          },
+          "original_caller_sha256": {
+            "type": "string"
+          },
+          "native_off_sha256": {
+            "type": "string"
+          },
+          "destroy_grant_id": {
+            "type": "string"
+          },
+          "native_absence_sha256": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "original_failure_preserved": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "normal_guest_success_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "guest_command_replayed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "native_off_observed": {
+            "type": "boolean"
+          },
+          "native_absence_observed": {
+            "type": "boolean"
+          }
+        }
+      } ,
+      "FailedServingGuestDisposalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preregistration_id",
+          "policy_id",
+          "policy_checksum",
+          "generation",
+          "fencing_token",
+          "intent_sha256"
+        ],
+        "minProperties": 6,
+        "maxProperties": 6,
+        "properties": {
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "policy_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "policy_checksum": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "fencing_token": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA256 of the exact current PostgreSQL intent::text bytes; never hash a decoded/re-encoded JSON object."
+          }
+        }
+      },
+      "FailedServingGuestDisposalReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preregistration_id",
+          "admission_id"
+        ],
+        "minProperties": 2,
+        "maxProperties": 2,
+        "properties": {
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "admission_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        }
+      },
+      "FailedServingGuestDisposalSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "id",
+          "record_id",
+          "stage",
+          "preregistration_id",
+          "actual_core_source",
+          "original_intent_sha256",
+          "quarantine_intent_sha256",
+          "terminal_intent_sha256",
+          "installation_sha256",
+          "enrollment_sha256",
+          "original_slot_sha256",
+          "quarantine_slot_sha256",
+          "current_stable_event_sha256",
+          "native_off_record_id",
+          "historical_accepted_read_count",
+          "historical_promoted_count",
+          "business_effects_preserved",
+          "Core_or_Guest_native_write_sent",
+          "Guest_writer_drain_claimed",
+          "native_off_observed",
+          "native_absence_observed",
+          "operator_native_action_ACK_claimed",
+          "original_failure_cause_fixed_claimed",
+          "historical_zero_useful_capacity_claimed",
+          "replacement_requires_new_original_enrollment"
+        ],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "failed_serving_guest_disposal_v1"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "quarantined",
+              "quiescent",
+              "terminal"
+            ]
+          },
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "actual_core_source": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "original_intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "quarantine_intent_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "terminal_intent_sha256": {
+            "type": "string",
+            "pattern": "^(?:|[0-9a-f]{64})$"
+          },
+          "installation_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "enrollment_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "original_slot_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "quarantine_slot_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "current_stable_event_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "native_off_record_id": {
+            "type": "string",
+            "description": "Retained native-OFF row identity when linked; empty before a terminal link."
+          },
+          "historical_accepted_read_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "historical_promoted_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "business_effects_preserved": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "Core_or_Guest_native_write_sent": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "Guest_writer_drain_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "native_off_observed": {
+            "type": "boolean"
+          },
+          "native_absence_observed": {
+            "type": "boolean"
+          },
+          "operator_native_action_ACK_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "original_failure_cause_fixed_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "historical_zero_useful_capacity_claimed": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "replacement_requires_new_original_enrollment": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "description": "Closed public projection. Original intent, candidates, enrollment/provider payloads and historical job/canary wires stay private. OFF/absence is not remote business completion or a fixed cause."
+      },
+      "CapacityNativeAuthorityPermit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "command_id",
+          "attempt_id",
+          "capability",
+          "request_sha256",
+          "expires_at"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "ensure_capacity_envelope_bound",
+              "ensure_capacity_pod_drain",
+              "destroy_capacity_pod_drain_protection"
+            ]
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "release_protocol": {
+            "type": "string",
+            "enum": [
+              "native_release_result_v1"
+            ],
+            "description": "Present only, together with adapter_source_commit and return_nonce, for a release-bound destroy_capacity_pod_drain_protection permit."
+          },
+          "adapter_source_commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "return_nonce": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "One-use original return nonce; only its digest is retained by Core."
+          }
+        },
+        "anyOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "release_protocol"
+                  ]
+                },
+                {
+                  "required": [
+                    "adapter_source_commit"
+                  ]
+                },
+                {
+                  "required": [
+                    "return_nonce"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "required": [
+              "release_protocol",
+              "adapter_source_commit",
+              "return_nonce"
+            ]
+          }
+        ]
+      },
+      "CapacityNativeAuthorityRedeemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "authority_token",
+          "integration_instance_id",
+          "integration_type_id",
+          "capability",
+          "request_sha256"
+        ],
+        "anyOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "release_protocol"
+                  ]
+                },
+                {
+                  "required": [
+                    "adapter_source_commit"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "required": [
+              "release_protocol",
+              "adapter_source_commit"
+            ]
+          }
+        ],
+        "properties": {
+          "authority_token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "writeOnly": true
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integration_type_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "ensure_capacity_envelope_bound",
+              "ensure_capacity_pod_drain",
+              "destroy_capacity_pod_drain_protection"
+            ]
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "release_protocol": {
+            "type": "string",
+            "enum": [
+              "native_release_result_v1"
+            ],
+            "description": "Present only, together with adapter_source_commit, when the command was issued under the operator-approved release recovery binding; absent by default."
+          },
+          "adapter_source_commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$",
+            "description": "Exact compiled adapter Git source bound by the operator; never inferred from a response."
+          }
+        }
+      },
+      "CapacityNativeReleaseResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "protocol",
+          "command_id",
+          "attempt_id",
+          "integration_instance_id",
+          "integration_type_id",
+          "capability",
+          "request_sha256",
+          "adapter_source_commit",
+          "return_nonce",
+          "original_status",
+          "original_response_sha256",
+          "outcome",
+          "one_send",
+          "do_returned",
+          "read_returned",
+          "close_returned"
+        ],
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "native_release_result_v1"
+            ]
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integration_type_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "destroy_capacity_pod_drain_protection"
+            ]
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "adapter_source_commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "return_nonce": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "writeOnly": true
+          },
+          "original_status": {
+            "type": "integer",
+            "enum": [
+              200,
+              409
+            ]
+          },
+          "original_response_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "rejected_no_effect"
+            ],
+            "description": "applied pairs with original_status 200 and rejected_no_effect with 409. A 409 gains no new meaning until Core also joins its own original caller return."
+          },
+          "one_send": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "do_returned": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "read_returned": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "close_returned": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        }
+      },
+      "CapacityMutationAuxiliaryResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "requires_absence": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CapacityMutationGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "binding_name",
+          "integration_instance_id",
+          "scope_checksum",
+          "profile_name",
+          "slot",
+          "capability",
+          "request_sha256",
+          "expires_at",
+          "state"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "binding_name": {
+            "type": "string"
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope_checksum": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "capability": {
+            "type": "string"
+          },
+          "expected_resource_id": {
+            "type": "string"
+          },
+          "expected_resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "issued",
+              "redeemed",
+              "settled",
+              "confirmed",
+              "rejected",
+              "expired",
+              "compensating",
+              "compensated"
+            ]
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
+          }
+        }
+      },
+      "CapacityMutationRedeemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "settlement_token_sha256",
+          "integration_instance_id",
+          "scope_checksum",
+          "profile_name",
+          "slot",
+          "capability"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "settlement_token_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope_checksum": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "capability": {
+            "type": "string"
+          },
+          "expected_resource_id": {
+            "type": "string"
+          },
+          "expected_resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
+          }
+        }
+      },
+      "CapacityMutationRedeemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "mode",
+          "expires_at"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "write_once",
+              "read_only"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
+          }
+        }
+      },
+      "CapacityMutationSettleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "outcome",
+          "transport_completed",
+          "observed_at"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "action_id": {
+            "type": "string"
+          },
+          "next_action_ids": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string"
+            }
+          },
+          "auxiliary_resources": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/CapacityMutationAuxiliaryResource"
+            }
+          },
+          "auxiliary_inventory_complete": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "uncertain",
+              "rejected_before_send",
+              "provider_rejected"
+            ]
+          },
+          "transport_completed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "provider_error_code": {
+            "type": "string"
+          },
+          "provider_status_code": {
+            "type": "integer"
+          }
+        }
+      },
+      "CapacityMutationSettleResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "status"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "settled"
+            ]
+          }
+        }
+      },
+      "CapacityMutationNativeReadback": {
+          "type": "object",
+          "additionalProperties": false,
+          "readOnly": true,
+          "description": "Separately admitted failed-create native readback; original owning transport fields remain unchanged, including unknown identifiers.",
+          "required": [
+            "grant_id",
+            "binding_name",
+            "slot",
+            "resource_id",
+            "resource_created_at",
+            "request_sha256",
+            "observed_at",
+            "receipt_ref",
+            "owner_verified",
+            "spec_verified",
+            "resource_absent",
+            "action_ids",
+            "actions_terminal",
+            "actions_successful"
+          ],
+          "properties": {
+            "grant_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "binding_name": {
+              "type": "string"
+            },
+            "resource_id": {
+              "type": "string"
+            },
+            "resource_created_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "request_sha256": {
+              "type": "string"
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "receipt_ref": {
+              "type": "string"
+            },
+            "observed_creation_grant_id": {
+              "type": "string"
+            },
+            "slot": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "owner_verified": {
+              "type": "boolean"
+            },
+            "spec_verified": {
+              "type": "boolean"
+            },
+            "resource_absent": {
+              "type": "boolean"
+            },
+            "actions_terminal": {
+              "type": "boolean"
+            },
+            "actions_successful": {
+              "type": "boolean"
+            },
+            "action_history_complete": {
+              "type": "boolean"
+            },
+            "actions_failed": {
+              "type": "boolean"
+            },
+            "compensation_identity_verified": {
+              "type": "boolean"
+            },
+            "action_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "auxiliary_absent": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "$ref": "#/components/schemas/CapacityMutationAuxiliaryResource"
+              }
+            }
+          }
+        },
+      "CapacityMutationReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant",
+          "transport_completed"
+        ],
+        "properties": {
+          "native_readback": {
+            "$ref": "#/components/schemas/CapacityMutationNativeReadback"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "action_id": {
+            "type": "string"
+          },
+          "next_action_ids": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string"
+            }
+          },
+          "auxiliary_resources": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/CapacityMutationAuxiliaryResource"
+            }
+          },
+          "auxiliary_inventory_complete": {
+            "type": "boolean"
+          },
+          "grant": {
+            "$ref": "#/components/schemas/CapacityMutationGrant"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "transport_completed": {
+            "type": "boolean"
+          }
+        }
+      },
       "ServiceBanner": {"type": "object", "properties": {"service": {"type": "string"}, "status": {"type": "string"}}},
       "ReadyResponse": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["ready", "not_ready"]}, "rabbitmq_status": {"type": "string", "enum": ["ok", "degraded"]}, "reason": {"type": "string"}, "error": {"type": "string"}}},
       "ManifestMetadata": {

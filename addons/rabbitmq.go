@@ -2,12 +2,15 @@ package addons
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/brokersession"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
@@ -27,95 +30,169 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 		if lockPaused {
 			return fmt.Errorf("workflow dispatch lock requires BROKER_URL so paused queues can be verified")
 		}
-		logger, _ := Logger(app)
-		if logger != nil {
-			logger.Info("rabbitmq addon skipped because BROKER_URL is not set")
-		}
 		return nil
 	}
-
-	conn, err := amqp.Dial(brokerURL)
-	if err != nil {
-		if lockPaused {
-			return fmt.Errorf("workflow dispatch lock requires RabbitMQ queue verification: %w", err)
-		}
-		logger, _ := Logger(app)
-		if logger != nil {
-			logger.Warn("rabbitmq unreachable at boot; starting broker-degraded (IdP/auth + wake only, workflow dispatch disabled)",
-				zap.String("broker_url", brokerURL), zap.Error(err))
-		}
-		app.SetResource("rabbitmq", (*amqp.Connection)(nil))
-		app.SetResource("rpc_transport", nil)
-		return nil
-	}
-
-	db, ok := Postgres(app)
-	if !ok {
-		_ = conn.Close()
-		return fmt.Errorf("postgres addon is not available")
-	}
-
 	logger, _ := Logger(app)
-	if lockPaused {
-		if err := requireDispatchLockQueues(conn, message.DispatchLockPausedQueues()); err != nil {
-			_ = conn.Close()
-			return err
+	report := func(err error) { reportBrokerSessionFailure(logger, err) }
+	factory := func(parent context.Context) (*brokersession.Session, error) {
+		attempt, cancel := context.WithTimeout(parent, 15*time.Second)
+		defer cancel()
+		conn, err := dialBrokerSession(attempt, brokerURL)
+		if err != nil {
+			return nil, brokerDialError{err}
 		}
-	}
-
-	// Broker connectivity lost. We DO NOT exit: the IdP/auth and wake
-	// paths do not need the broker, so the process stays up and serves
-	// them. The workflow/event path degrades (returns 503) via
-	// Server.isBrokerAvailable() until the connection is restored.
-	connClose := conn.NotifyClose(make(chan *amqp.Error, 1))
-	go func() {
-		amqpErr, ok := <-connClose
-		if logger != nil {
-			if ok && amqpErr != nil {
-				logger.Error(
-					"rabbitmq connection lost; workflow dispatch degraded (process stays up)",
-					zap.Int("code", amqpErr.Code),
-					zap.String("reason", amqpErr.Reason),
-					zap.Bool("recover", amqpErr.Recover),
-					zap.Bool("server", amqpErr.Server),
-				)
-			} else {
-				logger.Error("rabbitmq connection lost; workflow dispatch degraded (process stays up)")
+		// Cancellation also bounds queue/consumer setup after the handshake.
+		interrupt := context.AfterFunc(attempt, func() { _ = conn.CloseDeadline(time.Now().Add(time.Second)) })
+		defer interrupt()
+		db, ok := Postgres(app)
+		if !ok {
+			_ = conn.CloseDeadline(time.Now().Add(time.Second))
+			return nil, fmt.Errorf("postgres addon is not available")
+		}
+		if lockPaused {
+			if err := requireDispatchLockQueues(conn, message.DispatchLockPausedQueues()); err != nil {
+				_ = conn.CloseDeadline(time.Now().Add(time.Second))
+				return nil, err
 			}
 		}
-	}()
-
-	// Construct the generic rpc.Transport first. Consumers subscribe
-	// through it; the raw amqp connection stays available so handlers
-	// that still do direct outbound publishes (resolveIntegrationInstance,
-	// dispatchWorkflowThroughIntegration, etc.) keep working during
-	// the migration.
-	rpcTransport := rpcamqp.New(conn)
-
-	if err := message.RegisterAllConsumers(rpcTransport, conn, db, logger); err != nil {
-		_ = conn.Close()
-		return fmt.Errorf("register consumers: %w", err)
+		// One owner reconnects the session. The SDK transport deliberately has
+		// no second connection watchdog and never replays an outbound request.
+		transport := rpcamqp.New(conn)
+		closed := conn.NotifyClose(make(chan *amqp.Error, 1))
+		// The owner closes the socket before cancelling delivery contexts. The
+		// pinned SDK settles handler errors with Nack(false); parent shutdown
+		// must not cause that settlement on a still-live socket.
+		sessionCtx, cancelSession := context.WithCancel(context.WithoutCancel(parent))
+		var stopConsumers func()
+		stopMonitor := func() {}
+		session := &brokersession.Session{Connection: conn, Transport: transport, Closed: closed,
+			Live: func() bool { return !conn.IsClosed() },
+			Close: func() {
+				// Monitor cancellation is independent of delivery cancellation.
+				// Stop consumers closes its gate and socket before cancelling
+				// handlers, preventing SDK settlement on a still-live connection.
+				monitorStopped := make(chan struct{})
+				go func() { stopMonitor(); close(monitorStopped) }()
+				if stopConsumers != nil {
+					stopConsumers()
+				} else {
+					_ = conn.CloseDeadline(time.Now().Add(time.Second))
+				}
+				cancelSession()
+				_ = transport.Close()
+				<-monitorStopped
+			}}
+		stopConsumers, err = message.RegisterAllConsumersWithContext(sessionCtx, transport, conn, db, logger)
+		if err != nil {
+			// Return partial ownership so the same supervised drain deadline
+			// covers handlers already running during failed registration.
+			return session, fmt.Errorf("register consumers: %w", err)
+		}
+		if attempt.Err() != nil || conn.IsClosed() {
+			return session, fmt.Errorf("broker session closed during consumer registration")
+		}
+		stopMonitor = message.StartIntegrationRuntimeMonitorWithContext(sessionCtx, conn, db, logger, integrationRuntimeMonitorInterval())
+		return session, nil
 	}
-
-	app.SetResource("rabbitmq", conn)
-	app.SetResource("rpc_transport", rpcTransport)
-	app.RegisterCloser(func(context.Context) error { return conn.Close() })
-
-	monitorInterval := integrationRuntimeMonitorInterval()
-	stopMonitor := message.StartIntegrationRuntimeMonitor(conn, db, logger, monitorInterval)
-	app.RegisterCloser(func(context.Context) error {
-		stopMonitor()
-		return nil
-	})
-
-	// The Heimdall closed-loop guardian sweep used to live here. It
-	// moved to the separate integration-heimdall repo (commercial
-	// product). The core keeps the guardian_* / remediation_*
-	// manifest kinds and their CRUD endpoints; any guardian
-	// integration (Heimdall or a custom one) subscribes to the
-	// event stream and runs its own sweep loop.
-
+	initial, err := factory(ctx)
+	if err != nil {
+		if initial != nil {
+			brokersession.Drain(initial, report)
+		}
+		var dialError brokerDialError
+		if lockPaused || !errors.As(err, &dialError) {
+			return err
+		}
+		report(err)
+	}
+	changed := func(session *brokersession.Session) {
+		var conn *amqp.Connection
+		var transport rpc.Transport
+		if session != nil {
+			conn, transport = session.Connection, session.Transport
+		}
+		app.SetResource("rabbitmq", conn)
+		app.SetResource("rpc_transport", transport)
+	}
+	manager := brokersession.Start(ctx, initial, factory, changed, report)
+	app.SetResource("rabbitmq_session", manager)
+	if initial == nil {
+		changed(nil)
+	}
+	app.RegisterCloser(manager.Shutdown)
 	return nil
+}
+
+func reportBrokerSessionFailure(logger *zap.Logger, err error) {
+	if logger != nil {
+		// Do not log BROKER_URL or credential-bearing dial errors.
+		fields := []zap.Field{zap.String("error_class", fmt.Sprintf("%T", err))}
+		var brokerError *amqp.Error
+		if errors.As(err, &brokerError) {
+			fields = append(fields, zap.Int("amqp_code", brokerError.Code))
+		}
+		if errors.Is(err, brokersession.ErrDrainDeadline) {
+			logger.Error("rabbitmq session drain exceeded deadline; replacement withheld", fields...)
+			return
+		}
+		logger.Warn("rabbitmq session unavailable; reconnecting without replay", fields...)
+	}
+}
+
+type brokerDialError struct{ error }
+
+// dialBrokerSession bounds both TCP/TLS and the AMQP handshake and cancels
+// an in-progress handshake on shutdown. The library clears its deadline once
+// negotiation succeeds; the live connection continues with normal heartbeats.
+func dialBrokerSession(ctx context.Context, brokerURL string) (*amqp.Connection, error) {
+	return dialBrokerSessionUsing(ctx, brokerURL, (&net.Dialer{Timeout: 10 * time.Second}).DialContext)
+}
+
+func dialBrokerSessionUsing(ctx context.Context, brokerURL string, dial func(context.Context, string, string) (net.Conn, error)) (*amqp.Connection, error) {
+	var stop func() bool
+	var socket net.Conn
+	conn, err := amqp.DialConfig(brokerURL, amqp.Config{Dial: func(network, address string) (net.Conn, error) {
+		raw, err := dial(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		socket = raw
+		deadline := time.Now().Add(10 * time.Second)
+		if end, ok := ctx.Deadline(); ok && end.Before(deadline) {
+			deadline = end
+		}
+		if err = raw.SetDeadline(deadline); err != nil {
+			_ = raw.Close()
+			return nil, err
+		}
+		stop = context.AfterFunc(ctx, func() { _ = raw.Close() })
+		return raw, nil
+	}})
+	if stop != nil {
+		stop()
+	}
+	if err != nil {
+		// Open can return a non-nil, incompletely negotiated connection with
+		// an error (for example incompatible SASL). Retire its raw socket and
+		// reader before another dial, without waiting for protocol shutdown.
+		if socket != nil {
+			_ = socket.Close()
+		}
+		if conn != nil {
+			_ = conn.CloseDeadline(time.Now())
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	if ctx.Err() != nil {
+		if conn != nil {
+			_ = conn.CloseDeadline(time.Now().Add(time.Second))
+		}
+		return nil, ctx.Err()
+	}
+	return conn, err
 }
 
 type passiveQueueDeclarer interface {
@@ -141,17 +218,16 @@ func requireDispatchLockQueuesOnChannel(channel passiveQueueDeclarer, queues []s
 	return nil
 }
 
-// RabbitMQ returns the shared RabbitMQ connection when the addon is installed.
-//
-// IMPORTANT: when the broker is unreachable at boot the addon installs the
-// resource key with a TYPED-NIL value (see bootstrapRabbitMQ's soft-fail
-// path: app.SetResource("rabbitmq", (*amqp.Connection)(nil))). In that case
-// this accessor returns (nil, true) — the `ok` is true because the key
-// exists, but the connection is nil. Callers that start a background loop
-// dispatching through the broker MUST therefore also check the connection is
-// live (use brokerLive) and not rely on `ok` alone; otherwise a bare
-// goroutine would dereference a nil *amqp.Connection and panic the process.
+// RabbitMQ returns the current fully registered session's connection. During
+// boot degradation, recovery, drain or shutdown it returns (nil, true). Callers
+// obtain one snapshot per operation and check brokerLive; they must not cache it
+// across operations or retry an ambiguous operation after a session change.
 func RabbitMQ(app *runtime.ServiceApp) (*amqp.Connection, bool) {
+	if raw, ok := app.Resource("rabbitmq_session"); ok {
+		if manager, ok := raw.(*brokersession.Manager); ok {
+			return manager.Connection(), true
+		}
+	}
 	resource, ok := app.Resource("rabbitmq")
 	if !ok {
 		return nil, false
@@ -186,6 +262,11 @@ func brokerLive(conn *amqp.Connection) bool {
 // call this; the raw RabbitMQ() accessor remains available for
 // handlers mid-migration.
 func RPCTransport(app *runtime.ServiceApp) (rpc.Transport, bool) {
+	if raw, ok := app.Resource("rabbitmq_session"); ok {
+		if manager, ok := raw.(*brokersession.Manager); ok {
+			return manager.Transport(), true
+		}
+	}
 	resource, ok := app.Resource("rpc_transport")
 	if !ok {
 		return nil, false

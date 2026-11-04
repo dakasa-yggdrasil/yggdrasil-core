@@ -1,0 +1,95 @@
+{
+  "command_ingress": {
+    "argv": [
+      "--request",
+      "--request-sha256",
+      "--barrier",
+      "--barrier-sha256",
+      "--operator",
+      "--runtime-source",
+      "--expected-build-source"
+    ],
+    "database": "Existing RAM-only psql configuration; configured and actual database must be yggdrasil; one connection and one explicit transaction, deferred Rollback only. Existing advisory locks, SELECT FOR SHARE/UPDATE and SET LOCAL TIME ZONE are preserved; this is not a PostgreSQL READ ONLY transaction.",
+    "files": "Two SHA-pinned closed JSON regular 0600 files, maximum 4096 bytes each; no raw input is included in the report. All supplied SHA/source strings validate lowercase fixed-length hexadecimal before output assignment.",
+    "path": "cmd/retirement-forward-inspect/main.go",
+    "shipping": "CI artifact companion only, not added to Dockerfile. Existing production-command-operations census remains limited to the three scripts shipped in the production image; all 18 records unchanged."
+  },
+  "operator_invocation_requirements": {
+    "driver_debug": "Remove PQGO_DEBUG or set it to 0 in the child environment before exec. lib/pq v1.12.0 reads PQGO_DEBUG=1 at package initialization and enables raw protocol stderr; changing it inside run would be too late.",
+    "hard_wall": "Required external direct-child subprocess timeout of 20 seconds, kill then wait on timeout, preserving partial stdout/stderr and exit evidence. CLI/repository context20 alone is not a hard wall: lib/pq v1.12.0 applies context to TCP dial but startup/auth socket I/O lacks a deadline when connect_timeout is absent; cancel transport may also outlive the query context.",
+    "initialization": "psql.Open only configures sql.Open and pool; no Ping/retry/addon/service initializer. Credentials and raw SQL errors are not logged by the command.",
+    "timeout_receipt": "A killed child without a complete successful rollback report must never be described as having an observed Rollback. OS connection closure is not a rollback receipt."
+  },
+  "preserved_historical_reviews": {
+    "docs/service-contract/M2_SOURCE_REVIEW.json": "11a5c0025091bde075f1c81cc957e3f01bc23d3ac368ae33cdd761ae21f76051",
+    "docs/service-contract/REVIEW.json": "ecbd93a1dbedda1424fee6e6b2f699cba21e02673f439a428fc7ea0eb26de710",
+    "docs/service-contract/SCHEDULER_SKIP_REVIEW.json": "30953f9f8c424cfc419ffe9cdbab5e9c77012848de76b242e8b3f4922d3ee39f"
+  },
+  "runtime_build_compatibility": {
+    "actual_build": "CurrentGuestCoreSource reports clean diagnostic VCS revision; never overridden to inspected c025.",
+    "current_build_dependent_validation": "retirementForwardSnapshotTx binding_authority_profile uses GuestBindingAuthorityCurrent and GuestOriginalProfileEnabled, both through guestProductionProfileMatches and guestProtocolAuthoritySupported. Actual stored D11 authority 48888f21acdddaf411094ec525004297c229863f on notify-aws-elastic is explicitly compatible with any clean 40-hex actual build. Entire internal/capacity tree is byte-identical to c025.",
+    "excluded_current_build_paths": "RequestGuestRetirementForwardHistorical, forwardSourceOrigin, forwardRecord, retirementForwardCurrentTx, retirementForwardCallbackContextTx and guestRetirementV2CurrentTx are not invoked by this inspector. Conditional existing-delete and failed-serving terminal readers validate stored records without a current-build equality requirement.",
+    "historical_issuer_validation": "verifyGuestAuthorityIssuerTx uses the stored actual issuer and stored compatibility-map hash; it does not substitute the diagnostic build.",
+    "interpretation": "Later read failure is not proof the original c025 POST reached that stage; changed data and diagnostic execution remain separate facts."
+  },
+  "schema": "core_service_source_review_supplement_v1",
+  "scope": "Rollback-only retirement-forward inspection companion and passive diagnostic stages; Source-only review. No admission, deployment, native qualification or retrospective original-409 diagnosis is asserted.",
+  "source_baseline": {
+    "commit": "17267e8af7866d5d5579bae16abac160960445b8",
+    "source_inventory_sha256": "485b1ff740f6e8336ec36a2c193d5bc2e06607acddc72190fb19011d975ead35"
+  },
+  "source_inventory": {
+    "added": {
+      "cmd/retirement-forward-inspect/main.go": {
+        "build_constraint": "",
+        "bytes": 3937,
+        "sha256": "2eed779bd3b86f3e76603a4d7f3ea3cb322dab4fd43745005e8024151d3f67de"
+      },
+      "repository/capacity_guest_retirement_forward_inspection.go": {
+        "build_constraint": "",
+        "bytes": 9101,
+        "sha256": "8756e5a85d3b840230f8c38b4ca3e8386be62aa3ecb48ab696ba519e00b13371"
+      }
+    },
+    "bytes": 130910,
+    "changed": {
+      "repository/capacity_guest_retirement_forward.go": {
+        "build_constraint": "",
+        "bytes": 18608,
+        "sha256": "8f900eae33379135f6eb79595a9b5bd6c75e9dd0848b0b28ae261342a01c4f93"
+      },
+      "repository/capacity_guest_retirement_forward_admission.go": {
+        "build_constraint": "",
+        "bytes": 16662,
+        "sha256": "0b64cdc23464cae236765a7be1a6a16de73968eb1882cf2ee4bdec76ad78e724"
+      },
+      "repository/capacity_guest_retirement_forward_evidence.go": {
+        "build_constraint": "",
+        "bytes": 14815,
+        "sha256": "f47be4c6c78328dc141028057db3f82ef3f013a2c48c54a4bd3b983b3ca17206"
+      },
+      "repository/capacity_guest_retirement_v2.go": {
+        "build_constraint": "",
+        "bytes": 19634,
+        "sha256": "b18bb729630e57a823ba49a193ded44e014101c08772a99f38a6084dc11cdba1"
+      },
+      "repository/yggdrasil_permissions.go": {
+        "build_constraint": "",
+        "bytes": 3769,
+        "sha256": "77bfd0e145f57f0a48029269a6831a5d17c132382a0e1d37d2cdbdd948aa6d93"
+      }
+    },
+    "complete_source_count": 801,
+    "path": "docs/service-contract/source/sources.json",
+    "prior_records_preserved": 794,
+    "removed": [],
+    "sha256": "d835a09bcbf228ca7e2cab027c8d7567a4f5ff5f551e0381d855f85848f676c9"
+  },
+  "validation": {
+    "CI_or_native_pass_claimed": false,
+    "exact_head_CI_required": true,
+    "historical_review_nodes_modified": false,
+    "local": "Source/text/JSON/hash/diff/gofmt only; Root-read existing data-only census generator executed. No Go functional test, build, vet, list, product import, SQL, auth, Native or provider operation.",
+    "source_review": "Root read original handoff/full diff; independent peer review and Root final acceptance of the updated integrated Source remain separate."
+  }
+}

@@ -38,6 +38,9 @@ type ReconcileResult struct {
 	Errors    int
 	Duration  time.Duration
 	Timestamp time.Time
+	// diagnostics is intentionally private: the existing status API remains
+	// unchanged and the counters cannot carry resource names or error text.
+	diagnostics reconcileDiagnostics
 }
 
 // Labels and annotations applied to managed K8s resources.

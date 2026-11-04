@@ -1,0 +1,9 @@
+[
+  "test_goose93_native_once.Goose93OnceTests.test_inert_before_any_input_or_credential_io",
+  "test_goose93_native_once.Goose93OnceTests.test_exact_one_job_image_only_and_no_restart_or_overlay",
+  "test_goose93_native_once.Goose93OnceTests.test_actual_m93_source_definitions_not_normalized",
+  "test_goose93_native_once.Goose93OnceTests.test_catalog_query_keeps_full_reviewed_query_and_native_budgets",
+  "test_goose93_native_once.Goose93OnceTests.test_job_uncertainty_consumes_durable_marker_and_never_sends_again",
+  "test_goose93_native_once.Goose93OnceTests.test_closed_http_scope_forbids_core_patch_delete_and_other_job",
+  "test_goose93_native_once.Goose93OnceTests.test_exact_approved_catalog_delta_rejects_old_record_or_body_change"
+]

@@ -46,6 +46,23 @@ func InsertWorkflowRun(
 	inputs map[string]any,
 	metadata map[string]any,
 ) error {
+	return insertWorkflowRun(ctx, db, id, selector, inputs, metadata)
+}
+
+// InsertWorkflowRunTx admits the original pending run in the caller's schedule
+// transaction. It does not commit or create a second execution identity.
+func InsertWorkflowRunTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, selector model.ManifestSelector, inputs, metadata map[string]any) error {
+	if tx == nil {
+		return errors.New("workflow run transaction required")
+	}
+	return insertWorkflowRun(ctx, tx, id, selector, inputs, metadata)
+}
+
+type workflowRunInserter interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func insertWorkflowRun(ctx context.Context, db workflowRunInserter, id uuid.UUID, selector model.ManifestSelector, inputs, metadata map[string]any) error {
 	inputsJSON := mustEncodeJSON(inputs, "{}")
 	metadataJSON := mustEncodeJSON(metadata, "{}")
 
