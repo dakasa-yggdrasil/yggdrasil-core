@@ -25,6 +25,7 @@ type guestRetirementForwardEvidence struct {
 func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRetirementOriginalV2) (guestRetirementForwardEvidence, error) {
 	e := guestRetirementForwardEvidence{JournalSHA256: []string{}, AuthoritySHA256: []string{}, TransportSHA256: []string{}}
 	i := s.Request.Intent
+	forwardInspectionStage(ctx, "original_journal_rows")
 	rows, err := tx.QueryContext(ctx, `SELECT sequence,kind,original_wire,return_sha256,previous_sha256,original_return_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1 ORDER BY sequence`, i.RequestID)
 	if err != nil {
 		return e, err
@@ -69,22 +70,27 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 	if cl != nil {
 		return e, cl
 	}
+	forwardInspectionStage(ctx, "original_authenticated_forward_prefix")
 	if !capacity.GuestRetirementForwardPrefix(observations, s.Receipt.Enrollment, i) {
 		return e, ErrCapacityConflict
 	}
 	var callerWire []byte
 	var same bool
+	forwardInspectionStage(ctx, "original_caller_wire")
 	if err = tx.QueryRowContext(ctx, `SELECT original_wire,return_sha256,original_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_guest_original_caller_returns WHERE intent_id=$1`, i.RequestID).Scan(&callerWire, &e.CallerSHA256, &same); err != nil {
 		return e, ErrCapacityConflict
 	}
 	var c GuestOriginalCallerReturn
+	forwardInspectionStage(ctx, "original_caller_timeline")
 	if !same || capacity.BusinessCreationSHA256(callerWire) != e.CallerSHA256 || capacity.DecodeGuestLifecycle(callerWire, &c) != nil || !guestForwardCallerTimelineValid(c, i) {
 		return e, ErrCapacityConflict
 	}
 	// Complete normal success must use the unchanged normal lane instead.
+	forwardInspectionStage(ctx, "original_caller_not_normal_success")
 	if c.Status == 200 && c.BodyPersisted && !c.DoFailed && !c.ReadFailed && !c.CloseFailed && !c.OriginalContextFailed && c.DriverReturnedAt.Before(i.OriginalDeadline) {
 		return e, ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "original_caller_body")
 	if c.BodyPersisted {
 		var o model.CapacityGuestRetirementObservationV2
 		if capacity.DecodeGuestLifecycle(c.Body, &o) != nil || !capacity.GuestRetirementV2ObservedReturnAuthentic(o, s.Receipt.Enrollment, i) || !reflect.DeepEqual(o, observations[len(observations)-1]) {
@@ -95,6 +101,7 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 	}
 	var attempt, requestSHA string
 	var possible time.Time
+	forwardInspectionStage(ctx, "original_caller_attempt")
 	if err = tx.QueryRowContext(ctx, `SELECT attempt_id::text,request_sha256,possible_send_at FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1`, i.RequestID).Scan(&attempt, &requestSHA, &possible); err != nil || attempt != i.AttemptID || requestSHA != s.RequestSHA256 || c.StartedAt.Before(possible) {
 		return e, ErrCapacityConflict
 	}
@@ -102,6 +109,7 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 	// The read deadline is stored at PostgreSQL timestamp precision; compare its
 	// upper bound in that same representation. The raw authority still has to
 	// precede the exact native signed deadline below, without a time tolerance.
+	forwardInspectionStage(ctx, "original_authority_rows")
 	ar, err := tx.QueryContext(ctx, `SELECT r.id::text,r.phase,r.ordinal,r.possible_read_at,r.original_deadline,v.original_wire,v.authority_sha256,v.original_record=convert_from(v.original_wire,'UTF8')::jsonb,r.original_deadline<=$2::timestamptz FROM public.capacity_guest_original_authority_reads r LEFT JOIN public.capacity_guest_original_authority_returns v ON v.read_id=r.id WHERE r.intent_id=$1 ORDER BY CASE r.phase WHEN 'before_start' THEN 0 ELSE 1 END,r.ordinal`, i.RequestID, i.OriginalDeadline.Format(time.RFC3339Nano))
 	if err != nil {
 		return e, err
@@ -149,23 +157,27 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 	if cl != nil {
 		return e, cl
 	}
+	forwardInspectionStage(ctx, "original_authority_count")
 	if n != 4 {
 		return e, ErrCapacityConflict
 	}
 	// lib/pq has one result stream per transaction. Close the complete authority
 	// row set before reading its retained transport joins.
+	forwardInspectionStage(ctx, "original_authority_transports")
 	for _, ref := range refs {
 		if err = guestRetirementForwardAuthorityTransportTx(ctx, tx, ref.id, ref.started, ref.deadline, ref.expected, &e); err != nil {
 			return e, err
 		}
 	}
 	var transports int
+	forwardInspectionStage(ctx, "original_transport_count")
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_original_authority_transport_returns t JOIN public.capacity_guest_original_authority_reads r ON r.id=t.read_id WHERE r.intent_id=$1`, i.RequestID).Scan(&transports); err != nil || transports != 3 {
 		return e, ErrCapacityConflict
 	}
 	// UTC and deterministic ordering make this a complete frame hash, not a
 	// latest-row authority. Immutable individual joins above remain mandatory.
 	var frame []byte
+	forwardInspectionStage(ctx, "original_frame")
 	err = tx.QueryRowContext(ctx, `SELECT jsonb_build_object('returns',(SELECT jsonb_agg(to_jsonb(r) ORDER BY sequence) FROM public.capacity_vm_retirement_original_returns r WHERE intent_id=$1),'caller',(SELECT to_jsonb(c) FROM public.capacity_guest_original_caller_returns c WHERE intent_id=$1),'attempt',(SELECT to_jsonb(a) FROM public.capacity_guest_original_caller_attempts a WHERE intent_id=$1),'authority',(SELECT jsonb_agg(jsonb_build_object('read',to_jsonb(r),'return',to_jsonb(v)) ORDER BY CASE r.phase WHEN 'before_start' THEN 0 ELSE 1 END,r.ordinal) FROM public.capacity_guest_original_authority_reads r LEFT JOIN public.capacity_guest_original_authority_returns v ON v.read_id=r.id WHERE r.intent_id=$1),'transport',(SELECT jsonb_agg(to_jsonb(t) ORDER BY t.read_id,t.native_stage) FROM public.capacity_guest_original_authority_transport_returns t JOIN public.capacity_guest_original_authority_reads r ON r.id=t.read_id WHERE r.intent_id=$1))::text`, i.RequestID).Scan(&frame)
 	if err != nil {
 		return e, err
@@ -177,16 +189,19 @@ func guestRetirementForwardAuthorityTransportTx(ctx context.Context, tx *sql.Tx,
 	var raw, body []byte
 	var digest string
 	var consistent bool
+	forwardInspectionStage(ctx, "original_transport_wire")
 	err := tx.QueryRowContext(ctx, `SELECT original_wire,original_reply_wire,return_sha256,original_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_guest_original_authority_transport_returns WHERE read_id=$1 AND native_stage='journal'`, id).Scan(&raw, &body, &digest, &consistent)
 	if err != nil || !consistent || capacity.BusinessCreationSHA256(raw) != digest {
 		return ErrCapacityConflict
 	}
 	var diagnostic capacity.GuestOriginalHTTPReturn
+	forwardInspectionStage(ctx, "original_transport_timeline")
 	if capacity.DecodeGuestLifecycle(raw, &diagnostic) != nil || len(diagnostic.Body) != 0 || diagnostic.StartedAt.Before(started) || !diagnostic.DriverReturnedAt.Before(deadline) {
 		return ErrCapacityConflict
 	}
 	diagnostic.Body = body
 	var actual model.CapacityGuestRetirementObservationV2
+	forwardInspectionStage(ctx, "original_transport_body")
 	if capacity.GuestOriginalHTTPDecode(diagnostic, &actual) != nil || !reflect.DeepEqual(actual, expected) {
 		return ErrCapacityConflict
 	}
@@ -199,14 +214,17 @@ func guestRetirementForwardAuthorityTransportTx(ctx context.Context, tx *sql.Tx,
 func retirementForwardQuietTx(ctx context.Context, tx *sql.Tx, x retirementForwardSnapshot, ownRun, ownDestroy string) error {
 	i := x.original.Request.Intent
 	var busy int
+	forwardInspectionStage(ctx, "quiet_workflow_runs")
 	err := tx.QueryRowContext(ctx, `WITH matching AS (SELECT w.id FROM public.workflow_runs w JOIN public.manifests m ON m.id=w.workflow_id AND m.kind='workflow' AND m.namespace=$1 AND m.name=$2 WHERE w.id::text<>$3 AND (w.status NOT IN('succeeded','failed','cancelled') OR w.finished_at IS NULL) UNION SELECT w.id FROM public.workflow_runs w WHERE w.workflow_namespace=$1 AND w.workflow_name=$2 AND w.id::text<>$3 AND (w.status NOT IN('succeeded','failed','cancelled') OR w.finished_at IS NULL)) SELECT count(*) FROM matching`, x.spec.Workflow.Namespace, x.spec.Workflow.Name, ownRun).Scan(&busy)
 	if err != nil || busy != 0 {
 		return ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "quiet_mutation_grants")
 	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE `+capacityGrantUndisposedSQL+` AND integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND state IN('issued','redeemed','settled','compensating') AND id::text<>$4`, x.binding.IntegrationInstanceID, x.binding.ScopeChecksum, x.binding.ProfileName, ownDestroy).Scan(&busy)
 	if err != nil || busy != 0 {
 		return ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "quiet_canaries")
 	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_notify_canary_challenges WHERE policy_id=$1 AND original_deadline>clock_timestamp()`, i.PolicyID).Scan(&busy)
 	if err != nil || busy != 0 {
 		return ErrCapacityConflict

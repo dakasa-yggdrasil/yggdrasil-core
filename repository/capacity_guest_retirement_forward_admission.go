@@ -292,6 +292,7 @@ func (s CapacityStore) GuestRetirementForwardOriginal(ctx context.Context, polic
 // the live admission was retained. Neither old run is rewritten as success.
 func (s CapacityStore) failedForwardRetirementRunTx(ctx context.Context, tx *sql.Tx, x retirementForwardSnapshot, id string) (string, error) {
 	var wire, result []byte
+	forwardInspectionStage(ctx, "failed_run_original")
 	if err := tx.QueryRowContext(ctx, installedGuestPreviousFailedRunQuery, id, uuid.MustParse(x.original.Request.Intent.WorkflowID), x.now).Scan(&wire, &result); err != nil {
 		return "", err
 	}
@@ -299,6 +300,7 @@ func (s CapacityStore) failedForwardRetirementRunTx(ctx context.Context, tx *sql
 		Status string                        `json:"status"`
 		Steps  []model.WorkflowRunStepResult `json:"steps"`
 	}
+	forwardInspectionStage(ctx, "failed_run_shape")
 	if json.Unmarshal(result, &out) != nil || out.Status != "failed" || len(out.Steps) != 7 {
 		return "", ErrCapacityConflict
 	}
@@ -309,6 +311,7 @@ func (s CapacityStore) failedForwardRetirementRunTx(ctx context.Context, tx *sql
 		}
 		steps[step.ID] = step
 	}
+	forwardInspectionStage(ctx, "failed_run_steps")
 	for _, id := range []string{"provision-original-notify", "complete-original-provision", "refresh-original-membership"} {
 		if steps[id].Status != "skipped" {
 			return "", ErrCapacityConflict
@@ -330,12 +333,14 @@ func (s CapacityStore) failedForwardRetirementRunTx(ctx context.Context, tx *sql
 		return "", ErrCapacityConflict
 	}
 	wf := model.Manifest{ID: uuid.MustParse(x.original.Request.Intent.WorkflowID)}
+	forwardInspectionStage(ctx, "failed_run_workflow")
 	if err := tx.QueryRowContext(ctx, `SELECT namespace,name,version,checksum FROM public.manifests WHERE id=$1 AND active`, wf.ID).Scan(&wf.Metadata.Namespace, &wf.Metadata.Name, &wf.Version, &wf.Checksum); err != nil {
 		return "", err
 	}
 	own := s
 	own.WorkflowID = wf.ID
 	own.guestReconcile = &guestReconcileSource{workflow: wf}
+	forwardInspectionStage(ctx, "failed_run_dispatch_original")
 	if err := own.installedGuestDispatchRunTx(ctx, tx, x.policy, x.spec, uuid.MustParse(id), result); err != nil {
 		return "", err
 	}

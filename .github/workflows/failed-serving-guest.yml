@@ -270,6 +270,29 @@ jobs:
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_FORWARD_CENSUS
+      - name: Build qualified rollback-only inspection companion
+        shell: bash
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          set -Eeuo pipefail
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]]
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+          go build -mod=readonly -trimpath -buildvcs=true -o "$RETIREMENT_FORWARD_LOGS/retirement-forward-inspect-linux-amd64" ./cmd/retirement-forward-inspect
+          go version -m "$RETIREMENT_FORWARD_LOGS/retirement-forward-inspect-linux-amd64" > "$RETIREMENT_FORWARD_LOGS/inspection-build-metadata.txt"
+          python3 - <<'PY_INSPECTION'
+          import hashlib,json,os,pathlib
+          p=pathlib.Path(os.environ['RETIREMENT_FORWARD_LOGS'])
+          binary=p/'retirement-forward-inspect-linux-amd64'
+          raw=binary.read_bytes();metadata=(p/'inspection-build-metadata.txt').read_text()
+          assert raw[:4]==b'\x7fELF' and raw[4]==2 and raw[5]==1 and int.from_bytes(raw[18:20],'little')==62
+          assert 'vcs.revision='+os.environ['SOURCE_COMMIT'] in metadata and 'vcs.modified=false' in metadata
+          assert 'CGO_ENABLED=0' in metadata and 'GOOS=linux' in metadata and 'GOARCH=amd64' in metadata
+          value={'schema':'retirement_forward_readonly_inspection_build_v1','diagnostic_source':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'binary_sha256':hashlib.sha256(raw).hexdigest(),'binary_bytes':len(raw),'production_execution':False,'admission_authority':False}
+          (p/'INSPECTION-BUILD.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          PY_INSPECTION
       - name: Retain original forward qualification outcomes and executed census
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -264,6 +264,40 @@ func TestGuestRetirementForwardHistoricalAndAtomicityPostgres(t *testing.T) {
 			ctx := forwardTestContext(t)
 			before := f.PreservedOriginals()
 			req := f.HistoricalRequest()
+			t.Run("readonly_inspection", func(t *testing.T) {
+				actor := uuid.NewString()
+				if _, err := f.DB.Exec(`INSERT INTO public.collaborators(id,slug,status,display_name,traits) VALUES($1,$2,'active','Declared inspection test human','{"yggdrasil_admin":true}'::jsonb)`, actor, "inspection-human-"+actor); err != nil {
+					t.Fatal(err)
+				}
+				var database string
+				if err := f.DB.QueryRow(`SELECT current_database()`).Scan(&database); err != nil {
+					t.Fatal(err)
+				}
+				// Successful inspection must not even ATTEMPT DML. Rollback alone
+				// would conceal such an attempt from a before/after row census.
+				if _, err := f.DB.Exec(`CREATE FUNCTION public.inspection_reject_dml() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'readonly inspection attempted DML'; END $$;
+DO $$ DECLARE r record; BEGIN FOR r IN SELECT c.oid::regclass AS target FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN('r','p') LOOP EXECUTE format('CREATE TRIGGER inspection_reject_dml BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %s FOR EACH STATEMENT EXECUTE FUNCTION public.inspection_reject_dml()',r.target); END LOOP; END $$;`); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if _, err := f.DB.Exec(`DO $$ DECLARE r record; BEGIN FOR r IN SELECT c.oid::regclass AS target FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN('r','p') LOOP EXECUTE format('DROP TRIGGER inspection_reject_dml ON %s',r.target); END LOOP; END $$; DROP FUNCTION public.inspection_reject_dml();`); err != nil {
+						t.Fatal(err)
+					}
+				}()
+				got := f.Store.InspectGuestRetirementForwardHistorical(ctx, req, actor, barrier, barrier.SourceCommit, database)
+				if !got.ReadChecksPassed || !got.TypedIntentCAS || !got.RolledBack || got.MutationAttempted || got.AdmissionCreated || got.Stage != "read_checks_complete_no_admission" || got.FailedRunCount != 1 {
+					t.Fatalf("readonly inspection: %+v", got)
+				}
+				stale := req
+				stale.IntentSHA256 = strings.Repeat("f", 64)
+				got = f.Store.InspectGuestRetirementForwardHistorical(ctx, stale, actor, barrier, barrier.SourceCommit, database)
+				if got.ReadChecksPassed || !got.RolledBack || got.Stage != "historical_seven_cas_and_barrier" || got.FailureClass != "validation_refused" {
+					t.Fatalf("exact refused read stage: %+v", got)
+				}
+				if !reflect.DeepEqual(before, f.PreservedOriginals()) || f.HistoricalRequest().IntentSHA256 != req.IntentSHA256 || forwardTestRowCount(t, f, "capacity_guest_retirement_forwards") != 0 || forwardTestRowCount(t, f, "capacity_guest_retirement_forward_reads") != 0 {
+					t.Fatal("inspection changed original, intent or admission ledgers")
+				}
+			})
 			calls := 0
 			_, err := f.Store.RequestGuestRetirementForwardHistorical(ctx, req, "collaborator:"+uuid.NewString(), barrier, func(context.Context) error {
 				calls++

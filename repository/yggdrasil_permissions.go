@@ -33,6 +33,10 @@ func ResolveYggdrasilPermissions(
 	collaboratorID uuid.UUID,
 	collaboratorTraits map[string]any,
 ) ([]string, error) {
+	return resolveYggdrasilPermissionsOn(ctx, db, collaboratorID, collaboratorTraits)
+}
+
+func resolveYggdrasilPermissionsOn(ctx context.Context, db dbtx, collaboratorID uuid.UUID, collaboratorTraits map[string]any) ([]string, error) {
 	if collaboratorTraits != nil {
 		if v, ok := collaboratorTraits["yggdrasil_admin"].(bool); ok && v {
 			return []string{YggdrasilGodModeAction}, nil

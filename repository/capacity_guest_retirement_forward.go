@@ -181,66 +181,82 @@ func persistRetirementForwardIntentTx(ctx context.Context, tx *sql.Tx, old, next
 
 func (s CapacityStore) retirementForwardSnapshotTx(ctx context.Context, tx *sql.Tx, id string) (retirementForwardSnapshot, error) {
 	var x retirementForwardSnapshot
+	forwardInspectionStage(ctx, "scope_lookup")
 	var ns, env, domain, dim string
 	if err := tx.QueryRowContext(ctx, `SELECT g.namespace,g.environment,g.domain,g.dimension FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_provisioning_preregistrations p ON p.id=r.preregistration_id JOIN public.capacity_mutation_grants g ON g.id=p.create_grant_id WHERE r.id=$1`, id).Scan(&ns, &env, &domain, &dim); err != nil {
 		return x, err
 	}
+	forwardInspectionStage(ctx, "scope_lock")
 	if err := lockMutationScope(ctx, tx, ns, model.CapacityPolicySpec{Environment: env, Domain: domain, Dimension: dim}); err != nil {
 		return x, err
 	}
+	forwardInspectionStage(ctx, "timezone")
 	if _, err := tx.ExecContext(ctx, `SET LOCAL TIME ZONE 'UTC'`); err != nil {
 		return x, err
 	}
 	var err error
+	forwardInspectionStage(ctx, "original_retirement_load")
 	x.original, err = loadGuestRetirementV2Tx(ctx, tx, id, true)
 	if err != nil {
 		return x, err
 	}
 	i := x.original.Request.Intent
+	forwardInspectionStage(ctx, "original_policy_id")
 	x.policy.ID, err = uuid.Parse(i.PolicyID)
 	if err != nil {
 		return x, err
 	}
 	x.policy.Kind = "capacity_policy"
 	var active bool
+	forwardInspectionStage(ctx, "policy_original")
 	err = tx.QueryRowContext(ctx, `SELECT namespace,name,version,checksum,spec,active FROM public.manifests WHERE id=$1 AND kind='capacity_policy' FOR SHARE`, x.policy.ID).Scan(&x.policy.Metadata.Namespace, &x.policy.Metadata.Name, &x.policy.Version, &x.policy.Checksum, &x.policy.Spec, &active)
 	if err != nil || !active || x.policy.Checksum != i.PolicyChecksum {
 		return x, ErrCapacityConflict
 	}
 	var latestPolicy string
+	forwardInspectionStage(ctx, "policy_latest")
 	if tx.QueryRowContext(ctx, `SELECT id::text FROM public.manifests WHERE kind='capacity_policy' AND namespace=$1 AND name=$2 ORDER BY version DESC,id DESC LIMIT 1 FOR SHARE`, x.policy.Metadata.Namespace, x.policy.Metadata.Name).Scan(&latestPolicy) != nil || latestPolicy != x.policy.ID.String() {
 		return x, ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "policy_parse")
 	x.spec, err = parseCapacityPolicy(x.policy)
 	if err != nil {
 		return x, err
 	}
+	forwardInspectionStage(ctx, "binding_authority_profile")
 	if ns != x.policy.Metadata.Namespace || env != x.spec.Environment || domain != x.spec.Domain || dim != x.spec.Dimension || x.spec.GuestRetirementBinding == nil || !reflect.DeepEqual(*x.spec.GuestRetirementBinding, x.original.Binding) || !capacity.GuestBindingAuthorityCurrent(x.spec, x.original.Binding) || !capacity.GuestOriginalProfileEnabled(x.spec, x.original.Binding, i.Tuple.Provider) {
 		return x, ErrCapacityConflict
 	}
 	var wfChecksum string
+	forwardInspectionStage(ctx, "workflow_original")
 	err = tx.QueryRowContext(ctx, `SELECT checksum,active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, i.WorkflowID, x.spec.Workflow.Namespace, x.spec.Workflow.Name).Scan(&wfChecksum, &active)
 	if err != nil || !active || wfChecksum != i.WorkflowChecksum {
 		return x, ErrCapacityConflict
 	}
 	var latestWorkflow string
+	forwardInspectionStage(ctx, "workflow_latest")
 	if tx.QueryRowContext(ctx, `SELECT id::text FROM public.manifests WHERE kind='workflow' AND namespace=$1 AND name=$2 ORDER BY version DESC,id DESC LIMIT 1 FOR SHARE`, x.spec.Workflow.Namespace, x.spec.Workflow.Name).Scan(&latestWorkflow) != nil || latestWorkflow != i.WorkflowID {
 		return x, ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "profile_locks")
 	if err = lockRetirementForwardBindingsTx(ctx, tx, x.spec.MutationBindings); err != nil {
 		return x, err
 	}
+	forwardInspectionStage(ctx, "current_intent_decode")
 	x.current, err = loadCapacityIntent(ctx, tx, ns, x.spec, true)
 	if err != nil {
 		return x, err
 	}
+	forwardInspectionStage(ctx, "current_intent_wire")
 	if err = tx.QueryRowContext(ctx, `SELECT intent::text,clock_timestamp() FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, ns, env, domain, dim).Scan(&x.intentWire, &x.now); err != nil {
 		return x, err
 	}
+	forwardInspectionStage(ctx, "integration_binding")
 	x.binding, err = capacity.VMObservationBinding(x.spec, x.original.Binding.MutationBindingName)
 	if err != nil || checkMutationIntegration(ctx, tx, x.binding) != nil {
 		return x, ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "current_intent_predicates")
 	if x.current.PolicyID != x.policy.ID || x.current.PolicyChecksum != x.policy.Checksum || x.current.Generation != int64(i.Generation) || x.current.RecoveryOnly || x.current.FloorDegraded || x.current.OriginalNotifyWindow != nil || x.current.FailedInstalledDisposal != nil || x.current.FailedServingDisposal != nil || !capacityIntentReduction(x.current) || (x.current.Phase != "draining" && x.current.Phase != "drained") || i.Slot <= x.binding.ProtectedSlots || i.Slot < 2 || i.Slot > 8 || x.current.BaselineSnapshot.Profile != x.binding.ProfileName || x.current.Decision.Profile != x.binding.ProfileName || x.current.BaselineSnapshot.Units != i.Slot || x.current.Decision.Units != i.Slot-1 || x.current.Decision.Units < x.spec.Floor || !capacityProfileCurrent(x.spec, x.current.Decision, x.now) {
 		return x, ErrCapacityConflict
 	}
@@ -248,11 +264,13 @@ func (s CapacityStore) retirementForwardSnapshotTx(ctx context.Context, tx *sql.
 	if x.current.RetirementForward != nil {
 		lockCtx = context.WithValue(ctx, retirementForwardScopeKey{}, retirementForwardScope{id: x.current.RetirementForward.ID, slot: i.Slot})
 	}
+	forwardInspectionStage(ctx, "native_slot_lock")
 	if err = lockNativeMutationSlot(lockCtx, tx, x.binding, i.Slot); err != nil {
 		return x, err
 	}
 	var slot capacityResourceSlot
 	var exists bool
+	forwardInspectionStage(ctx, "native_slot_tuple")
 	slot, exists, err = loadMutationSlot(ctx, tx, ns, x.spec, x.binding, i.Slot)
 	if err != nil || !exists || slot.ProfileName != x.binding.ProfileName {
 		return x, ErrCapacityConflict
@@ -261,10 +279,12 @@ func (s CapacityStore) retirementForwardSnapshotTx(ctx context.Context, tx *sql.
 		return x, ErrCapacityConflict
 	}
 	// The exact enrolled native tuple and confirmed original create stay owned.
+	forwardInspectionStage(ctx, "original_create_receipt")
 	original, err := guestOriginalCreateReceiptV2Tx(ctx, tx, x.original)
 	if err != nil || original.Grant.State != "confirmed" || original.ResourceID != i.Tuple.ResourceID || original.ResourceCreatedAt != i.Tuple.CreatedAt {
 		return x, ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "original_evidence")
 	x.evidence, err = guestRetirementForwardEvidenceTx(ctx, tx, x.original)
 	return x, err
 }

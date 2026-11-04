@@ -138,12 +138,14 @@ func (s CapacityStore) IssueGuestRetirementV2(original *capacity.GuestRetirement
 
 func loadGuestRetirementV2Tx(ctx context.Context, tx *sql.Tx, id string, finalized bool) (GuestRetirementOriginalV2, error) {
 	var out GuestRetirementOriginalV2
+	forwardInspectionStage(ctx, "original_retirement_id")
 	if !validCapacityExecutor(id) {
 		return out, ErrCapacityMutationAuthorization
 	}
 	var preID, digest string
 	var wire []byte
 	var consistent bool
+	forwardInspectionStage(ctx, "original_retirement_wire")
 	err := tx.QueryRowContext(ctx, `SELECT preregistration_id::text,original_wire,intent_sha256,intent_record=convert_from(original_wire,'UTF8')::jsonb->'intent' AND original_deadline=(intent_record->>'original_deadline')::timestamptz AND created_at=(intent_record->>'issued_at')::timestamptz AND id::text=intent_record->>'request_id' AND attempt_id::text=intent_record->>'attempt_id' AND nonce_sha256=intent_record->>'nonce_sha256' FROM public.capacity_vm_retirement_intents WHERE id=$1 FOR SHARE`, id).Scan(&preID, &wire, &digest, &consistent)
 	if err != nil {
 		return out, err
@@ -151,26 +153,32 @@ func loadGuestRetirementV2Tx(ctx context.Context, tx *sql.Tx, id string, finaliz
 	if !consistent || capacity.DecodeGuestLifecycle(wire, &out.Preflight) != nil || out.Preflight.Nonce != "" || capacity.GuestRetirementSHA(out.Preflight.Intent) != digest || out.Preflight.Intent.Schema != capacity.GuestRetirementV2IntentSchema || out.Preflight.Intent.PreregistrationID != preID {
 		return out, ErrCapacityConflict
 	}
+	forwardInspectionStage(ctx, "original_preregistration_binding")
 	stored, err := loadGuestOriginalTx(ctx, tx, preID)
 	if err != nil {
 		return out, err
 	}
+	forwardInspectionStage(ctx, "original_create_witness")
 	if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
 		return out, err
 	}
 	out.Preregistration, out.Binding, out.Member = stored.pre, stored.binding, stored.member
 	out.WitnessSHA = capacity.GuestRetirementSHA(stored.witness)
+	forwardInspectionStage(ctx, "original_enrollment_receipt")
 	out.Receipt, out.RegistrationSHA, err = loadGuestReceiptTx(ctx, tx, preID)
 	if err != nil {
 		return out, err
 	}
+	forwardInspectionStage(ctx, "original_installation")
 	if _, err = loadGuestInstallationTx(ctx, tx, stored, out.Receipt); err != nil {
 		return out, err
 	}
+	forwardInspectionStage(ctx, "original_preflight_content")
 	if !capacity.GuestRetirementV2PreflightContent(out.Preflight, out.Receipt.Enrollment) || out.Preflight.Intent.ProfileManifestSHA256 != out.Binding.ProfileManifestSHA256 || out.Preflight.Intent.CoreSourceCommit != out.Binding.CoreAuthoritySourceCommit {
 		return out, ErrCapacityConflict
 	}
 	var source string
+	forwardInspectionStage(ctx, "original_retirement_issuer")
 	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&out.ExecutorID, &source); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, source, out.Binding, out.Preregistration, out.Preflight.Intent.PolicyID, out.Preflight.Intent.PolicyChecksum) != nil {
 		return out, ErrCapacityConflict
 	}
@@ -179,6 +187,7 @@ func loadGuestRetirementV2Tx(ctx context.Context, tx *sql.Tx, id string, finaliz
 		return out, nil
 	}
 	var kind, previous, returnSHA string
+	forwardInspectionStage(ctx, "original_final_nonce")
 	if err = tx.QueryRowContext(ctx, `SELECT kind,previous_sha256,return_sha256,original_wire,original_return_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1 AND sequence=1`, id).Scan(&kind, &previous, &returnSHA, &wire, &consistent); err != nil {
 		return out, err
 	}
