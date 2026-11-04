@@ -223,7 +223,8 @@ jobs:
           }
           failed=0
           record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
-          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn$)' || failed=1
+          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|ClosedGuardsPostgres|MissingPrefixPostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
+          record continuation_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=6m -json ./repository -run '^TestGuestRetirementForwardContinuationPostgres$' || failed=1
           record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^TestGuestRetirementForward' || failed=1
           record http go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^TestGuestRetirementForward' || failed=1
           [[ "$failed" == 0 ]]
@@ -243,8 +244,8 @@ jobs:
               'TestGuestRetirementForwardReadonlyObserverJoins',
               'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
               'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres',
-              'TestGuestRetirementForwardContinuationPostgres',
               'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn']),
+            'continuation_repository':('repository',['TestGuestRetirementForwardContinuationPostgres']),
             'message':('controllers/message',[
               'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
               'TestGuestRetirementForwardWorkflowMetadataNeverInventsCallerSuccess',
