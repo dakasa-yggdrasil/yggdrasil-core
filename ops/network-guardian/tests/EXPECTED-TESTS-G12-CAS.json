@@ -1,0 +1,8 @@
+[
+  "test_g12pair_core_cas.G12CoreCASTests.test_forced_unbound_refuses_before_all_input_auth_or_native_io",
+  "test_g12pair_core_cas.G12CoreCASTests.test_r2_preimage_and_full_cas_mutation_footprint",
+  "test_g12pair_core_cas.G12CoreCASTests.test_known_s2_pending_refuses_missing_ack_unknown_or_grant_drift",
+  "test_g12pair_core_cas.G12CoreCASTests.test_once_markers_precede_only_actual_patch_and_prevent_replay",
+  "test_g12pair_core_cas.G12CoreCASTests.test_lost_ack_is_get_only_and_expired_current15_never_sends",
+  "test_g12pair_core_cas.G12CoreCASTests.test_common_api_mutex_filesystem_and_bounded_sql_are_literal"
+]

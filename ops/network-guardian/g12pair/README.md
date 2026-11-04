@@ -1,0 +1,7 @@
+# G12 R3 allowlist Source binding preparation
+
+Source literals are bound to actual R3 ee8e3377ba91ff3efc3fde3a9751790608ac7066, linux/amd64 manifest b0ee27bd53443260e8e05123f9474454e8108310c4b94a7e72b6bae107cf1ac2 and Root-reviewed predicted controller hash7c05da2f2ab22a08abd57d5e514e71c7c378e03387a532a8189e1845e3865879. This is not operational P4 CI, a Native standing derivation, swap, Core adoption or schema93 acceptance. Operational commit/CI and actual standing remain future documentary values.
+
+The fixed prefix preserves G11 [R1/4fa5525,R2/8e6d44d]/a370 and appends G12 [R2/8e6d44d,R3/b0ee27b]. G11 source243fe177 and standingb0baa40b remain exact historical authority. G10 aliases428334/71647, all seven helpers,31 pinned Owner spans,43 protected refs, runtime14 and Cold/Hub lifetimes are unchanged. Both units pin the final bound Guardian Source. Planned maintenance retains exactly1of3 recovery markers, original120, owning15, independent15 and the same six commands.
+
+The Source CI role set derives from actual business Root receiptf502:19 static name/event roles including Context Freshness, excluding only its dynamic event. Root must confirm the actual P4b applicable cohort after publication. No previous outcomes qualify P4b. Native tools must authenticate installed prefix/units and produce the real staged standing before the existing qualification and swap. Core CAS Source remains separate. No Source imports, functional tests, native action or generator execution qualified this preparation.
