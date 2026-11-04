@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-03T22:22:26-03:00",
+  "generated_at": "2026-11-04T03:21:08-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1491,
-    ".json": 214,
+    ".json": 215,
     ".py": 83,
     ".sql": 93,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "101bd8b8b33fb2b0d6ce0696dc0f6a73b4a4c243",
+    "commit": "c9d2851c5c17bd63fa17612888bcf39132c76025",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "9bf7903033b322abaaf3a9a3d111c4096c2411189638c195ae6062af13307d6d"
+        "sha256": "43a0a5139fb502c7691acf5c8b5a944effae761e42b2ce782a03bf15f8903a44"
       },
       {
         "path": "AGENTS.md",
@@ -28,7 +28,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "fa89d0b35f6cdb67a362c89db503c6895a6a73d9265763825ea09268da12f3d7"
+        "sha256": "d8a5f649b8f38c0dd8df7e71630c40f6b8c7a5f6030e7fae499aa4449957ad75"
       },
       {
         "path": "README.md",
@@ -66,7 +66,7 @@
     {
       "path": "repository",
       "files": 365,
-      "kb": 4802
+      "kb": 4830
     },
     {
       "path": "controllers/httpapi",
@@ -76,7 +76,7 @@
     {
       "path": "controllers/message",
       "files": 193,
-      "kb": 1655
+      "kb": 1673
     },
     {
       "path": "internal/capacity",
