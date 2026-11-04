@@ -71,7 +71,15 @@ jobs:
           sha256sum --check SHA256SUMS
           cd ../../rollout
           sha256sum --check SHA256SUMS-G10
-      - name: Run exact preserved180 and additive G10 census
+      - name: Verify additive G11 inert source and separate operational tools
+        run: |
+          cd ops/network-guardian/g11pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
+          cd ../../rollout
+          sha256sum --check SHA256SUMS-G11
+      - name: Run exact preserved200 and additive G11 maintenance census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
