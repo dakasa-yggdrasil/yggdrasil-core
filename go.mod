@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ses v1.34.22
 	github.com/aws/aws-sdk-go-v2/service/sns v1.39.15
 	github.com/crewjam/saml v0.5.1
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/go-webauthn/webauthn v0.17.2
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.6.3
