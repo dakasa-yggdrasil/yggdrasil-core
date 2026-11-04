@@ -76,7 +76,7 @@ BEGIN
    WHEN 'complete-original-retirement' THEN step->>'status'='skipped' ELSE false END) IS NOT TRUE)) IS NOT TRUE THEN RETURN false; END IF;
  SELECT * INTO b FROM public.capacity_vm_retirement_delete_bindings WHERE intent_id=retirement AND destroy_grant_id::text=r->>'destroy_grant_id' AND eligibility_sha256=p->>'delete_eligibility_sha256';
  IF NOT FOUND THEN RETURN false; END IF;
- SELECT * INTO g FROM public.capacity_mutation_grants WHERE id=b.destroy_grant_id AND state='settled';
+ SELECT known.* INTO g FROM public.capacity_mutation_grants known WHERE known.id=b.destroy_grant_id AND known.state='settled' AND known.original_disposition_id IS NULL AND known.failed_original_disposition_id IS NULL AND known.native_denied_disposition_id IS NULL AND known.enrolled_failed_disposition_id IS NULL;
  IF NOT FOUND THEN RETURN false; END IF;
  IF (encode(digest(g.grant_record::text,'sha256'),'hex')=p->>'destroy_grant_sha256'
   AND b.eligibility_sha256=encode(digest(b.original_wire,'sha256'),'hex') AND b.original_eligibility_record=convert_from(b.original_wire,'UTF8')::jsonb

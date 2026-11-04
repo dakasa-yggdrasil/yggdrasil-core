@@ -702,7 +702,7 @@
       "callee": "EmitEvent",
       "file": "repository/capacity_mutations.go",
       "function": "emitCapacityMutationEvent",
-      "line": 961,
+      "line": 967,
       "type_expressions": [
         "record.EventProvider + \".\" + record.EventResource + \".\" + verb",
         "\"workflow\""

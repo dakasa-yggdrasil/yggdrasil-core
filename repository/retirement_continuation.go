@@ -85,7 +85,7 @@ func (s CapacityStore) TryRequestGuestRetirementForwardContinuation(ctx context.
 	}
 	proof.DispatchSHA256 = capacity.BusinessCreationSHA256(dispatchWire)
 	var destroy string
-	err = tx.QueryRowContext(ctx, `SELECT b.destroy_grant_id::text,b.eligibility_sha256,encode(digest(g.grant_record::text,'sha256'),'hex') FROM public.capacity_vm_retirement_delete_bindings b JOIN public.capacity_mutation_grants g ON g.id=b.destroy_grant_id WHERE b.intent_id=$1 AND g.state='settled'`, parent.RetirementRequestID).Scan(&destroy, &proof.DeleteEligibilitySHA256, &proof.DestroyGrantSHA256)
+	err = tx.QueryRowContext(ctx, `SELECT b.destroy_grant_id::text,b.eligibility_sha256,encode(digest(g.grant_record::text,'sha256'),'hex') FROM public.capacity_vm_retirement_delete_bindings b JOIN public.capacity_mutation_grants g ON g.id=b.destroy_grant_id WHERE b.intent_id=$1 AND `+capacityGrantUndisposedSQL+` AND g.state='settled'`, parent.RetirementRequestID).Scan(&destroy, &proof.DeleteEligibilitySHA256, &proof.DestroyGrantSHA256)
 	if err != nil {
 		return false, continuationEligibilityError(err)
 	}
