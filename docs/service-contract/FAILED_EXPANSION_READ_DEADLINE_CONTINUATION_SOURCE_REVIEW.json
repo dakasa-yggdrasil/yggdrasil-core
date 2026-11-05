@@ -1,0 +1,66 @@
+{
+  "change": "A contiguous same-claim qualified absence read, new prepared read and original deadline-failed raw return permit a separate finite readonly owner after real failed workflow finalization and natural lease expiry.",
+  "migration95": {
+    "delta": "Only guard_failed_unwitnessed_expansion_cleanup_event claimed-stage branch and its two local declarations.",
+    "down": "Restores the exact migration94 function body without rewriting records.",
+    "path": "db/migrations/00095_failed_expansion_read_failure_continuation.sql",
+    "sha256": "50f2f1f712a91abf3ccd17d0fb2040d30b4bd2c6455268902e1452e922a94808"
+  },
+  "preserved": [
+    "Migration94 admission and original append-only records.",
+    "Original CREATE and DELETE SDK results, child grant and single possible-send event.",
+    "All old deadlines, leases, failed workflow ACKs and historical tests.",
+    "Existing provider, adapter, Native transport and guest controller methods."
+  ],
+  "problem": "A deadline-failed absence return remained immutable raw custody, but the last-stage claim guard could not resume that read after the original failed workflow ACK and lease expiry.",
+  "production_or_provider_authority": false,
+  "required_guards": [
+    "Same admission, child, claim, run, generation, fence, executor and original lease tuple.",
+    "An original absence read with matching canonical wire and accepted SETTLED child receipt; failed call and original context, no observed output and actual return at or after its original deadline.",
+    "Complete accepted original AWS destroy result remains bound to the same single child.",
+    "The old workflow and dispatch are failed, returned and acknowledged before a new run and fence can claim.",
+    "A fresh read and fresh survivor floor are required before terminal closure."
+  ],
+  "schema": "failed_expansion_deadline_read_continuation_source_review_v1",
+  "source_refs": [
+    {
+      "bytes": 29302,
+      "path": "repository/failed_expansion_owner.go",
+      "sha256": "0bc1bdd7b2194eadbdff9ff28f7e9dc26cb6cdb38abf6ba7491e88001914ad2d"
+    },
+    {
+      "bytes": 34900,
+      "path": "db/migrations/00095_failed_expansion_read_failure_continuation.sql",
+      "sha256": "50f2f1f712a91abf3ccd17d0fb2040d30b4bd2c6455268902e1452e922a94808"
+    },
+    {
+      "bytes": 21769,
+      "path": "repository/failed_expansion_read_failure_continuation_postgres_test.go",
+      "sha256": "f509ea0a019eb1c100de703c105820b8b57707486d4a1b762a9885e1cc69ce14"
+    },
+    {
+      "bytes": 27870,
+      "path": ".github/workflows/failed-serving-guest.yml",
+      "sha256": "6eb6fd38e73ced2070a9f9fa57e2aec05db66be6e13685744973ea8ec8f38576"
+    },
+    {
+      "bytes": 56655,
+      "path": ".github/workflows/capacity-postgres.yml",
+      "sha256": "ff10604bdb8ba9c08d81c3b98ecbb15d18b80e2a15c6404d0d37369158590a18"
+    }
+  ],
+  "status": "accepted-source-only",
+  "validation": {
+    "count": 1,
+    "functional_execution": "Required in CI; not run locally.",
+    "migration_round_trip": "The regression asserts actual95 Up/source body and94 Down/body plus immutable ledger.",
+    "negative_children": 11,
+    "postgres_majors": [
+      16,
+      17
+    ],
+    "race": true,
+    "scope": "Source review and existing CI qualification; this document confers no deployment or runtime authority.",
+    "test_root": "TestFailedUnwitnessedExpansionCleanupPostgresReadDeadlineContinuation"
+  }
+}

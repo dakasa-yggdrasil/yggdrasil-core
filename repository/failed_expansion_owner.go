@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -273,12 +274,31 @@ func (s CapacityStore) TryClaimFailedExpansionCleanup(ctx context.Context, polic
 		if err = failedExpansionClosedOwnerTx(ctx, tx, old); err != nil {
 			return s, zero, a, true, err
 		}
-		var pending FailedExpansionReadReturn
-		if (events[len(events)-1].Stage != "pending_absence" && events[len(events)-1].Stage != "absence_complete") || json.Unmarshal(events[len(events)-1].Evidence, &pending) != nil || pending.Pending == pending.Complete {
+		child, childErr := failedExpansionChildTx(ctx, tx, a)
+		if childErr != nil {
 			return s, zero, a, true, ErrCapacityConflict
 		}
-		child, childErr := failedExpansionChildTx(ctx, tx, a)
-		if childErr != nil || pending.Receipt == nil || !reflect.DeepEqual(guestMutationReceiptV2(child), *pending.Receipt) {
+		qualified := events[len(events)-1]
+		if qualified.Stage == "absence_returned" {
+			// The failed read remains raw custody. Only its preceding qualified
+			// same-owner read may anchor a fresh read-only successor.
+			if !failedExpansionDeadlineReturnContinuation(events, old, a, child, now) {
+				return s, zero, a, true, ErrCapacityConflict
+			}
+			qualified = events[len(events)-3]
+			var returnedBeforeACK bool
+			if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$1::uuid AND j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.finished_at=j.returned_at AND j.returned_at>=$2)`, old.RunID, events[len(events)-1].RecordedAt).Scan(&returnedBeforeACK); err != nil {
+				return s, zero, a, true, err
+			}
+			if !returnedBeforeACK {
+				return s, zero, a, true, ErrCapacityConflict
+			}
+		}
+		var pending FailedExpansionReadReturn
+		if (qualified.Stage != "pending_absence" && qualified.Stage != "absence_complete") || json.Unmarshal(qualified.Evidence, &pending) != nil || pending.Pending == pending.Complete {
+			return s, zero, a, true, ErrCapacityConflict
+		}
+		if pending.Receipt == nil || !reflect.DeepEqual(guestMutationReceiptV2(child), *pending.Receipt) {
 			return s, zero, a, true, ErrCapacityConflict
 		}
 		if _, actualPending, contentErr := failedExpansionReadContent(pending, p, a); contentErr != nil || actualPending != pending.Pending {
@@ -307,6 +327,43 @@ func (s CapacityStore) TryClaimFailedExpansionCleanup(ctx context.Context, polic
 	}
 	s.failedExpansionOwner = &failedExpansionOwner{id: a.ID, claim: c.Sequence}
 	return s, next, a, true, nil
+}
+
+// A deadline-failed read is never absence evidence. This exact contiguous
+// same-owner suffix merely permits another finite owner to issue a NEW read of
+// the already accepted settled child after the old run/lease have closed.
+func failedExpansionDeadlineReturnContinuation(events []FailedUnwitnessedExpansionCleanupEvent, claim FailedUnwitnessedExpansionCleanupEvent, a FailedUnwitnessedExpansionCleanup, child capacityMutationRecord, now time.Time) bool {
+	if len(events) < 3 || claim.LeaseExpiresAt == nil || child.Grant.State != "settled" || child.Settlement == nil {
+		return false
+	}
+	qualified, prepared, returned := events[len(events)-3], events[len(events)-2], events[len(events)-1]
+	if (qualified.Stage != "pending_absence" && qualified.Stage != "absence_complete") || prepared.Stage != "absence_prepared" || returned.Stage != "absence_returned" || prepared.Sequence != qualified.Sequence+1 || returned.Sequence != prepared.Sequence+1 || qualified.Sequence <= claim.Sequence {
+		return false
+	}
+	for _, event := range []FailedUnwitnessedExpansionCleanupEvent{qualified, prepared, returned} {
+		if event.CleanupID != a.ID || event.ChildGrantID != a.ChildGrantID || event.RunID != claim.RunID || event.Generation != claim.Generation || event.FencingToken != claim.FencingToken || event.LeaseOwner != claim.LeaseOwner || event.ExecutorID != claim.ExecutorID || event.LeaseExpiresAt == nil || !event.LeaseExpiresAt.Equal(*claim.LeaseExpiresAt) || event.RecordedAt.Before(claim.RecordedAt) || event.RecordedAt.After(now) {
+			return false
+		}
+	}
+	var read FailedExpansionRead
+	var raw, prior FailedExpansionReadReturn
+	if capacity.DecodeGuestLifecycle(prepared.Evidence, &read) != nil || capacity.DecodeGuestLifecycle(returned.Evidence, &raw) != nil || json.Unmarshal(qualified.Evidence, &prior) != nil {
+		return false
+	}
+	wire, err := json.Marshal(read)
+	receipt := guestMutationReceiptV2(child)
+	receiptWire, receiptErr := json.Marshal(receipt)
+	if err != nil || receiptErr != nil || !reflect.DeepEqual(raw.Read, read) || !bytes.Equal(raw.ReadWire, wire) || raw.Receipt == nil || !reflect.DeepEqual(*raw.Receipt, receipt) || !bytes.Equal(raw.ReceiptWire, receiptWire) || prior.Receipt == nil || !reflect.DeepEqual(*prior.Receipt, receipt) || prior.Read.ClaimSequence != claim.Sequence || prior.Read.ReadID == read.ReadID {
+		return false
+	}
+	if raw.Schema != "failed_unwitnessed_expansion_native_return_v1" || read.Schema != "failed_unwitnessed_expansion_native_read_v1" || read.Kind != "absence" || !validCapacityExecutor(read.ReadID) || read.CleanupID != a.ID || read.ChildGrantID != a.ChildGrantID || read.ClaimSequence != claim.Sequence || read.AdmissionSHA256 != capacity.GuestRetirementSHA(a) || !raw.CallFailed || !raw.OriginalContextFailed || raw.Pending || raw.Complete || raw.Status != "" || raw.Plan != nil || raw.Observation != nil || raw.ObserverSourceCommit != "" || len(raw.OriginalObserverReturn) != 0 {
+		return false
+	}
+	if read.IssuedAtCore.IsZero() || !read.OriginalDeadlineCore.After(read.IssuedAtCore) || read.OriginalDeadlineCore.Sub(read.IssuedAtCore) > 5*time.Second || read.OriginalDeadlineCore.After(*claim.LeaseExpiresAt) || raw.StartedAtCore.Before(read.IssuedAtCore) || !raw.StartedAtCore.Before(read.OriginalDeadlineCore) || raw.ReturnedAtCore.Before(read.OriginalDeadlineCore) || raw.ReturnedAtCore.After(returned.RecordedAt) || prepared.RecordedAt.Before(qualified.RecordedAt) || returned.RecordedAt.Before(prepared.RecordedAt) {
+		return false
+	}
+	_, err = capacity.ValidateOriginalAWSDestroyReturn(child.Binding, child.Grant, child.AttemptID, *child.Settlement, child.CreatedAt, now)
+	return err == nil
 }
 
 func failedExpansionClosedOwnerTx(ctx context.Context, tx *sql.Tx, c FailedUnwitnessedExpansionCleanupEvent) error {
