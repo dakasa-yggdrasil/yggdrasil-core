@@ -358,17 +358,7 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 			if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, f.Policy); err != nil || !selected {
 				t.Fatal("same failed policy not latched", err)
 			}
-			// A genuinely later compatible policy is a normal new decision, not a reset
-			// or replay of this consumed admission. Its Source planner must regain control.
-			newer := f.Policy
-			newer.ID = uuid.New()
-			newer.Version++
-			newer.Checksum = capacity.BusinessCreationSHA256([]byte("DECLARED-new-compatible-policy"))
-			f.private.exec(t, `INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec,active) VALUES($1,'v1','capacity_policy',$2,$3,$4,$5,$6::jsonb,true)`, newer.ID, newer.Metadata.Namespace, newer.Metadata.Name, newer.Version, newer.Checksum, string(newer.Spec))
-			if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, newer); err != nil || selected {
-				t.Fatal("new compatible policy stuck behind old consumed cleanup", err)
-			}
-			cleanupTerminalNewPolicyReconcile(t, ctx, f, newer, terminal, a, ledger)
+			cleanupTerminalNewPolicyReconcile(t, ctx, f, terminal, a, ledger)
 		})
 	}
 
@@ -377,7 +367,7 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 // This extension keeps the same real PG root and declared transport. It proves
 // an old terminal cleanup authorizes a separate compatible-policy membership
 // reconciliation, never another provider grant or replay of the failed create.
-func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *FailedExpansionCleanupRecoveryFixture, newer model.Manifest, terminal model.CapacityIntent, a FailedUnwitnessedExpansionCleanup, ledger [][]byte) {
+func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *FailedExpansionCleanupRecoveryFixture, terminal model.CapacityIntent, a FailedUnwitnessedExpansionCleanup, ledger [][]byte) {
 	t.Helper()
 	var grantWire, sdkWire []byte
 	if err := f.DB.QueryRowContext(ctx, `SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY id),'[]'::jsonb)::text FROM public.capacity_mutation_grants g`).Scan(&grantWire); err != nil {
@@ -405,6 +395,21 @@ func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *Fai
 	response := model.RunWorkflowResponse{Workflow: model.ManifestReference{ID: f.Workflow.ID, Kind: "workflow", Namespace: f.Workflow.Metadata.Namespace, Name: f.Workflow.Metadata.Name, Version: f.Workflow.Version}, Status: "succeeded", StartedAt: *job.StartedAt, FinishedAt: returned}
 	if err = FinishCapacityDispatch(ctx, f.DB, job, response, returned, nil); err != nil {
 		t.Fatal("real terminal cleanup owner return", err)
+	}
+	// A genuinely NEW normal workflow receives its own finite context after
+	// the old cleanup returned. This never extends the old cleanup lease.
+	workflowCtx, cancelWorkflow := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancelWorkflow()
+	ctx = workflowCtx
+	// Finish checks the original active policy pin; supersession follows its real ACK.
+	// A genuinely later compatible policy is a normal new decision, not a reset
+	// or replay of this consumed admission. Its Source planner must regain control.
+	newer, err := CreateManifestVersion(ctx, f.DB, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: f.Policy.Metadata.Namespace, Name: f.Policy.Metadata.Name}, Spec: f.Policy.Spec}, capacity.BusinessCreationSHA256([]byte("DECLARED-new-compatible-policy")))
+	if err != nil || newer.ID == f.Policy.ID || newer.Version != f.Policy.Version+1 || !newer.Metadata.Active {
+		t.Fatal("atomic new compatible-policy activation", newer, err)
+	}
+	if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, newer); err != nil || selected {
+		t.Fatal("new compatible policy stuck behind old consumed cleanup", err)
 	}
 	f.Policy = newer
 	f.startSuccessorDispatch()
@@ -444,6 +449,134 @@ func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *Fai
 	complete = complete.WithOriginalGuestNotifyCanary(completeStep, capacity.CurrentGuestCoreSource())
 	if _, err = complete.AdvanceOriginalGuest(ctx, newer, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, "prepared", assessment); !errors.Is(err, ErrCapacityConflict) {
 		t.Fatal("old terminal floor canaries credited the new membership epoch", err)
+	}
+	beforeFailureIntent := failedCleanupTestIntent(t, f.DB, newer, f.Spec)
+	beforeFailureLedger := failedCleanupTestLedger(t, f.DB, a)
+	if _, err = claimedStore.IssueMutation(ctx, newer, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, model.CapacityMutationIssue{BindingName: f.Spec.MutationBindings[0].Name, DesiredSpec: failedServingWire(t, f.Spec.MutationBindings[0].Slots[0].DesiredSpec)}); !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("readonly terminal handoff issued a provider grant", err)
+	}
+	if err = complete.MarkFailedExpansionPossibleSend(ctx, newer); !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("readonly handoff reused cleanup possible-send authority", err)
+	}
+	foreign := complete
+	foreignMarker := *complete.failedExpansionTerminalReconcile
+	foreignMarker.RunID = uuid.NewString()
+	foreign.failedExpansionTerminalReconcile = &foreignMarker
+	if _, err = foreign.AdvanceOriginalGuest(ctx, newer, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, "prepared", assessment); !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("foreign private readonly marker acquired phase authority", err)
+	}
+	unregistered := plan
+	unregistered.OriginalRunID = uuid.New()
+	if _, _, _, err = unregistered.TryClaimFailedExpansionTerminalReconcile(ctx, newer, assessment); !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("unregistered caller acquired readonly handoff ownership", err)
+	}
+	if !bytes.Equal(beforeFailureIntent, failedCleanupTestIntent(t, f.DB, newer, f.Spec)) || !reflect.DeepEqual(beforeFailureLedger, failedCleanupTestLedger(t, f.DB, a)) {
+		t.Fatal("readonly refusal changed lease, intent or original cleanup ledger")
+	}
+	first := claimed
+	firstRun := f.store.OriginalRunID
+	if first.FailedExpansionTerminalReconcile.PreviousRunID != "" || first.FailedExpansionTerminalReconcile.PreviousRunSHA256 != "" || first.FailedExpansionTerminalReconcile.PreviousFence != terminal.FencingToken {
+		t.Fatal("first readonly claim invented a prior failed workflow")
+	}
+	if err = f.DB.QueryRowContext(ctx, `SELECT id FROM public.capacity_dispatch_jobs WHERE run_id=$1`, firstRun).Scan(&jobID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err = f.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err = readCapacityDispatchJob(ctx, tx, jobID, false)
+	_ = tx.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
+	returned = time.Now().UTC()
+	response = model.RunWorkflowResponse{Workflow: model.ManifestReference{ID: f.Workflow.ID, Kind: "workflow", Namespace: f.Workflow.Metadata.Namespace, Name: f.Workflow.Metadata.Name, Version: f.Workflow.Version}, Status: "failed", StartedAt: *job.StartedAt, FinishedAt: returned}
+	readonlyFailure := errors.New("DECLARED first readonly initial-canary/inventory qualification unavailable")
+	// The real first Commit has returned; its separate finalization ACK has
+	// not happened yet. Never rewrite a sealed ACK or original source clock.
+	firstCommit, err := finishCapacityDispatchFirstCommitOnce(ctx, f.DB, job, response, returned, readonlyFailure, nil)
+	if err != nil || firstCommit.uncertain || firstCommit.ackLost || firstCommit.state != "returned" {
+		t.Fatal("actual readonly failed first Commit", err)
+	}
+	var missingACK bool
+	if err = f.DB.QueryRowContext(ctx, `SELECT j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at IS NULL AND w.status='failed' AND w.finished_at=j.returned_at FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$1`, firstRun).Scan(&missingACK); err != nil || !missingACK {
+		t.Fatal("real first Commit must leave the separate ACK absent", missingACK, err)
+	}
+	// Probe only the prior-run closure reader. The already existing original
+	// failed-create run supplies a distinct real ID here, never new authority;
+	// the public new requester is separately started and validated below.
+	closureReader := plan
+	closureReader.OriginalRunID = uuid.MustParse(a.RunID)
+	tx, err = f.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pgNow time.Time
+	if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&pgNow); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	_, missingACKErr := closureReader.failedExpansionTerminalClosedRunTx(ctx, tx, newer, f.Spec, first, pgNow)
+	_ = tx.Rollback()
+	if !errors.Is(missingACKErr, ErrCapacityConflict) {
+		t.Fatal("unACKed real failed run counted as closed", missingACKErr)
+	}
+	if err = acknowledgeCapacityDispatchFinalization(ctx, f.DB, firstCommit.current); err != nil {
+		t.Fatal("actual readonly failed owner ACK", err)
+	}
+	var acknowledged bool
+	var failedRunWire []byte
+	if err = f.DB.QueryRowContext(ctx, `SELECT j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.finished_at=j.returned_at,row_to_json(w)::text FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$1`, firstRun).Scan(&acknowledged, &failedRunWire); err != nil || !acknowledged {
+		t.Fatal("readonly failed response/ACK must remain genuine", err)
+	}
+	tx, err = f.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&pgNow); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	closedWire, closedErr := closureReader.failedExpansionTerminalClosedRunTx(ctx, tx, newer, f.Spec, first, pgNow)
+	_ = tx.Rollback()
+	if closedErr != nil || !bytes.Equal(closedWire, failedRunWire) {
+		t.Fatal("same real failed run became closed only after its actual ACK", closedErr)
+	}
+	// The genuine new Source requester starts before the old capacity lease
+	// expires. It cannot renew that lease, even after the failed run ACK.
+	f.startSuccessorDispatch()
+	inv, assessment, reporting = inventoryAssessment()
+	plan = f.PlanStore().WithOriginalGuestReconcile(f.Workflow, f.step(capacity.PlanOriginalGuestOperation), capacity.CurrentGuestCoreSource(), "", "", inv, reporting)
+	var leaseLive bool
+	if err = f.DB.QueryRowContext(ctx, `SELECT clock_timestamp()<$1`, *first.LeaseExpiresAt).Scan(&leaseLive); err != nil || !leaseLive {
+		t.Fatal("premature readonly resume needs actual live old lease", leaseLive, err)
+	}
+	if _, _, _, err = plan.TryClaimFailedExpansionTerminalReconcile(ctx, newer, assessment); !errors.Is(err, ErrCapacityLease) {
+		t.Fatal("new requester reminted a live readonly lease", err)
+	}
+	if !bytes.Equal(beforeFailureIntent, failedCleanupTestIntent(t, f.DB, newer, f.Spec)) || !reflect.DeepEqual(beforeFailureLedger, failedCleanupTestLedger(t, f.DB, a)) {
+		t.Fatal("premature readonly claim changed old epoch or original cleanup ledger")
+	}
+	time.Sleep(max(0, time.Until(*first.LeaseExpiresAt)) + 5*time.Millisecond)
+	inv, assessment, reporting = inventoryAssessment()
+	plan = plan.WithOriginalGuestReconcile(f.Workflow, f.step(capacity.PlanOriginalGuestOperation), capacity.CurrentGuestCoreSource(), "", "", inv, reporting)
+	claimedStore, claimed, selected, err = plan.TryClaimFailedExpansionTerminalReconcile(ctx, newer, assessment)
+	if err != nil || !selected || claimed.Generation != first.Generation || claimed.Generation != terminal.Generation+1 || claimed.FencingToken != first.FencingToken+1 || claimed.LeaseOwner == first.LeaseOwner || claimed.LeaseExpiresAt == nil || claimed.FailedExpansionTerminalReconcile == nil {
+		t.Fatal("genuine new readonly run did not resume same generation/new fence", selected, err)
+	}
+	marker := claimed.FailedExpansionTerminalReconcile
+	if marker.PreviousRunID != firstRun.String() || marker.PreviousRunSHA256 != originalDispositionDigest(failedRunWire) || marker.PreviousFence != first.FencingToken || marker.RunID != f.store.OriginalRunID.String() || marker.ExecutorID != f.store.ExecutorID {
+		t.Fatal("readonly continuation did not bind exact failed original run/fence", marker)
+	}
+	complete = f.store.WithOriginalGuestReconcile(f.Workflow, completeStep, capacity.CurrentGuestCoreSource(), "refresh", "", inv, reporting)
+	complete, epoch, selected, err = complete.OriginalGuestFailedExpansionTerminalReconcileEpoch(ctx, newer)
+	if err != nil || !selected || epoch.FencingToken != claimed.FencingToken || epoch.LeaseOwner != claimed.LeaseOwner || complete.guestReconcile.mode != "provision" {
+		t.Fatal("new readonly run could not bind its own current finite lease", selected, err)
+	}
+	complete = complete.WithOriginalGuestNotifyCanary(completeStep, capacity.CurrentGuestCoreSource())
+	if _, err = complete.AdvanceOriginalGuest(ctx, newer, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, "prepared", assessment); !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("previous failed run or old floor supplied new initial usefulness", err)
 	}
 	// Spend the unchanged minimum publication interval; no old challenge,
 	// deadline, policy or source clock is rewritten to manufacture freshness.

@@ -86,6 +86,78 @@ func bindFailedExpansionTerminalReconcile(s CapacityStore, m *model.CapacityFail
 	return s
 }
 
+// This marker is a readonly ownership chain, never a successful old canary
+// or a permission to resend a provider operation. Earlier immutable runs and
+// canary rows stay in their original states.
+func failedExpansionTerminalMarkerValid(m *model.CapacityFailedExpansionTerminalReconcile, current model.CapacityIntent) bool {
+	if m == nil || m.Schema != failedExpansionTerminalReconcileSchema || m.TerminalGeneration < 1 || m.TerminalFence < 1 || m.ClaimGeneration != m.TerminalGeneration+1 || m.ClaimGeneration != current.Generation || m.ClaimFence != current.FencingToken || m.PreviousFence < m.TerminalFence || m.ClaimFence != m.PreviousFence+1 || !validCapacityExecutor(m.RunID) || !validCapacityExecutor(m.ExecutorID) {
+		return false
+	}
+	if m.PreviousFence == m.TerminalFence {
+		return m.PreviousRunID == "" && m.PreviousRunSHA256 == ""
+	}
+	return validCapacityExecutor(m.PreviousRunID) && m.PreviousRunID != m.RunID && capacity.ValidDigest(m.PreviousRunSHA256)
+}
+
+// A returned failure without its actual final ACK is still unclosed. Count
+// every owning job first; a second malformed/unknown owner cannot be hidden by
+// choosing the one row that happens to have a favorable returned shape.
+func (s CapacityStore) failedExpansionTerminalFailedRunTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, runID string, now time.Time) ([]byte, error) {
+	if !validCapacityExecutor(runID) {
+		return nil, ErrCapacityConflict
+	}
+	rows, err := tx.QueryContext(ctx, `WITH jobs AS (SELECT * FROM public.capacity_dispatch_jobs WHERE run_id=$1::uuid) SELECT row_to_json(w)::text,w.result FROM public.workflow_runs w JOIN jobs j ON j.run_id=w.id WHERE (SELECT count(*) FROM jobs)=1 AND w.id=$1::uuid AND(w.workflow_id IS NULL OR w.workflow_id=$2) AND j.envelope::jsonb#>>'{workflow,id}'=$2::text AND w.status='failed' AND j.state='returned' AND j.return_status='failed' AND j.returned_at IS NOT NULL AND w.finished_at=j.returned_at AND j.returned_at<=$3 AND j.finalization_ack_at>=j.returned_at AND j.finalization_ack_at<=$3 LIMIT 2`, runID, s.WorkflowID, now)
+	if err != nil {
+		return nil, err
+	}
+	var run, result []byte
+	n := 0
+	for rows.Next() {
+		n++
+		if err = rows.Scan(&run, &result); err != nil {
+			rows.Close()
+			return nil, err
+		}
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, err
+	}
+	if n != 1 {
+		return nil, ErrCapacityConflict
+	}
+	if err = s.installedGuestDispatchRunTx(ctx, tx, policy, p, uuid.MustParse(runID), result); err != nil {
+		return nil, err
+	}
+	return run, nil
+}
+
+func (s CapacityStore) failedExpansionTerminalClosedRunTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, old model.CapacityIntent, now time.Time) ([]byte, error) {
+	m := old.FailedExpansionTerminalReconcile
+	if !failedExpansionTerminalMarkerValid(m, old) || m.RunID == s.OriginalRunID.String() {
+		return nil, ErrCapacityConflict
+	}
+	run, err := s.failedExpansionTerminalFailedRunTx(ctx, tx, policy, p, m.RunID, now)
+	if err != nil {
+		return nil, err
+	}
+	// Expired old canaries remain accepted/held/unknown exactly as recorded.
+	// New nonces never replay those requests or imply they had no effect. The
+	// same publication budget/gap and Guest mutex are checked on every new Issue.
+	var unsafe bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_challenges c WHERE c.policy_id=$1 AND c.generation=$2 AND c.fence=$3 AND(c.original_deadline>=$4 OR c.executor_id<>$5 OR c.lease_owner<>$6 OR c.workflow_id<>$7))`, policy.ID, old.Generation, old.FencingToken, now, m.ExecutorID, old.LeaseOwner, s.WorkflowID).Scan(&unsafe)
+	if err != nil {
+		return nil, err
+	}
+	if unsafe {
+		return nil, ErrCapacityConflict
+	}
+	return run, nil
+}
+
 // TryClaimFailedExpansionTerminalReconcile is called by the registered plan
 // step only. An actual later compatible policy adopts the surviving roster;
 // this is not Claim of the old failed expansion or a lease extension.
@@ -119,11 +191,19 @@ func (s CapacityStore) TryClaimFailedExpansionTerminalReconcile(ctx context.Cont
 	if err != nil {
 		return s, zero, false, err
 	}
-	// No M94 SQL at all for ordinary/historical callers without this selector.
-	if old.FailedUnwitnessedExpansionCleanupID == "" || old.PolicyID == policy.ID {
+	// Ordinary/historical callers with neither typed selector do no M94 SQL.
+	resuming := old.FailedExpansionTerminalReconcile != nil
+	if !resuming && (old.FailedUnwitnessedExpansionCleanupID == "" || old.PolicyID == policy.ID) {
 		return s, old, false, nil
 	}
-	if !s.ExecutionEnabled || !p.ExecutionEnabled || old.Phase != "hold" || old.RecoveryOnly || old.FloorDegraded || old.LeaseOwner != "" || old.LeaseExecutorID != "" || old.LeaseExpiresAt != nil || old.OriginalNotifyWindow != nil || old.InstalledGuestReconcile != nil || old.FailedExpansionTerminalReconcile != nil || old.Generation < 1 || old.Generation >= maxCapacityGeneration || old.FencingToken < 1 || old.FencingToken >= maxCapacityGeneration {
+	if !s.ExecutionEnabled || !p.ExecutionEnabled || old.RecoveryOnly || old.FloorDegraded || old.OriginalNotifyWindow != nil || old.InstalledGuestReconcile != nil || old.Generation < 1 || old.Generation >= maxCapacityGeneration || old.FencingToken < 1 || old.FencingToken >= maxCapacityGeneration {
+		return s, old, false, ErrCapacityConflict
+	}
+	if resuming {
+		if !failedExpansionTerminalMarkerValid(old.FailedExpansionTerminalReconcile, old) || old.FailedUnwitnessedExpansionCleanupID != "" || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || (old.Phase != "preparing" && old.Phase != "prepared" && old.Phase != "canary") || old.LeaseOwner == "" || old.LeaseExecutorID != old.FailedExpansionTerminalReconcile.ExecutorID || old.LeaseExpiresAt == nil {
+			return s, old, false, ErrCapacityConflict
+		}
+	} else if old.Phase != "hold" || old.LeaseOwner != "" || old.LeaseExecutorID != "" || old.LeaseExpiresAt != nil {
 		return s, old, false, ErrCapacityConflict
 	}
 	if err = s.guestReconcileSourceTx(ctx, tx, policy, p); err != nil {
@@ -136,11 +216,31 @@ func (s CapacityStore) TryClaimFailedExpansionTerminalReconcile(ctx context.Cont
 	if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 		return s, old, false, err
 	}
-	a, terminal, terminalSHA, err := s.failedExpansionTerminalReconcileTx(ctx, tx, policy, p, old.FailedUnwitnessedExpansionCleanupID)
+	cleanupID := old.FailedUnwitnessedExpansionCleanupID
+	var previousRun []byte
+	if resuming {
+		if !now.After(*old.LeaseExpiresAt) {
+			return s, old, false, ErrCapacityLease
+		}
+		previousRun, err = s.failedExpansionTerminalClosedRunTx(ctx, tx, policy, p, old, now)
+		if err != nil {
+			return s, old, false, err
+		}
+		cleanupID = old.FailedExpansionTerminalReconcile.CleanupID
+	}
+	a, terminal, terminalSHA, err := s.failedExpansionTerminalReconcileTx(ctx, tx, policy, p, cleanupID)
 	if err != nil {
 		return s, old, false, err
 	}
-	if old.PolicyID.String() != a.PolicyID || old.PolicyChecksum != a.PolicyChecksum || old.Generation != terminal.Generation || old.FencingToken != terminal.FencingToken || old.Decision.Units != a.SurvivorCount {
+	if old.Decision.Units != a.SurvivorCount {
+		return s, old, false, ErrCapacityConflict
+	}
+	if resuming {
+		m := old.FailedExpansionTerminalReconcile
+		if m.TerminalEventSHA256 != terminalSHA || m.TerminalGeneration != terminal.Generation || m.TerminalFence != terminal.FencingToken || old.BaselineSnapshot.Units != a.SurvivorCount {
+			return s, old, false, ErrCapacityConflict
+		}
+	} else if old.PolicyID.String() != a.PolicyID || old.PolicyChecksum != a.PolicyChecksum || old.Generation != terminal.Generation || old.FencingToken != terminal.FencingToken {
 		return s, old, false, ErrCapacityConflict
 	}
 	if err = failedExpansionQuietTx(ctx, tx, a, s.OriginalRunID.String()); err != nil {
@@ -164,7 +264,28 @@ func (s CapacityStore) TryClaimFailedExpansionTerminalReconcile(ctx context.Cont
 	next := model.CapacityIntent{Namespace: policy.Metadata.Namespace, PolicyName: policy.Metadata.Name, PolicyID: policy.ID, PolicyChecksum: policy.Checksum, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension, Generation: old.Generation + 1, FencingToken: old.FencingToken + 1, Phase: "preparing", Decision: decision, Assessment: assessment, BaselineSnapshot: snapshot, UpdatedAt: now, LeaseOwner: uuid.NewString(), LeaseExecutorID: s.ExecutorID}
 	expiry := now.Add(time.Duration(min(p.LeaseSeconds, 90)) * time.Second)
 	next.LeaseExpiresAt = &expiry
-	marker := &model.CapacityFailedExpansionTerminalReconcile{Schema: failedExpansionTerminalReconcileSchema, CleanupID: a.ID, TerminalEventSHA256: terminalSHA, TerminalGeneration: terminal.Generation, TerminalFence: terminal.FencingToken, ClaimGeneration: next.Generation, ClaimFence: next.FencingToken, RunID: s.OriginalRunID.String(), ExecutorID: s.ExecutorID}
+	marker := &model.CapacityFailedExpansionTerminalReconcile{Schema: failedExpansionTerminalReconcileSchema, CleanupID: a.ID, TerminalEventSHA256: terminalSHA, TerminalGeneration: terminal.Generation, TerminalFence: terminal.FencingToken, ClaimGeneration: next.Generation, ClaimFence: next.FencingToken, PreviousFence: terminal.FencingToken, RunID: s.OriginalRunID.String(), ExecutorID: s.ExecutorID}
+	if resuming {
+		// Same real membership baseline/generation, new finite epoch. Preserve
+		// the immediate genuine failed owner as lineage, never clear/rearm it.
+		next = old
+		next.Phase = "preparing"
+		next.Assessment = assessment
+		next.Decision = decision
+		next.UpdatedAt = now
+		next.FencingToken++
+		next.LeaseOwner = uuid.NewString()
+		next.LeaseExecutorID = s.ExecutorID
+		next.LeaseExpiresAt = &expiry
+		copied := *old.FailedExpansionTerminalReconcile
+		copied.PreviousRunID = copied.RunID
+		copied.PreviousRunSHA256 = capacity.BusinessCreationSHA256(previousRun)
+		copied.PreviousFence = old.FencingToken
+		copied.ClaimFence = next.FencingToken
+		copied.RunID = s.OriginalRunID.String()
+		copied.ExecutorID = s.ExecutorID
+		marker = &copied
+	}
 	next.FailedExpansionTerminalReconcile = marker
 	if err = persistRetirementForwardIntentTx(ctx, tx, old, next, "failed-expansion-terminal-reconcile:"+a.ID); err != nil {
 		return s, old, false, err
@@ -208,7 +329,7 @@ func (s CapacityStore) OriginalGuestFailedExpansionTerminalReconcileEpoch(ctx co
 	if m == nil {
 		return s, current, false, nil
 	}
-	if s.guestReconcile.step.Use.Operation != capacity.CompleteOriginalGuestOperation || m.Schema != failedExpansionTerminalReconcileSchema || m.RunID != s.OriginalRunID.String() || m.ExecutorID != s.ExecutorID || m.ClaimGeneration != current.Generation || m.ClaimFence != current.FencingToken || m.ClaimGeneration != m.TerminalGeneration+1 || m.ClaimFence != m.TerminalFence+1 {
+	if s.guestReconcile.step.Use.Operation != capacity.CompleteOriginalGuestOperation || !failedExpansionTerminalMarkerValid(m, current) || m.RunID != s.OriginalRunID.String() || m.ExecutorID != s.ExecutorID {
 		return s, current, false, ErrCapacityConflict
 	}
 	bound := bindFailedExpansionTerminalReconcile(s, m)
@@ -224,6 +345,15 @@ func (s CapacityStore) OriginalGuestFailedExpansionTerminalReconcileEpoch(ctx co
 	}
 	if err = bound.installedGuestDispatchRunTx(ctx, tx, policy, p, s.OriginalRunID, nil); err != nil {
 		return s, current, false, err
+	}
+	if m.PreviousRunID != "" {
+		previous, e := bound.failedExpansionTerminalFailedRunTx(ctx, tx, policy, p, m.PreviousRunID, now)
+		if e != nil {
+			return s, current, false, e
+		}
+		if capacity.BusinessCreationSHA256(previous) != m.PreviousRunSHA256 {
+			return s, current, false, ErrCapacityConflict
+		}
 	}
 	a, terminal, terminalSHA, err := bound.failedExpansionTerminalReconcileTx(ctx, tx, policy, p, m.CleanupID)
 	if err != nil || terminalSHA != m.TerminalEventSHA256 || terminal.Generation != m.TerminalGeneration || terminal.FencingToken != m.TerminalFence || current.Decision.Action != "hold" || current.Decision.Units != a.SurvivorCount || current.BaselineSnapshot.Units != a.SurvivorCount {

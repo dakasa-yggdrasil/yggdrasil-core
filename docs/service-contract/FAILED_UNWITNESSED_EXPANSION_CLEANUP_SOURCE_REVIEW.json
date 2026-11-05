@@ -8,7 +8,8 @@
     "One possible-send, one redemption/native send; accepted child settlement seals the actual attached auxiliary inventory.",
     "Qualified Pending or complete absence may resume GET-only after real failed owner ACK and natural expiry, requiring new authenticated read and new floor.",
     "Full VM and all sealed paid-auxiliary absence plus fresh survivor native observations/signed canaries precede cleanup_closed and truthful unleased HOLD.",
-    "A later compatible policy claims a separate provider-readonly generation/run/fence/finite lease, validates immutable terminal94 and current survivor identity, then obtains fresh inventory and signed initial-membership canaries before ordinary promotion; generic assessment cannot discard the terminal selector."
+    "A later compatible policy claims a separate provider-readonly generation/run/fence/finite lease, validates immutable terminal94 and current survivor identity, then obtains fresh inventory and signed initial-membership canaries before ordinary promotion; generic assessment cannot discard the terminal selector.",
+    "A genuinely failed later readonly membership run may resume only after its actual finalization ACK and natural lease/challenge expiry, with the same generation, a new fence/run/finite lease and exact previous whole-run digest; fresh canaries and unchanged nonce budgets remain required. Unknown old returns are never replayed or marked no-effect."
   ],
   "historical_source_fixtures": "Explicit89/91/92/93 fixtures retain exact old censuses; new94 fixture and eight required roots are separate.",
   "local_functional_execution": false,
@@ -69,8 +70,8 @@
       "sha256": "3a84d23085d68a58b3288422fa2c5a743f1bddf4954953eeda8afbba83bfc515"
     },
     "model/capacity_failed_expansion_terminal_reconcile.go": {
-      "bytes": 756,
-      "sha256": "e4fb6afdcf6ac05e2b9ef5ad3e3445e75a292632d4cbd841845fcdac30656bd8"
+      "bytes": 938,
+      "sha256": "da839fe1d83567e324b280cf5cddc90f90829d1a43e280ac2ccb3089dd1d9691"
     },
     "repository/capacity.go": {
       "bytes": 35201,
@@ -93,8 +94,8 @@
       "sha256": "fa44628f51f778cb52c7850c3cc1db32d14a084a4b13ea86e296b7b056fd4c03"
     },
     "repository/capacity_guest_reconcile.go": {
-      "bytes": 18276,
-      "sha256": "529a7b3f6d6ffcc962b4935d6603602693b361ad13930aa58b9560d0a75203a7"
+      "bytes": 18550,
+      "sha256": "50250e8381e80ac3455ddcb17ff544ea9f1fe075e9c304426889feabe1f65953"
     },
     "repository/capacity_mutations.go": {
       "bytes": 49136,
@@ -113,8 +114,8 @@
       "sha256": "116f90cc3cfa5b404d01f6a01cb3cb9a21fe9b4ed816d1c57305286e6454ed0c"
     },
     "repository/failed_expansion_terminal_reconcile.go": {
-      "bytes": 12941,
-      "sha256": "57a559c1eb30c4fb4a41640bfd104614e586df5df2ca18b8bd7a1386c68bf6cd"
+      "bytes": 18949,
+      "sha256": "8c60e05cd134a19b63ef48c4ce662f607157c34b945ec278a4cbd257bf3d440d"
     },
     "repository/failed_unwitnessed_expansion_cleanup.go": {
       "bytes": 21990,
@@ -141,7 +142,7 @@
     "path": "docs/service-contract/source/sources.json",
     "records": 811,
     "schema": "core_source_interface_census_v1",
-    "sha256": "d050a36ab994063027635e915816606c827b936686f8c82d5801fdd546091f02"
+    "sha256": "363169b3b6d633db2f0d63b46bc52f21ab267152bb76b13c496cf5ad0096f623"
   },
   "unchanged_protocols": [
     "original-create-dispositions accounting-only boundary",

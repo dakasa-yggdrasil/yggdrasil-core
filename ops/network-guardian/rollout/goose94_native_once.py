@@ -20,24 +20,24 @@ import time
 import types
 import uuid
 
-SOURCE_BOUND = False
-COMPANION_SOURCE_Q = None
-COMPANION_IMAGE_D = None
-COMPANION_IMAGE_PROOF_SHA256 = None
-SOURCE_CI_GATE_SHA256 = None
-CAS_SOURCE_SHA256 = None
-RUNTIME_MANIFEST_SHA256 = None
-G12_RETURN_SHA256 = None
-BASELINE93_ACCEPTANCE_SHA256 = None
-A3_PREIMAGE_SHA256 = None
-CONFIG_SHA256 = None
-JOB_UUID = None
-JOB_MANIFEST_SHA256 = None
-EXPECTED_RUNS = None
-EXPECTED_JOBS = None
-EXPECTED_CHECKS = None
-EXPECTED_EXTRA_CHECKS = None
-REQUIRED_CI = None
+SOURCE_BOUND = True
+COMPANION_SOURCE_Q = '7cd5cea0834bcee901c282bc81b9486d5c16513b'
+COMPANION_IMAGE_D = 'd8a86c844f0b2df14aa3ae3b0281f43be14a7f6aed3b1bf962816a603e966a1b'
+COMPANION_IMAGE_PROOF_SHA256 = '41482154202cd279cd26fff745d412ea362722b3ffbb778f08335c4dd7daa090'
+SOURCE_CI_GATE_SHA256 = '26db381fdb66ffac76cd8a0a05f2f4cdde3b0a0cc59aff2ec969f7312020e90c'
+CAS_SOURCE_SHA256 = '822765061d6622767b4c03c137ef3729c40a4b9e3185451f91b30d67391d7eb4'
+RUNTIME_MANIFEST_SHA256 = 'f9bab7f85578b5cd47ced35fcfc8580438ed2f388b8a6b632cd5019ead96963e'
+G12_RETURN_SHA256 = '85e5f5466eb81a91b9134b188cf23516f027948cf4436b5174461c0fcdd2e377'
+BASELINE93_ACCEPTANCE_SHA256 = '70f90a07f5f0b9151574e1a2dc261246d97a404e13189701ae66787af15bd456'
+A3_PREIMAGE_SHA256 = 'd2f28d2395776640bcb0c86ee79e22131c59b8aaca7b963a08a26c4ae857540f'
+CONFIG_SHA256 = '30381de43a6228665614982ff02dd59ce85e00cffcdc9b86b869ce46ce8474f6'
+JOB_UUID = '1bd90389-9190-48df-9a60-00b6be8806a8'
+JOB_MANIFEST_SHA256 = 'd4cd5a9bf2d5db68d42325b17aab867ab915250fa0aac4cadc00160eff00ce69'
+EXPECTED_RUNS = 20
+EXPECTED_JOBS = 43
+EXPECTED_CHECKS = frozenset({(127045228043, 'original-http-transport', 'completed', 'success'), (127045219068, 'Analyze (javascript-typescript)', 'completed', 'success'), (127045219516, 'Analyze (go)', 'completed', 'success'), (127045228053, 'focused-linux', 'completed', 'success'), (127045210922, 'host-factory-source-pg', 'completed', 'success'), (127045228359, 'host-factory-source-pg', 'completed', 'success'), (127045228089, 'bounded-source-and-history (16)', 'completed', 'success'), (127045228374, 'unit-tests', 'completed', 'success'), (127045228167, 'svc-doctor', 'completed', 'success'), (127045219302, 'Analyze (actions)', 'completed', 'success'), (127045229090, 'gate-regression', 'completed', 'success'), (127045228558, 'addons-smoke', 'completed', 'success'), (127045228808, 'reconcile', 'completed', 'success'), (127045228233, 'HTTP maintenance disposition (PostgreSQL 16)', 'completed', 'success'), (127045228761, 'signed-postgres-recovery', 'completed', 'success'), (127045228329, 'original-provider-source', 'completed', 'success'), (127045211129, 'original-provider-source', 'completed', 'success'), (127045228297, 'retirement-forward (16)', 'completed', 'success'), (127045474243, 'CodeQL', 'completed', 'success'), (127045228029, 'lint', 'completed', 'success'), (127045228021, 'native-core-kind', 'completed', 'success'), (127045227969, 'closed-administrative-boundary', 'completed', 'success'), (127045228223, 'native-oidc-postgres', 'completed', 'success'), (127045228344, 'focused-linux', 'completed', 'success'), (127045228537, 'Scheduler skip Source kernel (PostgreSQL 16)', 'completed', 'success'), (127045211365, 'guest-pg-public-auth', 'completed', 'success'), (127045228396, 'source-contracts', 'completed', 'success'), (127045228357, 'retirement-forward (17)', 'completed', 'success'), (127045228650, 'HTTP maintenance disposition (PostgreSQL 17)', 'completed', 'success'), (127045211206, 'source-contracts', 'completed', 'success'), (127045228906, 'capacity-postgres', 'completed', 'success'), (127045211283, 'native-cli-build', 'completed', 'success'), (127045228478, 'focused-linux', 'completed', 'success'), (127045228917, 'capacity-owned-http', 'completed', 'success'), (127045228266, 'exact-source-and-historical-proof', 'completed', 'success'), (127045211088, 'svc-doctor', 'completed', 'success'), (127045228165, 'lint', 'completed', 'success'), (127045211276, 'original-http-transport', 'completed', 'success'), (127045228368, 'native-cli-build', 'completed', 'success'), (127045228832, 'Scheduler skip Source kernel (PostgreSQL 17)', 'completed', 'success'), (127045219271, 'Analyze (python)', 'completed', 'success'), (127045228496, 'bounded-source-and-history (17)', 'completed', 'success'), (127045228601, 'synthetic-resume-transaction', 'completed', 'success'), (127045228481, 'guest-pg-public-auth', 'completed', 'success')})
+EXPECTED_EXTRA_CHECKS = frozenset({(127045474243, 'CodeQL', 'completed', 'success')})
+REQUIRED_CI = frozenset({('Partial Guest native OFF reconciliation Source', 'pull_request'), ('Failed serving Guest Source and PostgreSQL', 'pull_request'), ('Native OIDC protocol integration', 'pull_request'), ('Original and native denied disposition Source', 'pull_request'), ('Recorded HTTP maintenance disposition Source and PostgreSQL', 'pull_request'), ('Original Guest Core source and PostgreSQL gates', 'push'), ('Protected native capacity API qualification', 'pull_request'), ('Owned Network Guardian', 'pull_request'), ('Failed installed Guest administrative HTTP Source', 'pull_request'), ('Service contract', 'push'), ('template-go-api CI', 'pull_request'), ('Docs freshness', 'pull_request'), ('Capacity source-owned HTTP qualification', 'pull_request'), ('Capacity intent PostgreSQL protocol', 'pull_request'), ('Original Guest Core source and PostgreSQL gates', 'pull_request'), ('Guest historical unknown read recovery', 'pull_request'), ('Installed Guest reconciliation Source', 'pull_request'), ('Service contract', 'pull_request'), ('PR #140', 'dynamic'), ('Context Freshness (ADR + durable context)', 'pull_request')})
 CURRENT_OPS_P = '3e617cc176026cd70ee885ede753fbc6f6dd17a6'
 CURRENT_CORE_R = 'ee8e3377ba91ff3efc3fde3a9751790608ac7066'
 CURRENT_CORE_D = 'b0ee27bd53443260e8e05123f9474454e8108310c4b94a7e72b6bae107cf1ac2'
@@ -52,8 +52,8 @@ ROOT = Path('/var/lib/dakasa-core-rollout/goose94-failed-unwitnessed-expansion')
 CLAIM = ROOT / 'GOOSE94-POSSIBLE-CREATE.json'
 JOB_URI = '/apis/batch/v1/namespaces/dakasa/jobs'
 DEP_URI = '/apis/apps/v1/namespaces/dakasa/deployments/yggdrasil'
-RS_URI = None
-CURRENT_RS_UID = None
+RS_URI = '/apis/apps/v1/namespaces/dakasa/replicasets/yggdrasil-68b7fd948f'
+CURRENT_RS_UID = 'd4205c10-64b0-410b-95b5-797af85407d3'
 CORE_PODS_URI = '/api/v1/namespaces/dakasa/pods?labelSelector=app%3Dyggdrasil'
 PREFIX = '153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:'
 APP = 'yggdrasil-goose94-companion'
