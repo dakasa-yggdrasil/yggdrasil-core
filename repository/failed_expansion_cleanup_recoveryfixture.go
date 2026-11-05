@@ -110,9 +110,12 @@ func NewFailedExpansionCleanupRecoveryFixture(tb testing.TB) *FailedExpansionCle
 	if err != nil {
 		t.Fatal(err)
 	}
+	envelope, err := encodeCapacityDispatchEnvelope(e)
+	if err != nil {
+		t.Fatal("canonical original dispatch envelope", err)
+	}
 	result := map[string]any{"steps": []any{map[string]any{"status": "succeeded", "metadata": map[string]any{"generation": pre.Generation, "fencing_token": pre.Fence, "lease_owner": pre.LeaseOwner}}, map[string]any{"status": "failed", "metadata": map[string]any{"original_guest_refusal_predicate": "original-guest-step-25"}}}}
 	base.exec(t, `INSERT INTO public.workflow_runs(id,status,workflow_namespace,workflow_name,workflow_version,started_at,finished_at,result,error,inputs,metadata) VALUES($1,'failed',$2,$3,$4,$5,$6,$7::jsonb,'declared unavailable original Describe after accepted SDK',$8::jsonb,$9::jsonb)`, e.RunID, f.Workflow.Metadata.Namespace, f.Workflow.Metadata.Name, f.Workflow.Version, start, finish, string(failedServingWire(t, result)), string(failedServingWire(t, e.Inputs)), string(failedServingWire(t, e.Metadata)))
-	envelope := failedServingWire(t, e)
 	base.exec(t, `INSERT INTO public.capacity_dispatch_jobs(id,run_id,protocol,realm,environment,domain,dimension,source_tick,envelope,envelope_sha256,state,lease_owner,fencing_token,lease_expires_at,started_at,returned_at,return_status,return_error,finalization_ack_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'returned',$11,1,$12,$13,$14,'failed','declared unavailable original Describe',$15)`, e.JobID, e.RunID, e.Protocol, e.Realm, e.Environment, e.Domain, e.Dimension, e.SourceTick, envelope, capacityDispatchSHA(envelope), uuid.New(), pre.OriginalDeadline, start, finish, ack)
 	f.JobID = e.JobID.String()
 	return f

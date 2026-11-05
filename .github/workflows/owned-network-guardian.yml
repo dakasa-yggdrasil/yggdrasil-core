@@ -119,6 +119,19 @@ jobs:
           cat "$GUARDIAN_CI_EVIDENCE/unittest.stdout"
           cat "$GUARDIAN_CI_EVIDENCE/unittest.stderr"
           exit "$result"
+      - name: Run separate exact M94 cleanup admission client Source fixtures
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
+        run: |
+          mkdir -p "$GUARDIAN_CI_EVIDENCE/cleanup94-client"
+          set +e
+          python3 -I -B ops/network-guardian/client_tests/run_m94_cleanup_ci.py > "$GUARDIAN_CI_EVIDENCE/cleanup94-client/unittest.stdout" 2> "$GUARDIAN_CI_EVIDENCE/cleanup94-client/unittest.stderr"
+          result=$?
+          printf '%s\n' "$result" > "$GUARDIAN_CI_EVIDENCE/cleanup94-client/unittest.exit"
+          cat "$GUARDIAN_CI_EVIDENCE/cleanup94-client/unittest.stdout"
+          cat "$GUARDIAN_CI_EVIDENCE/cleanup94-client/unittest.stderr"
+          exit "$result"
       - name: Retain reviewed exact source, units and fixture
         if: always()
         uses: actions/upload-artifact@v4

@@ -93,8 +93,8 @@
       "sha256": "5fca5255e07976819669f8b32546c21044d8eed2591bb6acaa89fbe890927554"
     },
     "repository/failed_expansion_cleanup_recoveryfixture.go": {
-      "bytes": 12862,
-      "sha256": "6920c9d62d74fe521c8efb5007e44fa9f834f8105d2ef47a391e9a12c8281f6c"
+      "bytes": 12952,
+      "sha256": "cfb0894b7cddb979052595b3f7be9fc5646fc88bfbb707dc38541ebc08b5386b"
     },
     "repository/failed_expansion_native.go": {
       "bytes": 25698,
@@ -127,7 +127,7 @@
     "path": "docs/service-contract/source/sources.json",
     "records": 809,
     "schema": "core_source_interface_census_v1",
-    "sha256": "e8542a580863f246b368130617f7fc96a1454c9f83fb9682e4ab06815bd90b0b"
+    "sha256": "47135e5ab2f6ca0c3d499e3cded29a6e917b5fa1f659a125b942bf549af6c6bd"
   },
   "unchanged_protocols": [
     "original-create-dispositions accounting-only boundary",
