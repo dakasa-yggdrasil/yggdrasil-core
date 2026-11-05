@@ -36,7 +36,7 @@ PROPOSAL_BOUND = True
 G8_CONFIG = ETC / 'controller.r13-netlink-g8pair.production.json'
 G12_CONFIG = ETC / 'controller.r13-netlink-g12pair.production.json'
 G6_CONFIG = ETC / 'controller.r13-netlink-g6pair.production.json'
-GUARDIAN_SOURCE = Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g14pair-source-v1/network_guardian.py')
+GUARDIAN_SOURCE = Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g14pair-source-v2/network_guardian.py')
 # The package supplies the exact reviewed successor Guardian source hash.
 FIELDS = {'schema', 'execute', 'source_files_sha256', 'eks_endpoint', 'eks_public_ca_base64', 'core_service_uid',
           'core_container_images', 'root_review_attestation'}

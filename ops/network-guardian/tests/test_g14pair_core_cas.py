@@ -169,12 +169,93 @@ def schema95_operand():
     return config,legacy,current,refs,ref,root94,root95
 
 
+def repair_acceptance_operand():
+    """Trusted-helper interface isolation; no actual repair or Root evidence."""
+    events=[]
+    ctrl={'boot_id':'11111111-1111-4111-8111-111111111111','pid':2,'start_ticks':3,'InvocationID':'1'*32,'ExecMainStartTimestampMonotonic':'4'}
+    guard={**ctrl,'pid':5,'start_ticks':6,'InvocationID':'2'*32,'ExecMainStartTimestampMonotonic':'7'}
+    protected=cas.required_protected_refs()
+    folder=Path('/declared/package');run=Path('/declared/run');standing=b'DECLARED standing'
+    ledger=Path('/declared/ledger');full=copy.deepcopy(ctrl)
+    full_path=ledger/'declared-key-QUALIFIED.PUBLIC.json'
+    own_path=ledger/(guard['boot_id']+'-GUARDIAN-'+guard['InvocationID']+'-FIRST-CURRENT15-RETURN.PUBLIC.json')
+    measurement={'qualified_15_seconds':True,'all_requested_rows_accounted_for':True}
+    kernel={'all_four_backends_and_reverse_sources_positive':True}
+    own={'schema':'Root_owning_finite512_current15_readonly_observation_v1','source_sha256':cas.SOURCE_PIN,'standing_config_sha256':cas.sha(standing),'identity':full,'measurement':measurement,'kernel':kernel}
+    originals={n:{'path':'/declared/'+n,'sha256':'a'*64} for n in ('claim','hold','before','standing','failed_guardian_descriptor','controller_commit')}
+    originals['native_commands']={}
+    repair={'schema':'g14_guardian_source_forward_repair_evidence_v1','failed_swap_manifest_sha256':'b'*64,'failed_swap_originals':originals,'failed_guardian_restart_count':3,'repair_claim_ref':{'path':'/declared/repair-claim','sha256':'a'*64},'repair_helper_ref':{'path':'/declared/g14_guardian_source_repair_once.py','sha256':'c'*64}}
+    result={'source_commit':'e'*40,'source_R':cas.CORE_R,'amd64_D':cas.NEW_DIGEST,'new_guardian_source_sha256':cas.SOURCE_PIN,'controller_config_sha256':'f'*64,'independent_current15':True,'all_inherited_budget_and_original_refs_unchanged':True,'Core_Cold_Hub_or_provider_mutation':False,'conservative_per_role_gap_seconds':{'controller':0,'guardian':0},'standing_sha256':cas.sha(standing),'controller':ctrl,'guardian':guard,'actual_new_full120_ref':{'path':str(full_path),'sha256':cas.sha(b'DECLARED full120')},'own_daemon_first_current15_ref':{'path':str(own_path),'sha256':cas.sha(cas.canonical(own))},'guardian_restart_baseline':3,'repair':repair}
+    returned={'schema':'g14_guardian_source_forward_repair_return_v1','status':'GUARDIAN_SOURCE_REPAIR_OK','result':result,'automatic_replay':False,'Guest_or_Core_business_authority':False}
+    manifest={'source_commit':'e'*40,'protected_refs':[{'path':p,'sha256':h} for p,h in protected.items()]}
+    class Owner:
+        sha=cas.SOURCE_PIN;raw_config=standing
+        def __init__(self,pin):events.append(('owner',pin))
+        def identity(self):return full
+        def original_qualification_measurement(self,identity):events.append(('full120',identity));return {'declared':True}
+        def key(self,identity):return 'declared-key'
+        def current15_readonly(self):
+            events.append(('fresh15',None))
+            return {'identity':full,'measurement':measurement,'kernel':kernel},b'DECLARED prefix',b'DECLARED closing',[{}]
+    class Backend:
+        def __init__(self,*args):pass
+        def files(self,successor):events.append(('files',successor))
+        def protected(self):return protected
+    data={Path('/declared/standing'):standing,full_path:b'DECLARED full120',own_path:cas.canonical(own)}
+    def identity(value):
+        # Exact public physical-identity contract, with declared operands only.
+        cas.need(type(value) is dict and set(value)=={'boot_id','pid','start_ticks','InvocationID','ExecMainStartTimestampMonotonic'},'CLOSED_NATIVE_IDENTITY')
+        cas.need(cas.re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}',str(value['boot_id']))
+                 and type(value['pid']) is int and value['pid']>1 and type(value['start_ticks']) is int and value['start_ticks']>0
+                 and cas.re.fullmatch('[a-f0-9]{32}',str(value['InvocationID'])) and cas.re.fullmatch('[1-9][0-9]*',str(value['ExecMainStartTimestampMonotonic'])),'EXACT_PHYSICAL_NATIVE_IDENTITY')
+    C=types.SimpleNamespace(NEW_DIGEST=cas.NEW_DIGEST,HEAD_CONFIG_SHA='f'*64,NEW_STANDING=Path('/declared/standing'),CTRL='ctrl',GUARD='guard',NEW_CONFIG=Path('/declared/config'),NEW_SOURCE=Path('/declared/source'),LEDGER=ledger,sha=cas.sha,wire=cas.canonical,loads=json.loads,once=lambda p,r:events.append(('once',p.name)),read=lambda p,*args:data[p],identity=identity,load_guardian=lambda *args:types.SimpleNamespace(Owner=Owner))
+    def physical(unit,argv):
+        events.append(('physical',unit))
+        if unit!='ctrl':raise AssertionError('repair must not use legacy Guardian observer')
+        return ctrl
+    cut=types.SimpleNamespace(C=C,Backend=Backend,physical_identity=physical,controller_argv=lambda p:['declared-controller'],guardian_argv=lambda *args:['declared-guardian'])
+    def validate(cut,folder,manifest,returned,run):events.append(('repair-validator',run));return returned['result']['repair']
+    def observe(cut,pin,expected,baseline):
+        events.append(('repair-observer',baseline));cas.need(baseline in (0,3),'DECLARED_BASELINE');return expected
+    helper=types.SimpleNamespace(validate_repair_return=validate,observe_guardian=observe)
+    return cut,folder,manifest,returned,run,helper,events
+
+
 class G14CoreCASTests(unittest.TestCase):
     def test_forced_unbound_refuses_before_all_input_auth_or_native_io(self):
+        # The scoped return path is a lexical check before private-directory,
+        # file or Source-helper access. No filesystem authority comes from it.
+        state=cas.ROOT
+        for leaf in ('swap-once-declared','guardian-source-repair-11111111-1111-4111-8111-111111111111'):
+            cas.closed_g14_return_path(state/leaf/'RETURN.json',state)
+        for path in (Path('/declared/RETURN.json'),state/'foreign'/'RETURN.json',
+                     state/'swap-once-declared'/'HOLD.json',
+                     state/'guardian-source-repair-11111111111141118111111111111111'/'RETURN.json',
+                     state/'guardian-source-repair-11111111-1111-4111-8111-11111111111g'/'RETURN.json',
+                     state/'guardian-source-repair-11111111-1111-4111-8111-111111111111-extra'/'RETURN.json'):
+            with self.subTest(return_path=str(path)),patch.object(cas,'read') as read,patch.object(cas,'load_repair_helper') as helper:
+                with self.assertRaises(cas.Hold):cas.closed_g14_return_path(path,state)
+                read.assert_not_called();helper.assert_not_called()
+        with self.assertRaises(cas.Hold):cas.closed_g14_return_path(state/'swap-once-declared'/'RETURN.json',Path('/declared/foreign-state'))
+        main=next(n for n in ast.parse(PATH.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='main')
+        calls=[n for n in ast.walk(main) if isinstance(n,ast.Call)]
+        order={name:min(n.lineno for n in calls if isinstance(n.func,ast.Name) and n.func.id==name)
+               for name in ('closed_g14_return_path','load_repair_helper')}
+        return_reads=[n.lineno for n in calls if isinstance(n.func,ast.Attribute) and n.func.attr=='read'
+                      and n.args and isinstance(n.args[0],ast.Name) and n.args[0].id=='returned_path']
+        return_dirs=[n.lineno for n in calls if isinstance(n.func,ast.Attribute) and n.func.attr=='private_dir'
+                     and n.args and isinstance(n.args[0],ast.Attribute) and isinstance(n.args[0].value,ast.Name)
+                     and n.args[0].value.id=='returned_path']
+        self.assertLess(order['closed_g14_return_path'],min(return_reads+return_dirs+[order['load_repair_helper']]))
         with patch.object(cas,'SOURCE_BOUND',False), patch.object(cas,'read') as read, patch.object(cas,'load_tools') as tools, patch.object(cas,'API') as api:
             for call in (cas.main,lambda:cas.maintenance_inputs(object()),lambda:cas.database_a3(None,None,None,None,'BEFORE'),lambda:cas.g14_acceptance(None,None,None,None,None),lambda:cas.patch_once(None,None,None,None,None,0)):
                 with self.subTest(call=repr(call)), self.assertRaises(cas.Hold): call()
             read.assert_not_called(); tools.assert_not_called(); api.assert_not_called()
+        with patch.object(cas,'SOURCE_BOUND',False),patch.object(cas,'read') as read:
+            cut=types.SimpleNamespace(physical_identity=lambda *args: self.fail('unbound native observer'))
+            for call in (lambda:cas.accepted_guardian(cut,{}),lambda:cas.load_repair_helper({})):
+                with self.assertRaises(cas.Hold):call()
+            read.assert_not_called()
         with patch.multiple(cas,SOURCE_BOUND=True,CORE_R=None,NEW_DIGEST=None,M94_MIGRATION_SHA=None),patch.object(cas,'read') as read:
             with self.assertRaises(cas.Hold):cas.require_bound()
             read.assert_not_called()
@@ -315,6 +396,46 @@ class G14CoreCASTests(unittest.TestCase):
         self.assertNotIn('Pending',cas.A3_SQL);self.assertNotIn('fd24881a',PATH.read_text())
 
     def test_once_markers_precede_only_actual_patch_and_prevent_replay(self):
+        # Exercise the full common acceptance after the trusted repair helper,
+        # including full120, own15 and an independent fresh15; no Root facts.
+        with binding():
+            cut,folder,manifest,returned,run,helper,events=repair_acceptance_operand()
+            with patch.object(cas,'load_repair_helper',return_value=helper):
+                accepted=cas.g14_acceptance(cut,folder,manifest,returned,run)
+                self.assertEqual(len(accepted),5)
+                self.assertEqual(accepted[2:4],(returned['result']['controller'],returned['result']['guardian']))
+                self.assertEqual(cas.accepted_guardian(cut,returned),accepted[3])
+            self.assertIn(('repair-validator',run),events)
+            self.assertEqual(events.count(('repair-observer',3)),2)
+            self.assertTrue(any(e[0]=='full120' for e in events));self.assertTrue(any(e[0]=='fresh15' for e in events))
+            self.assertNotIn(('physical','guard'),events)
+            # The old failed swap/HOLD cannot masquerade as a success receipt.
+            wrong=copy.deepcopy(returned);wrong.update(schema='g14_pair_swap_return_v1',status='HOLD')
+            with self.assertRaises(cas.Hold):cas.g14_acceptance(cut,folder,manifest,wrong,run)
+        # Real loader boundary: lexical/ref/global SHA refusals occur before IO;
+        # only exact Source bytes may become the trusted helper interface.
+        helper_raw=b"def validate_repair_return(*args): return {'declared': True}\ndef observe_guardian(*args): return args[2]\n"
+        with binding():
+            cut,folder,manifest,returned,run,helper,events=repair_acceptance_operand()
+            pin=cas.sha(helper_raw);returned['result']['repair']['repair_helper_ref']['sha256']=pin
+            with patch.object(cas,'REPAIR_HELPER_SHA256',pin),patch.object(cas,'read',return_value=helper_raw) as read:
+                module=cas.load_repair_helper(returned)
+                self.assertTrue(callable(module.validate_repair_return));self.assertTrue(callable(module.observe_guardian))
+                read.assert_called_once_with(Path('/declared/g14_guardian_source_repair_once.py'),131072,0o600)
+            for fault in ('unbound_helper','foreign_helper_ref','wrong_filename','relative_helper','baseline_bool','baseline_two','old_hold'):
+                bad=copy.deepcopy(returned);global_pin=pin
+                if fault=='unbound_helper':global_pin=None
+                elif fault=='foreign_helper_ref':bad['result']['repair']['repair_helper_ref']['sha256']='f'*64
+                elif fault=='wrong_filename':bad['result']['repair']['repair_helper_ref']['path']='/declared/foreign.py'
+                elif fault=='relative_helper':bad['result']['repair']['repair_helper_ref']['path']='relative.py'
+                elif fault=='baseline_bool':bad['result']['guardian_restart_baseline']=False
+                elif fault=='baseline_two':bad['result']['guardian_restart_baseline']=2
+                else:bad['status']='HOLD'
+                with self.subTest(repair_fault=fault),patch.object(cas,'REPAIR_HELPER_SHA256',global_pin),patch.object(cas,'read') as read:
+                    with self.assertRaises(cas.Hold):cas.load_repair_helper(bad)
+                    read.assert_not_called()
+            with patch.object(cas,'REPAIR_HELPER_SHA256',pin),patch.object(cas,'read',return_value=b'DECLARED wrong helper bytes'):
+                with self.assertRaises(cas.Hold):cas.load_repair_helper(returned)
         events=[];files={}
         def once(path,raw):
             if path in files:raise FileExistsError(str(path))

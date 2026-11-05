@@ -31,6 +31,7 @@ SOURCE_PIN = None
 TOOL_PINS = None
 CONFIG_REF = None
 G14_OPS_P = None
+REPAIR_HELPER_SHA256 = None
 M95_MIGRATION_SHA = '50f2f1f712a91abf3ccd17d0fb2040d30b4bd2c6455268902e1452e922a94808'
 M95_EVENT_BODY_SHA = '8830bda75d61322a993c0f5572268ed912e8816aab69abdfae4ccb264194a351'
 CLEANUP_ID = '838331bb-fb7b-4ea3-9e67-3ffd3f539402'
@@ -284,11 +285,61 @@ def query(cut,run,name,sql):
         cut.C.once(run/(name+'.RETURN.json'),cut.C.wire({'started_at':start,'ended_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'elapsed_seconds':time.monotonic()-mono,'returncode':code,'timed_out':timeout}))
     need(code==0 and not timeout and not err and len(out)<=CAP,'COMPLETE_READONLY_SQL_RETURN_ZERO');return cut.C.loads(out)
 
+def closed_g14_return_path(path, state):
+    # Lexical scope only, before any private-dir check, read or helper load.
+    need(path.name == 'RETURN.json' and path.parent.parent == ROOT == state
+         and (path.parent.name.startswith('swap-once-')
+              or (path.parent.name.startswith('guardian-source-repair-')
+                  and full_id(path.parent.name.removeprefix('guardian-source-repair-')))),
+         'CLOSED_G14_RETURN_NAMESPACE_BEFORE_IO')
+
+
+def is_guardian_repair(returned):
+    return type(returned) is dict and returned.get('schema') == 'g14_guardian_source_forward_repair_return_v1'
+
+
+def load_repair_helper(returned):
+    require_bound()
+    need(is_guardian_repair(returned) and set(returned) == {'schema', 'status', 'result', 'automatic_replay', 'Guest_or_Core_business_authority'}
+         and returned['status'] == 'GUARDIAN_SOURCE_REPAIR_OK' and returned['automatic_replay'] is False
+         and returned['Guest_or_Core_business_authority'] is False, 'CLOSED_G14_GUARDIAN_REPAIR_RETURN')
+    result = returned['result']
+    need(type(result) is dict and type(result.get('guardian_restart_baseline')) is int
+         and result['guardian_restart_baseline'] in (0, 3), 'EXACT_REPAIR_GUARDIAN_RESTART_BASELINE')
+    repair = result.get('repair')
+    need(type(repair) is dict and set(repair) == {'schema', 'failed_swap_manifest_sha256', 'failed_swap_originals', 'failed_guardian_restart_count', 'repair_claim_ref', 'repair_helper_ref'}
+         and repair['schema'] == 'g14_guardian_source_forward_repair_evidence_v1', 'CLOSED_G14_REPAIR_EVIDENCE')
+    ref = repair['repair_helper_ref']
+    need(type(ref) is dict and set(ref) == {'path', 'sha256'} and digest_value(REPAIR_HELPER_SHA256)
+         and ref['sha256'] == REPAIR_HELPER_SHA256, 'EXACT_SOURCE_BOUND_REPAIR_HELPER_REF')
+    validated_config_ref(ref['path'], ref['sha256'])
+    path = Path(ref['path'])
+    need(path.name == 'g14_guardian_source_repair_once.py', 'EXACT_REPAIR_HELPER_FILENAME')
+    raw = read(path, 131072, 0o600)
+    need(sha(raw) == REPAIR_HELPER_SHA256, 'EXACT_SOURCE_BOUND_REPAIR_HELPER_BYTES')
+    module = types.ModuleType('reviewed_g14_guardian_source_repair_for_core_cas')
+    module.__file__ = str(path)
+    exec(compile(raw, str(path), 'exec'), module.__dict__)
+    return module
+
+
+def accepted_guardian(cut, returned):
+    require_bound()
+    if is_guardian_repair(returned):
+        helper = load_repair_helper(returned)
+        return helper.observe_guardian(cut, SOURCE_PIN, returned['result']['guardian'], returned['result']['guardian_restart_baseline'])
+    return cut.physical_identity(cut.C.GUARD, cut.guardian_argv(cut.C.NEW_SOURCE, SOURCE_PIN))
+
+
 def g14_acceptance(cut, folder, manifest, returned, run):
     require_bound()
     C = cut.C
+    repair = None
+    if is_guardian_repair(returned):
+        repair = load_repair_helper(returned).validate_repair_return(cut, folder, manifest, returned, run)
     need(set(returned) == {'schema', 'status', 'result', 'automatic_replay', 'Guest_or_Core_business_authority'}
-         and returned['schema'] == 'g14_pair_swap_return_v1' and returned['status'] == 'CONFIG_SWAP_OK'
+         and ((repair is not None and returned['schema'] == 'g14_guardian_source_forward_repair_return_v1' and returned['status'] == 'GUARDIAN_SOURCE_REPAIR_OK')
+              or (repair is None and returned['schema'] == 'g14_pair_swap_return_v1' and returned['status'] == 'CONFIG_SWAP_OK'))
          and returned['automatic_replay'] is False and returned['Guest_or_Core_business_authority'] is False, 'ACTUAL_CLOSED_G14_SWAP_RETURN')
     result = returned['result']
     need(result['source_commit'] == manifest['source_commit'] and result['source_R'] == CORE_R and result['amd64_D'] == C.NEW_DIGEST
@@ -308,7 +359,7 @@ def g14_acceptance(cut, folder, manifest, returned, run):
     for key in ('controller', 'guardian'):
         C.identity(result[key])
     ctrl = cut.physical_identity(C.CTRL, cut.controller_argv(C.NEW_CONFIG))
-    guard = cut.physical_identity(C.GUARD, cut.guardian_argv(C.NEW_SOURCE, SOURCE_PIN))
+    guard = accepted_guardian(cut, returned)
     need(ctrl == result['controller'] and guard == result['guardian'], 'SAME_ACCEPTED_G14_CONTROLLER_GUARDIAN')
     G = C.load_guardian(C.NEW_SOURCE, SOURCE_PIN)
     owner = G.Owner(SOURCE_PIN)
@@ -971,15 +1022,26 @@ def main():
     need(manifest['source_commit'] == a.expected_ops_source == G14_OPS_P and re.fullmatch('[a-f0-9]{40}',a.expected_ops_source)
          and manifest['files']['source/network_guardian.py'] == SOURCE_PIN and manifest['tools'] == TOOL_PINS,'EXACT_SEPARATELY_QUALIFIED_G14_OPERATIONAL_SOURCE')
     returned_path = a.g14_swap_return.absolute()
-    need(returned_path.name == 'RETURN.json' and returned_path.parent.parent == ROOT and returned_path.parent.name.startswith('swap-once-'),'EXACT_ACTUAL_G14_RETURN_PATH')
+    closed_g14_return_path(returned_path, C.STATE)
     C.private_dir(returned_path.parent); returned_raw = C.read(returned_path,32<<20,0o600)
-    need(sha(returned_raw) == a.expected_g14_swap_return_sha256 and digest_value(a.expected_g14_swap_return_sha256)
-         and not (returned_path.parent/'HOLD.json').exists(),'EXACT_ACTUAL_G14_SUCCESS_RETURN_NOT_HOLD')
-    swap_claim = C.loads(C.read(ROOT/('SWAP-'+a.expected_manifest_sha256+'-POSSIBLE.json'),32768,0o600))
-    need(set(swap_claim) == {'schema','manifest_sha256','old_controller','old_guardian','run','automatic_replay'}
-         and swap_claim['schema'] == 'g14_once_only_swap_claim_v1' and swap_claim['manifest_sha256'] == a.expected_manifest_sha256
-         and swap_claim['old_controller'] == manifest['expected_controller_identity'] and swap_claim['old_guardian'] == manifest['expected_guardian_identity']
-         and swap_claim['run'] == str(returned_path.parent) and swap_claim['automatic_replay'] is False,'G14_ACTUAL_ONCE_CLAIM_BINDS_MANIFEST_AND_RETURN')
+    need(sha(returned_raw) == a.expected_g14_swap_return_sha256 and digest_value(a.expected_g14_swap_return_sha256), 'EXACT_G14_RETURN_BYTES')
+    returned = C.loads(returned_raw)
+    repair_helper = load_repair_helper(returned) if is_guardian_repair(returned) else None
+    repair = None
+    if repair_helper is not None:
+        need(returned_path.name == 'RETURN.json' and returned_path.parent.parent == C.STATE
+             and re.fullmatch('guardian-source-repair-[a-f0-9-]{36}',returned_path.parent.name)
+             and not (returned_path.parent/'HOLD.json').exists(),'EXACT_ACTUAL_G14_REPAIR_RETURN_NOT_HOLD')
+    if repair_helper is None:
+        need(returned_path.name == 'RETURN.json' and returned_path.parent.parent == ROOT and returned_path.parent.name.startswith('swap-once-'),'EXACT_ACTUAL_G14_RETURN_PATH')
+        C.private_dir(returned_path.parent); returned_raw = C.read(returned_path,32<<20,0o600)
+        need(sha(returned_raw) == a.expected_g14_swap_return_sha256 and digest_value(a.expected_g14_swap_return_sha256)
+             and not (returned_path.parent/'HOLD.json').exists(),'EXACT_ACTUAL_G14_SUCCESS_RETURN_NOT_HOLD')
+        swap_claim = C.loads(C.read(ROOT/('SWAP-'+a.expected_manifest_sha256+'-POSSIBLE.json'),32768,0o600))
+        need(set(swap_claim) == {'schema','manifest_sha256','old_controller','old_guardian','run','automatic_replay'}
+             and swap_claim['schema'] == 'g14_once_only_swap_claim_v1' and swap_claim['manifest_sha256'] == a.expected_manifest_sha256
+             and swap_claim['old_controller'] == manifest['expected_controller_identity'] and swap_claim['old_guardian'] == manifest['expected_guardian_identity']
+             and swap_claim['run'] == str(returned_path.parent) and swap_claim['automatic_replay'] is False,'G14_ACTUAL_ONCE_CLAIM_BINDS_MANIFEST_AND_RETURN')
     run = a.evidence_dir.absolute()
     need(run.parent == ROOT and re.fullmatch('core-image-cas-[A-Za-z0-9_-]{1,96}',run.name),'CLOSED_NEW_CAS_EVIDENCE_DIRECTORY')
     C.private_dir(ROOT); C.private_dir(run,create=True)
@@ -995,8 +1057,14 @@ def main():
             before = api_read(api,C,run,'DEPLOYMENT-BEFORE',DEP_URI)
             pods = api_read(api,C,run,'PODS-BEFORE',PODS_URI); old_tuple = core_before(before,pods,C)
             need(sha(C.wire(before['spec'])) == c['core_preimage']['spec_sha256'] and sha(C.wire(before['metadata']['annotations'])) == c['core_preimage']['annotations_sha256'],'EXACT_ROOT_FULL_R4_PREIMAGE')
-            lineage = C.loads(C.read(returned_path.parent/'BEFORE.json',32<<20,0o600))
-            need(lineage['core'] == old_tuple and lineage['controller'] == manifest['expected_controller_identity']
+            if repair_helper is not None:
+                repair = repair_helper.validate_repair_return(cut,folder,manifest,returned,run)
+                lineage = C.loads(input_ref(C,repair['failed_swap_originals']['before']))
+            else:
+                lineage = C.loads(C.read(returned_path.parent/'BEFORE.json',32<<20,0o600))
+            need(lineage['core'] == old_tuple
+                 and ((repair is None and lineage['controller'] == manifest['expected_controller_identity'])
+                      or (repair is not None and returned['result']['controller'] == manifest['expected_controller_identity']))
                  and lineage['guardian'] == manifest['expected_guardian_identity'] and lineage['protected_refs'] == required_protected_refs(),'SAME_G14_PREDECESSOR_CORE_AND_PROTECTED_ORIGINALS')
             wire = C.wire(build_patch(before,C)); C.once(run/'PATCH.json',wire)
             status, raw, headers = api.request('PATCH',DEP_URI+'?dryRun=All&fieldManager=core-image-cas-once',wire)
@@ -1011,7 +1079,7 @@ def main():
                  and fresh['spec'] == before['spec'] and fresh['metadata']['annotations'] == before['metadata']['annotations'],'UNCHANGED_FULL_API_PREIMAGE_NO_REBASE')
             backend.files(successor=True)
             need(backend.protected() == protected and cut.physical_identity(C.CTRL,cut.controller_argv(C.NEW_CONFIG)) == ctrl
-                 and cut.physical_identity(C.GUARD,cut.guardian_argv(C.NEW_SOURCE,SOURCE_PIN)) == guard,'SAME_ACCEPTED_G14_LIFETIMES_IMMEDIATELY_BEFORE_PATCH')
+                 and accepted_guardian(cut,returned) == guard,'SAME_ACCEPTED_G14_LIFETIMES_IMMEDIATELY_BEFORE_PATCH')
             database_a3(cut,run,c,sql,'PRESEND')
             current_lock = OPLOCK.lstat()
             need((current_lock.st_dev,current_lock.st_ino) == inode and time.monotonic()-observed <= 15,'SAME_MUTEX_AND_FRESH_CURRENT15')

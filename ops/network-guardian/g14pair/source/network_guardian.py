@@ -13,16 +13,13 @@ import time
 import types
 
 ROOT = Path('/opt/dakasa/capacity-network')
-HERE = ROOT / 'network-boot-recovery-r13-g14pair-source-v1'
+HERE = ROOT / 'network-boot-recovery-r13-g14pair-source-v2'
 SELF = HERE / 'network_guardian.py'
-CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g14pair.production.json')
-# The R13 netlink Guardian (2f5bb7e1) stays installed; its standing config is
-# an authority for this boot's ledger records (never rewritten or reset).
+CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g14pair-v2.production.json')
 R13_PREDECESSOR_HERE = ROOT / 'network-boot-recovery-r13-netlink-source-v1'
 R13_PREDECESSOR_SOURCE_SHA = '2f5bb7e1946d905fbfc83c0662b0df281f6fb9f1fba2c85b4036ba825376021c'
 R13_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-netlink.production.json')
 R13_PREDECESSOR_SCHEMA = 'Root_standing_R13_netlink_successor_Core262_R43_network_boot_terminal_recovery_v1'
-# d211 stays installed: its PROOF-* copies are the historical anchor's evidence.
 PREDECESSOR_HERE = ROOT / 'network-boot-recovery-Core262-r43-adoption-source-v1'
 PREDECESSOR_SOURCE_SHA = 'd211254aa392513bd3384d05fd87c3f18179d18c7bf13370323b74ae97367d94'
 PREDECESSOR_CONFIG_SHA = '7f0f1f2b979bedf22f96d6cdb12c2dd3cff5d53c421135b1381d703c1bc2ee96'
@@ -33,35 +30,22 @@ HUB = 'dakasa-capacity-network-hub.service'
 COLD = 'dakasa-capacity-network-cold-transport.service'
 GUARDIAN = 'dakasa-capacity-network-guardian.service'
 RUNTIME = ROOT / 'source-r13-netlink-v1'
-# The controller --config is the G12 head only after explicit concrete binding.
 NEW_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink-g14pair.production.json')
-# The R13 base config stays installed: the successor Hub reads and seals it,
-# and every pair config is checked, link by link, against its exact bytes.
 BASE_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink.production.json')
 BASE_CONFIG_SHA = '460b0fd49191248fecffa7009636a82391815a64fc23db11e039b7ee9f5d928a'
-# The f5-pair config stays installed (the f5-pair Guardian d83f892b stands on it).
 F5PAIR_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink-f5pair.production.json')
 F5PAIR_CONFIG_SHA = 'ed797c474d71a064f4e9dfe99a4c2ddc6530b49ae712eb78033b75967c2b6621'
-# The g2-pair config stays installed (the g2-pair Guardian 9e45ade0 stands on it;
-# live since CONFIG_SWAP_OK 2026-11-02 09:16:04Z, PKG 0a14d2f4...).
 G2PAIR_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink-g2pair.production.json')
 G2PAIR_CONFIG_SHA = '9168e9c661a40a9f1761e0938deb7fda44a4ce3a0a3e852f8cab281bdb71e48b'
-# The g3-pair config stays installed (the g3-pair Guardian 9e7d88e2 stands on it;
-# live controller --config of the g4 package's starting state, verified on the Brain).
 G3PAIR_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink-g3pair.production.json')
 G3PAIR_CONFIG_SHA = '7b452ccca85f722e59c3748dc127f0cccda3e54bbcecc9f74c9b4c6cbc589068'
-# The g4-pair config stays installed (the g4-pair Guardian 81f7f53b stands on it;
-# the live controller --config when this package was written).
 G4PAIR_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink-g4pair.production.json')
 G4PAIR_CONFIG_SHA = '431a42ee4caba690a6a479e1ca19d842835dc23d8acccb3bc63a05bee7ea663b'
-# The actual R42 controller config (the historical anchor's controller_config_sha256).
 G5PAIR_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink-g5pair.production.json')
 G5PAIR_CONFIG_SHA = '1b38e2cb050b9c98fc6edf07d867edaed1758aba1bdb496ad4566f13e5fb6a45'
 G6PAIR_CONFIG = Path('/etc/dakasa/capacity-network/controller.r13-netlink-g6pair.production.json')
 G6PAIR_CONFIG_SHA = '8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e'
 R42_CONFIG_SHA = '0f4631320e7319cf4da3c37586bbee2ae977eb338831fb0e991ed735cb9113c3'
-# Core image pairs (kube_native.approved_core_images: {image, image_id}, 1..2
-# pairs, unique digests). The ONLY values core_container_images may take.
 CORE_IMAGE_REF = '153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@'
 CORE_417 = CORE_IMAGE_REF + 'sha256:417ec2ba7649820700816d4a9cd422d857e2f3ede41a09875ec890e06e114f28'
 CORE_C423 = CORE_IMAGE_REF + 'sha256:c4238ebdedc618a180183ba19e0748957c134bbce8c81c7987eea5ea8c0bc68a'  # Core 2de33bb
@@ -69,10 +53,7 @@ CORE_87CF = CORE_IMAGE_REF + 'sha256:87cf7de98bcf402a0438fea7ebf6025bd487db0e880
 CORE_2C68 = CORE_IMAGE_REF + 'sha256:2c68827818e8bcd53629835dff89ab66056907af3a5aa7721605ee726a4778ad'  # Core g2 (PR #112/#113) linux/amd64
 CORE_A9FA = CORE_IMAGE_REF + 'sha256:a9fa2599db02016ff6a7cc90e95281448953fc4ee20160953042fc8c1c405494'  # Core g3 (145afc7f, PR #114/#115) linux/amd64
 CORE_9913 = CORE_IMAGE_REF + 'sha256:9913ebfb5afc3620b8d6f4136ea1b9cc5acfda0c339199a99be4444fa10f417e'  # live Core g4 (5e967dd6, PR #116/#117) linux/amd64
-# Pin the actual amd64 head manifest; historical G6 is independently fixed.
-# No index, tag, configuration digest or placeholder admits an image.
 CORE_CADC = CORE_IMAGE_REF + 'sha256:cadc0c4491109d5791438b6187b53620008f8a634ae8d93903f664ae18c18edd'
-# Root-reviewed R6 release and controller input; native adoption remains separate.
 PROPOSAL_BOUND = True
 HEAD_CORE_SOURCE = '33a846d31a5b123b2c1141192671bc830bf6d9c8'
 HEAD_NEW_CORE_DIGEST = 'sha256:35195e4ddff2a69f2ae7fca8f24b43177c61c49f12117a4fe4925a43e9cd6fde'
@@ -111,12 +92,6 @@ G13_CORE_IMAGE_PAIRS = [{'image': CORE_G12, 'image_id': CORE_G12}, {'image': COR
 G14_CORE_IMAGE_PAIRS = [{'image': CORE_G13, 'image_id': CORE_G13}, {'image': CORE_G14, 'image_id': CORE_G14}]
 G13_CONTROLLER_CONFIG_SHA = '2fafe364344596ec0ab4a87a1887c8a4bcc581b103937fedb807e624fc3e6ac0'
 G12_CONTROLLER_CONFIG_SHA = '7c05da2f2ab22a08abd57d5e514e71c7c378e03387a532a8189e1845e3865879'
-# GENERIC PAIR CHAIN, in order: (generation, pinned pairs, config path, pinned
-# config sha or None). Link 0 is the R13 base (R42 pairs). The LAST link is the
-# head: the controller's --config, bound by the standing config's
-# new_controller_config_sha256 (None here). Admitting a future Core image =
-# append one link whose pairs are [previous head's newest image, NEW], move
-# NEW_CONFIG to its path and pin the previous head's config sha.
 G11_CONTROLLER_CONFIG_SHA = 'a3706d21323a4cce2ef1d0746a9daffd81c1dad538f028635765bcbc116c7777'
 PAIR_CHAIN = (
     ('base', R42_CORE_IMAGE_PAIRS, BASE_CONFIG, BASE_CONFIG_SHA),
@@ -136,10 +111,6 @@ PAIR_CHAIN = (
     ('g14pair', G14_CORE_IMAGE_PAIRS, NEW_CONFIG, None),
 )
 ALLOWED_CORE_IMAGE_PAIRS = tuple(pairs for _, pairs, _, _ in PAIR_CHAIN)
-# Predecessor pair Guardians whose standing configs stay installed and whose
-# ledger records count as this Guardian's own (in chain order): (generation,
-# Guardian source sha, standing config path, schema, standing config sha,
-# controller config sha it binds). Append one entry per future pair Guardian.
 F5PAIR_PREDECESSOR_SOURCE_SHA = 'd83f892b087b6c604928d9a21e47af5f6086124eeecadb08e6560f47e631afeb'
 F5PAIR_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-f5pair.production.json')
 F5PAIR_PREDECESSOR_SCHEMA = 'Root_standing_R13_f5pair_successor_Core262_R43_network_boot_terminal_recovery_v1'
@@ -147,29 +118,19 @@ F5PAIR_PREDECESSOR_CONFIG_SHA = 'afcfe2e5cad8dbf59732fb805e7f6c4a709608f36ba77bc
 G2PAIR_PREDECESSOR_SOURCE_SHA = '9e45ade0254496bf04458b85d0214208bcbafcd4b7e4af7285388da9c63ec1da'
 G2PAIR_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g2pair.production.json')
 G2PAIR_PREDECESSOR_SCHEMA = 'Root_standing_R13_g2pair_successor_Core262_R43_network_boot_terminal_recovery_v1'
-# The g2-pair standing config (g2 swap result.json -> successor_configs
-# .standing_config_sha256), fixed since the g3 package.
 G2PAIR_PREDECESSOR_CONFIG_SHA = '494a57d8d4995f9f52348e6153bca5e00a73b873fbd69e8e36c187407cc0f57f'
 G3PAIR_PREDECESSOR_SOURCE_SHA = '9e7d88e29a8dce5296f58df33db0ae2c7853db5d6801836ca9c1a4311f73d985'
 G3PAIR_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g3pair.production.json')
 G3PAIR_PREDECESSOR_SCHEMA = 'Root_standing_R13_g3pair_successor_Core262_R43_network_boot_terminal_recovery_v1'
-# The g3-pair standing config (g3 swap result.json -> successor_configs
-# .standing_config_sha256), fixed since the g4 package.
 G3PAIR_PREDECESSOR_CONFIG_SHA = '2922be85534c7d93257a9d703af8509c72e585e5683edfd35496ff8294df40d9'
 G4PAIR_PREDECESSOR_SOURCE_SHA = '81f7f53b9e201955cf9d53c7a8b8a791ef5bb9a143343a4f28a93b72198a9b45'
 G4PAIR_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g4pair.production.json')
 G4PAIR_PREDECESSOR_SCHEMA = 'Root_standing_R13_g4pair_successor_Core262_R43_network_boot_terminal_recovery_v1'
-# The live g4-pair standing config (g4 swap result.json -> successor_configs
-# .standing_config_sha256), pinned directly (full value known; set_head_digest.py
-# only re-checks it). An all-zero value would refuse every pair-chain check
-# (PAIR_STANDING_CHAIN_PINS_SET).
 G4PAIR_PREDECESSOR_CONFIG_SHA = '385928fe10e25980b918ca44bacd5b7e8b901cd2cbcde2bae8304e58d8931997'
 G5PAIR_PREDECESSOR_SOURCE_SHA = 'e38fe46112f471ff02565fa5fdead6315606c071cfdb074144795f1b9923c230'
 G5PAIR_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g5pair.production.json')
 G5PAIR_PREDECESSOR_SCHEMA = 'Root_standing_R13_g5pair_successor_Core262_R43_network_boot_terminal_recovery_v1'
 G5PAIR_PREDECESSOR_CONFIG_SHA = '180b38fa905099e57776e944eda2be856ccc89bc070ad6b67a9142ab380139ca'
-# Canonical G6 and boot-v2 are distinct historical authorities over the same
-# G6 controller. Neither is relabelled as another image pair.
 G6_PREDECESSOR_SOURCE_SHA = '6c2cc19f1f962d9d8eaec0cd5e6f813bf49004f8ff6fef9c9fe9f8f0310d8f1b'
 G6_PREDECESSOR_CONFIG = Path('/etc/dakasa/capacity-network/network-recovery.r13-g6pair.production.json')
 G6_PREDECESSOR_SCHEMA = 'Root_standing_R13_g6pair_successor_Core262_R43_network_boot_terminal_recovery_v1'
@@ -205,10 +166,7 @@ PAIR_STANDING_CHAIN = (
     ('g5pair', G5PAIR_PREDECESSOR_SOURCE_SHA, G5PAIR_PREDECESSOR_CONFIG, G5PAIR_PREDECESSOR_SCHEMA,
      G5PAIR_PREDECESSOR_CONFIG_SHA, G5PAIR_CONFIG_SHA),
 )
-# The actual R42 controller config stays installed: the R13 config is checked
-# against its exact bytes, which the historical anchor pins.
 OLD_CONFIG = Path('/etc/dakasa/capacity-network/controller.r42-cold-unknown184014.production.json')
-# The standing R42 Hub imports its runtime from here (hub_boot_once.SOURCE).
 HUB_RUNTIME = ROOT / 'source-r42-cold-unknown184014-v1'
 HUB_SOURCE = ROOT / 'network-boot-recovery-r42-source-v1/hub_boot_once.py'
 HUB_CONFIG = Path('/etc/dakasa/capacity-network/hub-boot.r42.production.json')
