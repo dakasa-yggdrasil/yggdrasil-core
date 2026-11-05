@@ -116,6 +116,7 @@ func cleanupNativeInventoryReturn(t *testing.T, f *FailedExpansionCleanupRecover
 	}
 	inventory := cleanupNativeInventory(t, f, a, true)
 	server := inventory.Members[1].Server
+	server.AuxiliaryInventoryComplete = true
 	var desired model.CapacityMutationSpecV1
 	if json.Unmarshal(plan.CanonicalSpec, &desired) != nil {
 		t.Fatal("canonical exact destroy projection")

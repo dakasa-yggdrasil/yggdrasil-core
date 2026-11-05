@@ -171,12 +171,11 @@ class G13MaintenanceTests(unittest.TestCase):
             self.assertEqual(value['g11_predecessor_guardian_source_sha256'], C.G11_SOURCE_SHA)
             self.assertEqual(value['g11_predecessor_standing_config_sha256'], C.G11_STANDING_SHA)
             # Exercise the real staged/live output validator with every fixed prefix.
-            prefix = {'base': old['r13_base_controller_config_sha256'],
-                      **{name: '1' * 64 for name in ('f5pair','g2pair','g3pair','g4pair','g5pair')},
-                      **{('g'+str(n)+'pair'): getattr(S.C,'G'+str(n)+'_CONFIG_SHA') for n in range(6,13)}}
+            prefix = {name: pin for name, _, _, pin in G.PAIR_CHAIN[:-1]}
             ancestry = {name: old[name] for name in ('predecessor_standing_config_sha256',
-                'r13_predecessor_standing_config_sha256','r42_controller_config_sha256',
-                'r13_base_controller_config_sha256','hub_source_sha256','hub_boot_config_sha256','hub_unit_sha256')}
+                'r13_predecessor_standing_config_sha256','hub_source_sha256','hub_boot_config_sha256','hub_unit_sha256')}
+            ancestry.update(r42_controller_config_sha256=G.R42_CONFIG_SHA,
+                            r13_base_controller_config_sha256=G.BASE_CONFIG_SHA)
             expected = {'source_sha256': manifest['files']['source/network_guardian.py'],
                         'unit_sha256': units, 'controller_prefix_sha256': prefix,
                         'ancestry_input_sha256': ancestry}

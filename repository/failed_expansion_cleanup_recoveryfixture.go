@@ -53,7 +53,7 @@ func NewFailedExpansionCleanupRecoveryFixture(tb testing.TB) *FailedExpansionCle
 	f := &FailedExpansionCleanupRecoveryFixture{DB: base.db, Policy: base.policy, Workflow: base.workflow, Spec: base.p, private: base, t: t, store: base.store}
 	f.AdmissionSourceStore = base.store
 	b := base.p.MutationBindings[0]
-	if len(b.Slots) < 2 || b.Slots[1].DesiredSpec == nil || b.ProtectedSlots != 1 {
+	if len(b.Slots) < 2 || b.Slots[1].Slot != 2 || b.Slots[1].DesiredSpec == nil || b.Slots[1].Slot <= b.ProtectedSlots {
 		t.Fatal("declared unprotected tail2 required")
 	}
 	pre := base.pre
