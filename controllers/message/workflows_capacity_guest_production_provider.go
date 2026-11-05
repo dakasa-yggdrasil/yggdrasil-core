@@ -285,8 +285,15 @@ func (s *originalProductionGuestSupplier) call(ctx context.Context, op string, f
 		return "", errOriginalGuestStep
 	}
 	a := s.resolved
-	r, err := executeIntegrationThroughResolvedWithPolicy(ctx, s.conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errOriginalGuestStep, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: s.parent}})
-	if err != nil || s.guard(ctx) != nil || capacity.DecodeVMObservation(r.Output, out) != nil {
+	native := &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: s.parent, originalAWSReadUnavailable: s.provider == "aws" && op == "observe_ec2_instance"}
+	r, err := executeIntegrationThroughResolvedWithPolicy(ctx, s.conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errOriginalGuestStep, requireExplicitResponse: true, nativeHTTP: native})
+	if err != nil {
+		if native.originalAWSReadUnavailable && s.guard(ctx) == nil {
+			return "", err
+		}
+		return "", errOriginalGuestStep
+	}
+	if s.guard(ctx) != nil || capacity.DecodeVMObservation(r.Output, out) != nil {
 		return "", errOriginalGuestStep
 	}
 	return r.Status, nil

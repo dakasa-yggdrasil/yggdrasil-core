@@ -6,6 +6,7 @@ on:
       - 'ops/network-guardian/**'
       - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
       - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
+      - 'db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql'
       - '.github/workflows/owned-network-guardian.yml'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - 'ops/network-guardian/**'
       - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
       - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
+      - 'db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql'
       - '.github/workflows/owned-network-guardian.yml'
   workflow_dispatch:
 
@@ -115,6 +117,7 @@ jobs:
             ops/network-guardian/
             db/migrations/00092_workflow_runs_busy_logical_index.sql
             db/migrations/00093_guest_retirement_settled_absence_continuation.sql
+            db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql
             ${{ runner.temp }}/owned-network-guardian/
           if-no-files-found: error
           retention-days: 30

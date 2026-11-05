@@ -19,7 +19,14 @@ type GuestNotifyFloorMember struct {
 func (s CapacityStore) GuestNotifyFloorMembers(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, excludedSlot int) ([]GuestNotifyFloorMember, error) {
 	var out []GuestNotifyFloorMember
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		if s.guestNotifyOrigin == nil || s.guestNotifyOrigin.source != capacity.CurrentGuestCoreSource() || p.GuestNotifyCanaryBinding == nil || p.GuestRetirementBinding == nil || !capacityIntentReduction(current) || current.RecoveryOnly || current.FloorDegraded || (current.Phase != "draining" && current.Phase != "drained") {
+		cleanup, _, cleanupActive, err := s.failedExpansionActiveClaimTx(ctx, tx, policy, current, now)
+		if err != nil {
+			return err
+		}
+		if s.guestNotifyOrigin == nil || s.guestNotifyOrigin.source != capacity.CurrentGuestCoreSource() || p.GuestNotifyCanaryBinding == nil || p.GuestRetirementBinding == nil || current.RecoveryOnly || current.FloorDegraded || !cleanupActive && (!capacityIntentReduction(current) || current.Phase != "draining" && current.Phase != "drained") {
+			return ErrCapacityConflict
+		}
+		if cleanupActive && (excludedSlot != cleanup.Slot || cleanup.Slot < 2 || cleanup.SurvivorCount != cleanup.Slot-1 || cleanup.SurvivorCount < p.Floor) {
 			return ErrCapacityConflict
 		}
 		if current.FailedInstalledDisposal != nil {
@@ -46,7 +53,7 @@ func (s CapacityStore) GuestNotifyFloorMembers(ctx context.Context, policy model
 			return ErrCapacityConflict
 		}
 		for _, member := range r.Members {
-			if member.Slot == excludedSlot {
+			if member.Slot == excludedSlot || cleanupActive && member.Slot >= cleanup.Slot {
 				continue
 			}
 			slot, exists, err := loadMutationSlot(ctx, tx, policy.Metadata.Namespace, p, b, member.Slot)
@@ -72,7 +79,13 @@ func (s CapacityStore) GuestNotifyFloorMembers(ctx context.Context, policy model
 			}
 			out = append(out, GuestNotifyFloorMember{member.Slot, receipt.PreregistrationID})
 		}
-		if len(out) < p.Floor || len(out) < current.Decision.Units {
+		if cleanupActive {
+			// The failed expansion's desired N2 remains historical truth. Its
+			// unwitnessed target is never counted or probed as a survivor.
+			if len(out) != cleanup.SurvivorCount {
+				return ErrCapacityConflict
+			}
+		} else if len(out) < p.Floor || len(out) < current.Decision.Units {
 			return ErrCapacityConflict
 		}
 		return nil

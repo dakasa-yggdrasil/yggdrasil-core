@@ -499,32 +499,34 @@ type CapacityDecision struct {
 
 // CapacityIntent is one durable generation per logical domain/dimension.
 type CapacityIntent struct {
-	RetirementForward       *CapacityGuestRetirementForwardMarker `json:"retirement_forward,omitempty"`
-	FailedServingDisposal   *CapacityFailedServingDisposal        `json:"failed_serving_disposal,omitempty"`
-	FailedInstalledDisposal *CapacityFailedInstalledDisposal      `json:"failed_installed_disposal,omitempty"`
-	InstalledGuestReconcile *CapacityInstalledGuestReconcile      `json:"installed_guest_reconcile,omitempty"`
-	Namespace               string                                `json:"namespace"`
-	PolicyName              string                                `json:"policy_name"`
-	PolicyID                uuid.UUID                             `json:"policy_id"`
-	PolicyChecksum          string                                `json:"policy_checksum"`
-	Environment             string                                `json:"environment"`
-	Domain                  string                                `json:"domain"`
-	Dimension               string                                `json:"dimension"`
-	Generation              int64                                 `json:"generation"`
-	FencingToken            int64                                 `json:"fencing_token"`
-	Phase                   string                                `json:"phase"`
-	LeaseOwner              string                                `json:"lease_owner,omitempty"`
-	LeaseExecutorID         string                                `json:"lease_executor_id,omitempty"`
-	LeaseExpiresAt          *time.Time                            `json:"lease_expires_at,omitempty"`
-	RecoveryOnly            bool                                  `json:"recovery_only"`
-	FloorDegraded           bool                                  `json:"floor_degraded,omitempty"`
-	NativeHPAGeneration     int64                                 `json:"native_hpa_generation"`
-	NativePodBaseline       []string                              `json:"native_pod_baseline"`
-	BaselineSnapshot        CapacitySnapshot                      `json:"baseline_snapshot"`
-	Decision                CapacityDecision                      `json:"decision"`
-	Assessment              CapacityAssessment                    `json:"assessment"`
-	UpdatedAt               time.Time                             `json:"updated_at"`
-	OriginalNotifyWindow    *CapacityOriginalNotifyWindowMarker   `json:"original_notify_window,omitempty"`
+	FailedUnwitnessedExpansionCleanupID string                                    `json:"failed_unwitnessed_expansion_cleanup_id,omitempty"`
+	RetirementForward                   *CapacityGuestRetirementForwardMarker     `json:"retirement_forward,omitempty"`
+	FailedServingDisposal               *CapacityFailedServingDisposal            `json:"failed_serving_disposal,omitempty"`
+	FailedInstalledDisposal             *CapacityFailedInstalledDisposal          `json:"failed_installed_disposal,omitempty"`
+	FailedExpansionTerminalReconcile    *CapacityFailedExpansionTerminalReconcile `json:"failed_expansion_terminal_reconcile,omitempty"`
+	InstalledGuestReconcile             *CapacityInstalledGuestReconcile          `json:"installed_guest_reconcile,omitempty"`
+	Namespace                           string                                    `json:"namespace"`
+	PolicyName                          string                                    `json:"policy_name"`
+	PolicyID                            uuid.UUID                                 `json:"policy_id"`
+	PolicyChecksum                      string                                    `json:"policy_checksum"`
+	Environment                         string                                    `json:"environment"`
+	Domain                              string                                    `json:"domain"`
+	Dimension                           string                                    `json:"dimension"`
+	Generation                          int64                                     `json:"generation"`
+	FencingToken                        int64                                     `json:"fencing_token"`
+	Phase                               string                                    `json:"phase"`
+	LeaseOwner                          string                                    `json:"lease_owner,omitempty"`
+	LeaseExecutorID                     string                                    `json:"lease_executor_id,omitempty"`
+	LeaseExpiresAt                      *time.Time                                `json:"lease_expires_at,omitempty"`
+	RecoveryOnly                        bool                                      `json:"recovery_only"`
+	FloorDegraded                       bool                                      `json:"floor_degraded,omitempty"`
+	NativeHPAGeneration                 int64                                     `json:"native_hpa_generation"`
+	NativePodBaseline                   []string                                  `json:"native_pod_baseline"`
+	BaselineSnapshot                    CapacitySnapshot                          `json:"baseline_snapshot"`
+	Decision                            CapacityDecision                          `json:"decision"`
+	Assessment                          CapacityAssessment                        `json:"assessment"`
+	UpdatedAt                           time.Time                                 `json:"updated_at"`
+	OriginalNotifyWindow                *CapacityOriginalNotifyWindowMarker       `json:"original_notify_window,omitempty"`
 }
 
 // CapacityTransitionProof is a receipt assembled by the policy's protected

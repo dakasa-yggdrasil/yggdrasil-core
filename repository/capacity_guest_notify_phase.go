@@ -19,6 +19,26 @@ func (s CapacityStore) guardGuestNotifyPhaseTx(ctx context.Context, tx *sql.Tx, 
 	if next.Decision.Units < p.Floor || previous.RecoveryOnly || previous.FloorDegraded {
 		return ErrCapacityConflict
 	}
+	cleanup, claim, cleanupActive, err := s.failedExpansionActiveClaimTx(ctx, tx, policy, *previous, now)
+	if err != nil {
+		return err
+	}
+	if cleanupActive {
+		if next.Phase != "promoted" || next.Decision.Units != cleanup.SurvivorCount {
+			return ErrCapacityConflict
+		}
+		if err := s.failedExpansionSurvivorFloorTx(ctx, tx, policy, p, *previous, cleanup, claim, now, "after_retirement_floor"); err != nil {
+			return err
+		}
+		var live int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE NOT(slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&live); err != nil {
+			return err
+		}
+		if live != cleanup.SurvivorCount {
+			return ErrCapacityConflict
+		}
+		return nil
+	}
 	usage := "initial_useful_membership"
 	if capacityIntentReduction(*previous) {
 		usage = "after_retirement_floor"
@@ -38,6 +58,18 @@ func (s CapacityStore) guardGuestNotifyPhaseTx(ctx context.Context, tx *sql.Tx, 
 }
 
 func (s CapacityStore) guestNotifyRetirementFloorTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, slot int, now time.Time, usage, afterAckID string) error {
+	cleanup, claim, cleanupActive, err := s.failedExpansionActiveClaimTx(ctx, tx, policy, current, now)
+	if err != nil {
+		return err
+	}
+	if cleanupActive {
+		// The cleanup's real settlement/absence ledger supplies the after-PG
+		// barrier. An old original-retirement caller ACK is not that barrier.
+		if slot != cleanup.Slot || afterAckID != "" {
+			return ErrCapacityConflict
+		}
+		return s.failedExpansionSurvivorFloorTx(ctx, tx, policy, p, current, cleanup, claim, now, usage)
+	}
 	if retirementForwardActive(&current) {
 		r, _, err := loadRetirementForwardTx(ctx, tx, current.RetirementForward.ID, "admitted")
 		if err != nil {
@@ -82,6 +114,31 @@ func (s CapacityStore) guestNotifyRetirementFloorTx(ctx context.Context, tx *sql
 		return err
 	}
 	if useful < p.Floor || useful < current.Decision.Units {
+		return ErrCapacityConflict
+	}
+	return nil
+}
+
+func (s CapacityStore) failedExpansionSurvivorFloorTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, cleanup FailedUnwitnessedExpansionCleanup, claim FailedUnwitnessedExpansionCleanupEvent, now time.Time, usage string) error {
+	if p.GuestNotifyCanaryBinding == nil || p.GuestRetirementBinding == nil || current.RecoveryOnly || current.FloorDegraded || cleanup.Slot < 2 || cleanup.SurvivorCount != cleanup.Slot-1 || cleanup.SurvivorCount < p.Floor || claim.RecordedAt.IsZero() || (usage != "before_retirement_floor" && usage != "after_retirement_floor") {
+		return ErrCapacityConflict
+	}
+	afterPG := claim.RecordedAt
+	if usage == "after_retirement_floor" {
+		var err error
+		afterPG, err = s.failedExpansionAbsenceAfterPGTx(ctx, tx, cleanup.ID)
+		if err != nil {
+			return err
+		}
+		if !afterPG.After(claim.RecordedAt) {
+			return ErrCapacityConflict
+		}
+	}
+	useful, err := s.guestNotifyUsefulMembersTx(ctx, tx, policy, p, current, cleanup.Slot, now, usage, afterPG)
+	if err != nil {
+		return err
+	}
+	if useful != cleanup.SurvivorCount || useful < p.Floor {
 		return ErrCapacityConflict
 	}
 	return nil

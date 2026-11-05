@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "8131e23857477b176ddf4cc9dc7dc9395e56e8135e391f1e6ccc1528ce0983c1"
+      "sha256": "b7b62fd667369717e0779710b11438f2d190c6701b39e1f9eac4f201bf7a941b"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -61,6 +61,16 @@
       "evidence": "docs/service-contract/RETIREMENT_READONLY_OBSERVER_SOURCE_REVIEW.json",
       "id": "retirement_readonly_observer_source_review",
       "sha256": "5ebdecac069cd1b8354629cfb21965fe8cf0f22965a9928cd393c42198e6ef22"
+    },
+    {
+      "evidence": "docs/service-contract/AWS_ORIGINAL_READ_UNAVAILABLE_SOURCE_REVIEW.json",
+      "id": "original_aws_read_unavailable_source_review",
+      "sha256": "c082cfba8bff306a26b50d3e279afbafe5c5310d5ec9ed040aa23236de48da2b"
+    },
+    {
+      "evidence": "docs/service-contract/FAILED_UNWITNESSED_EXPANSION_CLEANUP_SOURCE_REVIEW.json",
+      "id": "failed_unwitnessed_expansion_cleanup_source_review",
+      "sha256": "62a241a9fc5381f408b4f204ebf74e96dc24df6baa2f31a5cd9bd5bbe863c817"
     }
   ],
   "coverage": "complete",
@@ -68,7 +78,7 @@
     {
       "evidence": "docs/service-contract/source/http-routes.json",
       "id": "http_mux_registrations",
-      "sha256": "1aaa2934654c3854343cad6b3c7f800d3aa105cf17ad56b1332a7d1ebb35c131"
+      "sha256": "503d3bedef9df4a19e0f1b0b1f15642aedd3cee700919b10f31c0ec54f0fa675"
     },
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
@@ -78,14 +88,14 @@
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "115651fd89b0131d8d6fadbba71394b2c2cb71d98b1e4f934be528d6e5e34986"
+      "sha256": "38e0b9ed00a6e658c06253da21cca1863da19ba76ad413ad59c32030aba440ff"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "5c6516e80b37725d17eebd1447a0ea738f91e8e951f5919fdbdb195dd8bc3f22"
+      "sha256": "9e5af6584e231d98e87954690b4f4c2dc1c0f8ec3bed56aca4ab55fbd62304af"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -109,7 +119,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "353c9a6aa06d8f74c13220c7dd014574469c98de8a7996442bf5208c4c757195"
+    "sha256": "363169b3b6d633db2f0d63b46bc52f21ab267152bb76b13c496cf5ad0096f623"
   },
   "unresolved": []
 }

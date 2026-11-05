@@ -208,6 +208,9 @@ func (s CapacityStore) AssessOriginalGuest(ctx context.Context, policy model.Man
 		if s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.PlanOriginalGuestOperation {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
+		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" {
+			return *old, "", nil
+		}
 		if old != nil && pendingCapacityPhase(old.Phase) && old.Phase != "proposed" {
 			return *old, "", nil
 		}
@@ -290,13 +293,15 @@ func (s CapacityStore) AdvanceOriginalGuest(ctx context.Context, policy model.Ma
 	if s.DB == nil || s.guestReconcile == nil || !guestReconcileLive(ctx) {
 		return model.CapacityIntent{}, ErrCapacityConflict
 	}
-	return s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+	terminalReconcile := false
+	out, err := s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
 		if s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.CompleteOriginalGuestOperation || !guestReconcileLive(ctx) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
 		if err := s.checkLease(p, policy, old, generation, fence, owner, now); err != nil {
 			return model.CapacityIntent{}, "", err
 		}
+		terminalReconcile = old.FailedExpansionTerminalReconcile != nil && s.failedExpansionTerminalReconcile != nil
 		if !capacityTransitionAllowed(old.Phase, phase) || !sameCapacityResourceIdentity(old.Assessment.Snapshot, assessment.Snapshot) || assessment.Snapshot.Units != old.Decision.Units || assessment.Snapshot.Profile != old.Decision.Profile || !capacityProfileCurrent(p, old.Decision, now) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
@@ -311,12 +316,17 @@ func (s CapacityStore) AdvanceOriginalGuest(ctx context.Context, policy model.Ma
 		next := *old
 		next.Phase, next.Assessment, next.UpdatedAt = phase, assessment, now
 		if phase == "promoted" {
+			next.FailedExpansionTerminalReconcile = nil
 			next.LeaseOwner, next.LeaseExecutorID, next.LeaseExpiresAt = "", "", nil
 			next.Decision.Clock.LastActionAt = now
 			next.Decision.Clock.UpSince, next.Decision.Clock.DownSince = time.Time{}, time.Time{}
 		}
 		return next, "original-guest-reconcile:" + s.WorkflowID.String() + ":" + phase, nil
 	})
+	if terminalReconcile && errors.Is(err, sql.ErrNoRows) {
+		return model.CapacityIntent{}, ErrCapacityConflict
+	}
+	return out, err
 }
 
 func (s CapacityStore) guestReconcilePhaseTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, old, next model.CapacityIntent, now time.Time) error {

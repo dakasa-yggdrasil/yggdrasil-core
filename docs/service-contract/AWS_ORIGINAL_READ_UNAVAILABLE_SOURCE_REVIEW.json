@@ -1,0 +1,70 @@
+{
+  "adapter_source_changed": false,
+  "authority": "Only the private original AWS observe_ec2_instance consumer enables the class. It is not selected by public input, any other provider, create, retirement, callback or generic adapter call.",
+  "classification": {
+    "HTTP": "Actual same complete bounded HTTP response/read/close and original context checks remain mandatory. SDK Envelope is duplicate-safe/closed; known optional SDK transport metadata is allowed; bare-RPC compatibility remains.",
+    "RPC": "Only exact closed nonduplicate canonical {ok:false,error:{code:execute_failed,message:original_ec2_readiness_native_read_failed}}, with no data, becomes the private static error class.",
+    "meaning": "The existing adapter class reports native-read unavailability, including AWS eventual propagation or unavailable SDK/XML result. It provides no observation or proof. It does not claim that each event is precisely InvalidInstanceID.NotFound.",
+    "public_errors": "Existing detail-free errors stay unchanged; no provider error text or response body enters the retained typed class."
+  },
+  "continuation": {
+    "failed_reads": "Return zero proof/Pending only for this class while guard/context remain live. All other RPC errors, malformed Core JSON/envelopes, mismatched parsed identity/spec/physical proof/health and cancelled contexts fail immediately.",
+    "qualification": "No unavailable reply can provide native identity, signed create witness, enrollment, useful capacity, completion or clean-cycle credit.",
+    "unchanged": "Exactly one original ensure/Create/settlement; existing accepted receipt/ID/birth/action joins; original guard/owner/lease/catalog checks and one-second read ticker; original context deadline is never replaced or extended."
+  },
+  "declared_CI": {
+    "CI_or_production_acceptance_claimed": false,
+    "budgets_workflows_and_old_criteria_unchanged": true,
+    "existing_step": "Actual original provider source contracts and default refusal",
+    "functional_local_execution": false,
+    "new_required_roots": [
+      "TestOriginalAWSReadUnavailableClosedRPC",
+      "TestOriginalAWSReadUnavailableSupplier"
+    ],
+    "prior13roots_preserved": true,
+    "tests": [
+      "controllers/message/rpc_aws_read_unavailable_test.go",
+      "controllers/message/workflows_capacity_guest_aws_read_unavailable_test.go"
+    ],
+    "workflow": ".github/workflows/capacity-guest-original-source.yml"
+  },
+  "proof_criteria_weakened": false,
+  "protocol_or_provider_binding_changed": false,
+  "references": [
+    "https://docs.aws.amazon.com/ec2/latest/devguide/eventual-consistency.html"
+  ],
+  "runtime": {
+    "controllers/message/adapter_transport.go": {
+      "bytes": 23064,
+      "sha256": "41fad42c10e89464c6abff8364440eaebad3ea56238fe21d42387768084ff88b"
+    },
+    "controllers/message/rpc_client.go": {
+      "bytes": 5602,
+      "sha256": "d1aed6be7db6ad51137c772c54fc4623ae5b8416a6130a10cdef70f42104c6dd"
+    },
+    "controllers/message/workflows_capacity_guest_production_aws.go": {
+      "bytes": 5868,
+      "sha256": "eb98e969f58530c067771315f34479eab9272972db8c3817a5bb28627d6b1732"
+    },
+    "controllers/message/workflows_capacity_guest_production_provider.go": {
+      "bytes": 20959,
+      "sha256": "1b72dc7afa675ba39f543b276cd91ab4d39c40c5ffcea6e7169f2bc6b1710279"
+    }
+  },
+  "schema_changed": false,
+  "scope": "Source-owned original AWS creation observer may await unavailable native reads on its one settled original creation, within the unchanged original provisioning deadline.",
+  "source_inventory": {
+    "bytes": 131065,
+    "changed": [
+      "controllers/message/adapter_transport.go",
+      "controllers/message/rpc_client.go",
+      "controllers/message/workflows_capacity_guest_production_aws.go",
+      "controllers/message/workflows_capacity_guest_production_provider.go"
+    ],
+    "complete_non_test_Go_sources": 802,
+    "path": "docs/service-contract/source/sources.json",
+    "sha256": "279d3c46caa9ac18a0941545c67242cd0d866a67457bd4d998caa1fb54d34f7e",
+    "unchanged": 798
+  },
+  "validation": "Static text/JSON/SHA/AST/gofmt/diff only plus existing deterministic pure Source-token inventory generator. Independent review and actual exact-Source CI remain required."
+}

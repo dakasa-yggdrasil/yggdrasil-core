@@ -147,15 +147,16 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 			len(missing), strings.Join(missing, "\n  "))
 	}
 
-	// The exact reviewed inventory has 62 ops routes, including dispatch
+	// The exact reviewed inventory has 64 ops routes, including dispatch
 	// dispositions, retirement recovery, failed-installed replacement/native OFF,
 	// and the four distinct failed-serving quarantine/read/native-OFF/complete
 	// routes, the historical retirement-forward admission/read pair and the
-	// separate recorded HTTP-maintenance disposition/read pair.
+	// separate recorded HTTP-maintenance disposition/read pair and the
+	// failed-unwitnessed-expansion cleanup admission/read pair.
 	// Count drift requires review; every route still needs the permission
 	// wrapper asserted above, independently of this complete census.
-	if routeCount != 62 {
-		t.Errorf("ops route count = %d, expected exactly 62 — investigate before merging", routeCount)
+	if routeCount != 64 {
+		t.Errorf("ops route count = %d, expected exactly 64 — investigate before merging", routeCount)
 	}
 }
 

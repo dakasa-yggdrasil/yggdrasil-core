@@ -23,29 +23,34 @@ const maxCapacityGeneration int64 = 9007199254740991
 // CapacityStore serializes each logical dimension in PostgreSQL. The process
 // gate is explicit and defaults to false in the workflow handler.
 type CapacityStore struct {
-	OriginalRunID             uuid.UUID // Private actual dispatch run, never a wire-supplied recovery selector.
-	ExecutorPowerEnabled      bool
-	ExecutorPowerOperator     string
-	ExecutorPowerObserver     executorpower.Observer
-	DB                        *sql.DB
-	ExecutionEnabled          bool
-	AdmissionOnly             bool
-	WorkflowID                uuid.UUID
-	ExecutorID                string
-	ExecutorActivityPrincipal string
-	guestOriginal             *guestOriginalProvisioningContext
-	guestRetirementOrigin     *guestOriginalProvisioningContext
-	guestNotifyOrigin         *guestOriginalProvisioningContext
-	hostOriginalClaim         *hostOriginalClaim
-	hostOriginalFactory       *hostOriginalFactoryScope
-	hostOriginalOrdinary      *hostOriginalOrdinaryFactory
-	guestReconcile            *guestReconcileSource
+	OriginalRunID                    uuid.UUID // Private actual dispatch run, never a wire-supplied recovery selector.
+	ExecutorPowerEnabled             bool
+	ExecutorPowerOperator            string
+	ExecutorPowerObserver            executorpower.Observer
+	DB                               *sql.DB
+	ExecutionEnabled                 bool
+	AdmissionOnly                    bool
+	WorkflowID                       uuid.UUID
+	ExecutorID                       string
+	ExecutorActivityPrincipal        string
+	guestOriginal                    *guestOriginalProvisioningContext
+	guestRetirementOrigin            *guestOriginalProvisioningContext
+	guestNotifyOrigin                *guestOriginalProvisioningContext
+	hostOriginalClaim                *hostOriginalClaim
+	hostOriginalFactory              *hostOriginalFactoryScope
+	hostOriginalOrdinary             *hostOriginalOrdinaryFactory
+	guestReconcile                   *guestReconcileSource
+	failedExpansionOwner             *failedExpansionOwner
+	failedExpansionTerminalReconcile *model.CapacityFailedExpansionTerminalReconcile
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation
 // is never overwritten by a concurrent assessment or a policy revision.
 func (s CapacityStore) Assess(ctx context.Context, policy model.Manifest, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
 	intent, err := s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" {
+			return *old, "", nil
+		}
 		if old != nil && pendingCapacityPhase(old.Phase) && old.Phase != "proposed" {
 			if old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum {
 				return model.CapacityIntent{}, "", fmt.Errorf("%w: pending generation belongs to another policy revision", ErrCapacityConflict)
@@ -161,6 +166,9 @@ func (s CapacityStore) Renew(ctx context.Context, policy model.Manifest, generat
 		if err := s.checkLease(p, policy, old, generation, fence, owner, now); err != nil {
 			return model.CapacityIntent{}, "", err
 		}
+		if old.FailedUnwitnessedExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil {
+			return model.CapacityIntent{}, "", ErrCapacityConflict
+		}
 		next := *old
 		next.Decision.ExecutionPermitted = capacityProfileCurrent(p, old.Decision, now)
 		expires := now.Add(time.Duration(p.LeaseSeconds) * time.Second)
@@ -209,8 +217,14 @@ func (s CapacityStore) Advance(ctx context.Context, policy model.Manifest, gener
 }
 
 func (s CapacityStore) checkLease(p model.CapacityPolicySpec, policy model.Manifest, old *model.CapacityIntent, generation, fence int64, owner string, now time.Time) error {
+	if old != nil && old.FailedExpansionTerminalReconcile != nil && (s.failedExpansionTerminalReconcile == nil || *old.FailedExpansionTerminalReconcile != *s.failedExpansionTerminalReconcile || old.FailedExpansionTerminalReconcile.RunID != s.OriginalRunID.String() || old.FailedExpansionTerminalReconcile.ExecutorID != s.ExecutorID) {
+		return ErrCapacityConflict
+	}
 	if !s.ExecutionEnabled || !p.ExecutionEnabled {
 		return ErrCapacityDisabled
+	}
+	if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" && s.failedExpansionOwner == nil {
+		return ErrCapacityConflict
 	}
 	if old == nil || old.Generation != generation || old.FencingToken != fence || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.RecoveryOnly || !pendingCapacityPhase(old.Phase) {
 		return ErrCapacityConflict
@@ -241,6 +255,9 @@ func (s CapacityStore) Observe(ctx context.Context, policy model.Manifest) (mode
 // elapsed lease time. The exact original revision may now be inactive.
 func (s CapacityStore) Recover(ctx context.Context, policy model.Manifest, generation int64, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
 	return s.recoveryTransaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+		if old != nil && (old.FailedUnwitnessedExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil) {
+			return model.CapacityIntent{}, "", ErrCapacityConflict
+		}
 		if !validCapacityExecutor(s.ExecutorID) || old == nil || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Generation != generation || old.Phase == "proposed" || !pendingCapacityPhase(old.Phase) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
