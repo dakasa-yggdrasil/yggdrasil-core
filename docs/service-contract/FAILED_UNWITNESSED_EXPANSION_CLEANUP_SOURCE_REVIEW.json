@@ -29,7 +29,7 @@
     ],
     "parent_terminal_state": "cleanup_closed",
     "path": "db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql",
-    "sha256": "0dc53b56f1a872c05da85be9c65c2ceeb3c8e8a40a7b8f08a62ec96289481b39"
+    "sha256": "2850db98eddbfd629b98df879eb61266036d70210118e8e20289782d2b37a78c"
   },
   "new_public_request": "Exactly grant_id and job_id; authenticated collaborator with actual administrative grant, including warn mode.",
   "no_qualification_from_cleanup": [
