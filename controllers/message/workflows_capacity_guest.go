@@ -171,6 +171,12 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	}
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executor, OriginalRunID: capacityDispatchOriginalRun(ctx)}
+	if result.Operation == capacity.RetireOriginalGuestOperation || result.Operation == "capacity.finish_original_guest_retirement" {
+		store, _, _, err = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource()).BindFailedExpansionCleanup(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner)
+		if err != nil {
+			return fail("failed-unwitnessed-expansion-cleanup-epoch")
+		}
+	}
 	if maintenance {
 		store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
 		parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, err = store.GuestNotifyMaintenanceEpoch(ctx, policy, parsed.PreregistrationID)
@@ -204,6 +210,22 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	key, err := sourceGuestSigningKey(ctx, db, p.GuestRetirementBinding.IntentSigningKeyRef)
 	if err != nil {
 		return fail("original-guest-step-16")
+	}
+	if result.Operation == capacity.RetireOriginalGuestOperation || result.Operation == "capacity.finish_original_guest_retirement" {
+		cleanup, handled, cleanupErr := executeFailedExpansionCleanupStep(ctx, db, store, policy, p, step, parsed, key, result.Operation == "capacity.finish_original_guest_retirement")
+		if cleanupErr != nil {
+			return fail("failed-unwitnessed-expansion-cleanup-held")
+		}
+		if handled {
+			raw, e := json.Marshal(cleanup)
+			if e != nil || json.Unmarshal(raw, &result.Metadata) != nil {
+				return fail("failed-unwitnessed-expansion-cleanup-output")
+			}
+			result.Status = "succeeded"
+			result.Error = ""
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
 	}
 	var output any
 	switch result.Operation {

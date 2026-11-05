@@ -139,6 +139,58 @@ jobs:
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY
+      - name: Qualify separate schema94 unwitnessed expansion cleanup
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          record() {
+            local name="$1"; shift
+            set +e
+            "$@" > "$FAILED_SERVING_LOGS/$name.stdout" 2> "$FAILED_SERVING_LOGS/$name.stderr"
+            local rc=$?
+            set -e
+            printf '%s\n' "$rc" > "$FAILED_SERVING_LOGS/$name.exit"
+            return "$rc"
+          }
+          failed=0
+          record cleanup94-repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=4m -json ./repository -run '^TestFailedUnwitnessedExpansionCleanupPostgres(AdmissionOnce|ImmutableOriginals|OwnerAndWriteGates|WholeLifecycle)$' || failed=1
+          record cleanup94-http go test -buildvcs=true -p=1 -race -count=1 -timeout=3m -json ./controllers/httpapi -run '^TestFailedUnwitnessedExpansionCleanup(RequiresAuthenticatedOperator|RejectsCallerEvidenceBeforeStorage|RequiresAdministrativeGrant|SummaryPreservesPrivateEvidenceAndFailure)$' || failed=1
+          [[ "$failed" == 0 ]]
+          python3 - <<'PY_CLEANUP94'
+          import collections,json,os,pathlib,subprocess
+          p=pathlib.Path(os.environ['FAILED_SERVING_LOGS']);base='github.com/dakasa-yggdrasil/yggdrasil-core/'
+          expected={
+            'cleanup94-repository':('repository',[
+              'TestFailedUnwitnessedExpansionCleanupPostgresAdmissionOnce',
+              'TestFailedUnwitnessedExpansionCleanupPostgresImmutableOriginals',
+              'TestFailedUnwitnessedExpansionCleanupPostgresOwnerAndWriteGates',
+              'TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle']),
+            'cleanup94-http':('controllers/httpapi',[
+              'TestFailedUnwitnessedExpansionCleanupRequiresAuthenticatedOperator',
+              'TestFailedUnwitnessedExpansionCleanupRejectsCallerEvidenceBeforeStorage',
+              'TestFailedUnwitnessedExpansionCleanupRequiresAdministrativeGrant',
+              'TestFailedUnwitnessedExpansionCleanupSummaryPreservesPrivateEvidenceAndFailure'])}
+          summary={}
+          for name,(package,roots) in expected.items():
+              assert (p/(name+'.exit')).read_text().strip()=='0',name+' actual exit'
+              rows=[json.loads(line) for line in (p/(name+'.stdout')).read_text().splitlines() if line.strip()]
+              assert rows and all(r.get('Package')==base+package for r in rows),name+' package'
+              assert not any(r.get('Action') in ('fail','skip') for r in rows),name+' no failed/skipped nodes'
+              for action in ('run','pass'):
+                  actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r and '/' not in r['Test'])
+                  assert actual==collections.Counter(roots),(name,action,actual)
+              assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1
+              if name=='cleanup94-repository':
+                  for child in ('pending','complete_before_canary'):
+                      node='TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle/'+child
+                      assert sum(r.get('Action')=='pass' and r.get('Test')==node for r in rows)==1,node+' mandatory real read-only owner continuation'
+              summary[name]={'roots':roots,'passed':len(roots),'skipped':0}
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
+          assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
+          value={'schema':'failed_unwitnessed_expansion_cleanup_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':94,'race':True,'count':1,'total_roots':8,'summary':summary,'historical_schema93_census_unchanged':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          (p/'CLEANUP94-CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(value,sort_keys=True))
+          PY_CLEANUP94
       - name: Retain original outcomes and exact executed census
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -203,7 +255,7 @@ jobs:
           for name,present in [('default',False),('fixture',True),('native',False),('both',False)]:
               row=json.loads((p/f'build-{name}.json').read_text())
               assert row['ImportPath']=='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
-              for target in ('failed_serving_recoveryfixture.go','guest_retirement_forward_recoveryfixture.go'):
+              for target in ('failed_serving_recoveryfixture.go','guest_retirement_forward_recoveryfixture.go','failed_expansion_cleanup_recoveryfixture.go'):
                   assert (target in row.get('GoFiles',[])) is present,(name,target,'fixture inclusion drift')
                   assert (target in row.get('IgnoredGoFiles',[])) is (not present)
           print('BOTH_RECOVERY_FIXTURES_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')

@@ -1496,6 +1496,121 @@
           }
         }
       }
+    },
+    "/api/v1/ops/capacity/failed-unwitnessed-expansion-cleanups": {
+      "post": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Admit a failed unwitnessed expansion cleanup",
+        "description": "God mode and existing workflow-management permission are required. Closed original grant_id/job_id only; exact GET reconciles uncertain POST. The immutable accepted CREATE receipt remains intact; a separately claimed normal DESTROY may be sent once after real survivor and native checks.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailedUnwitnessedExpansionCleanupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable requested cleanup, with no provider operation yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedUnwitnessedExpansionCleanupSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not the exact closed original-retirement/current-frame request."
+          },
+          "401": {
+            "description": "An authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and current administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "409": {
+            "description": "Original lineage, failed run, expired lease/process barrier, current frame or outstanding authority conflicts. No Guest command or provider write was sent."
+          }
+        },
+        "operationId": "admitFailedUnwitnessedExpansionCleanup"
+      }
+    },
+    "/api/v1/ops/capacity/failed-unwitnessed-expansion-cleanups/{grantId}": {
+      "get": {
+        "tags": [
+          "capacity-recovery"
+        ],
+        "summary": "Read the original failed expansion cleanup by CREATE grant",
+        "description": "Read the immutable failed unwitnessed expansion admission and latest append-only stage by its original CREATE grant. Private provider bodies and read wrappers are withheld; no new call or send authority is created.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "HumanSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original admission and latest stage, without private evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailedUnwitnessedExpansionCleanupSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not the exact closed original-retirement/current-frame request."
+          },
+          "401": {
+            "description": "An authenticated human collaborator is required."
+          },
+          "403": {
+            "description": "Manage-workflows and current administrative recovery (god-mode) permission are required; POST also requires CSRF."
+          },
+          "404": {
+            "description": "Stored original lineage is unavailable or invalid."
+          }
+        },
+        "operationId": "readFailedUnwitnessedExpansionCleanup"
+      }
     }
   },
   "components": {
@@ -3540,6 +3655,125 @@
             "format": "date-time"
           }
         }
+      },
+      "FailedUnwitnessedExpansionCleanupRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "job_id"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "description": "Original settled CREATE grant and owning failed acknowledged job only. Core derives every target, epoch and guard; the request itself sends no provider operation."
+      },
+      "FailedUnwitnessedExpansionCleanupSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "grant_id",
+          "child_grant_id",
+          "job_id",
+          "run_id",
+          "preregistration_id",
+          "schema",
+          "stage",
+          "event_count",
+          "slot",
+          "resource_id",
+          "resource_created_at",
+          "original_auxiliary_inventory_complete",
+          "original_SDK_return_sha256",
+          "original_guest_success",
+          "clean_cycle_credit",
+          "serving_or_business_or_savings_authority"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "child_grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "preregistration_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "schema": {
+            "type": "string",
+            "enum": [
+              "failed_unwitnessed_expansion_cleanup_v1"
+            ]
+          },
+          "stage": {
+            "type": "string"
+          },
+          "event_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 8
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "original_auxiliary_inventory_complete": {
+            "type": "boolean"
+          },
+          "original_SDK_return_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "original_guest_success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "clean_cycle_credit": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "serving_or_business_or_savings_authority": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        },
+        "description": "Public append-only cleanup summary. No SDK bodies, credentials, nonce, caller evidence or private native read payload is returned. cleanup_closed means physical cleanup, never successful CREATE or enrolled Guest credit."
       }
     },
     "responses": {

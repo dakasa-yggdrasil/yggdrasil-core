@@ -208,6 +208,9 @@ func (s CapacityStore) AssessOriginalGuest(ctx context.Context, policy model.Man
 		if s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.PlanOriginalGuestOperation {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
+		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" && old.PolicyID == policy.ID {
+			return *old, "", nil
+		}
 		if old != nil && pendingCapacityPhase(old.Phase) && old.Phase != "proposed" {
 			return *old, "", nil
 		}

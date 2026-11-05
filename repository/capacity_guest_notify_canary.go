@@ -118,6 +118,13 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		if err != nil {
 			return err
 		}
+		cleanup, _, cleanupActive, err := s.failedExpansionActiveClaimTx(ctx, tx, policy, current, now)
+		if err != nil {
+			return err
+		}
+		if cleanupActive && (maintenance || current.FloorDegraded || cleanup.Slot < 2 || cleanup.SurvivorCount != cleanup.Slot-1 || cleanup.SurvivorCount < p.Floor || stored.pre.Slot >= cleanup.Slot || preID == cleanup.PreregistrationID || usage != "before_retirement_floor" && usage != "after_retirement_floor") {
+			return ErrCapacityConflict
+		}
 		if retirementForwardActive(&current) {
 			m := current.RetirementForward
 			r, _, e := loadRetirementForwardTx(ctx, tx, m.ID, "admitted")

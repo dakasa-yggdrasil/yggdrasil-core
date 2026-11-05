@@ -40,17 +40,26 @@ type CapacityStore struct {
 	hostOriginalFactory       *hostOriginalFactoryScope
 	hostOriginalOrdinary      *hostOriginalOrdinaryFactory
 	guestReconcile            *guestReconcileSource
+	failedExpansionOwner      *failedExpansionOwner
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation
 // is never overwritten by a concurrent assessment or a policy revision.
 func (s CapacityStore) Assess(ctx context.Context, policy model.Manifest, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
 	intent, err := s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" && (old.Phase != "hold" || old.PolicyID == policy.ID) {
+			return *old, "", nil
+		}
 		if old != nil && pendingCapacityPhase(old.Phase) && old.Phase != "proposed" {
 			if old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum {
 				return model.CapacityIntent{}, "", fmt.Errorf("%w: pending generation belongs to another policy revision", ErrCapacityConflict)
 			}
 			return *old, "", nil
+		}
+		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" && old.PolicyID != policy.ID {
+			if err := guestPolicyContinuityTx(ctx, s.DB, policy, p, old.PolicyID.String(), old.PolicyChecksum); err != nil {
+				return model.CapacityIntent{}, "", err
+			}
 		}
 		clock := model.CapacityClockState{}
 		generation, fence := int64(0), int64(0)
@@ -161,6 +170,9 @@ func (s CapacityStore) Renew(ctx context.Context, policy model.Manifest, generat
 		if err := s.checkLease(p, policy, old, generation, fence, owner, now); err != nil {
 			return model.CapacityIntent{}, "", err
 		}
+		if old.FailedUnwitnessedExpansionCleanupID != "" {
+			return model.CapacityIntent{}, "", ErrCapacityConflict
+		}
 		next := *old
 		next.Decision.ExecutionPermitted = capacityProfileCurrent(p, old.Decision, now)
 		expires := now.Add(time.Duration(p.LeaseSeconds) * time.Second)
@@ -212,6 +224,9 @@ func (s CapacityStore) checkLease(p model.CapacityPolicySpec, policy model.Manif
 	if !s.ExecutionEnabled || !p.ExecutionEnabled {
 		return ErrCapacityDisabled
 	}
+	if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" && s.failedExpansionOwner == nil {
+		return ErrCapacityConflict
+	}
 	if old == nil || old.Generation != generation || old.FencingToken != fence || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.RecoveryOnly || !pendingCapacityPhase(old.Phase) {
 		return ErrCapacityConflict
 	}
@@ -241,6 +256,9 @@ func (s CapacityStore) Observe(ctx context.Context, policy model.Manifest) (mode
 // elapsed lease time. The exact original revision may now be inactive.
 func (s CapacityStore) Recover(ctx context.Context, policy model.Manifest, generation int64, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
 	return s.recoveryTransaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" {
+			return model.CapacityIntent{}, "", ErrCapacityConflict
+		}
 		if !validCapacityExecutor(s.ExecutorID) || old == nil || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Generation != generation || old.Phase == "proposed" || !pendingCapacityPhase(old.Phase) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}

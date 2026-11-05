@@ -72,7 +72,13 @@ record pg-identity docker exec "$cid" psql -XAt -v ON_ERROR_STOP=1 -h "$PGHOST" 
   -c "SELECT json_build_object('database',current_database(),'unix_socket',inet_server_addr() IS NULL,'major',current_setting('server_version_num')::int/10000,'listen_addresses',current_setting('listen_addresses'));"
 record identity-check python3 -I -B .github/scripts/verify_http_maintenance_disposition_ci.py identity
 record derived-sql python3 -I -B .github/scripts/render_http_maintenance_pre91.py --check
-record migrations go run ./scripts/goose up
+# This exact historical gate retains schema93 as later migrations are added.
+cat > "$pg_root/migrate93.go" <<'GO_MIGRATE93'
+package main
+import("context";"database/sql";"os";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
+func main(){db,e:=sql.Open("postgres",os.Getenv("ORIGINAL_CREATE_DISPOSITION_PG_DSN"));if e!=nil{panic(e)};defer db.Close();if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpToContext(context.Background(),db,"db/migrations",93);e!=nil{panic(e)}}
+GO_MIGRATE93
+record migrations go run "$pg_root/migrate93.go"
 record database-before docker exec "$cid" psql -XAt -v ON_ERROR_STOP=1 -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" \
   -c "SELECT json_build_object('schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'history',(SELECT array_to_json(array_agg(row_to_json(v) ORDER BY v.id)) FROM public.goose_db_version v));"
 record source-before python3 -I -B .github/scripts/verify_http_maintenance_disposition_ci.py prepare

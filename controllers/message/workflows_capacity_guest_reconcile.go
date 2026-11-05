@@ -303,6 +303,29 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			return result
 		}
 	}
+	if step.Use.Operation == capacity.PlanOriginalGuestOperation || step.Use.Operation == capacity.CompleteOriginalGuestOperation && parsed.Mode == "retire" {
+		var cleanup any
+		var handled bool
+		var cleanupErr error
+		if step.Use.Operation == capacity.PlanOriginalGuestOperation {
+			cleanup, handled, cleanupErr = planFailedExpansionCleanup(ctx, store, policy, wf, step)
+		} else {
+			cleanup, handled, cleanupErr = completeFailedExpansionCleanup(ctx, store, policy, wf, p, step, parsed)
+		}
+		if cleanupErr != nil {
+			return fail(cleanupErr)
+		}
+		if handled {
+			raw, e := json.Marshal(cleanup)
+			if e != nil || json.Unmarshal(raw, &result.Metadata) != nil {
+				return fail(errOriginalGuestStep)
+			}
+			result.Status = "succeeded"
+			result.Error = ""
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+	}
 	// An authenticated historical forward claim must be selected before the
 	// powered-off target is asked to satisfy aggregate useful coverage.
 	if step.Use.Operation == capacity.PlanOriginalGuestOperation {

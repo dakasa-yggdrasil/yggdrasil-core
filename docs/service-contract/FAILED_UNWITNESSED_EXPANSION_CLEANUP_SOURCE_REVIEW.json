@@ -1,0 +1,140 @@
+{
+  "CI_workflow": "failed-serving-guest.yml separate schema94 step, four repository roots and four HTTP roots; historical16 and forward26 remain unchanged",
+  "actual_CI_acceptance": false,
+  "authority": [
+    "Immutable94 admission and append-only events join the original SDK, failed ACK and full survivor roster.",
+    "Only a genuine scheduler claim installs the private Store cleanup selector.",
+    "Parent remains SETTLED and reserves ordinary open slot until actual closure; only exact FK-linked ordinary DESTROY child is exempt.",
+    "One possible-send, one redemption/native send; accepted child settlement seals the actual attached auxiliary inventory.",
+    "Qualified Pending or complete absence may resume GET-only after real failed owner ACK and natural expiry, requiring new authenticated read and new floor.",
+    "Full VM and all sealed paid-auxiliary absence plus fresh survivor native observations/signed canaries precede cleanup_closed and truthful unleased HOLD.",
+    "Same failed policy remains latched; a later compatible policy resumes normal assessment without clearing immutable history."
+  ],
+  "historical_source_fixtures": "Explicit89/91/92/93 fixtures retain exact old censuses; new94 fixture and eight required roots are separate.",
+  "local_functional_execution": false,
+  "migration94": {
+    "affected_relations": [
+      "capacity_failed_unwitnessed_expansion_cleanups",
+      "capacity_failed_unwitnessed_expansion_cleanup_events",
+      "capacity_mutation_grants",
+      "capacity_intents"
+    ],
+    "new_functions": [
+      "guard_failed_unwitnessed_expansion_cleanup",
+      "failed_expansion_absence_read_valid",
+      "guard_failed_unwitnessed_expansion_cleanup_event",
+      "guard_failed_unwitnessed_expansion_cleanup_grant",
+      "guard_failed_unwitnessed_expansion_cleanup_intent",
+      "immutable_failed_unwitnessed_expansion_cleanup"
+    ],
+    "parent_terminal_state": "cleanup_closed",
+    "path": "db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql",
+    "sha256": "0cbf8fcd3e76c6cf22dffd42ac15c1292e688ae8899a97676a1dd06411bdb560"
+  },
+  "new_public_request": "Exactly grant_id and job_id; authenticated collaborator with actual administrative grant, including warn mode.",
+  "no_qualification_from_cleanup": [
+    "No target Guest command/witness/enrollment/install",
+    "No CREATE confirmation or legacy compensation",
+    "No clean-cycle, Guest, business or savings credit",
+    "Unknown original auxiliary inventory stays unknown"
+  ],
+  "production_adoption": false,
+  "runtime": {
+    "controllers/httpapi/ops_failed_unwitnessed_expansion_cleanup.go": {
+      "bytes": 2874,
+      "sha256": "dfa946f951c013ca6eebd35fd6c82108533f45fd6d204d59a358fe22bcb0207d"
+    },
+    "controllers/httpapi/server.go": {
+      "bytes": 189148,
+      "sha256": "fd05ce825932904d938b6ebce8d1a272f638ead0f94ae2366ae12d9e876ff2e3"
+    },
+    "controllers/message/workflows_capacity_guest.go": {
+      "bytes": 26351,
+      "sha256": "9650947cae9c873d0979ee1b5ba8aedd3d4f47d304cb0870fd14cd3bde02b650"
+    },
+    "controllers/message/workflows_capacity_guest_reconcile.go": {
+      "bytes": 25742,
+      "sha256": "2373a626973fa22d23eeb5421ccc148f8b7ee6b0d45bfed3fec0e84e89691b48"
+    },
+    "controllers/message/workflows_failed_expansion_cleanup.go": {
+      "bytes": 11448,
+      "sha256": "56f8cd6b54fea340a5500dc69726fa7ef1fe61d388a8b5ee072bc7bf4ce6505c"
+    },
+    "controllers/message/workflows_failed_expansion_cleanup_nativequalification.go": {
+      "bytes": 884,
+      "sha256": "02a097646ff404df6f35532a5590206c63843cfd30892b316f1418f7a1d101fa"
+    },
+    "model/capacity.go": {
+      "bytes": 33394,
+      "sha256": "ddda33190ec5071d5e749ef9782b0c9e4f4492430b625a75beb9de572e1c06f7"
+    },
+    "repository/capacity.go": {
+      "bytes": 34851,
+      "sha256": "1f9b3ae01c5dc13ed12c5d8e9b16fe14c43561a047d4d2ef8c14115a85ebb0bb"
+    },
+    "repository/capacity_guest_notify_canary.go": {
+      "bytes": 20272,
+      "sha256": "3c8aaf19c3385b55229dcfe6742b25daacac3bc3650fd3906c37ef21728c3a32"
+    },
+    "repository/capacity_guest_notify_floor_members.go": {
+      "bytes": 3792,
+      "sha256": "a9edcb59e6579bd5f82be4059cce5d0e763dd8717515e827dd9ce94e6161f905"
+    },
+    "repository/capacity_guest_notify_phase.go": {
+      "bytes": 6093,
+      "sha256": "fa44628f51f778cb52c7850c3cc1db32d14a084a4b13ea86e296b7b056fd4c03"
+    },
+    "repository/capacity_guest_reconcile.go": {
+      "bytes": 18258,
+      "sha256": "2c84546839e452baed237431828531b5a1248e280f92abef322ed4f0d6530ae6"
+    },
+    "repository/capacity_mutations.go": {
+      "bytes": 49036,
+      "sha256": "5fca5255e07976819669f8b32546c21044d8eed2591bb6acaa89fbe890927554"
+    },
+    "repository/failed_expansion_cleanup_recoveryfixture.go": {
+      "bytes": 12824,
+      "sha256": "c6fc866eb2bdf1daf3d3bfbce0a16c457af039fe87fa3b9e65d3b54676bd2693"
+    },
+    "repository/failed_expansion_native.go": {
+      "bytes": 25698,
+      "sha256": "e37aa5f7f783a01b9351a091eb6b87f07d551551b981f26bd447ce316be878d7"
+    },
+    "repository/failed_expansion_owner.go": {
+      "bytes": 24637,
+      "sha256": "f2adc8cffe058c26def7b82d7f0b0a325d7cef6eb2bd405edc558373850d0f31"
+    },
+    "repository/failed_unwitnessed_expansion_cleanup.go": {
+      "bytes": 22005,
+      "sha256": "c0991b6a7862fef6a8fd7a84a099253b441bdc368e6392f8320c8a560e8eb708"
+    }
+  },
+  "schema": "failed_unwitnessed_expansion_cleanup_source_review_v1",
+  "scope": "Explicit administrative cleanup of a source-pinned accepted AWS tail expansion with failed owning ACK, expired original context and no Guest witness/enrollment/installation.",
+  "source_census": {
+    "added_sources": [
+      "controllers/httpapi/ops_failed_unwitnessed_expansion_cleanup.go",
+      "controllers/message/workflows_failed_expansion_cleanup.go",
+      "controllers/message/workflows_failed_expansion_cleanup_nativequalification.go",
+      "repository/failed_expansion_cleanup_recoveryfixture.go",
+      "repository/failed_expansion_native.go",
+      "repository/failed_expansion_owner.go",
+      "repository/failed_unwitnessed_expansion_cleanup.go"
+    ],
+    "bytes": 118429,
+    "empty_build_constraint": "Existing owning Go decoder empty string default; nonempty constraints literal",
+    "existing_131072_limit_unchanged": true,
+    "path": "docs/service-contract/source/sources.json",
+    "records": 809,
+    "schema": "core_source_interface_census_v1",
+    "sha256": "9afb10c7370a79b4308578c535a7f9364651ef6eca1b187b2023f6029b4460dc"
+  },
+  "unchanged_protocols": [
+    "original-create-dispositions accounting-only boundary",
+    "historical73/82/enrolled/installed/serving recovery",
+    "canonical c34 ordinary terminate wire with empty compensation_of",
+    "H7 opaque authenticated read-only return",
+    "original CREATE SDK and settlement bytes",
+    "original timers and finite read/write deadlines"
+  ]
+}

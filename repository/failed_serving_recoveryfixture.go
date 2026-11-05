@@ -59,8 +59,8 @@ func failedServingWire(t *testing.T, value any) []byte {
 
 func failedServingDB(t *testing.T) *sql.DB { t.Helper(); return failedServingDBAtSchema(t, 93) }
 
-// Only the historical index89 proof uses89; operational/new recovery fixtures
-// always use current93. No caller/env can select an arbitrary old schema.
+// Only the historical index89 proof uses89; the closed recovery fixtures stay
+// on schema93. No caller/env can select an arbitrary old schema.
 func failedServingDBAtSchema(t *testing.T, target int64) *sql.DB {
 	t.Helper()
 	if target != 89 && target != 93 {
@@ -120,7 +120,7 @@ func failedServingDBAtSchema(t *testing.T, target int64) *sql.DB {
 	if target == 89 {
 		err = goose.UpTo(db, migrations, 89)
 	} else {
-		err = goose.Up(db, migrations)
+		err = goose.UpToContext(context.Background(), db, migrations, 93)
 	}
 	if err != nil {
 		t.Fatal("production migrations", err)

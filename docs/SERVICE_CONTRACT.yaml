@@ -66,6 +66,11 @@
       "evidence": "docs/service-contract/AWS_ORIGINAL_READ_UNAVAILABLE_SOURCE_REVIEW.json",
       "id": "original_aws_read_unavailable_source_review",
       "sha256": "c082cfba8bff306a26b50d3e279afbafe5c5310d5ec9ed040aa23236de48da2b"
+    },
+    {
+      "evidence": "docs/service-contract/FAILED_UNWITNESSED_EXPANSION_CLEANUP_SOURCE_REVIEW.json",
+      "id": "failed_unwitnessed_expansion_cleanup_source_review",
+      "sha256": "c779ed3341f909b16a9ca8b2790954a9ab0772d14b8bac9ca015f83b5c9c1aaf"
     }
   ],
   "coverage": "complete",
@@ -73,7 +78,7 @@
     {
       "evidence": "docs/service-contract/source/http-routes.json",
       "id": "http_mux_registrations",
-      "sha256": "1aaa2934654c3854343cad6b3c7f800d3aa105cf17ad56b1332a7d1ebb35c131"
+      "sha256": "503d3bedef9df4a19e0f1b0b1f15642aedd3cee700919b10f31c0ec54f0fa675"
     },
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
@@ -83,14 +88,14 @@
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "115651fd89b0131d8d6fadbba71394b2c2cb71d98b1e4f934be528d6e5e34986"
+      "sha256": "38e0b9ed00a6e658c06253da21cca1863da19ba76ad413ad59c32030aba440ff"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "5c6516e80b37725d17eebd1447a0ea738f91e8e951f5919fdbdb195dd8bc3f22"
+      "sha256": "9e5af6584e231d98e87954690b4f4c2dc1c0f8ec3bed56aca4ab55fbd62304af"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -114,7 +119,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "3a0457236525075e127c44ff0ca58df345f58d8a11890eb1683437cf916bd0fb"
+    "sha256": "9afb10c7370a79b4308578c535a7f9364651ef6eca1b187b2023f6029b4460dc"
   },
   "unresolved": []
 }

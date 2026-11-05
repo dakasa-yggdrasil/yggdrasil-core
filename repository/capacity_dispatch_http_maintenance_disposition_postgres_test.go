@@ -73,7 +73,7 @@ func httpMaintenanceDisposableDBAtSchema(t *testing.T, parent *sql.DB, target in
 		// Keep the original old-R4-on91 proof on an actual historical91 DB.
 		err = goose.UpToContext(ctx, db, "../db/migrations", target)
 	} else {
-		err = goose.UpContext(ctx, db, "../db/migrations")
+		err = goose.UpToContext(ctx, db, "../db/migrations", 93)
 	}
 	if err != nil {
 		t.Fatal("actual HTTP fixture migrations", target, err)
