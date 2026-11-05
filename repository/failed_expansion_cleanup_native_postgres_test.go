@@ -360,11 +360,10 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 			}
 			// A genuinely later compatible policy is a normal new decision, not a reset
 			// or replay of this consumed admission. Its Source planner must regain control.
-			newer := f.Policy
-			newer.ID = uuid.New()
-			newer.Version++
-			newer.Checksum = capacity.BusinessCreationSHA256([]byte("DECLARED-new-compatible-policy"))
-			f.private.exec(t, `INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec,active) VALUES($1,'v1','capacity_policy',$2,$3,$4,$5,$6::jsonb,true)`, newer.ID, newer.Metadata.Namespace, newer.Metadata.Name, newer.Version, newer.Checksum, string(newer.Spec))
+			newer, err := CreateManifestVersion(ctx, f.DB, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: f.Policy.Metadata.Namespace, Name: f.Policy.Metadata.Name}, Spec: f.Policy.Spec}, capacity.BusinessCreationSHA256([]byte("DECLARED-new-compatible-policy")))
+			if err != nil || newer.ID == f.Policy.ID || newer.Version != f.Policy.Version+1 || !newer.Metadata.Active {
+				t.Fatal("atomic new compatible-policy activation", newer, err)
+			}
 			if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, newer); err != nil || selected {
 				t.Fatal("new compatible policy stuck behind old consumed cleanup", err)
 			}
