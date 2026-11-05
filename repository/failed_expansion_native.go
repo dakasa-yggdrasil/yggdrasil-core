@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"time"
 
@@ -494,6 +495,9 @@ func (s CapacityStore) CompleteFailedExpansionCleanup(ctx context.Context, polic
 			return ErrCapacityConflict
 		}
 		if e = s.guestNotifyRetirementFloorTx(ctx, tx, policy, p, current, a.Slot, now, "after_retirement_floor", ""); e != nil {
+			if errors.Is(e, sql.ErrNoRows) {
+				return ErrCapacityConflict
+			}
 			return e
 		}
 		child, e := failedExpansionChildTx(ctx, tx, a)

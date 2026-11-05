@@ -271,8 +271,13 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 			}
 			returned := time.Now().UTC()
 			response := model.RunWorkflowResponse{Workflow: model.ManifestReference{ID: f.Workflow.ID, Kind: "workflow", Namespace: f.Workflow.Metadata.Namespace, Name: f.Workflow.Metadata.Name, Version: f.Workflow.Version}, Status: "failed", StartedAt: *job.StartedAt, FinishedAt: returned}
-			if err = FinishCapacityDispatch(ctx, f.DB, job, response, returned, errors.New("DECLARED-only original read ended Pending")); err != nil {
-				t.Fatal("real failed owner ACK", err)
+			originalReadFailure := errors.New("DECLARED-only original read ended Pending")
+			if err = FinishCapacityDispatch(ctx, f.DB, job, response, returned, originalReadFailure); !errors.Is(err, originalReadFailure) {
+				t.Fatal("original failed read must remain failed after ACK", err)
+			}
+			var failedAcknowledged bool
+			if err = f.DB.QueryRow(`SELECT j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at IS NOT NULL AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.finished_at=j.returned_at FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.id=$1 AND j.run_id=$2`, owningJobID, f.store.OriginalRunID).Scan(&failedAcknowledged); err != nil || !failedAcknowledged {
+				t.Fatal("real failed owner ACK required before read-only continuation", failedAcknowledged, err)
 			}
 			if _, _, _, _, err = f.PlanStore().TryClaimFailedExpansionCleanup(ctx, f.Policy); !errors.Is(err, ErrCapacityLease) {
 				t.Fatal("new owner reminted before natural expiry", err)
@@ -352,7 +357,113 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 			if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, newer); err != nil || selected {
 				t.Fatal("new compatible policy stuck behind old consumed cleanup", err)
 			}
+			cleanupTerminalNewPolicyReconcile(t, ctx, f, newer, terminal, a, ledger)
 		})
 	}
 
+}
+
+// This extension keeps the same real PG root and declared transport. It proves
+// an old terminal cleanup authorizes a separate compatible-policy membership
+// reconciliation, never another provider grant or replay of the failed create.
+func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *FailedExpansionCleanupRecoveryFixture, newer model.Manifest, terminal model.CapacityIntent, a FailedUnwitnessedExpansionCleanup, ledger [][]byte) {
+	t.Helper()
+	var grantWire, sdkWire []byte
+	if err := f.DB.QueryRowContext(ctx, `SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY id),'[]'::jsonb)::text FROM public.capacity_mutation_grants g`).Scan(&grantWire); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.DB.QueryRowContext(ctx, `SELECT(grant_record#>'{settlement,original_provider_create_return}')::text FROM public.capacity_mutation_grants WHERE id=$1`, a.GrantID).Scan(&sdkWire); err != nil {
+		t.Fatal(err)
+	}
+	// The old workflow has actually returned before its later scheduler may
+	// acquire an independent current run. Finish never rewrites the old SDK.
+	var jobID uuid.UUID
+	if err := f.DB.QueryRowContext(ctx, `SELECT id FROM public.capacity_dispatch_jobs WHERE run_id=$1`, f.store.OriginalRunID).Scan(&jobID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := f.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := readCapacityDispatchJob(ctx, tx, jobID, false)
+	_ = tx.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
+	returned := time.Now().UTC()
+	response := model.RunWorkflowResponse{Workflow: model.ManifestReference{ID: f.Workflow.ID, Kind: "workflow", Namespace: f.Workflow.Metadata.Namespace, Name: f.Workflow.Metadata.Name, Version: f.Workflow.Version}, Status: "succeeded", StartedAt: *job.StartedAt, FinishedAt: returned}
+	if err = FinishCapacityDispatch(ctx, f.DB, job, response, returned, nil); err != nil {
+		t.Fatal("real terminal cleanup owner return", err)
+	}
+	f.Policy = newer
+	f.startSuccessorDispatch()
+	inventoryAssessment := func() (model.CapacityVMFleetInventory, model.CapacityAssessment, model.CapacityMetricRangeObservation) {
+		now := time.Now().UTC()
+		inv := cleanupNativeInventory(t, f, a, false)
+		inv.Members[0].Server.Status = "running"
+		snapshot, err := capacity.GuestReconcileSnapshot(newer, f.Spec, inv, now)
+		if err != nil {
+			t.Fatal("fresh exact installed survivor snapshot", err)
+		}
+		assessment := model.CapacityAssessment{Snapshot: snapshot, Evidence: []model.CapacityEvidence{}}
+		for _, signal := range f.Spec.Signals {
+			value := (signal.UpAbove + signal.DownBelow) / 2
+			assessment.Evidence = append(assessment.Evidence, model.CapacityEvidence{Name: signal.Name, SourceIdentity: signal.SourceIdentity, Unit: signal.Unit, RequireData: true, Matched: true, DataState: "present", Value: &value, RangeMin: &value, RangeMax: &value, SourceSampledAt: now, WindowStart: now.Add(-time.Duration(f.Spec.DownHoldSeconds) * time.Second), WindowEnd: now, Samples: f.Spec.MinSamples, CoverageComplete: true, MaxGapSeconds: f.Spec.MaxSampleGapSeconds})
+		}
+		if err := capacity.ValidateAssessment(f.Spec, assessment, now); err != nil {
+			t.Fatal("declared complete ordinary demand contract", err)
+		}
+		return inv, assessment, failedServingReplacementCoverage(f.Spec, now)
+	}
+	inv, assessment, reporting := inventoryAssessment()
+	plan := f.PlanStore().WithOriginalGuestReconcile(f.Workflow, f.step(capacity.PlanOriginalGuestOperation), capacity.CurrentGuestCoreSource(), "", "", inv, reporting)
+	claimedStore, claimed, selected, err := plan.TryClaimFailedExpansionTerminalReconcile(ctx, newer, assessment)
+	if err != nil || !selected || claimed.FailedExpansionTerminalReconcile == nil || claimed.PolicyID != newer.ID || claimed.PolicyChecksum != newer.Checksum || claimed.Generation <= terminal.Generation || claimed.FencingToken <= terminal.FencingToken || claimed.LeaseOwner == "" || claimed.LeaseExpiresAt == nil || claimed.Phase != "preparing" || claimed.Decision.Units != 1 || claimed.BaselineSnapshot.Units != 1 {
+		t.Fatal("real new compatible-policy membership claim", selected, claimed, err)
+	}
+	if claimedStore.failedExpansionOwner != nil || claimed.FailedUnwitnessedExpansionCleanupID != "" {
+		t.Fatal("new policy retained the old cleanup write selector")
+	}
+	completeStep := failedServingReplacementStep(t, f.private, "refresh-original-membership")
+	complete := f.store.WithOriginalGuestReconcile(f.Workflow, completeStep, capacity.CurrentGuestCoreSource(), "refresh", "", inv, reporting)
+	complete, epoch, selected, err := complete.OriginalGuestFailedExpansionTerminalReconcileEpoch(ctx, newer)
+	if err != nil || !selected || epoch.Generation != claimed.Generation || epoch.FencingToken != claimed.FencingToken || epoch.LeaseOwner != claimed.LeaseOwner || complete.guestReconcile == nil || complete.guestReconcile.mode != "provision" {
+		t.Fatal("exact current run did not bind private membership epoch", selected, err)
+	}
+	complete = complete.WithOriginalGuestNotifyCanary(completeStep, capacity.CurrentGuestCoreSource())
+	if _, err = complete.AdvanceOriginalGuest(ctx, newer, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, "prepared", assessment); !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("old terminal floor canaries credited the new membership epoch", err)
+	}
+	// Spend the unchanged minimum publication interval; no old challenge,
+	// deadline, policy or source clock is rewritten to manufacture freshness.
+	gap := time.Duration(f.Spec.GuestNotifyCanaryBinding.MinimumPublicationIntervalSeconds)*time.Second + time.Millisecond
+	timer := time.NewTimer(gap)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+		t.Fatal("original whole-test context expired before new publication", ctx.Err())
+	case <-timer.C:
+	}
+	failedServingReplacementCanary(t, ctx, complete, newer, f.Spec, claimed, f.private.pre, f.private.receipt)
+	for _, phase := range []string{"prepared", "canary", "promoted"} {
+		inv, assessment, reporting = inventoryAssessment()
+		complete = complete.WithOriginalGuestReconcile(f.Workflow, completeStep, capacity.CurrentGuestCoreSource(), "provision", "", inv, reporting)
+		claimed, err = complete.AdvanceOriginalGuest(ctx, newer, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, phase, assessment)
+		if err != nil || claimed.Phase != phase {
+			t.Fatal("normal membership phase after actual initial canary", phase, err)
+		}
+		if phase != "promoted" && claimed.FailedExpansionTerminalReconcile == nil {
+			t.Fatal("typed membership claim disappeared before real promotion", phase)
+		}
+	}
+	if claimed.FailedExpansionTerminalReconcile != nil || claimed.FailedUnwitnessedExpansionCleanupID != "" || claimed.LeaseOwner != "" || claimed.LeaseExecutorID != "" || claimed.LeaseExpiresAt != nil || claimed.Assessment.Snapshot.Units != 1 {
+		t.Fatal("new ordinary useful floor did not become marker-free and unleased", claimed)
+	}
+	var afterGrants, afterSDK []byte
+	if err := f.DB.QueryRowContext(ctx, `SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY id),'[]'::jsonb)::text FROM public.capacity_mutation_grants g`).Scan(&afterGrants); err != nil || !bytes.Equal(grantWire, afterGrants) {
+		t.Fatal("membership-only handoff changed or created provider grants", err)
+	}
+	if err := f.DB.QueryRowContext(ctx, `SELECT(grant_record#>'{settlement,original_provider_create_return}')::text FROM public.capacity_mutation_grants WHERE id=$1`, a.GrantID).Scan(&afterSDK); err != nil || !bytes.Equal(sdkWire, afterSDK) || !reflect.DeepEqual(ledger, failedCleanupTestLedger(t, f.DB, a)) {
+		t.Fatal("new policy membership rewrote the terminal cleanup or original SDK", err)
+	}
 }

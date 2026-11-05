@@ -208,7 +208,7 @@ func (s CapacityStore) AssessOriginalGuest(ctx context.Context, policy model.Man
 		if s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.PlanOriginalGuestOperation {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
-		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" && old.PolicyID == policy.ID {
+		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" {
 			return *old, "", nil
 		}
 		if old != nil && pendingCapacityPhase(old.Phase) && old.Phase != "proposed" {
@@ -314,6 +314,7 @@ func (s CapacityStore) AdvanceOriginalGuest(ctx context.Context, policy model.Ma
 		next := *old
 		next.Phase, next.Assessment, next.UpdatedAt = phase, assessment, now
 		if phase == "promoted" {
+			next.FailedExpansionTerminalReconcile = nil
 			next.LeaseOwner, next.LeaseExecutorID, next.LeaseExpiresAt = "", "", nil
 			next.Decision.Clock.LastActionAt = now
 			next.Decision.Clock.UpSince, next.Decision.Clock.DownSince = time.Time{}, time.Time{}
