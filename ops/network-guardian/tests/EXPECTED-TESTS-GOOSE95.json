@@ -1,0 +1,9 @@
+[
+  "test_goose95_native_once.Goose95OnceTests.test_forced_unbound_refuses_before_io",
+  "test_goose95_native_once.Goose95OnceTests.test_goose95_job_scope_and_distinct_claim",
+  "test_goose95_native_once.Goose95OnceTests.test_shipped_m95_single_guard_and_95_only_job_logs",
+  "test_goose95_native_once.Goose95OnceTests.test_known_cleanup_paid_sdk_raw_timeout_and_closed_ack",
+  "test_goose95_native_once.Goose95OnceTests.test_historical_m94_sdk_and_child_binding_preserved",
+  "test_goose95_native_once.Goose95OnceTests.test_prior94_catalog_and_sole95_event_guard_delta",
+  "test_goose95_native_once.Goose95OnceTests.test_goose95_lost_ack_current15_and_method_guards"
+]
