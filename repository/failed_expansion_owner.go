@@ -38,7 +38,7 @@ func loadFailedExpansionTx(ctx context.Context, tx *sql.Tx, id string) (FailedUn
 	var out []FailedUnwitnessedExpansionCleanupEvent
 	for rows.Next() {
 		var e FailedUnwitnessedExpansionCleanupEvent
-		if rows.Scan(&raw, &sha) != nil || originalDispositionDigest(raw) != sha || capacity.DecodeGuestLifecycle(raw, &e) != nil || e.CleanupID != id || e.Sequence != int64(len(out)+1) {
+		if rows.Scan(&raw, &sha) != nil || originalDispositionDigest(raw) != sha || json.Unmarshal(raw, &e) != nil || e.CleanupID != id || e.Sequence != int64(len(out)+1) {
 			return a, nil, ErrCapacityConflict
 		}
 		out = append(out, e)
