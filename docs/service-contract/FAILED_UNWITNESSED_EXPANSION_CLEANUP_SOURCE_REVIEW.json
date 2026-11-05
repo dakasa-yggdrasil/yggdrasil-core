@@ -101,8 +101,8 @@
       "sha256": "e37aa5f7f783a01b9351a091eb6b87f07d551551b981f26bd447ce316be878d7"
     },
     "repository/failed_expansion_owner.go": {
-      "bytes": 24672,
-      "sha256": "0c5184c112e90943f468a96b9360cb97c0cef3e8d2fac4ac84e1fb21eff6faed"
+      "bytes": 24690,
+      "sha256": "90e08dda7c046c9928def6ee27bd29c0bc97bc9cd4abffeb7ff90792e9c83dfb"
     },
     "repository/failed_unwitnessed_expansion_cleanup.go": {
       "bytes": 22005,
@@ -127,7 +127,7 @@
     "path": "docs/service-contract/source/sources.json",
     "records": 809,
     "schema": "core_source_interface_census_v1",
-    "sha256": "47135e5ab2f6ca0c3d499e3cded29a6e917b5fa1f659a125b942bf549af6c6bd"
+    "sha256": "69bf1eb67024a52ebac0cf5bd1846dbed99b88e266ededf8709e9e6db2b937d9"
   },
   "unchanged_protocols": [
     "original-create-dispositions accounting-only boundary",
