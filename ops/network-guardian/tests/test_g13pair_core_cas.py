@@ -48,9 +48,10 @@ def a3_operand():
     lease, finished, observed = '2026-11-05T00:25:12.260723Z','2026-11-05T00:20:14.370000Z','2026-11-05T01:00:00Z'
     ids = {k:'11111111-1111-4111-8111-111111111111' for k in ('workflow_id','lease_owner','executor_id')}
     p = {**ids,'preregistration_id':cas.A3_PRE,'original_create_grant_id':cas.A3_GRANT,'original_create_request_sha256':'5'*64,'slot':2,
-         'policy_id':cas.A3_POLICY,'policy_checksum':'6'*64,'generation':22,'fence':43,'binding_name':'declared',
+         'policy_id':cas.A3_POLICY,'policy_checksum':'6'*64,'generation':22,'fence':43,'binding_name':'declared-s2',
          'original_deadline':'2026-11-05T00:25:09Z','reserved_at':'2026-11-05T00:20:10Z'}
     wire = cas.canonical(p)
+    grb={'mutation_binding_name':'declared','members':[{'slot':1,'name':'declared-s1'},{'slot':2,'name':'declared-s2'}]}
     grant = {'grant_id':cas.A3_GRANT,'state':'settled','capability':'ensure_ec2_instance','slot':2,'request_sha256':'5'*64,
              'binding_name':'declared','integration_instance_id':'declared-instance','scope_checksum':'7'*64,'profile_name':'declared','expires_at':'2026-11-05T00:25:09Z'}
     sdk = {'schema':'aws_original_run_instances_return_v1','provider':'aws','adapter_source_commit':cas.A3_CREATOR,
@@ -75,7 +76,7 @@ def a3_operand():
              # Dispatch authority is independent of capacity's fence/owner.
              'dispatch':[{'id':cas.A3_JOB,'run_id':cas.A3_RUN,'state':'returned','return_status':'failed','fencing_token':1,'lease_owner':'different-dispatch-owner',
                           'envelope':{'workflow':{'id':ids['workflow_id']}},'returned_at':finished,'finalization_ack_at':'2026-11-05T00:20:14.389Z','lease_expires_at':lease}],
-             'preregistration':{'id':cas.A3_PRE,'create_grant_id':cas.A3_GRANT,'original_wire':'\\x'+wire.hex(),'preregistration_record':p,'original_deadline':p['original_deadline']},
+             'preregistration':{'id':cas.A3_PRE,'create_grant_id':cas.A3_GRANT,'original_wire':'\\x'+wire.hex(),'binding_wire':'\\x'+cas.canonical(grb).hex(),'preregistration_record':p,'original_deadline':p['original_deadline']},
              'active_policy':{'id':cas.A3_POLICY,'kind':'capacity_policy','active':True,'checksum':'6'*64},'survivors':[survivor],
              **{k:[] for k in ('target_witnesses','target_enrollments','target_installations','target_retirements','factory_bindings','compensations','cleanup_admissions')}}
     case = {**ids,'lease_expires_at':lease,'policy_checksum':'6'*64,'intent_sha256':cas.sha(value['intent_pgtext'].encode()),
@@ -105,6 +106,32 @@ class G13CoreCASTests(unittest.TestCase):
         with patch.multiple(cas,SOURCE_BOUND=True,CORE_R=None,NEW_DIGEST=None,M94_MIGRATION_SHA=None),patch.object(cas,'read') as read:
             with self.assertRaises(cas.Hold):cas.require_bound()
             read.assert_not_called()
+        # The qualified Source may leave only the Root's late data ref unbound.
+        # Every direct maintenance entrypoint still needs the complete guard.
+        with binding(), patch.object(cas,'CONFIG_REF',None), patch.object(cas,'read') as read, patch.object(cas,'API') as api:
+            cas.require_source_bound()
+            for call in (cas.require_bound, lambda:cas.load_tools(Path('/declared/package')),
+                         lambda:cas.maintenance_inputs(object()),lambda:cas.database_a3(None,None,None,None,'BEFORE'),
+                         lambda:cas.g13_acceptance(None,None,None,None,None),lambda:cas.patch_once(None,None,None,None,None,0)):
+                with self.subTest(late_ref_call=repr(call)),self.assertRaises(cas.Hold):call()
+            read.assert_not_called();api.assert_not_called()
+        argv=['declared-cas','--package','/declared/package','--expected-ops-source','c'*40,
+              '--expected-manifest-sha256','a'*64,'--g13-swap-return','/declared/RETURN.json',
+              '--expected-g13-swap-return-sha256','a'*64,'--evidence-dir','/declared/evidence',
+              '--execute-core-image-cas-once']
+        for suffix in ([],['--config-ref-path','/declared/config'],['--expected-config-sha256','a'*64]):
+            with binding(),patch.object(cas,'CONFIG_REF',None),patch.object(cas.sys,'argv',argv+suffix),patch.object(cas,'load_tools') as tools,patch.object(cas,'read') as read,patch.object(cas,'API') as api:
+                with self.subTest(missing_runtime_arg=suffix),self.assertRaises(SystemExit) as failure:cas.main()
+                self.assertEqual(failure.exception.code,2);self.assertIsNone(cas.CONFIG_REF)
+                tools.assert_not_called();read.assert_not_called();api.assert_not_called()
+        for path,pin in (('relative/config','a'*64),('/declared/../config','a'*64),('/declared/./config','a'*64),('//declared/config','a'*64),('/','a'*64),('/declared/config',''),('/declared/config','A'*64),('/declared/config','0'*64)):
+            with binding(),patch.object(cas,'CONFIG_REF',None),patch.object(cas.sys,'argv',argv+['--config-ref-path',path,'--expected-config-sha256',pin]),patch.object(cas,'load_tools') as tools,patch.object(cas,'read') as read,patch.object(cas,'API') as api:
+                with self.subTest(runtime_path=path,runtime_sha=pin),self.assertRaises(cas.Hold):cas.main()
+                self.assertIsNone(cas.CONFIG_REF);tools.assert_not_called();read.assert_not_called();api.assert_not_called()
+        with binding(),patch.object(cas,'CONFIG_REF',None),patch.object(cas.sys,'argv',argv+['--config-ref-path','/declared/config','--expected-config-sha256','a'*64]),patch.object(cas.sys,'platform','linux'),patch.object(cas.os,'geteuid',return_value=0),patch.object(cas,'load_tools',side_effect=RuntimeError('DECLARED_FIRST_IO_BOUNDARY')) as tools,patch.object(cas,'read') as read,patch.object(cas,'API') as api:
+            with self.assertRaisesRegex(RuntimeError,'DECLARED_FIRST_IO_BOUNDARY'):cas.main()
+            self.assertEqual(cas.CONFIG_REF,{'path':'/declared/config','sha256':'a'*64})
+            cas.require_bound();tools.assert_called_once_with(Path('/declared/package'));read.assert_not_called();api.assert_not_called()
 
     def test_r3_preimage_and_full_cas_mutation_footprint(self):
         with binding():
@@ -128,10 +155,22 @@ class G13CoreCASTests(unittest.TestCase):
                 with self.subTest(field=field),self.assertRaises(cas.Hold):cas.result_shape(d,wrong,C)
 
     def test_known_a3_create_refuses_uncertain_ack_authority_or_epoch(self):
-        value,c,C=a3_operand();self.assertTrue(cas.validate_a3(value,c,C))
-        for fault in ('missing_ack','unknown','wrong_finish','wrong_predicate','unexpired_lease','foreign_capacity_owner','sdk_not_200','foreign_sdk_source','foreign_vm','sdk_next_action','sdk_before_reservation','sdk_after_grant_expiry','disposed_parent','wrong_prereg_wire','witness','enrollment','installation','retirement','cleanup_admission','extra_survivor','missing_survivor_enrollment','inactive_policy'):
+        value,c,C=a3_operand()
+        self.assertNotEqual(value['preregistration']['preregistration_record']['binding_name'],cas.loads(value['grant_pgtext'])['grant_record']['binding']['name'])
+        self.assertTrue(cas.validate_a3(value,c,C))
+        for fault in ('missing_ack','unknown','wrong_finish','wrong_predicate','unexpired_lease','foreign_capacity_owner','sdk_not_200','foreign_sdk_source','foreign_vm','sdk_next_action','sdk_before_reservation','sdk_after_grant_expiry','disposed_parent','wrong_prereg_wire','witness','enrollment','installation','retirement','cleanup_admission','extra_survivor','missing_survivor_enrollment','inactive_policy','missing_member','duplicate_member','foreign_member','wrong_mutation_join','wrong_prereg_binding'):
             v=copy.deepcopy(value);config=copy.deepcopy(c)
-            if fault=='missing_ack':v['dispatch'][0]['finalization_ack_at']=None
+            if fault in ('missing_member','duplicate_member','foreign_member','wrong_mutation_join','wrong_prereg_binding'):
+                pre=v['preregistration'];stored=cas.loads(bytes.fromhex(pre['binding_wire'][2:]))
+                if fault=='missing_member':stored['members']=[m for m in stored['members']if m['slot']!=2]
+                elif fault=='duplicate_member':stored['members'].append(copy.deepcopy(stored['members'][1]))
+                elif fault=='foreign_member':stored['members'][1]['name']='declared-foreign-member'
+                elif fault=='wrong_mutation_join':stored['mutation_binding_name']='declared-foreign-profile'
+                else:pre['preregistration_record']['binding_name']='declared-foreign-member'
+                pre['binding_wire']='\\x' + cas.canonical(stored).hex()
+                resealed=cas.canonical(pre['preregistration_record']);pre['original_wire']='\\x'+resealed.hex()
+                config['case']['preregistration_sha256']=cas.sha(resealed)
+            elif fault=='missing_ack':v['dispatch'][0]['finalization_ack_at']=None
             elif fault=='unknown':v['dispatch'][0]['state']='unknown'
             elif fault=='wrong_finish':v['dispatch'][0]['returned_at']='2026-11-05T00:20:15Z'
             elif fault=='wrong_predicate':
@@ -157,7 +196,9 @@ class G13CoreCASTests(unittest.TestCase):
             elif fault=='extra_survivor':v['survivors'].append(copy.deepcopy(v['survivors'][0]))
             elif fault=='missing_survivor_enrollment':v['survivors'][0]['enrollments']=[]
             else:v['active_policy']['active']=False
-            with self.subTest(fault=fault),self.assertRaises(cas.Hold):cas.validate_a3(v,config,C)
+            with self.subTest(fault=fault),self.assertRaises(cas.Hold) as held:cas.validate_a3(v,config,C)
+            if fault in ('missing_member','duplicate_member','foreign_member','wrong_mutation_join','wrong_prereg_binding'):
+                self.assertEqual(str(held.exception),'ORIGINAL_GRB_PROFILE_MUTATION_JOIN'if fault=='wrong_mutation_join'else'ORIGINAL_GRB_UNIQUE_SLOT_MEMBER')
         # No synthetic grant or new seven-CAS/admission fields enter the image case.
         self.assertNotIn('Pending',cas.A3_SQL);self.assertNotIn('fd24881a',PATH.read_text())
 

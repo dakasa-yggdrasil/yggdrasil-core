@@ -24,20 +24,20 @@ import sys
 import time
 import types
 
-SOURCE_BOUND = False
-CORE_R = None
-NEW_DIGEST = None
-SOURCE_PIN = None
-TOOL_PINS = None
+SOURCE_BOUND = True
+CORE_R = '7cd5cea0834bcee901c282bc81b9486d5c16513b'
+NEW_DIGEST = 'd8a86c844f0b2df14aa3ae3b0281f43be14a7f6aed3b1bf962816a603e966a1b'
+SOURCE_PIN = 'f5f0e218f774deefe909e884988d845be93d8c746fc5047820f68759852e7d9f'
+TOOL_PINS = {'derive_g13pair_controller_config.py': 'ccb08112ca6198e6b131cd6e08dc80039a4e9c5ab83adb75bb72de03e4128c87', 'derive_standing_config.py': 'c3e73349b0884acab33a04dbc3d82d6c618cc3252234e22a928ce50dfbd8c3b4', 'g13cut.py': '8b601365da7f04b08d3f8ea3cd936683f9edfe8e8ad459a373f7cdb57f94a572', 'pair_change_contract.py': '0514243386ce30194f2453696f2be03b279942693ab682d8041685d4a471c297'}
 CONFIG_REF = None
-SQL_DATA_REF = None
+SQL_DATA_REF = {'path': '/var/lib/dakasa-core-rollout/g12pair/goose94-current-preimage-5ca2637c-21c6-4b58-a514-81e49fece680/EXACT-E70-SQL-DATA.original.json', 'sha256': 'e70f1bfc0821be5eaf44ec2248656da06ff269cfa57079ff487ae74f4cfe1054'}
 OLD_SOURCE = 'ee8e3377ba91ff3efc3fde3a9751790608ac7066'
 OLD_DIGEST = 'b0ee27bd53443260e8e05123f9474454e8108310c4b94a7e72b6bae107cf1ac2'
 UID = 'a58ab8c2-da48-46c1-ae62-a650141eeb86'
 OLD_POD = '61a21926-d006-4994-80f4-0025d6434d30'
 GENERATION = 276
 # Exact full container/config identities are fresh Root data, never prefixes.
-OLD_CONTAINER_ID = None
+OLD_CONTAINER_ID = 'containerd://47f099f925451263e74bdd030d6d170f6c766e487a2917b718db85c9cfdb90e9'
 OLD_IMAGE_CONFIG_DIGEST = 'sha256:a09e74731d09a41e369677ac50b24cafeee7ad9e1e23bc6573b7ad1474e905b8'
 A3_GRANT = 'c117f03f-27db-4da2-b990-c2729f98a46f'
 A3_PRE = '4677b2cf-9cfa-4218-bc3d-930de13591a8'
@@ -51,8 +51,8 @@ A3_ATTEMPT = '661c977d-5dd6-4aec-a2ab-754b064c63bf'
 A3_CREATOR = 'c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce'
 S1_RESOURCE = 'i-070b5767a35c7f0d5'
 S1_BIRTH = '2026-11-03T01:17:18Z'
-M94_MIGRATION_SHA = None
-M94_NEW_TRIGGERS = None
+M94_MIGRATION_SHA = '2850db98eddbfd629b98df879eb61266036d70210118e8e20289782d2b37a78c'
+M94_NEW_TRIGGERS = ('failed_unwitnessed_expansion_cleanup_event_guard', 'failed_unwitnessed_expansion_cleanup_grant_guard', 'failed_unwitnessed_expansion_cleanup_intent_guard', 'failed_unwitnessed_expansion_cleanup_admission', 'failed_unwitnessed_expansion_cleanup_immutable', 'failed_unwitnessed_expansion_cleanup_event_immutable')
 M94_FUNCTIONS = ('guard_failed_unwitnessed_expansion_cleanup', 'failed_expansion_absence_read_valid', 'guard_failed_unwitnessed_expansion_cleanup_event', 'guard_failed_unwitnessed_expansion_cleanup_grant', 'guard_failed_unwitnessed_expansion_cleanup_intent', 'immutable_failed_unwitnessed_expansion_cleanup')
 # Exact immutable Source metadata; future release/Root binding remains unbound.
 M94_FINAL_SQL_SHA256 = '2850db98eddbfd629b98df879eb61266036d70210118e8e20289782d2b37a78c'
@@ -331,7 +331,7 @@ def g13_acceptance(cut, folder, manifest, returned, run):
     C.once(run / 'FRESH-INDEPENDENT-CURRENT15.json', C.wire({'observation': observation, 'native_read_count': len(reads)}))
     return backend, protected, ctrl, guard, time.monotonic()
 
-def require_bound():
+def require_source_bound():
     need(SOURCE_BOUND is True and full_id(UID) and full_id(OLD_POD)
          and re.fullmatch('[a-f0-9]{40}', str(CORE_R)) and CORE_R != OLD_SOURCE
          and digest_value(NEW_DIGEST) and NEW_DIGEST != OLD_DIGEST
@@ -344,10 +344,25 @@ def require_bound():
          and len(set(M94_NEW_TRIGGERS))==len(M94_NEW_TRIGGERS)
          and all(type(n) is str and re.fullmatch('[a-z_][a-z0-9_]*',n) for n in M94_NEW_TRIGGERS),
          'G13_RELEASE_AND_FRESH_R3_PREIMAGES_NOT_BOUND')
-    for ref in (CONFIG_REF, SQL_DATA_REF):
-        need(type(ref) is dict and set(ref) == {'path', 'sha256'} and Path(ref['path']).is_absolute()
-             and digest_value(ref['sha256']), 'CLOSED_ROOT_BOUND_INPUT_REF')
+    ref = SQL_DATA_REF
+    need(type(ref) is dict and set(ref) == {'path', 'sha256'} and Path(ref['path']).is_absolute()
+         and digest_value(ref['sha256']), 'CLOSED_ROOT_BOUND_INPUT_REF')
     need(SQL_DATA_REF['sha256'] == POLICY92_SQL_SHA, 'EXACT_UNMODIFIED_E70_QUERY_FACTORY')
+
+
+def validated_config_ref(path, expected_sha256):
+    # Lexical validation only: no resolve/stat/read, credential or native access.
+    need(type(path) is str and path != '/' and '\x00' not in path
+         and Path(path).is_absolute() and not path.startswith('//')
+         and str(Path(path)) == path and '..' not in Path(path).parts
+         and digest_value(expected_sha256), 'CLOSED_ROOT_RUNTIME_CONFIG_REF')
+    return {'path': path, 'sha256': expected_sha256}
+
+
+def require_bound():
+    require_source_bound()
+    need(type(CONFIG_REF) is dict and set(CONFIG_REF) == {'path', 'sha256'}, 'CLOSED_ROOT_BOUND_INPUT_REF')
+    validated_config_ref(CONFIG_REF['path'], CONFIG_REF['sha256'])
 
 
 def load_tools(folder):
@@ -454,6 +469,22 @@ A3_SQL = """SELECT jsonb_build_object(
 'compensations',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY id),'[]'::jsonb) FROM public.capacity_mutation_grants x WHERE grant_record#>>'{grant,compensation_of}'='c117f03f-27db-4da2-b990-c2729f98a46f'),
 'cleanup_admissions',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY id),'[]'::jsonb) FROM public.capacity_failed_unwitnessed_expansion_cleanups x))"""
 
+def original_preregistration_member(pre, p, grant, binding, C):
+    """The stored GRB owns member names; mutation binding names remain profile-wide."""
+    need(type(pre.get('binding_wire')) is str and pre['binding_wire'].startswith('\\x'), 'ORIGINAL_GRB_BINDING_WIRE_HEX_PREFIX')
+    try:
+        raw = bytes.fromhex(pre['binding_wire'][2:])
+    except ValueError:
+        raise Hold('ORIGINAL_GRB_BINDING_WIRE_HEX') from None
+    stored = C.loads(raw)
+    need(type(stored) is dict and stored.get('mutation_binding_name') == binding['name']
+         and type(stored.get('members')) is list, 'ORIGINAL_GRB_PROFILE_MUTATION_JOIN')
+    members = [member for member in stored['members'] if type(member) is dict
+               and type(member.get('slot')) is int and member['slot'] == grant['slot'] == p['slot']]
+    need(len(members) == 1 and type(members[0].get('name')) is str
+         and members[0]['name'] == p['binding_name'], 'ORIGINAL_GRB_UNIQUE_SLOT_MEMBER')
+
+
 def validate_a3(v, c, C):
     need(type(v) is dict and set(v) == {'observed_at_pg','intent_pgtext','run_pgtext','dispatch','grant_pgtext','preregistration','active_policy','survivors','target_witnesses','target_enrollments','target_installations','target_retirements','factory_bindings','compensations','cleanup_admissions'}, 'CLOSED_ACTUAL_A3_SNAPSHOT')
     k = c['case']
@@ -516,12 +547,12 @@ def validate_a3(v, c, C):
          and pre['id'] == A3_PRE and pre['create_grant_id'] == A3_GRANT
          and C.loads(wire) == pre['preregistration_record'], 'EXACT_ORIGINAL_PREREGISTRATION_WIRE')
     p = pre['preregistration_record']
+    original_preregistration_member(pre, p, grant, binding, C)
     need(p['preregistration_id'] == A3_PRE and p['original_create_grant_id'] == A3_GRANT
          and p['original_create_request_sha256'] == grant['request_sha256'] and p['slot'] == 2
          and p['policy_id'] == A3_POLICY and p['policy_checksum'] == k['policy_checksum']
          and p['workflow_id'] == k['workflow_id'] and p['generation'] == 22 and p['fence'] == 43
          and p['lease_owner'] == k['lease_owner'] and p['executor_id'] == k['executor_id']
-         and p['binding_name'] == binding['name']
          and utc(p['original_deadline']) == utc(pre['original_deadline']) < utc(v['observed_at_pg']), 'EXPIRED_ORIGINAL_CREATE_DEADLINE_NO_REWRITE')
     need(utc(sdk['called_at']) >= utc(p['reserved_at']) and utc(sdk['context_deadline']) <= utc(grant['expires_at'])
          and utc(sdk['resource_created_at']) >= utc(p['reserved_at'])-datetime.timedelta(seconds=5)
@@ -759,7 +790,8 @@ def patch_once(api, C, run, wire, marker, observed):
 
 
 def main():
-    require_bound()
+    global CONFIG_REF
+    require_source_bound()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--package',required=True,type=Path)
     p.add_argument('--expected-ops-source',required=True)
@@ -767,8 +799,12 @@ def main():
     p.add_argument('--g13-swap-return',required=True,type=Path)
     p.add_argument('--expected-g13-swap-return-sha256',required=True)
     p.add_argument('--evidence-dir',required=True,type=Path)
+    p.add_argument('--config-ref-path',required=True)
+    p.add_argument('--expected-config-sha256',required=True)
     p.add_argument('--execute-core-image-cas-once',action='store_true',required=True)
     a = p.parse_args()
+    CONFIG_REF = validated_config_ref(a.config_ref_path, a.expected_config_sha256)
+    require_bound()
     need(os.geteuid() == 0 and sys.platform == 'linux','ROOT_LINUX_BRAIN_ONLY')
     folder = a.package.absolute(); cut = load_tools(folder); C = cut.C
     c, original_config, sql = maintenance_inputs(C)

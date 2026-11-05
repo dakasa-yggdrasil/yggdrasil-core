@@ -40,8 +40,9 @@ def declared_a3():
        **{x:None for x in ('original_disposition_id','failed_original_disposition_id','native_denied_disposition_id','enrolled_failed_disposition_id')}}
     pre={'preregistration_id':G.A3_PRE,'original_create_grant_id':G.A3_GRANT,'original_create_request_sha256':grant['request_sha256'],
          'slot':2,'policy_id':G.A3_POLICY,'policy_checksum':k['policy_checksum'],'workflow_id':k['workflow_id'],'generation':22,'fence':43,
-         'lease_owner':k['lease_owner'],'executor_id':k['executor_id'],'binding_name':'declared-binding','original_deadline':before,'reserved_at':'2026-11-05T00:20:13Z'}
+         'lease_owner':k['lease_owner'],'executor_id':k['executor_id'],'binding_name':'declared-s2','original_deadline':before,'reserved_at':'2026-11-05T00:20:13Z'}
     raw=G.wire(pre)
+    grb={'mutation_binding_name':grant['binding_name'],'members':[{'slot':1,'name':'declared-s1'},{'slot':2,'name':'declared-s2'}]}
     enrollment={'preregistration_id':'declared-s1','enrollment_record':{'statement':{'tuple':{'resource_id':G.S1_RESOURCE,'resource_created_at':G.S1_BIRTH}}}}
     survivor={'slot':1,'resource_id':G.S1_RESOURCE,'slot_record':{'resource_created_at':G.S1_BIRTH,'resource_id':G.S1_RESOURCE,'tombstone':False},
               **{x:grant[x] for x in ('integration_instance_id','scope_checksum','profile_name')},
@@ -49,7 +50,7 @@ def declared_a3():
     v={'observed_at_pg':after,'intent_pgtext':G.wire(i).decode(),'run_pgtext':G.wire(run).decode(),'grant_pgtext':G.wire(g).decode(),
        'dispatch':[{'id':G.A3_JOB,'run_id':G.A3_RUN,'state':'returned','return_status':'failed','returned_at':before,
                     'finalization_ack_at':before,'lease_expires_at':before,'envelope':{'workflow':{'id':k['workflow_id']}}}],
-       'preregistration':{'id':G.A3_PRE,'create_grant_id':G.A3_GRANT,'original_wire':'\\x'+raw.hex(),'preregistration_record':pre,'original_deadline':before},
+       'preregistration':{'id':G.A3_PRE,'create_grant_id':G.A3_GRANT,'original_wire':'\\x'+raw.hex(),'binding_wire':'\\x'+G.wire(grb).hex(),'preregistration_record':pre,'original_deadline':before},
        'active_policy':{'id':G.A3_POLICY,'kind':'capacity_policy','active':True,'checksum':k['policy_checksum']},'survivors':[survivor],
        **{x:[] for x in ('target_witnesses','target_enrollments','target_installations','target_retirements','factory_bindings','compensations','cleanup_admissions')}}
     for field,pin in (('intent_pgtext','intent_sha256'),('run_pgtext','run_sha256'),('grant_pgtext','grant_sha256')):k[pin]=G.sha(v[field].encode())
@@ -91,10 +92,21 @@ class Goose94OnceTests(unittest.TestCase):
 
     def test_a3_sdk_failed_ack_and_absent_target_proofs(self):
         v,c=declared_a3();C=types.SimpleNamespace(loads=G.loads)
+        self.assertNotEqual(v['preregistration']['preregistration_record']['binding_name'],G.loads(v['grant_pgtext'])['grant_record']['binding']['name'])
         self.assertTrue(G.validate_a3(v,c,C))
-        for fault in ('missing_ack','unknown_job','witness','enrollment','installation','retirement','wrong_source','uncertain','sdk_not200','unexpired','second_survivor','wrong_wire','metadata_steps_only','sdk_next_action','settlement_next_action','destroy_receipt','sdk_before_reservation','sdk_after_grant_expiry','wrong_binding'):
+        for fault in ('missing_ack','unknown_job','witness','enrollment','installation','retirement','wrong_source','uncertain','sdk_not200','unexpired','second_survivor','wrong_wire','metadata_steps_only','sdk_next_action','settlement_next_action','destroy_receipt','sdk_before_reservation','sdk_after_grant_expiry','wrong_binding','missing_member','duplicate_member','foreign_member','wrong_mutation_join','wrong_prereg_binding'):
             bad=copy.deepcopy(v);case=copy.deepcopy(c)
-            if fault=='missing_ack':bad['dispatch'][0]['finalization_ack_at']=None
+            if fault in ('missing_member','duplicate_member','foreign_member','wrong_mutation_join','wrong_prereg_binding'):
+                pre=bad['preregistration'];stored=G.loads(bytes.fromhex(pre['binding_wire'][2:]))
+                if fault=='missing_member':stored['members']=[m for m in stored['members']if m['slot']!=2]
+                elif fault=='duplicate_member':stored['members'].append(copy.deepcopy(stored['members'][1]))
+                elif fault=='foreign_member':stored['members'][1]['name']='declared-foreign-member'
+                elif fault=='wrong_mutation_join':stored['mutation_binding_name']='declared-foreign-profile'
+                else:pre['preregistration_record']['binding_name']='declared-foreign-member'
+                pre['binding_wire']='\\x' + G.wire(stored).hex()
+                resealed=G.wire(pre['preregistration_record']);pre['original_wire']='\\x'+resealed.hex()
+                case['case']['preregistration_sha256']=G.sha(resealed)
+            elif fault=='missing_ack':bad['dispatch'][0]['finalization_ack_at']=None
             elif fault=='unknown_job':bad['dispatch'][0]['state']='unknown'
             elif fault in ('witness','enrollment','installation','retirement'):bad['target_'+{'witness':'witnesses','enrollment':'enrollments','installation':'installations','retirement':'retirements'}[fault]]=[{}]
             elif fault=='unexpired':bad['observed_at_pg']='2026-11-05T00:20:59Z'
@@ -114,7 +126,9 @@ class Goose94OnceTests(unittest.TestCase):
                 elif fault=='sdk_after_grant_expiry':settlement['original_provider_create_return']['context_deadline']='2026-11-05T00:21:01Z'
                 else:g['grant_record']['binding']['scope_checksum']='f'*64
                 bad['grant_pgtext']=G.wire(g).decode();case['case']['grant_sha256']=G.sha(bad['grant_pgtext'].encode())
-            with self.subTest(fault=fault),self.assertRaises(G.Hold):G.validate_a3(bad,case,C)
+            with self.subTest(fault=fault),self.assertRaises(G.Hold) as held:G.validate_a3(bad,case,C)
+            if fault in ('missing_member','duplicate_member','foreign_member','wrong_mutation_join','wrong_prereg_binding'):
+                self.assertEqual(str(held.exception),'ORIGINAL_GRB_PROFILE_MUTATION_JOIN'if fault=='wrong_mutation_join'else'ORIGINAL_GRB_UNIQUE_SLOT_MEMBER')
 
     def test_m94_new_null_column_preserves_old_sdk_and_all_columns(self):
         old,c=declared_a3();new=copy.deepcopy(old);g=G.loads(new['grant_pgtext']);g[G.CHILD_COLUMN]=None;new['grant_pgtext']=G.wire(g).decode()

@@ -38,3 +38,20 @@ An existing invalid or differently defined index causes HOLD and requires a
 separate review. Never repair it by automatically dropping the index or
 running the migration Down. Independent Root acceptance and the later Core,
 end-to-end and complete elastic-cycle proofs remain separate requirements.
+
+## G13 schema94 maintenance inputs
+
+The Goose94 and G13 image operators join the original preregistration to its
+stored Guest binding by slot. The member name identifies that slot; the
+stored `mutation_binding_name` identifies the grant binding. Both identities
+remain exact, alongside the original wire, SDK, deadline and epoch checks.
+
+The G13 image operator takes the Root configuration through the required
+`--config-ref-path` and `--expected-config-sha256` arguments. It validates the
+reference before any file, credential or native access. The complete Root94
+receipt, original references, installed G13 acceptance and all existing
+mutation guards remain mandatory. Root-only readers that load the module
+directly must set `CONFIG_REF` with `validated_config_ref` and call
+`require_bound` before calling `load_tools` or another maintenance function.
+The configuration is actual Root data supplied after migration acceptance;
+it is not a future receipt embedded into the qualified operator Source.

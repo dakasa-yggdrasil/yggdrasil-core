@@ -625,6 +625,22 @@ def utc(value):
     normalized = re.sub(r'\.(\d{1,9})(?=Z|[+-])', lambda match: '.' + (match.group(1) + '000000')[:6], value)
     return datetime.datetime.fromisoformat(normalized.replace('Z', '+00:00'))
 
+def original_preregistration_member(pre, p, grant, binding, C):
+    """The stored GRB owns member names; mutation binding names remain profile-wide."""
+    need(type(pre.get('binding_wire')) is str and pre['binding_wire'].startswith('\\x'), 'ORIGINAL_GRB_BINDING_WIRE_HEX_PREFIX')
+    try:
+        raw = bytes.fromhex(pre['binding_wire'][2:])
+    except ValueError:
+        raise Hold('ORIGINAL_GRB_BINDING_WIRE_HEX') from None
+    stored = C.loads(raw)
+    need(type(stored) is dict and stored.get('mutation_binding_name') == binding['name']
+         and type(stored.get('members')) is list, 'ORIGINAL_GRB_PROFILE_MUTATION_JOIN')
+    members = [member for member in stored['members'] if type(member) is dict
+               and type(member.get('slot')) is int and member['slot'] == grant['slot'] == p['slot']]
+    need(len(members) == 1 and type(members[0].get('name')) is str
+         and members[0]['name'] == p['binding_name'], 'ORIGINAL_GRB_UNIQUE_SLOT_MEMBER')
+
+
 def validate_a3(v, c, C, after=False):
     need(type(v) is dict and set(v) == {'observed_at_pg','intent_pgtext','run_pgtext','dispatch','grant_pgtext','preregistration','active_policy','survivors','target_witnesses','target_enrollments','target_installations','target_retirements','factory_bindings','compensations','cleanup_admissions'}, 'CLOSED_ACTUAL_A3_SNAPSHOT')
     k = c['case']
@@ -691,12 +707,12 @@ def validate_a3(v, c, C, after=False):
          and pre['id'] == A3_PRE and pre['create_grant_id'] == A3_GRANT
          and C.loads(wire) == pre['preregistration_record'], 'EXACT_ORIGINAL_PREREGISTRATION_WIRE')
     p = pre['preregistration_record']
+    original_preregistration_member(pre, p, grant, binding, C)
     need(p['preregistration_id'] == A3_PRE and p['original_create_grant_id'] == A3_GRANT
          and p['original_create_request_sha256'] == grant['request_sha256'] and p['slot'] == 2
          and p['policy_id'] == A3_POLICY and p['policy_checksum'] == k['policy_checksum']
          and p['workflow_id'] == k['workflow_id'] and p['generation'] == 22 and p['fence'] == 43
          and p['lease_owner'] == k['lease_owner'] and p['executor_id'] == k['executor_id']
-         and p['binding_name'] == binding['name']
          and utc(p['original_deadline']) == utc(pre['original_deadline']) < utc(v['observed_at_pg']), 'EXPIRED_ORIGINAL_CREATE_DEADLINE_NO_REWRITE')
     need(utc(sdk['called_at']) >= utc(p['reserved_at']) and utc(sdk['context_deadline']) <= utc(grant['expires_at'])
          and utc(sdk['resource_created_at']) >= utc(p['reserved_at'])-datetime.timedelta(seconds=5)
