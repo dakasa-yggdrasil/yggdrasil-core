@@ -466,7 +466,7 @@ func (s CapacityStore) RefreshFailedExpansionSurvivors(ctx context.Context, poli
 // a separately authorized later policy version after real terminal cleanup.
 func failedExpansionOriginalIntentEqual(a FailedUnwitnessedExpansionCleanup, current model.CapacityIntent) bool {
 	var old model.CapacityIntent
-	if capacity.DecodeGuestLifecycle(a.OriginalIntentWire, &old) != nil {
+	if json.Unmarshal(a.OriginalIntentWire, &old) != nil {
 		return false
 	}
 	old.FailedUnwitnessedExpansionCleanupID = current.FailedUnwitnessedExpansionCleanupID

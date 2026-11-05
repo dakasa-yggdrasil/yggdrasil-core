@@ -70,7 +70,7 @@
     {
       "evidence": "docs/service-contract/FAILED_UNWITNESSED_EXPANSION_CLEANUP_SOURCE_REVIEW.json",
       "id": "failed_unwitnessed_expansion_cleanup_source_review",
-      "sha256": "baf6d654c49b81cadc4d85ff1f8b16de99d7176eb6553ed149698681eb097bcd"
+      "sha256": "ca042392283942fee8780fd5534b95f95d39cd031cc070c85e993940be7e8dea"
     }
   ],
   "coverage": "complete",
@@ -119,7 +119,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "69bf1eb67024a52ebac0cf5bd1846dbed99b88e266ededf8709e9e6db2b937d9"
+    "sha256": "e71e65eb316ffd52931953debc4a5df243b089a304163e19cb3aa159f3b1c2d6"
   },
   "unresolved": []
 }
