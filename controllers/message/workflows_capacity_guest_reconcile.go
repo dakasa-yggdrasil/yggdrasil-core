@@ -410,6 +410,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			if resumeErr != nil {
 				return fail(resumeErr)
 			}
+			if !disposalEligible && !eligible {
+				store, resumed, eligible, resumeErr = store.TryClaimFailedExpansionTerminalReconcile(ctx, policy, assessment)
+				if resumeErr != nil {
+					return fail(resumeErr)
+				}
+			}
 			if disposalEligible {
 				deadline, e := store.OriginalGuestReconcileLeaseDeadline(ctx, policy, disposed.Generation, disposed.FencingToken, disposed.LeaseOwner)
 				if e != nil || captureOriginalGuestReconcileDeadline(ctx, deadline) != nil {
@@ -423,6 +429,9 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 					return fail(errOriginalGuestStep)
 				}
 				plan.Mode, plan.Reason = "refresh", "installed_original_readiness_reconcile"
+				if resumed.FailedExpansionTerminalReconcile != nil {
+					plan.Reason = "failed_expansion_terminal_readonly_reconcile"
+				}
 				plan.Generation, plan.FencingToken, plan.LeaseOwner = resumed.Generation, resumed.FencingToken, resumed.LeaseOwner
 			} else {
 				stage = "ordinary_assessment"
@@ -474,6 +483,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			store, epoch, resuming, err = store.OriginalGuestInstalledResumeEpoch(ctx, policy)
 			if err != nil {
 				return fail(err)
+			}
+			if !resuming {
+				store, epoch, resuming, err = store.OriginalGuestFailedExpansionTerminalReconcileEpoch(ctx, policy)
+				if err != nil {
+					return fail(err)
+				}
 			}
 			if resuming {
 				parsed.Generation, parsed.FencingToken, parsed.LeaseOwner = epoch.Generation, epoch.FencingToken, epoch.LeaseOwner

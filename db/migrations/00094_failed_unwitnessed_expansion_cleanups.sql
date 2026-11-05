@@ -267,7 +267,7 @@ BEGIN
  IF NEW.stage IN('inventory_returned','absence_returned') THEN
   SELECT * INTO STRICT prepared FROM public.capacity_failed_unwitnessed_expansion_cleanup_events WHERE cleanup_id=a.id AND stage=split_part(NEW.stage,'_',1)||'_prepared' AND original_record#>>'{evidence,read_id}'=r#>>'{read,read_id}';
   IF prepared.original_record->'evidence' IS DISTINCT FROM r->'read'
-  OR EXISTS(SELECT 1 FROM public.capacity_failed_unwitnessed_expansion_cleanup_events old WHERE old.cleanup_id=a.id AND old.stage=NEW.stage AND old.original_record#>>'{evidence,read,read_id}'=r#>>'{read,read_id}')
+  OR EXISTS(SELECT 1 FROM public.capacity_failed_unwitnessed_expansion_cleanup_events prior_return WHERE prior_return.cleanup_id=a.id AND prior_return.stage=NEW.stage AND prior_return.original_record#>>'{evidence,read,read_id}'=r#>>'{read,read_id}')
   THEN RAISE EXCEPTION 'failed expansion actual read return mismatch'; END IF;
   RETURN NEW; -- Failed/late raw custody is retained, never authority.
  END IF;

@@ -167,7 +167,7 @@ func (s CapacityStore) ReadFailedUnwitnessedExpansionCleanup(ctx context.Context
 	var events []FailedUnwitnessedExpansionCleanupEvent
 	for rows.Next() {
 		var e FailedUnwitnessedExpansionCleanupEvent
-		if rows.Scan(&raw, &digest) != nil || originalDispositionDigest(raw) != digest || capacity.DecodeGuestLifecycle(raw, &e) != nil || e.CleanupID != out.ID || e.Sequence != int64(len(events)+1) {
+		if rows.Scan(&raw, &digest) != nil || originalDispositionDigest(raw) != digest || json.Unmarshal(raw, &e) != nil || e.CleanupID != out.ID || e.Sequence != int64(len(events)+1) {
 			return out, nil, ErrCapacityConflict
 		}
 		events = append(events, e)

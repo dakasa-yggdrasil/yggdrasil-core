@@ -1,6 +1,6 @@
 # ADR-0106: Close an accepted unwitnessed expansion with a separate cleanup
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-05
 - **Deciders:** Giomaster
 - **Scope:** Core / failed unwitnessed AWS expansion cleanup
@@ -49,7 +49,7 @@ Every absence read owns a new complete five-second challenge and authenticated
 read-only observer return. Full raw returns are durable before qualification.
 Only complete VM and every sealed paid-auxiliary absence, followed by fresh
 survivor native observation and actual post-absence canaries, closes cleanup.
-An authenticated Pending return can continue read-only under a new genuine
+An authenticated Pending or complete return can continue read-only under a new genuine
 owner only after the former workflow's failed ACK and natural lease expiry.
 An issued, uncertain or unknown native effect never gains a second send.
 
@@ -59,9 +59,15 @@ legacy compensation. Its original SDK/settlement bytes remain unchanged. The
 intent records an unleased HOLD at the actual surviving count, explicitly
 preserves the failed expansion and grants no Guest, serving, business, savings
 or clean-cycle credit. The same failed policy stays latched. A genuinely later
-compatible policy version can pass the normal source assessment and ADR0094
-continuity path, remove only the active selector and make a new decision;
-immutable94 history and consumed send authority remain permanent.
+compatible policy version enters a separate Source-owned reconciliation claim
+after normal assessment and ADR0094 continuity checks. That claim has a new
+run, generation, fence and finite lease, and carries no provider-write authority.
+It validates the immutable terminal cleanup and the same surviving roster,
+then obtains fresh native inventory and signed initial-membership canaries.
+Only the ordinary prepared/canary/promoted transitions clear the new selector
+and lease. Until that claim, ordinary assessment preserves the terminal HOLD
+and active cleanup selector. Immutable94 history and consumed send authority
+remain permanent; no historical absence or floor proof becomes fresh evidence.
 
 ## Consequences
 

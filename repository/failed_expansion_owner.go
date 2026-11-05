@@ -38,7 +38,7 @@ func loadFailedExpansionTx(ctx context.Context, tx *sql.Tx, id string) (FailedUn
 	var out []FailedUnwitnessedExpansionCleanupEvent
 	for rows.Next() {
 		var e FailedUnwitnessedExpansionCleanupEvent
-		if rows.Scan(&raw, &sha) != nil || originalDispositionDigest(raw) != sha || capacity.DecodeGuestLifecycle(raw, &e) != nil || e.CleanupID != id || e.Sequence != int64(len(out)+1) {
+		if rows.Scan(&raw, &sha) != nil || originalDispositionDigest(raw) != sha || json.Unmarshal(raw, &e) != nil || e.CleanupID != id || e.Sequence != int64(len(out)+1) {
 			return a, nil, ErrCapacityConflict
 		}
 		out = append(out, e)
@@ -103,7 +103,7 @@ func (s CapacityStore) failedExpansionActiveClaimTx(ctx context.Context, tx *sql
 // append-only cleanup ledger and its explicitly linked new child may change.
 func failedExpansionOriginalsTx(ctx context.Context, tx *sql.Tx, a FailedUnwitnessedExpansionCleanup) error {
 	var good bool
-	err := tx.QueryRowContext(ctx, `SELECT g.state='settled' AND `+capacityGrantUndisposedSQL+` AND encode(sha256(convert_to(g.grant_record::text,'UTF8')),'hex')=$2 AND encode(sha256(p.original_wire),'hex')=$3 AND encode(sha256(convert_to(to_jsonb(j)::text,'UTF8')),'hex')=$4 AND encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex')=$5 AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=p.id) AND NOT EXISTS(SELECT 1 FROM public.capacity_vm_original_enrollments WHERE preregistration_id=p.id) AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_original_installations WHERE preregistration_id=p.id) AND NOT EXISTS(SELECT 1 FROM public.capacity_vm_retirement_intents WHERE preregistration_id=p.id) FROM public.capacity_mutation_grants g JOIN public.capacity_vm_provisioning_preregistrations p ON p.id=$6 AND p.create_grant_id=g.id JOIN public.capacity_dispatch_jobs j ON j.id=$7 JOIN public.workflow_runs w ON w.id=j.run_id WHERE g.id=$1`, a.GrantID, a.OriginalGrantSHA256, a.OriginalPreregSHA256, a.OriginalDispatchSHA256, a.OriginalRunSHA256, a.PreregistrationID, a.JobID).Scan(&good)
+	err := tx.QueryRowContext(ctx, `SELECT g.state='settled' AND encode(sha256(convert_to(g.grant_record::text,'UTF8')),'hex')=$2 AND encode(sha256(p.original_wire),'hex')=$3 AND encode(sha256(convert_to(to_jsonb(j)::text,'UTF8')),'hex')=$4 AND encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex')=$5 AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=p.id) AND NOT EXISTS(SELECT 1 FROM public.capacity_vm_original_enrollments WHERE preregistration_id=p.id) AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_original_installations WHERE preregistration_id=p.id) AND NOT EXISTS(SELECT 1 FROM public.capacity_vm_retirement_intents WHERE preregistration_id=p.id) FROM (SELECT * FROM public.capacity_mutation_grants WHERE `+capacityGrantUndisposedSQL+`) g JOIN public.capacity_vm_provisioning_preregistrations p ON p.id=$6 AND p.create_grant_id=g.id JOIN public.capacity_dispatch_jobs j ON j.id=$7 JOIN public.workflow_runs w ON w.id=j.run_id WHERE g.id=$1`, a.GrantID, a.OriginalGrantSHA256, a.OriginalPreregSHA256, a.OriginalDispatchSHA256, a.OriginalRunSHA256, a.PreregistrationID, a.JobID).Scan(&good)
 	if err != nil {
 		return err
 	}
@@ -466,7 +466,7 @@ func (s CapacityStore) RefreshFailedExpansionSurvivors(ctx context.Context, poli
 // a separately authorized later policy version after real terminal cleanup.
 func failedExpansionOriginalIntentEqual(a FailedUnwitnessedExpansionCleanup, current model.CapacityIntent) bool {
 	var old model.CapacityIntent
-	if capacity.DecodeGuestLifecycle(a.OriginalIntentWire, &old) != nil {
+	if json.Unmarshal(a.OriginalIntentWire, &old) != nil {
 		return false
 	}
 	old.FailedUnwitnessedExpansionCleanupID = current.FailedUnwitnessedExpansionCleanupID
