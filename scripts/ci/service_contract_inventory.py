@@ -76,6 +76,10 @@ def main():
  failures=[]
  for name,data in result.items():
   target=x.out/(name+'.json')
+  # The owning v1 Go publicSourceFact decoder gives an omitted string its
+  # empty default. Encode only that default compactly; every nonempty build
+  # constraint and every path/size/digest remains explicit and unchanged.
+  if name=='sources':data={path:{key:value for key,value in fact.items() if key!='build_constraint' or value!=''} for path,fact in data.items()}
   # Keep the complete growing Source map within the published doctor's 128KiB bound.
   options={'separators':(',',':')} if name=='sources' else {'indent':2}
   envelope={'schema':'core_source_interface_census_v1','records':data}
