@@ -1,0 +1,11 @@
+# Core image maintenance after a failed cleanup read
+
+The G14 image operator is separate from the runtime10/tools4 package. Its own checksum and owning Source CI qualify the operator. Importing it performs no operation. Actual image, package, controller, Guardian and Root receipts must be bound before execution. The desired image declaration grants no rollout authority.
+
+The preimage is the unchanged R4 Deployment and Pod lifetime. The separately admitted failed expansion keeps its accepted original CREATE, its single accepted settled normal DESTROY child and every old ledger byte. The last qualified Pending observation, next preparation and deadline-failed raw return are retained as distinct facts. No raw failure is absence or Guest/cycle credit. The typed cleanup can resume automatically after the new Core starts, so the image operator reads mutable cleanup/policy state only before PATCH.
+
+Operation order is G14 pair qualification/swap, Goose95 while the current Core stays R4, then the image CAS. Schema95 changes only the event-guard body and its literal function definition, adding one migration-history row and preserving the entire prior94 catalog, records and SDK receipts. Historical Root94 remains separate from the closed Root95 acceptance and its five original roles.
+
+Supply the late Root data through `--config-ref-path` and `--expected-config-sha256`. The reference is validated before file, credential or Native access; the complete maintenance guard remains mandatory. Definitions-only readers must initialize `CONFIG_REF` with `validated_config_ref` and call `require_bound` before `load_tools`. Never rewrite the qualified operator to inject a later receipt.
+
+The operator preserves the operation mutex, all43 protected references, recovery budget and Cold/Hub identities, full120/own15/current15 qualification, exact unchanged full Core preimage, server dry-run and eight JSON-Patch operations. Durable global and per-run possible-send markers precede the only actual PATCH. Unknown acknowledgement permits GET-only reconciliation, never retry, rollback, rearm or another provider operation. PATCH acknowledgement does not prove new-Pod readiness, post-rollout qualification or a clean business cycle.

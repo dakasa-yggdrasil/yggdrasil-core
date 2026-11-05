@@ -7,6 +7,7 @@ on:
       - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
       - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
       - 'db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql'
+      - 'db/migrations/00095_failed_expansion_read_failure_continuation.sql'
       - '.github/workflows/owned-network-guardian.yml'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - 'db/migrations/00092_workflow_runs_busy_logical_index.sql'
       - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
       - 'db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql'
+      - 'db/migrations/00095_failed_expansion_read_failure_continuation.sql'
       - '.github/workflows/owned-network-guardian.yml'
   workflow_dispatch:
 
@@ -95,6 +97,12 @@ jobs:
           sha256sum --check SHA256SUMS
           cd tools
           sha256sum --check SHA256SUMS
+      - name: Check inert G14 Source checksums
+        run: |
+          cd ops/network-guardian/g14pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
       - name: Verify separate additive G12 Core CAS and Goose93 companion Source
         run: |
           cd ops/network-guardian/rollout
@@ -105,7 +113,15 @@ jobs:
         run: |
           cd ops/network-guardian/rollout
           sha256sum --check SHA256SUMS-G13
-      - name: Run exact preserved226 plus G13 network6 CoreCAS6 Goose94 companion7 census
+      - name: Verify additive G14 Core CAS Source
+        run: |
+          cd ops/network-guardian/rollout
+          sha256sum --check SHA256SUMS-G14
+      - name: Verify additive Goose95 Source
+        run: |
+          cd ops/network-guardian/rollout
+          sha256sum --check SHA256SUMS-GOOSE95
+      - name: Run exact preserved245 plus G14 network6 CoreCAS6 Goose95 companion7 census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
@@ -142,6 +158,7 @@ jobs:
             db/migrations/00092_workflow_runs_busy_logical_index.sql
             db/migrations/00093_guest_retirement_settled_absence_continuation.sql
             db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql
+            db/migrations/00095_failed_expansion_read_failure_continuation.sql
             ${{ runner.temp }}/owned-network-guardian/
           if-no-files-found: error
           retention-days: 30

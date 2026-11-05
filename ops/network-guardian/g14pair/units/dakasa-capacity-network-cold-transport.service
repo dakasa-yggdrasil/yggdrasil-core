@@ -1,0 +1,27 @@
+[Unit]
+Description=Cold restore the eight fixed bridge and MSS transport rules
+After=network-online.target k3s.service
+Wants=network-online.target
+Requires=k3s.service
+Before=dakasa-capacity-network-hub.service dakasa-capacity-network.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 -B /opt/dakasa/capacity-network/network-boot-recovery-r13-g14pair-source-v1/network_guardian.py --cold-restore --source-sha256 2d4454c6eb62f14a7d9ce151ce7eeb9260679af1215ef04697c2f35329a7b430
+RemainAfterExit=yes
+Restart=no
+TimeoutStartSec=180
+TimeoutStopSec=5
+KillMode=control-group
+CPUQuota=25%
+MemoryMax=384M
+MemorySwapMax=0
+TasksMax=32
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+RequiredBy=dakasa-capacity-network-hub.service dakasa-capacity-network.service

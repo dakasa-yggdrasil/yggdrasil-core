@@ -74,7 +74,16 @@ def main():
     goose94 = json.loads((HERE / 'EXPECTED-TESTS-GOOSE94.json').read_bytes())
     if type(goose94) is not list or len(goose94) != 7 or len(set(goose94)) != 7:
         raise RuntimeError('exact additive Goose94 seven-test roster required')
-    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93 + g13 + g13cas + goose94
+    g14 = json.loads((HERE / 'EXPECTED-TESTS-G14.json').read_bytes())
+    if type(g14) is not list or len(g14) != 6 or len(set(g14)) != 6:
+        raise RuntimeError('EXACT_G14_SIX_TEST_IDS_REQUIRED')
+    g14cas = json.loads((HERE / 'EXPECTED-TESTS-G14-CAS.json').read_bytes())
+    if type(g14cas) is not list or len(g14cas) != 6 or len(set(g14cas)) != 6:
+        raise RuntimeError('EXACT_G14_CAS_SIX_TEST_IDS_REQUIRED')
+    goose95 = json.loads((HERE / 'EXPECTED-TESTS-GOOSE95.json').read_bytes())
+    if type(goose95) is not list or len(goose95) != 7 or len(set(goose95)) != 7:
+        raise RuntimeError('EXACT_GOOSE95_SEVEN_TEST_IDS_REQUIRED')
+    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93 + g13 + g13cas + goose94 + g14 + g14cas + goose95
     if len(set(expected)) != len(expected):
         raise RuntimeError('all preserved and additive test rosters must be disjoint')
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
