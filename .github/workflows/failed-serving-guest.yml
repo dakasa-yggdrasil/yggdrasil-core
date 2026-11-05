@@ -121,6 +121,38 @@ jobs:
           (p/'CLEANUP94-CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_CLEANUP94
+      - name: Qualify schema95 deadline-failed cleanup read continuation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=3m -json ./repository -run '^TestFailedUnwitnessedExpansionCleanupPostgresReadDeadlineContinuation$' > "$FAILED_SERVING_LOGS/cleanup95-repository.stdout" 2> "$FAILED_SERVING_LOGS/cleanup95-repository.stderr"
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > "$FAILED_SERVING_LOGS/cleanup95-repository.exit"
+          [[ "$rc" == 0 ]]
+          python3 - <<'PY_CLEANUP95'
+          import collections,json,os,pathlib,subprocess
+          p=pathlib.Path(os.environ['FAILED_SERVING_LOGS'])
+          root='TestFailedUnwitnessedExpansionCleanupPostgresReadDeadlineContinuation'
+          children=['call_did_not_fail','not_original_context_deadline','unsupported_output_status','return_before_original_deadline','mismatched_read_wire','inventory_kind','zero_read_id','foreign_claim','forged_receipt','unsettled_child','missing_qualified_anchor']
+          package='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+          rows=[json.loads(line) for line in (p/'cleanup95-repository.stdout').read_text().splitlines() if line.strip()]
+          assert rows and all(r.get('Package')==package for r in rows)
+          assert not any(r.get('Action') in ('fail','skip') for r in rows)
+          assert 'WARNING: DATA RACE' not in (p/'cleanup95-repository.stderr').read_text()
+          for action in ('run','pass'):
+              actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r and '/' not in r['Test'])
+              assert actual==collections.Counter([root]),(action,actual)
+              child_nodes=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and r.get('Test','').startswith(root+'/'))
+              assert child_nodes==collections.Counter(root+'/'+child for child in children),(action,child_nodes)
+          assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
+          assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
+          value={'schema':'failed_expansion_deadline_read_continuation_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':95,'race':True,'count':1,'total_roots':1,'roots':[root],'children':children,'total_nodes':12,'skipped':0,'historical_schema94_census_unchanged':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          (p/'CLEANUP95-CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(value,sort_keys=True))
+          PY_CLEANUP95
       - name: Run exact schema93 Source, HTTP and bounded original-read cases
         shell: bash
         run: |

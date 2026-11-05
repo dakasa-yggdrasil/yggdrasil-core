@@ -71,6 +71,11 @@
       "evidence": "docs/service-contract/FAILED_UNWITNESSED_EXPANSION_CLEANUP_SOURCE_REVIEW.json",
       "id": "failed_unwitnessed_expansion_cleanup_source_review",
       "sha256": "3ab4fe572e6afccc1546b19acea2a4be61a2fc885bb11790f9da60d1a9b3c4f7"
+    },
+    {
+      "evidence": "docs/service-contract/FAILED_EXPANSION_READ_DEADLINE_CONTINUATION_SOURCE_REVIEW.json",
+      "id": "failed_expansion_read_deadline_continuation_source_review",
+      "sha256": "25595971f45d41b51dec609c51a641c05771fa9bc7499b5708ce895fbcae3834"
     }
   ],
   "coverage": "complete",
@@ -119,7 +124,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "349b19e664ae506c2a78bcd0ca27388d1b71944bf123d1fbb65288c332ead5b2"
+    "sha256": "587c037c7e3fb96df9cc6c76f60f440928394337b77c8f1e9f37c73d23efbca8"
   },
   "unresolved": []
 }
