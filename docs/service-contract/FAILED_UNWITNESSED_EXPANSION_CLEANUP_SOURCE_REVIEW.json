@@ -93,8 +93,8 @@
       "sha256": "fa44628f51f778cb52c7850c3cc1db32d14a084a4b13ea86e296b7b056fd4c03"
     },
     "repository/capacity_guest_reconcile.go": {
-      "bytes": 18276,
-      "sha256": "529a7b3f6d6ffcc962b4935d6603602693b361ad13930aa58b9560d0a75203a7"
+      "bytes": 18550,
+      "sha256": "50250e8381e80ac3455ddcb17ff544ea9f1fe075e9c304426889feabe1f65953"
     },
     "repository/capacity_mutations.go": {
       "bytes": 49136,
@@ -141,7 +141,7 @@
     "path": "docs/service-contract/source/sources.json",
     "records": 811,
     "schema": "core_source_interface_census_v1",
-    "sha256": "d050a36ab994063027635e915816606c827b936686f8c82d5801fdd546091f02"
+    "sha256": "dd74fbaec375deefd1c5245c09ef1aec3a0d63f94a222262f6a69f8c602d9018"
   },
   "unchanged_protocols": [
     "original-create-dispositions accounting-only boundary",
