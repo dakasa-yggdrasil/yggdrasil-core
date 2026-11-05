@@ -11,6 +11,9 @@ type CapacityFailedExpansionTerminalReconcile struct {
 	TerminalFence       int64  `json:"terminal_fence"`
 	ClaimGeneration     int64  `json:"claim_generation"`
 	ClaimFence          int64  `json:"claim_fence"`
+	PreviousRunID       string `json:"previous_run_id,omitempty"`
+	PreviousRunSHA256   string `json:"previous_run_sha256,omitempty"`
+	PreviousFence       int64  `json:"previous_fence"`
 	RunID               string `json:"run_id"`
 	ExecutorID          string `json:"executor_id"`
 }
