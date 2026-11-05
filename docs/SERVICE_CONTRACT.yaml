@@ -70,7 +70,7 @@
     {
       "evidence": "docs/service-contract/FAILED_UNWITNESSED_EXPANSION_CLEANUP_SOURCE_REVIEW.json",
       "id": "failed_unwitnessed_expansion_cleanup_source_review",
-      "sha256": "c779ed3341f909b16a9ca8b2790954a9ab0772d14b8bac9ca015f83b5c9c1aaf"
+      "sha256": "e7879ec101b49509b210176465daa150fe4b07624e8a903f4d214196f582e47d"
     }
   ],
   "coverage": "complete",
