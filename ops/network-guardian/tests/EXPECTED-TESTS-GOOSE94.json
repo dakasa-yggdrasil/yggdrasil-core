@@ -1,0 +1,9 @@
+[
+  "test_goose94_native_once.Goose94OnceTests.test_forced_unbound_refuses_before_io",
+  "test_goose94_native_once.Goose94OnceTests.test_same_closed_one_job_shape_and_distinct_once_domain",
+  "test_goose94_native_once.Goose94OnceTests.test_actual_m94_exact_four_source_functions",
+  "test_goose94_native_once.Goose94OnceTests.test_a3_sdk_failed_ack_and_absent_target_proofs",
+  "test_goose94_native_once.Goose94OnceTests.test_m94_new_null_column_preserves_old_sdk_and_all_columns",
+  "test_goose94_native_once.Goose94OnceTests.test_catalog_composition_and_all_prior93_bytes",
+  "test_goose94_native_once.Goose94OnceTests.test_lost_ack_and_stale_current15_cannot_send_twice"
+]
