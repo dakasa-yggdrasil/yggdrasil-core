@@ -65,7 +65,16 @@ def main():
     goose93 = json.loads((HERE / 'EXPECTED-TESTS-GOOSE93.json').read_bytes())
     if type(goose93) is not list or len(goose93) != 7 or len(set(goose93)) != 7:
         raise RuntimeError('exact additive Goose93 companion roster required')
-    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93
+    g13 = json.loads((HERE / 'EXPECTED-TESTS-G13.json').read_bytes())
+    if type(g13) is not list or len(g13) != 6 or len(set(g13)) != 6:
+        raise RuntimeError('EXACT_G13_SIX_TEST_IDS_REQUIRED')
+    g13cas = json.loads((HERE / 'EXPECTED-TESTS-G13-CAS.json').read_bytes())
+    if type(g13cas) is not list or len(g13cas) != 6 or len(set(g13cas)) != 6:
+        raise RuntimeError('exact additive G13 Core CAS six-test roster required')
+    goose94 = json.loads((HERE / 'EXPECTED-TESTS-GOOSE94.json').read_bytes())
+    if type(goose94) is not list or len(goose94) != 7 or len(set(goose94)) != 7:
+        raise RuntimeError('exact additive Goose94 seven-test roster required')
+    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93 + g13 + g13cas + goose94
     if len(set(expected)) != len(expected):
         raise RuntimeError('all preserved and additive test rosters must be disjoint')
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
@@ -90,7 +99,7 @@ def main():
              'source_commit': os.environ['SOURCE_COMMIT'], 'success': success,
              'expected': expected, 'historical_expected': historical, 'g9_expected': current, 'r6_expected': r6,
              'historical_count': len(historical), 'g9_count': len(current), 'r6_count': len(r6),
-             'index92_expected': index92, 'goose92_expected': goose92, 'g10_expected': g10, 'g10_count': len(g10), 'g11_expected': g11, 'g11_count': len(g11), 'g12_expected': g12, 'g12_count': len(g12), 'g12cas_expected': g12cas, 'g12cas_count': len(g12cas), 'goose93_expected': goose93, 'goose93_count': len(goose93),
+             'index92_expected': index92, 'goose92_expected': goose92, 'g10_expected': g10, 'g10_count': len(g10), 'g11_expected': g11, 'g11_count': len(g11), 'g12_expected': g12, 'g12_count': len(g12), 'g12cas_expected': g12cas, 'g12cas_count': len(g12cas), 'goose93_expected': goose93, 'goose93_count': len(goose93), 'g13_expected': g13, 'g13_count': len(g13), 'g13cas_expected': g13cas, 'g13cas_count': len(g13cas), 'goose94_expected': goose94, 'goose94_count': len(goose94),
              'index92_count': len(index92), 'goose92_count': len(goose92),
              'executed': result.runs, 'passed': result.passes,
              'failures': [test.id() for test, _ in result.failures],

@@ -1,0 +1,8 @@
+[
+  "test_g13pair_core_cas.G13CoreCASTests.test_forced_unbound_refuses_before_all_input_auth_or_native_io",
+  "test_g13pair_core_cas.G13CoreCASTests.test_r3_preimage_and_full_cas_mutation_footprint",
+  "test_g13pair_core_cas.G13CoreCASTests.test_known_a3_create_refuses_uncertain_ack_authority_or_epoch",
+  "test_g13pair_core_cas.G13CoreCASTests.test_once_markers_precede_only_actual_patch_and_prevent_replay",
+  "test_g13pair_core_cas.G13CoreCASTests.test_lost_ack_is_get_only_and_expired_current15_never_sends",
+  "test_g13pair_core_cas.G13CoreCASTests.test_common_custody_and_schema94_preserve_prior93_whole_history"
+]

@@ -89,12 +89,23 @@ jobs:
           sha256sum --check SHA256SUMS
           cd tools
           sha256sum --check SHA256SUMS
+      - name: Check inert G13 Source checksums
+        run: |
+          cd ops/network-guardian/g13pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
       - name: Verify separate additive G12 Core CAS and Goose93 companion Source
         run: |
           cd ops/network-guardian/rollout
           sha256sum --check SHA256SUMS-G12
           sha256sum --check SHA256SUMS-GOOSE93
-      - name: Run exact preserved207 plus G12 network6 CoreCAS6 Goose93 companion7 census
+          sha256sum --check SHA256SUMS-GOOSE94
+      - name: Verify additive G13 Core CAS Source
+        run: |
+          cd ops/network-guardian/rollout
+          sha256sum --check SHA256SUMS-G13
+      - name: Run exact preserved226 plus G13 network6 CoreCAS6 Goose94 companion7 census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
