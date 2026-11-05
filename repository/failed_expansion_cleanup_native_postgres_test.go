@@ -279,8 +279,19 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 			if err = f.DB.QueryRow(`SELECT j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at IS NOT NULL AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.finished_at=j.returned_at FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.id=$1 AND j.run_id=$2`, owningJobID, f.store.OriginalRunID).Scan(&failedAcknowledged); err != nil || !failedAcknowledged {
 				t.Fatal("real failed owner ACK required before read-only continuation", failedAcknowledged, err)
 			}
-			if _, _, _, _, err = f.PlanStore().TryClaimFailedExpansionCleanup(ctx, f.Policy); !errors.Is(err, ErrCapacityLease) {
-				t.Fatal("new owner reminted before natural expiry", err)
+			// This still names the ACKed failed run, not a genuine new started
+			// requester. Its identity must be refused before the lease gate.
+			var originalLeaseLive bool
+			if err = f.DB.QueryRow(`SELECT clock_timestamp()<$1`, *current.LeaseExpiresAt).Scan(&originalLeaseLive); err != nil || !originalLeaseLive {
+				t.Fatal("closed-owner negative must precede natural lease expiry", originalLeaseLive, err)
+			}
+			beforeRefusalIntent := failedCleanupTestIntent(t, f.DB, f.Policy, f.Spec)
+			beforeRefusalLedger := failedCleanupTestLedger(t, f.DB, a)
+			if _, _, _, _, err = f.PlanStore().TryClaimFailedExpansionCleanup(ctx, f.Policy); !errors.Is(err, ErrCapacityConflict) {
+				t.Fatal("ACKed old run acquired new ownership", err)
+			}
+			if !bytes.Equal(beforeRefusalIntent, failedCleanupTestIntent(t, f.DB, f.Policy, f.Spec)) || !reflect.DeepEqual(beforeRefusalLedger, failedCleanupTestLedger(t, f.DB, a)) {
+				t.Fatal("closed-owner refusal changed epoch, lease or immutable cleanup ledger")
 			}
 			time.Sleep(max(0, time.Until(*current.LeaseExpiresAt)) + 5*time.Millisecond)
 			f.startSuccessorDispatch()
