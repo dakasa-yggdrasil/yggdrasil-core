@@ -55,6 +55,10 @@ type nativeAdapterHTTPPolicy struct {
 	parentDeadline time.Time
 	guest          *capacityGuestHTTPPolicy
 	originalReturn func(bool)
+
+	// Only the source-owned original AWS creation observer may retain this
+	// static read-unavailable class. No public request can enable it.
+	originalAWSReadUnavailable bool
 }
 
 // Only the original private release caller owns this wrapper. http.Client
@@ -509,6 +513,11 @@ func (c *adapterTransportClient) callNativeHTTPJSON(ctx context.Context, target 
 		err = capacity.DecodeBusinessJSON(raw, response)
 	} else {
 		var inner []byte
+		if n.originalAWSReadUnavailable {
+			if err := validateOriginalAWSObserverEnvelope(raw); err != nil {
+				return fail(err)
+			}
+		}
 		inner, err = unwrapSDKHTTPEnvelope(raw)
 		if err == nil {
 			err = decodeRPCBodyWithPolicy(inner, response, policy)
@@ -516,6 +525,29 @@ func (c *adapterTransportClient) callNativeHTTPJSON(ctx context.Context, target 
 	}
 	if err = errors.Join(err, fence()); err != nil {
 		return fail(err)
+	}
+	return nil
+}
+
+// Preserve the existing bare-RPC compatibility, but never turn a malformed
+// SDK wrapper into the private read-unavailable class. The SDK's optional
+// transport metadata remains valid; it grants no observation authority.
+func validateOriginalAWSObserverEnvelope(raw []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for key := range fields {
+		if strings.EqualFold(key, "body") || strings.EqualFold(key, "content_type") {
+			var envelope rpc.Envelope
+			if err := capacity.DecodeNativeCapacity(json.RawMessage(raw), &envelope); err != nil {
+				return err
+			}
+			if envelope.ContentType != "application/json" || len(envelope.Body) == 0 {
+				return errors.New("original AWS SDK response envelope refused")
+			}
+			break
+		}
 	}
 	return nil
 }

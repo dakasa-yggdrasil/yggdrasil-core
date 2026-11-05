@@ -8,8 +8,30 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
+
+// A complete, closed reply from the original AWS observer reported that its
+// native read was unavailable. It supplies no observation or proof. Keep this
+// classification private and its text detail-free across every error wrapper.
+type originalAWSReadUnavailableError struct{}
+
+func (*originalAWSReadUnavailableError) Error() string { return "rpc adapter returned failure" }
+
+func originalAWSReadUnavailableReply(body []byte) bool {
+	var envelope rpcEnvelope
+	if capacity.DecodeNativeCapacity(json.RawMessage(body), &envelope) != nil {
+		return false
+	}
+	fields, err := capacity.NativeCanonicalObject(body, map[string]bool{"ok": true, "error": true})
+	if err != nil || len(fields) != 2 || !bytes.Equal(bytes.TrimSpace(fields["ok"]), []byte("false")) || envelope.Error == nil {
+		return false
+	}
+	details, err := capacity.NativeCanonicalObject(fields["error"], map[string]bool{"code": true, "message": true})
+	return err == nil && len(details) == 2 && envelope.Error.Code == "execute_failed" &&
+		envelope.Error.Message == "original_ec2_readiness_native_read_failed"
+}
 
 type rpcEnvelope struct {
 	OK    bool            `json:"ok"`
@@ -124,6 +146,9 @@ func decodeRPCBodyDetailFree(body []byte, response any, policy adapterCallPolicy
 			return policy.sanitizeError(err)
 		}
 		if envelope.Error != nil || !envelope.OK {
+			if policy.native != nil && policy.native.originalAWSReadUnavailable && originalAWSReadUnavailableReply(body) {
+				return policy.sanitizeError(&originalAWSReadUnavailableError{})
+			}
 			return policy.sanitizeError(errors.New("rpc adapter returned failure"))
 		}
 		if len(envelope.Data) == 0 || response == nil {

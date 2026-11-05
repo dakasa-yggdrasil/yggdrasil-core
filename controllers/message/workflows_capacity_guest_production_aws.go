@@ -4,6 +4,7 @@ package message
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"slices"
 	"time"
@@ -79,7 +80,17 @@ func (s *originalProductionGuestSupplier) readAWS(ctx context.Context, g model.C
 		Lifecycle model.CapacityAWSInstanceLifecycle `json:"lifecycle"`
 	}
 	status, err := s.call(ctx, "observe_ec2_instance", map[string]any{"profile": s.binding.ProfileName, "slot": g.Slot, "grant_id": g.GrantID, "expected_resource_id": receipt.ResourceID, "expected_resource_created_at": receipt.ResourceCreatedAt}, &observed)
-	if err != nil || status != "observed" || observed.Lifecycle.Schema != "aws_original_request_and_instance_status_v1" || observed.Lifecycle.RequestID != receipt.ActionID {
+	if err != nil {
+		var unavailable *originalAWSReadUnavailableError
+		if errors.As(err, &unavailable) && s.guard(ctx) == nil {
+			// The original Create invocation already owns one accepted SDK
+			// settlement. Await only another read on that exact receipt, using
+			// its existing ticker and original deadline; never create again.
+			return empty, errOriginalGuestProviderPending
+		}
+		return empty, errOriginalGuestStep
+	}
+	if status != "observed" || observed.Lifecycle.Schema != "aws_original_request_and_instance_status_v1" || observed.Lifecycle.RequestID != receipt.ActionID {
 		return empty, errOriginalGuestStep
 	}
 	proof, err := capacity.VMServerPlanProof(s.p, s.binding, observed.Plan, receipt, status, time.Now().UTC(), "original-aws-instance-status:"+g.GrantID)
