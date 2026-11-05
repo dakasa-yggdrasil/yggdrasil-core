@@ -358,16 +358,7 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 			if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, f.Policy); err != nil || !selected {
 				t.Fatal("same failed policy not latched", err)
 			}
-			// A genuinely later compatible policy is a normal new decision, not a reset
-			// or replay of this consumed admission. Its Source planner must regain control.
-			newer, err := CreateManifestVersion(ctx, f.DB, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: f.Policy.Metadata.Namespace, Name: f.Policy.Metadata.Name}, Spec: f.Policy.Spec}, capacity.BusinessCreationSHA256([]byte("DECLARED-new-compatible-policy")))
-			if err != nil || newer.ID == f.Policy.ID || newer.Version != f.Policy.Version+1 || !newer.Metadata.Active {
-				t.Fatal("atomic new compatible-policy activation", newer, err)
-			}
-			if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, newer); err != nil || selected {
-				t.Fatal("new compatible policy stuck behind old consumed cleanup", err)
-			}
-			cleanupTerminalNewPolicyReconcile(t, ctx, f, newer, terminal, a, ledger)
+			cleanupTerminalNewPolicyReconcile(t, ctx, f, terminal, a, ledger)
 		})
 	}
 
@@ -376,7 +367,7 @@ func TestFailedUnwitnessedExpansionCleanupPostgresWholeLifecycle(t *testing.T) {
 // This extension keeps the same real PG root and declared transport. It proves
 // an old terminal cleanup authorizes a separate compatible-policy membership
 // reconciliation, never another provider grant or replay of the failed create.
-func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *FailedExpansionCleanupRecoveryFixture, newer model.Manifest, terminal model.CapacityIntent, a FailedUnwitnessedExpansionCleanup, ledger [][]byte) {
+func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *FailedExpansionCleanupRecoveryFixture, terminal model.CapacityIntent, a FailedUnwitnessedExpansionCleanup, ledger [][]byte) {
 	t.Helper()
 	var grantWire, sdkWire []byte
 	if err := f.DB.QueryRowContext(ctx, `SELECT COALESCE(jsonb_agg(to_jsonb(g) ORDER BY id),'[]'::jsonb)::text FROM public.capacity_mutation_grants g`).Scan(&grantWire); err != nil {
@@ -404,6 +395,16 @@ func cleanupTerminalNewPolicyReconcile(t *testing.T, ctx context.Context, f *Fai
 	response := model.RunWorkflowResponse{Workflow: model.ManifestReference{ID: f.Workflow.ID, Kind: "workflow", Namespace: f.Workflow.Metadata.Namespace, Name: f.Workflow.Metadata.Name, Version: f.Workflow.Version}, Status: "succeeded", StartedAt: *job.StartedAt, FinishedAt: returned}
 	if err = FinishCapacityDispatch(ctx, f.DB, job, response, returned, nil); err != nil {
 		t.Fatal("real terminal cleanup owner return", err)
+	}
+	// Finish checks the original active policy pin; supersession follows its real ACK.
+	// A genuinely later compatible policy is a normal new decision, not a reset
+	// or replay of this consumed admission. Its Source planner must regain control.
+	newer, err := CreateManifestVersion(ctx, f.DB, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: f.Policy.Metadata.Namespace, Name: f.Policy.Metadata.Name}, Spec: f.Policy.Spec}, capacity.BusinessCreationSHA256([]byte("DECLARED-new-compatible-policy")))
+	if err != nil || newer.ID == f.Policy.ID || newer.Version != f.Policy.Version+1 || !newer.Metadata.Active {
+		t.Fatal("atomic new compatible-policy activation", newer, err)
+	}
+	if _, _, _, selected, err := f.PlanStore().TryClaimFailedExpansionCleanup(ctx, newer); err != nil || selected {
+		t.Fatal("new compatible policy stuck behind old consumed cleanup", err)
 	}
 	f.Policy = newer
 	f.startSuccessorDispatch()
