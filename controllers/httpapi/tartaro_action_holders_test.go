@@ -112,6 +112,22 @@ func requireErrorBody(t *testing.T, recorder *httptest.ResponseRecorder, status 
 	}
 }
 
+// requireNoRoster fails when an error response carries a roster. It checks
+// the decoded JSON keys, never the raw text: the error messages themselves
+// legitimately say "holders" ("tartaro action holders unavailable: ...").
+func requireNoRoster(t *testing.T, recorder *httptest.ResponseRecorder, why string) {
+	t.Helper()
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("error body is not a JSON object: %s", recorder.Body.String())
+	}
+	for _, key := range []string{"holders", "total"} {
+		if _, present := body[key]; present {
+			t.Fatalf("%s: body carries %q: %s", why, key, recorder.Body.String())
+		}
+	}
+}
+
 func TestTartaroActionHoldersRejectsMalformedQueriesBeforeAnyRead(t *testing.T) {
 	long := "tartaro:" + strings.Repeat("a", tartaroActionHoldersMaxActionLength)
 	for name, rawQuery := range map[string]string{
@@ -304,9 +320,7 @@ func TestTartaroActionHoldersRefuseToCountWhenAWildcardCatalogIsUnresolvable(t *
 			recorder := serveTartaroActionHolders(&Server{db: db, logger: zap.NewNop()}, "action=tartaro:suspend_user")
 
 			requireErrorBody(t, recorder, http.StatusServiceUnavailable)
-			if strings.Contains(recorder.Body.String(), "holders") || strings.Contains(recorder.Body.String(), "total") {
-				t.Fatalf("a refused count leaked a partial roster: %s", recorder.Body.String())
-			}
+			requireNoRoster(t, recorder, "a refused count leaked a partial roster")
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)
 			}
@@ -325,9 +339,7 @@ func TestTartaroActionHoldersMapARosterReadFailureToAServerError(t *testing.T) {
 	if recorder.Code < 500 {
 		t.Fatalf("status=%d body=%s, want 5xx", recorder.Code, recorder.Body.String())
 	}
-	if strings.Contains(recorder.Body.String(), "holders") {
-		t.Fatalf("a failed read answered a roster: %s", recorder.Body.String())
-	}
+	requireNoRoster(t, recorder, "a failed read answered a roster")
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
