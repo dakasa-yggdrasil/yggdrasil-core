@@ -1201,6 +1201,72 @@
         }
       }
     },
+    "/api/v1/tartaro/action-holders": {
+      "get": {
+        "summary": "Roster of the collaborators who hold one Tartaro grant now",
+        "description": "ADR-0107. Holders are exactly the collaborators the live Tartaro effective-actions read authorizes for the action on the configured Tartaro instance: status active AND (a membership satisfying the RBAC membership predicate in a team with a grant on the instance whose action_name is the action, or is * while the instance permission catalog lists the action [team_grant], OR Tartaro god mode [god_mode]). Any authenticated console caller (session or forwarded OIDC JWT); no ops permission; not a directory machine route. holders is sorted by collaborator_id ascending and unique, total equals the number of holders, and every sources list is a non-empty sorted subset of [god_mode, team_grant]. When any * grant exists on the instance and its permission catalog cannot be resolved, the answer is 503 rather than a roster that would count lower.",
+        "security": [
+          {
+            "HumanSession": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "action",
+            "required": true,
+            "description": "One concrete Yggdrasil grant action name, exactly once, without surrounding whitespace, never *, at most 128 bytes. Any other query parameter is refused.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "example": "tartaro:suspend_user"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete roster",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TartaroActionHolders"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing, repeated, padded, wildcard or oversized action, an unknown parameter or a malformed query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "500": {
+            "description": "Roster read failed; no partial roster is answered"
+          },
+          "503": {
+            "description": "A * grant exists on the instance and its permission catalog is not resolvable; the roster cannot be counted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/directory/snapshot": {
       "get": {
         "summary": "Collect a restricted consistent directory snapshot",
@@ -3634,6 +3700,83 @@
         },
         "required": [
           "phone_e164"
+        ]
+      },
+      "TartaroActionHolders": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The requested action, echoed."
+          },
+          "integration_instance": {
+            "$ref": "#/components/schemas/TartaroActionHoldersIntegrationInstance"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Always the number of holders."
+          },
+          "holders": {
+            "type": "array",
+            "description": "Sorted by collaborator_id ascending, unique; never null.",
+            "items": {
+              "$ref": "#/components/schemas/TartaroActionHolder"
+            }
+          }
+        },
+        "required": [
+          "action",
+          "integration_instance",
+          "total",
+          "holders"
+        ]
+      },
+      "TartaroActionHoldersIntegrationInstance": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The configured Tartaro instance (YGGDRASIL_TARTARO_INSTANCE_NAMESPACE/_NAME).",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "namespace",
+          "name"
+        ]
+      },
+      "TartaroActionHolder": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "collaborator_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical lowercase collaborator UUID."
+          },
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "description": "Sorted.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "god_mode",
+                "team_grant"
+              ]
+            }
+          }
+        },
+        "required": [
+          "collaborator_id",
+          "sources"
         ]
       },
       "TeamLeadershipUpdate": {

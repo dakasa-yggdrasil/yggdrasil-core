@@ -42,6 +42,8 @@ func TestRequireAuthenticatedConsoleAPIs_GuardsLeakingGETs(t *testing.T) {
 		"/api/v1/audit",
 		"/api/v1/reconciler/status",
 		"/api/v1/catalog/discovery",
+		// ADR-0107: the Tartaro action-holder roster lists collaborator ids.
+		"/api/v1/tartaro/action-holders?action=tartaro:suspend_user",
 	}
 
 	for _, path := range leakers {
