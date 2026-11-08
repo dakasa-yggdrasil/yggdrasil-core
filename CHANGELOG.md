@@ -274,6 +274,25 @@ All notable changes to yggdrasil-core are documented here.
 - Preserved the dedicated auth-admin credential only on the exact provider,
   SCIM, and SAML mutation routes while keeping workflow credentials excluded.
 
+### Added
+- **Tartaro action-holder roster (ADR-0107).**
+  `GET /api/v1/tartaro/action-holders?action=<grant>` answers the collaborators
+  who hold one Tartaro grant right now on the configured Tartaro instance,
+  with the predicate of the effective-actions read (ADR-0086): an active
+  collaborator with an authorizing membership in a team whose grant is the
+  action, or is `*` while the instance permission catalog lists it
+  (`team_grant`), or a Tartaro god (`god_mode`). One set-based statement
+  embeds `authorizationMembershipPredicate`. The body is `action`,
+  `integration_instance`, `total` and `holders` (`collaborator_id`,
+  `sources`), sorted and unique, with `total` equal to the number of holders.
+  A `*` grant whose catalog cannot be resolved answers 503 rather than a
+  roster that would count lower. Same console gate as the collaborator list,
+  no ops permission; only one concrete `action` query parameter is accepted.
+  `/api/v1/tartaro` is now a console-gated prefix. Tartaro's collective-ban
+  quorum reads this route instead of `GET /api/v1/collaborators?role=risk`,
+  whose `role` filter Core never applied. A new PostgreSQL step in the native
+  OIDC integration workflow proves the predicate against the migrated schema.
+
 ### Removed
 - **BREAKING: `POST /api/v1/auth/third-party/login` (ADR-0088).** The
   handler `handleAuthThirdPartyLogin` is deleted; see Security. It skips the

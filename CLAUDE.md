@@ -186,7 +186,9 @@ with `?kind=X` in the query string.
   no action (console: empty sets, directory: 404), answer `god_mode` (active
   collaborator with the `yggdrasil_admin` trait) and expand a `*` grant on
   the configured Tartaro instance to that instance's permission catalog
-  (ADR-0086). The
+  (ADR-0086). `GET /api/v1/tartaro/action-holders?action=<grant>` lists who
+  holds one Tartaro grant with that same predicate, catalog and god-mode rule
+  (ADR-0107); keep the two computations together. The
   materialized `tartaro_actions` trait is retired: nothing reads or writes it
   for authorization (ADR-0085). See `docs/security.md` for the contract.
 - `YGGDRASIL_WORKFLOW_RUN_TOKEN` is a workflow-route-only migration bridge and

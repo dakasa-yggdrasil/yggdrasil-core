@@ -68,6 +68,12 @@ The [bound execution contract](../CAPACITY-BOUND-EXECUTION.md) distinguishes
 transport permission from installed birth authority, runtime joins and native
 readback. A successful redemption does not attest useful capacity.
 
+### Tartaro
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/tartaro/action-holders?action=<grant>` | Roster of the collaborators who hold one Tartaro grant now (ADR-0107); any authenticated console caller |
+
 ### Webhooks
 
 | Method | Path | Purpose |

@@ -14,6 +14,17 @@ converts historical recovery into write permission. See
 [durable provider mutation authority](../features/capacity-mutations.md) for
 binding, lifecycle, deletion and default-off requirements.
 
+## Tartaro action holders
+
+`GET /api/v1/tartaro/action-holders?action=<grant>` (ADR-0107) answers who
+holds one Tartaro grant right now on the configured Tartaro instance, with the
+same membership predicate, `*` catalog expansion and god-mode rule as the
+effective-actions read (ADR-0086). Every field of the 200 body is always
+present; `holders` is sorted by `collaborator_id`, unique, and `total` equals
+its length. A consumer that counts voters must treat any non-200, including
+the 503 answered when a `*` grant exists and the instance catalog cannot be
+resolved, as "cannot count" and never as zero.
+
 ## Manifest envelope
 
 Every manifest persisted by Yggdrasil shares the same outer shape:
