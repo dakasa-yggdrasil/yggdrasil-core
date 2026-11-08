@@ -311,6 +311,43 @@ jobs:
               raise SystemExit(f"Third-party login gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
           print("Every third-party browser login PostgreSQL scenario executed.")
           PY
+      # ADR-0107: GET /api/v1/tartaro/action-holders counts the collaborators
+      # who hold one Tartaro grant with the same predicate as the effective
+      # actions read. sqlmock only pins the SQL text; this step proves through
+      # the real router against the migrated schema that inactive
+      # collaborators, expired, not-started and deactivated memberships,
+      # inactive teams and other instances are excluded, that "*" counts only
+      # for a catalog permission, that god mode merges with team grants once,
+      # and that an unresolvable wildcard catalog answers 503. The REQUIRE flag
+      # turns a missing DB_URL into a failure instead of a skip.
+      - name: Prove the Tartaro action-holder roster against the migrated schema
+        if: ${{ !cancelled() }}
+        env:
+          REQUIRE_TARTARO_ACTION_HOLDERS_POSTGRES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -p 1 -count=1 -timeout=5m ./controllers/httpapi -run '^TestTartaroActionHoldersHTTPPostgres$' | tee tartaro-action-holders-results.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = "TestTartaroActionHoldersHTTPPostgres"
+          scenarios = {
+              "unauthenticated_caller_is_refused",
+              "malformed_query_is_refused",
+              "wildcard_without_resolvable_catalog_is_unavailable",
+              "catalog_action_counts_the_authorized_set",
+              "wildcard_does_not_count_an_action_outside_the_catalog",
+              "roster_matches_the_effective_actions_read",
+          }
+          expected = {root} | {f"{root}/{name}" for name in scenarios}
+          events = [json.loads(line) for line in Path("tartaro-action-holders-results.jsonl").read_text().splitlines() if line.strip()]
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Tartaro action-holder gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
+          print("Every Tartaro action-holder roster PostgreSQL scenario executed.")
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -321,4 +358,5 @@ jobs:
             mfa-contact-results.jsonl
             session-lifecycle-results.jsonl
             third-party-login-results.jsonl
+            tartaro-action-holders-results.jsonl
           if-no-files-found: warn

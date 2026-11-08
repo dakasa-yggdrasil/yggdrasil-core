@@ -392,6 +392,20 @@ it is rolled out (ADR-0086). The materialized
 the console response no longer carries `trait_tartaro_actions` or `drift`,
 and `POST /api/v1/collaborators/{id}/sync-tartaro-actions` no longer exists.
 
+`GET /api/v1/tartaro/action-holders?action=<grant>` (ADR-0107) is the roster
+of the collaborators who hold one Tartaro grant now, under exactly the rules
+above: an `active` collaborator with an authorizing membership in a team whose
+grant on the configured instance is the action, or is `*` while the instance
+permission catalog lists it (`team_grant`), or a Tartaro god (`god_mode`). One
+statement embeds `authorizationMembershipPredicate`; the catalog and the
+god-mode rule are applied with the same code the effective-actions read uses.
+The answer carries collaborator ids only, sorted and unique, with `total`
+equal to the number of holders. When a `*` grant exists on the instance and
+its catalog cannot be resolved the roster answers 503 instead of counting
+lower. Any authenticated console caller may read it, with no ops permission,
+like the collaborator list; it is not a directory machine route, and the
+query accepts only one concrete `action` (400 otherwise).
+
 The new [restricted snapshot contract](directory-snapshot.md) is a separate
 typed projection of lifecycle, hierarchy and membership windows. It omits
 generic personal/employment data and email. Exact external integration UUID

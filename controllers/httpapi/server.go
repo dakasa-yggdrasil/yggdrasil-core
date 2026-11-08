@@ -652,6 +652,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/lifecycle-events", server.handleCollaboratorLifecycleEvents)
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/provider-state", server.handleCollaboratorProviderState)
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/effective-tartaro-actions", server.handleEffectiveTartaroActions)
+	// ADR-0107: same console gate as GET /api/v1/collaborators (any
+	// authenticated human caller, no ops permission). Not a directory machine
+	// route.
+	mux.HandleFunc("GET /api/v1/tartaro/action-holders", server.handleTartaroActionHolders)
 	mux.HandleFunc("POST /api/v1/collaborator-external-identities", server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityPost))
 	mux.HandleFunc("GET /api/v1/collaborator-external-identities", server.handleExternalIdentityGet)
 	mux.HandleFunc("DELETE /api/v1/collaborator-external-identities/{id}", server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityDelete))
@@ -1281,6 +1285,9 @@ func requiresAuthenticatedConsoleAPI(path string) bool {
 		"/api/v1/ops",
 		"/api/v1/console",
 		"/api/v1/collaborators",
+		// Tartaro action-holder roster (ADR-0107): authenticated console
+		// caller, exactly like /api/v1/collaborators.
+		"/api/v1/tartaro",
 		"/api/v1/teams",
 		"/api/v1/me",
 		"/api/v1/team-memberships",
