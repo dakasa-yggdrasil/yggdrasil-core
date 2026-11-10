@@ -207,7 +207,12 @@ func refreshGuestRetirementForwardInventory(ctx context.Context, store repositor
 		return errOriginalGuestStep
 	}
 	var inv model.CapacityVMFleetInventory
-	status, err := supplier.call(read, capacity.VMObserveInventory, map[string]any{"profile": b.ProfileName}, &inv)
+	status := "observed"
+	if supplier.provider == "aws" && b.OriginalProviderSourceCommit == enrolledFailedAWSCreator {
+		inv, err = callForwardInventoryReadonly(read, supplier)
+	} else {
+		status, err = supplier.call(read, capacity.VMObserveInventory, map[string]any{"profile": b.ProfileName}, &inv)
+	}
 	if err != nil || status != "observed" || read.Err() != nil {
 		return errOriginalGuestStep
 	}
