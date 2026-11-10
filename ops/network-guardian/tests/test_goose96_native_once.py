@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import uuid
 from pathlib import Path
 import tempfile
@@ -70,6 +71,32 @@ class Goose96OnceTests(unittest.TestCase):
             with mock.patch.multiple(G,SOURCE_BOUND=flag,COMPANION_SOURCE_Q=None,COMPANION_IMAGE_D=None),mock.patch.object(G,'private_read') as read,mock.patch.object(G,'reference') as ref:
                 with self.assertRaises(G.Hold):G.main()
                 read.assert_not_called();ref.assert_not_called()
+        # The actual complete S8 representation exceeds the generic4MiB cap.
+        # Exercise real private-file I/O in the existing root-owned CI child.
+        program=r"""
+import hashlib,json,sys,tempfile,types
+from pathlib import Path
+source=Path(sys.argv[1]);raw=source.read_bytes()
+assert hashlib.sha256(raw).hexdigest()==sys.argv[2]
+g=types.ModuleType('goose96_complete_baseline_CI');g.__file__=str(source)
+exec(compile(raw,str(source),'exec'),g.__dict__)
+with tempfile.TemporaryDirectory(prefix='goose96-baseline-')as name:
+    p=Path(name)/'complete.json';body=json.dumps({'declared':'x'*(5<<20)}).encode()
+    p.write_bytes(body);p.chmod(0o600);ref={'path':str(p),'sha256':g.sha(body)}
+    assert g.pre_read_baseline(ref)=={'declared':'x'*(5<<20)}
+    try:g.reference(ref)
+    except g.Hold:pass
+    else:raise AssertionError('generic4MiB reference accepted oversized file')
+    try:g.pre_read_baseline(dict(ref,sha256='f'*64))
+    except g.Hold:pass
+    else:raise AssertionError('baseline accepted wrong complete SHA')
+    p.write_bytes(b'x'*((8<<20)+1))
+    try:g.pre_read_baseline({'path':str(p),'sha256':g.sha(p.read_bytes())})
+    except g.Hold:pass
+    else:raise AssertionError('baseline accepted more than existing8MiB transport bound')
+"""
+        result=subprocess.run(['sudo','-n',sys.executable,'-I','-B','-c',program,str(SOURCE),G.sha(SOURCE.read_bytes())],capture_output=True,text=True,timeout=8)
+        self.assertEqual(result.returncode,0,result.stderr)
 
     def test_goose96_job_scope_and_distinct_claim(self):
         with mock.patch.multiple(G,JOB_UUID='a78740e4-6263-43dc-a0b2-56eb29368119',COMPANION_IMAGE_D='1'*64):

@@ -155,6 +155,11 @@ def reference(ref, cap=4 << 20):
     need(sha(raw) == ref['sha256'], 'ACTUAL_REFERENCE_BYTES')
     return raw
 
+def pre_read_baseline(ref):
+    # The complete S8 snapshot is 5300214 bytes with all88 original read rows.
+    # Use its existing8MiB case-transport bound; keep other references at4MiB.
+    return loads(reference(ref,8 << 20))
+
 def load_definitions(ref, pin, name):
     need(ref['sha256'] == pin, 'EXACT_REVIEWED_SOURCE_PIN')
     raw = reference(ref)
@@ -582,7 +587,7 @@ def main():
     need(cfg['g15_return']['sha256'] == G15_RETURN_SHA256,'ACTUAL_PHYSICAL_G15_RETURN')
     returned = loads(reference(cfg['g15_return'],32<<20))
     need(cfg['e70_sql_data']['sha256'] == E70_SHA and cfg['pre_read_preimage']['sha256'] == PRE_READ_PREIMAGE_SHA256,'EXACT_ORIGINAL_E70_AND_KNOWN_S8_PRE_READ_BASELINE')
-    e70, baseline = loads(reference(cfg['e70_sql_data'])), loads(reference(cfg['pre_read_preimage']))
+    e70, baseline = loads(reference(cfg['e70_sql_data'])), pre_read_baseline(cfg['pre_read_preimage'])
     validate_pre_read96(baseline,cfg['case'])
     need(cfg['legacy_catalog_sql']['sha256'] == LEGACY_CATALOG_SHA,'EXACT_LEGACY_CATALOG_SQL')
     legacy = reference(cfg['legacy_catalog_sql']).decode()
