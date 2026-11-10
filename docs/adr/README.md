@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**103 decisions.**
+**104 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -145,5 +145,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0103](0103-dispose-recorded-context-refused-http-maintenance-without-replay.md) | Dispose recorded context-refused HTTP maintenance without replay | Proposed | 2026-11-03 | Core recorded maintenance disposition |
 | [0104](0104-separate-retirement-observer-from-historical-mutation-authority.md) | Separate the retirement observer from historical mutation authority | Proposed | 2026-11-04 | Existing dedicated read-only service / partial-retirement absence |
 | [0105](0105-continue-settled-retirement-absence-under-a-new-owner.md) | Continue settled retirement absence under a new owner | Proposed | 2026-11-04 | Original Guest retirement / automatic GET-only settled-absence continuation |
-| [0106](0106-close-an-accepted-unwitnessed-expansion-with-a-separate-cleanup.md) | Close an accepted unwitnessed expansion with a separate cleanup | Proposed | 2026-11-05 | Core / failed unwitnessed expansion cleanup, normal one-shot destroy and truthful physical closure |
 | [0108](0108-resume-a-failed-settled-continuation-before-its-first-read.md) | Resume a failed settled continuation before its first read | Proposed | 2026-11-10 | Original Guest retirement / typed automatic pre-read-failure provenance |
+| [0106](0106-close-an-accepted-unwitnessed-expansion-with-a-separate-cleanup.md) | Close an accepted unwitnessed expansion with a separate cleanup | Proposed | 2026-11-05 | Core / failed unwitnessed expansion cleanup, normal one-shot destroy and truthful physical closure |
