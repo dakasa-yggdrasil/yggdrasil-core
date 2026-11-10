@@ -19,6 +19,7 @@ def pre_read_operand():
     t=cas.PRE_READ_TARGET
     def encoded(x):return json.dumps(x,separators=(',',':'),sort_keys=True)
     def sealed(x,**columns):
+        if 'recorded_at'in x:columns.setdefault('recorded_at',x['recorded_at'])
         raw=encoded(x).encode();return dict(columns,original_record=x,wire_hex=raw.hex(),record_sha256=cas.sha(raw))
     policy='10000000-0000-4000-8000-000000000001';owner='10000000-0000-4000-8000-000000000002';executor='10000000-0000-4000-8000-000000000003';ancestor='10000000-0000-4000-8000-000000000004'
     oldjobid='10000000-0000-4000-8000-000000000005';jobid='10000000-0000-4000-8000-000000000006';workflow='10000000-0000-4000-8000-000000000007';attempt='10000000-0000-4000-8000-000000000008';action='10000000-0000-4000-8000-000000000009'
@@ -208,7 +209,8 @@ class G15CoreCASTests(unittest.TestCase):
             def request(self,method,uri,body=None):events.append((method,uri));return 200,b'{}',{}
         with binding(),patch.object(cas.time,'monotonic',return_value=100):
             cas.patch_once(API(),C,Path('/declared/run'),b'[]',{},99)
-            self.assertEqual([x[0]for x in events],['durable','durable','PATCH'])
+            self.assertEqual([x[0]for x in events],['durable','durable','PATCH','durable','durable'])
+            self.assertEqual([x[1]for x in events[3:]],['PATCH-ACTUAL-RETURN.json','PATCH-ACTUAL-RETURN.HTTP.json'])
             with self.assertRaises(FileExistsError):cas.patch_once(API(),C,Path('/declared/run2'),b'[]',{},99)
             self.assertEqual(sum(x[0]=='PATCH'for x in events),1)
 

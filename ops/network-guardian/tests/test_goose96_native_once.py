@@ -75,7 +75,7 @@ class Goose96OnceTests(unittest.TestCase):
         with mock.patch.multiple(G,JOB_UUID='a78740e4-6263-43dc-a0b2-56eb29368119',COMPANION_IMAGE_D='1'*64):
             job=G.job_manifest();p=job['spec']['template']['spec'];c=p['containers'][0]
             self.assertEqual(job['metadata']['name'],'core-goose96-a78740e4626343dca0b256eb29368119')
-            self.assertEqual(job['metadata']['labels']['app'],'yggdrasil-goose96-companion')
+            self.assertEqual(job['metadata']['labels']['app'],'yggdrasil-schema96-companion')
             self.assertEqual((job['spec']['backoffLimit'],job['spec']['activeDeadlineSeconds'],job['spec']['parallelism']),(0,240,1))
             self.assertEqual(c['command'],['/bin/sh','-ceu','/app/goose up'])
             self.assertEqual(p['restartPolicy'],'Never');self.assertFalse(p['automountServiceAccountToken'])
@@ -340,7 +340,7 @@ class Goose96OnceTests(unittest.TestCase):
             elif fault=='check_definition':bad['legacy']['catalog90']['constraints'][0]['definition']+=' OR true'
             elif fault=='check_name':bad['legacy']['catalog90']['constraints'][0]['name']='foreign'
             elif fault=='check_not_validated':bad['legacy']['catalog90']['constraints'][0]['validated']=False
-            elif fault=='extra_constraint':bad['legacy']['catalog90']['constraints'].append({'name':'foreign'})
+            elif fault=='extra_constraint':bad['legacy']['catalog90']['constraints'].append(dict(copy.deepcopy(bad['legacy']['catalog90']['constraints'][0]),name='foreign'))
             elif fault=='old_table':bad['legacy']['catalog90']['tables'][0]['name']='foreign'
             elif fault=='old_column':bad['supplement']['columns90_91'][0]['name']='foreign'
             elif fault=='old_trigger':bad['schema94']['triggers'][0]['definition']='foreign'
