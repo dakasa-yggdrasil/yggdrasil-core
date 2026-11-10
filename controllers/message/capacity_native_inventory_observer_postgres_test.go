@@ -16,10 +16,12 @@ import (
 )
 
 // Prepare a DECLARED provider settlement through the existing real PostgreSQL
-// APIs. This owns exactly one Issue/Redeem/Settle; no native provider is called.
+// APIs, then admit a historical successor that adopts that settled DELETE.
+// This owns exactly one Issue/Redeem/Settle; no native provider is called.
 func inventoryReadonlySettledForwardFixture(t *testing.T, f *repository.GuestRetirementForwardRecoveryFixture, ctx context.Context) model.CapacityMutationReceipt {
 	t.Helper()
-	if _, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID); err != nil {
+	parent, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID)
+	if err != nil {
 		t.Fatal("real forward admission", err, f.AdmissionDiagnostics())
 	}
 	finish := f.FinishStore()
@@ -63,6 +65,34 @@ func inventoryReadonlySettledForwardFixture(t *testing.T, f *repository.GuestRet
 	if err != nil || !found || receipt.Grant.State != "settled" {
 		t.Fatal("real settled custody", err)
 	}
+	// Settlement does not rewrite the live admission into adopted-destroy
+	// authority. Close its real failed dispatch/ACK and observe natural expiry
+	// before requesting and claiming a distinct historical admission.
+	f.FinishFailedRun("finish-original-retirement")
+	originals, oldIntent := f.PreservedOriginals(), f.Intent
+	var parentBefore string
+	if err = f.DB.QueryRowContext(ctx, `SELECT encode(original_wire,'hex') FROM public.capacity_guest_retirement_forwards WHERE id=$1 AND stage='admitted'`, parent.ID).Scan(&parentBefore); err != nil {
+		t.Fatal(err)
+	}
+	barrier := f.WaitHistoricalBarrier()
+	child, err := f.Store.RequestGuestRetirementForwardHistorical(ctx, f.HistoricalRequest(), "declared-readonly-inventory-fixture", barrier, func(context.Context) error { return nil })
+	if err != nil || child.Mode != "historical" || child.ID == parent.ID || child.ParentAdmissionID != parent.ID || child.RootAdmissionID != parent.ID || child.DestroyGrantID != receipt.Grant.GrantID {
+		t.Fatal("historical admission must adopt the same settled original DELETE", child, err)
+	}
+	f.StartSuccessorDispatch()
+	next, preregistrationID, requestID, handled, err := f.PlanStore().TryClaimGuestRetirementForward(ctx, f.Policy)
+	if err != nil || !handled || preregistrationID != f.Pre.PreregistrationID || requestID != f.Request.Intent.RequestID || next.RetirementForward == nil || next.RetirementForward.ID != child.ID || next.FencingToken != oldIntent.FencingToken+1 || next.LeaseOwner == oldIntent.LeaseOwner || next.LeaseExpiresAt == nil || !next.LeaseExpiresAt.After(time.Now()) {
+		t.Fatal("historical successor must acquire a fresh fenced owner", next, handled, err)
+	}
+	f.Intent = next
+	var parentAfter string
+	var ownReads int
+	if err = f.DB.QueryRowContext(ctx, `SELECT encode(original_wire,'hex') FROM public.capacity_guest_retirement_forwards WHERE id=$1 AND stage='admitted'`, parent.ID).Scan(&parentAfter); err != nil || parentAfter != parentBefore || !reflect.DeepEqual(originals, f.PreservedOriginals()) {
+		t.Fatal("historical adoption rewrote the parent or immutable original evidence", err)
+	}
+	if err = f.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_retirement_forward_reads WHERE admission_id=$1`, child.ID).Scan(&ownReads); err != nil || ownReads != 0 {
+		t.Fatal("historical inventory owner must begin before any own absence read", ownReads, err)
+	}
 	return receipt
 }
 
@@ -73,7 +103,7 @@ func TestInventoryReadonlySettledForwardRefreshPostgres(t *testing.T) {
 	if !inventoryReadonlySourceReady(inventoryReadonlyAWSObserverSource) {
 		t.Fatal("actual published inventory compiler source must be bound before CI")
 	}
-	f := repository.NewGuestRetirementForwardLiveWorkflowFixture(t, "aws", 3, 4)
+	f := repository.NewGuestRetirementForwardRecoveryFixture(t, "aws", 3, 4)
 	ctx, stop := context.WithTimeout(context.Background(), 90*time.Second)
 	defer stop()
 	receipt := inventoryReadonlySettledForwardFixture(t, f, ctx)
