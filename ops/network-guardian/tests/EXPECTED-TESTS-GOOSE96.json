@@ -1,0 +1,9 @@
+[
+  "test_goose96_native_once.Goose96OnceTests.test_forced_unbound_refuses_before_io",
+  "test_goose96_native_once.Goose96OnceTests.test_goose96_job_scope_and_distinct_claim",
+  "test_goose96_native_once.Goose96OnceTests.test_shipped_m96_guard_and_96_only_job_logs",
+  "test_goose96_native_once.Goose96OnceTests.test_known_preread_failed_ack_zero_own_and_same_paid_sdk",
+  "test_goose96_native_once.Goose96OnceTests.test_immutable_root95_receipt_and_original_five_roles_preserved",
+  "test_goose96_native_once.Goose96OnceTests.test_prior95_catalog_and_sole96_function_and_constraint_delta",
+  "test_goose96_native_once.Goose96OnceTests.test_goose96_lost_ack_current15_and_method_guards"
+]

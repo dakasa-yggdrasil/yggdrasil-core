@@ -83,7 +83,16 @@ def main():
     goose95 = json.loads((HERE / 'EXPECTED-TESTS-GOOSE95.json').read_bytes())
     if type(goose95) is not list or len(goose95) != 7 or len(set(goose95)) != 7:
         raise RuntimeError('EXACT_GOOSE95_SEVEN_TEST_IDS_REQUIRED')
-    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93 + g13 + g13cas + goose94 + g14 + g14cas + goose95
+    g15 = json.loads((HERE / 'EXPECTED-TESTS-G15.json').read_bytes())
+    if type(g15) is not list or len(g15) != 6 or len(set(g15)) != 6:
+        raise RuntimeError('EXACT_G15_SIX_TEST_IDS_REQUIRED')
+    goose96 = json.loads((HERE / 'EXPECTED-TESTS-GOOSE96.json').read_bytes())
+    if type(goose96) is not list or len(goose96) != 7 or len(set(goose96)) != 7:
+        raise RuntimeError('EXACT_GOOSE96_7_TEST_IDS_REQUIRED')
+    g15cas = json.loads((HERE / 'EXPECTED-TESTS-G15-CAS.json').read_bytes())
+    if type(g15cas) is not list or len(g15cas) != 6 or len(set(g15cas)) != 6:
+        raise RuntimeError('EXACT_G15CAS_6_TEST_IDS_REQUIRED')
+    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93 + g13 + g13cas + goose94 + g14 + g14cas + goose95 + g15 + goose96 + g15cas
     if len(set(expected)) != len(expected):
         raise RuntimeError('all preserved and additive test rosters must be disjoint')
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
@@ -109,6 +118,8 @@ def main():
              'expected': expected, 'historical_expected': historical, 'g9_expected': current, 'r6_expected': r6,
              'historical_count': len(historical), 'g9_count': len(current), 'r6_count': len(r6),
              'index92_expected': index92, 'goose92_expected': goose92, 'g10_expected': g10, 'g10_count': len(g10), 'g11_expected': g11, 'g11_count': len(g11), 'g12_expected': g12, 'g12_count': len(g12), 'g12cas_expected': g12cas, 'g12cas_count': len(g12cas), 'goose93_expected': goose93, 'goose93_count': len(goose93), 'g13_expected': g13, 'g13_count': len(g13), 'g13cas_expected': g13cas, 'g13cas_count': len(g13cas), 'goose94_expected': goose94, 'goose94_count': len(goose94),
+             'g15_expected': g15, 'g15_count': len(g15),
+             'goose96_expected': goose96, 'goose96_count': len(goose96), 'g15cas_expected': g15cas, 'g15cas_count': len(g15cas),
              'index92_count': len(index92), 'goose92_count': len(goose92),
              'executed': result.runs, 'passed': result.passes,
              'failures': [test.id() for test, _ in result.failures],
