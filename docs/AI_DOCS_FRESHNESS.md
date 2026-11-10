@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 186371c6b13135b80ecec662d667871b46315ac0
-verified_diff_sha256: 7fa6f1dba376e108d999313e2efbe995a51c81371078ad5d7da84e92465f04ef
+verified_at_commit: 4fe7df39ceed3c85b121377e3b76ff39b88f79cc
+verified_diff_sha256: 8c13cb471cfabaeee0f8e399e4af74b15d201eb50e0a5fe46979d7dec1572678
 reconciler_schema: 2
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -448,3 +448,5 @@ core7_C16_rolling_window_review: Reviewed the C16 D6-to-qualified-D7 image pair,
 main_C16_inventory_union_review: Reconciled the C16 operational source with the independent inventory compiler source and current main Tartaro API. All selected inventory runtime and test files and changed operational paths retain exact source bytes; the two shared HTTP files retain their previously reviewed Tartaro route and authentication union. Main retains its complete814-source contract census and ADR0107/0108/0109; qualified compiler Source210 and D7 remain separate from this integration head. Only metadata conflicts were resolved, preserving both review records and refreshing tracked file facts. Exact merged-tree CI remains required; no local product execution or production authority was created.
 
 C16_original_CI_overlap_and_fixture_review: Retained original283-case CI errors and full logs. The pre-swap census still pinned historical Core5 while its reviewed contract and declared positive already selected current Core6; its exact digest guard now pins Core6 and still rejects both preceding image examples. The reader fixture now supplies the strict JSON decoder required by the real api_read path. These preserve the eight-operation CAS, exact imageID, all native commands and six maintenance/six CAS roots. Only the changed tool and enclosing package checksums were rebound; Guardian, controller, standing authority, reader and compiler image remain unchanged. Static Source review only; complete exact successor remote CI remains required.
+
+main_current_Core6_overlap_reconciliation: Integrated the exact current Core6 digest guard and complete strict reader test-double interface from the corrected operational source. All changed operational files match that source; previously reviewed compiler runtime, main Tartaro route/authentication union and full814-source census remain unchanged. Retained original failure evidence and both Source review records. No local product execution; the complete exact integrated remote CI remains required.
