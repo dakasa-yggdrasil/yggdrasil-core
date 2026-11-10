@@ -16,7 +16,7 @@ exec(compile(PATH.read_bytes(),str(PATH),'exec'),cas.__dict__)
 
 def pre_read_operand():
     """Declared synthetic storage/wires; never Root/Native authority or production evidence."""
-    t=cas.PRE_READ_TARGET
+    t={'root_admission_id': 'b8f529ca-43eb-4351-9ac3-a8774f90f562', 'failed_admission_id': '756a0af2-3ce3-4992-8fe2-116bb8da12cd', 'retirement_request_id': '87f9530e-0868-4538-98e7-96f241462c49', 'preregistration_id': '9cdb3d59-3085-4ecb-b384-49f47b2b03b4', 'destroy_grant_id': 'c46345dc-a21f-4d7d-834b-e8e8f38b7643', 'failed_run_id': 'ef121889-8828-4a8b-b821-873a13c15032', 'pending_read_id': '41de89ba-bec2-479a-87f6-cf5e4a602213', 'resource_id': 'i-03d9ec5b7702b6ee6'}
     def encoded(x):return json.dumps(x,separators=(',',':'),sort_keys=True)
     def sealed(x,**columns):
         if 'recorded_at'in x:columns.setdefault('recorded_at',x['recorded_at'])
@@ -53,7 +53,7 @@ def pre_read_operand():
     run={'id':t['failed_run_id'],'status':'failed','finished_at':'2026-11-10T16:00:20Z','metadata':{'capacity_dispatch_job_id':jobid,'triggered_by':'workflow_scheduler'},'result':{'status':'failed','steps':steps}};run['run_wire']=encoded(run)
     job={'id':jobid,'run_id':run['id'],'state':'returned','return_status':'failed','returned_at':run['finished_at'],'finalization_ack_at':'2026-11-10T16:00:21Z','envelope':encoded({'workflow':{'id':workflow}})};job['dispatch_wire']=encoded(job)
     intent={'policy_id':policy,'policy_checksum':'e'*64,'generation':31,'fencing_token':55,'phase':'drained','lease_owner':owner,'lease_executor_id':executor,'lease_expires_at':'2026-11-10T16:00:43Z','retirement_forward':{'id':t['failed_admission_id'],'stage':'admitted','mode':'settled_absence_continuation'}}
-    r={'selected_runtime_source':cas.OLD_SOURCE,'target':{'parent_forward_id':t['root_admission_id'],'retirement_request_id':t['retirement_request_id'],'preregistration_id':t['preregistration_id'],'resource_id':t['resource_id']},'current_intent':{'intent':intent},'current_intent_pgtext':encoded(intent),'active_policies':[{'id':policy,'checksum':'e'*64}],'forward_rows':[anchor,off,requested,admitted],'retirement_contexts':[],'delete_bindings':[binding],'destroy_grants':[storedgrant],'read_counts':[],'own_read_count':0,'all_read_rows':[prepared,pending],'unreturned_prepared':[],'latest_reads_all_outcomes':[prepared,pending],'workflow_runs':[oldrun,run],'workflow_run_steps':[],'owning_dispatch_jobs':[oldjob,job]}
+    r={'selected_runtime_source':'33a846d31a5b123b2c1141192671bc830bf6d9c8','target':{'parent_forward_id':t['root_admission_id'],'retirement_request_id':t['retirement_request_id'],'preregistration_id':t['preregistration_id'],'resource_id':t['resource_id']},'current_intent':{'intent':intent},'current_intent_pgtext':encoded(intent),'active_policies':[{'id':policy,'checksum':'e'*64}],'forward_rows':[anchor,off,requested,admitted],'retirement_contexts':[],'delete_bindings':[binding],'destroy_grants':[storedgrant],'read_counts':[],'own_read_count':0,'all_read_rows':[prepared,pending],'unreturned_prepared':[],'latest_reads_all_outcomes':[prepared,pending],'workflow_runs':[oldrun,run],'workflow_run_steps':[],'owning_dispatch_jobs':[oldjob,job]}
     value={'observed_at_pg':'2026-11-10T16:01:00Z','records':r,'records_wire':encoded(r),'records_sha256':cas.sha(encoded(r).encode())}
     case={k:t[k]for k in ('retirement_request_id','failed_admission_id','root_admission_id','destroy_grant_id')};case.update(expected_records_sha256=value['records_sha256'],provider_lanes={'aws':dict(intent_count=1,intent_busy=1,pending_authority=1,jobs_busy=0,runs_busy=0,forward_markers=1,forward_unreturned_reads=0,live_unreturned_canaries=0),'hetzner':dict(intent_count=1,intent_busy=0,pending_authority=0,jobs_busy=0,runs_busy=0,forward_markers=0,forward_unreturned_reads=0,live_unreturned_canaries=0)})
     return value,case
@@ -65,23 +65,139 @@ def reseal_pre_read(value,case):
         row['wire_hex']=json.dumps(row['original_record'],separators=(',',':'),sort_keys=True).encode().hex();row['record_sha256']=cas.sha(bytes.fromhex(row['wire_hex']))
     raw=json.dumps(value['records'],separators=(',',':'),sort_keys=True);value['records_wire']=raw;value['records_sha256']=case['expected_records_sha256']=cas.sha(raw.encode())
 
+
+def current_pre_read_operand():
+    """Declared current57 shape; old Go96/f55 fixture remains historical above.
+
+    These synthetic JSON/wires exercise the retained classic anchor followed
+    by two typed96 zero-read failures. Reused opaque IDs are labels only;
+    neither this fixture nor its hashes are Native/Root acceptance evidence.
+    """
+    value,case=pre_read_operand();r=value['records']
+    encoded=lambda x:json.dumps(x,separators=(',',':'),sort_keys=True)
+    previous=copy.deepcopy(r['forward_rows'][-1]);previous_run=copy.deepcopy(r['workflow_runs'][-1]);previous_job=copy.deepcopy(r['owning_dispatch_jobs'][-1])
+    for fence,admission,runid,jobid,owner,executor in (
+        (56,'c49f4092-bb5d-43e7-9560-9b32e1fd1e0c','89e2b9ba-6963-4183-bb27-bbf51db31c09','a0e2e863-0b5a-4aaa-8c2e-6faa9e91d122','10000000-0000-4000-8000-000000000020','10000000-0000-4000-8000-000000000021'),
+        (57,'78b8df5a-eb37-4a18-8029-15ee02d93bd1','21b8f725-d82c-40aa-8401-a4fbdca98d28','9c65b8f7-988a-41e1-8b76-5c34e0071645','10000000-0000-4000-8000-000000000022','10000000-0000-4000-8000-000000000023'),
+    ):
+        minute=fence-55
+        at=lambda second:f'2026-11-10T16:{minute:02d}:{second:02d}Z'
+        old=previous['original_record']
+        proof=copy.deepcopy(old['continuation'])
+        proof.update(schema='original_settled_absence_pre_read_continuation_v1',requesting_run_id=runid,failed_run_id=previous_run['id'],failed_run_sha256=cas.sha(previous_run['run_wire'].encode()),dispatch_id=previous_job['id'],dispatch_sha256=cas.sha(previous_job['dispatch_wire'].encode()))
+        requested=copy.deepcopy(old)
+        requested.update(id=admission,stage='requested',recorded_at=at(12),parent_admission_id=previous['id'],parent_admission_sha256=previous['record_sha256'],fence=fence-1,run_id='',continuation=proof,failed_run=base64.b64encode(previous_run['run_wire'].encode()).decode())
+        admitted=copy.deepcopy(requested)
+        admitted.update(stage='admitted',recorded_at=at(13),fence=fence,run_id=runid,lease_owner=owner,executor_id=executor)
+        frames=[]
+        for original in (requested,admitted):
+            raw=encoded(original).encode()
+            frames.append(dict(id=admission,stage=original['stage'],admission_id=admission,recorded_at=original['recorded_at'],original_record=original,wire_hex=raw.hex(),record_sha256=cas.sha(raw)))
+        r['forward_rows'].extend(frames)
+        run=copy.deepcopy(previous_run)
+        run.update(id=runid,finished_at=at(20))
+        run['metadata']['capacity_dispatch_job_id']=jobid
+        steps={s['id']:s for s in run['result']['steps']}
+        steps['plan-original-guest']['metadata'].update(generation=31,fencing_token=fence,lease_owner=owner)
+        steps['retire-original-guest']['metadata'].update(retirement_forward_id=admission,request_id=case['retirement_request_id'])
+        steps['finish-original-retirement']['metadata']={'original_guest_refusal_predicate':'original-guest-step-17'}
+        run['run_wire']=encoded({k:v for k,v in run.items()if k!='run_wire'})
+        job=copy.deepcopy(previous_job)
+        job.update(id=jobid,run_id=runid,returned_at=run['finished_at'],finalization_ack_at=at(21))
+        job['dispatch_wire']=encoded({k:v for k,v in job.items()if k!='dispatch_wire'})
+        r['workflow_runs'].append(run);r['owning_dispatch_jobs'].append(job)
+        previous,previous_run,previous_job=frames[-1],run,job
+    p=previous['original_record']
+    current=r['current_intent']['intent']
+    current.update(generation=31,fencing_token=57,lease_owner=p['lease_owner'],lease_executor_id=p['executor_id'],lease_expires_at='2026-11-10T16:02:43Z')
+    current['retirement_forward'].update(id=p['id'],stage='admitted',mode='settled_absence_continuation')
+    r['current_intent_pgtext']=encoded(current)
+    r['selected_runtime_source']='045176d16947555ccbc33a8b51635b08d2d9270e'
+    r['read_counts']=[dict(kind='absence',stage=stage,rows=1,first_at=row['recorded_at'],last_at=row['recorded_at'])for stage,row in zip(('prepared','returned'),r['all_read_rows'])]
+    value['observed_at_pg']='2026-11-10T16:06:00Z'
+    case.update(failed_admission_id=p['id'],current_runtime_source=r['selected_runtime_source'],current_generation=31,current_fencing_token=57,current_failed_run_id=previous_run['id'],current_lease_owner=p['lease_owner'])
+    reseal_pre_read(value,case)
+    return value,case
+
+
+def reseal_current_pre_read(value,case,update_expected=True):
+    """Reseal declared raw joins so semantic faults cannot hide behind bad SHA.
+
+    Keeping update_expected False instead tests the immutable Root snapshot
+    binding itself, as BEFORE/PRESEND must do for any retained-original change.
+    """
+    r=value['records'];encoded=lambda x:json.dumps(x,separators=(',',':'),sort_keys=True)
+    runs={w['id']:w for w in r['workflow_runs']};jobs={j['id']:j for j in r['owning_dispatch_jobs']}
+    for w in runs.values():w['run_wire']=encoded({k:v for k,v in w.items()if k!='run_wire'})
+    for j in jobs.values():j['dispatch_wire']=encoded({k:v for k,v in j.items()if k!='dispatch_wire'})
+    grant=r['destroy_grants'][0];grant['grant_pgtext']=encoded(grant['grant_record'])
+    for row in r['all_read_rows']:
+        raw=encoded(row['original_record']).encode();row['wire_hex']=raw.hex();row['record_sha256']=cas.sha(raw)
+    pending=next(x for x in r['all_read_rows']if x['id']=='41de89ba-bec2-479a-87f6-cf5e4a602213'and x['stage']=='returned')
+    last={}
+    for row in r['forward_rows']:
+        original=row['original_record'];proof=original.get('continuation')
+        if proof:
+            proof.update(destroy_grant_sha256=cas.sha(grant['grant_pgtext'].encode()),delete_eligibility_sha256=r['delete_bindings'][0]['eligibility_sha256'],pending_read_sha256=pending['record_sha256'],failed_run_sha256=cas.sha(runs[proof['failed_run_id']]['run_wire'].encode()),dispatch_sha256=cas.sha(jobs[proof['dispatch_id']]['dispatch_wire'].encode()))
+            original['failed_run']=base64.b64encode(runs[proof['failed_run_id']]['run_wire'].encode()).decode()
+        parent=original.get('parent_admission_id')
+        if parent in last:original['parent_admission_sha256']=last[parent]['record_sha256']
+        raw=encoded(original).encode();row['wire_hex']=raw.hex();row['record_sha256']=cas.sha(raw);last[row['id']]=row
+    r['current_intent_pgtext']=encoded(r['current_intent']['intent'])
+    raw=encoded(r);value['records_wire']=raw;value['records_sha256']=cas.sha(raw.encode())
+    if update_expected:case['expected_records_sha256']=value['records_sha256']
+
 DECLARED_CHECK96='CHECK (declared_old_proof OR declared_pre_read_proof)'
+DECLARED_INVENTORY_MANIFEST={'schemaVersion':2,'mediaType':'application/vnd.oci.image.manifest.v1+json','config':{'mediaType':'application/vnd.oci.image.config.v1+json','size':12,'digest':'sha256:'+'4'*64},'layers':[{'mediaType':'application/vnd.oci.image.layer.v1.tar+gzip','size':12,'digest':'sha256:'+'5'*64}]}
 
 @contextlib.contextmanager
 def binding():
-    with patch.multiple(cas,SOURCE_BOUND=True,CORE_R='c'*40,NEW_DIGEST='d'*64,SOURCE_PIN='a'*64,G15_OPS_P='e'*40,
+    with patch.multiple(cas,SOURCE_BOUND=True,CORE_R='c'*40,NEW_DIGEST='d'*64,SOURCE_PIN='a'*64,G15_OPS_P='e'*40,INVENTORY_SOURCE='1'*40,INVENTORY_DIGEST=cas.sha(cas.canonical(DECLARED_INVENTORY_MANIFEST)),INVENTORY_CONFIG_DIGEST='4'*64,
         TOOL_PINS={n:'a'*64 for n in ('pair_change_contract.py','derive_g15pair_controller_config.py','derive_standing_config.py','g15cut.py')},
         CONFIG_REF={'path':'/declared/config','sha256':'a'*64},SQL_DATA_REF={'path':'/declared/E70','sha256':cas.POLICY92_SQL_SHA},
-        UID='10000000-0000-4000-8000-000000000011',OLD_POD='10000000-0000-4000-8000-000000000012',GENERATION=278,
+        UID='10000000-0000-4000-8000-000000000011',OLD_POD='10000000-0000-4000-8000-000000000012',GENERATION=279,
         OLD_CONTAINER_ID='containerd://'+'b'*64,OLD_IMAGE_CONFIG_DIGEST='sha256:'+'e'*64):yield
 
 
 def core_operand():
     prefix='153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:';image=prefix+cas.OLD_DIGEST
     C=types.SimpleNamespace(OLD_DIGEST=cas.OLD_DIGEST,OLD_CORE_SOURCE=cas.OLD_SOURCE,NEW_DIGEST=cas.NEW_DIGEST,IMAGE_PREFIX=prefix)
-    d={'apiVersion':'apps/v1','kind':'Deployment','metadata':{'namespace':'dakasa','name':'yggdrasil','uid':cas.UID,'generation':278,'resourceVersion':'1','annotations':{'dakasa.io/core-source-commit':cas.OLD_SOURCE,'retain':'declared'}},'spec':{'replicas':1,'template':{'spec':{'containers':[{'name':'core','image':image,'env':[{'name':'DECLARED','value':'unchanged'}],'resources':{'limits':{'cpu':'1'}}}]}}},'status':{'observedGeneration':278,'readyReplicas':1,'updatedReplicas':1,'availableReplicas':1}}
-    p={'items':[{'metadata':{'uid':cas.OLD_POD,'name':'declared-core5'},'spec':{'containers':[{'name':'core','image':image}]},'status':{'phase':'Running','podIP':'192.0.2.1','containerStatuses':[{'name':'core','ready':True,'restartCount':0,'state':{'running':{'startedAt':'2026-11-10T15:00:00Z'}},'imageID':image,'containerID':cas.OLD_CONTAINER_ID}]}}]}
+    d={'apiVersion':'apps/v1','kind':'Deployment','metadata':{'namespace':'dakasa','name':'yggdrasil','uid':cas.UID,'generation':cas.GENERATION,'resourceVersion':'1','annotations':{'dakasa.io/core-source-commit':cas.OLD_SOURCE,'retain':'declared'}},'spec':{'replicas':1,'template':{'spec':{'containers':[{'name':'core','image':image,'env':[{'name':'DECLARED','value':'unchanged'}],'resources':{'limits':{'cpu':'1'}}}]}}},'status':{'observedGeneration':cas.GENERATION,'readyReplicas':1,'updatedReplicas':1,'availableReplicas':1}}
+    p={'items':[{'metadata':{'uid':cas.OLD_POD,'name':'declared-core6'},'spec':{'containers':[{'name':'core','image':image}]},'status':{'phase':'Running','podIP':'192.0.2.1','containerStatuses':[{'name':'core','ready':True,'restartCount':0,'state':{'running':{'startedAt':'2026-11-10T15:00:00Z'}},'imageID':image,'containerID':cas.OLD_CONTAINER_ID}]}}]}
     return d,p,C
+
+
+def inventory_description_wire(description=None):
+    """Actual SDK HTTP framing, not the decoded inner RPC reply."""
+    inner=cas.canonical({'ok':True,'data':cas.expected_inventory_description()if description is None else description})
+    return cas.canonical({'content_type':'application/json','body':base64.b64encode(inner).decode('ascii')})
+
+
+def reader_operand(manifest=None):
+    """Declared semantic Root/Kube operands; real input_ref hashes all bytes.
+
+    Tests scope the immutable known Root9/M7 pins to these synthetic originals
+    after separately asserting production constants. No receipt is published.
+    """
+    bodies={};events=[]
+    def ref(name,value):
+        raw=value if type(value)is bytes else cas.canonical(value)
+        p='/declared/reader/'+name;bodies[Path(p)]=raw
+        return {'path':p,'sha256':cas.sha(raw)}
+    app=cas.INVENTORY_APP;labels={'app':app};image=cas.INVENTORY_IMAGE_PREFIX+cas.INVENTORY_DIGEST
+    uid=lambda n:'20000000-0000-4000-8000-'+str(n).zfill(12)
+    dep={'apiVersion':'apps/v1','kind':'Deployment','metadata':{'namespace':'dakasa','name':app,'uid':uid(1),'generation':1},'spec':{'replicas':1,'selector':{'matchLabels':labels},'template':{'metadata':{'labels':labels},'spec':{'containers':[{'name':app,'image':image}]}}},'status':{'observedGeneration':1,'readyReplicas':1,'updatedReplicas':1,'availableReplicas':1}}
+    svc={'apiVersion':'v1','kind':'Service','metadata':{'namespace':'dakasa','name':app,'uid':uid(2)},'spec':{'type':'ClusterIP','clusterIP':'10.43.1.2','selector':labels,'ports':[{'protocol':'TCP','port':8081,'targetPort':8081}]}}
+    pod={'metadata':{'namespace':'dakasa','name':app+'-abc123-unit','uid':uid(3),'labels':labels,'ownerReferences':[{'controller':True,'kind':'ReplicaSet','name':app+'-abc123','uid':uid(4)}]},'spec':{'containers':[{'name':app,'image':image}]},'status':{'phase':'Running','conditions':[{'type':'Ready','status':'True'}],'containerStatuses':[{'name':app,'ready':True,'restartCount':0,'containerID':'containerd://'+'3'*64,'imageID':image,'state':{'running':{'startedAt':'2026-11-10T20:00:00Z'}}}]}}
+    receipt={'schema':'root_aws_original_inventory_readonly_operational_acceptance_v1','reviewed_by_root':True,'status':'QUALIFIED_IMAGE_AND_DEPLOYMENT_VERIFIED','source':cas.INVENTORY_SOURCE,'amd64_D':cas.INVENTORY_DIGEST,'namespace':'dakasa','deployment_uid':uid(1),'service_uid':uid(2),'pod_uid':uid(3),'container_id':'containerd://'+'3'*64,'provider':'aws-original-inventory-readonly','version':'1.0.0','operation':'observe_original_profile_inventory','original_profile_source_commit':cas.A3_CREATOR,'original_refs':{'qualified_image':ref('image',DECLARED_INVENTORY_MANIFEST if manifest is None else manifest),'source_ci':ref('ci',b'DECLARED complete Source-CI boundary'),'deployment':ref('deployment',dep),'service':ref('service',svc),'pod':ref('pod',pod),'describe':ref('describe',inventory_description_wire()),'health':ref('health',b'readonly observer up')}}
+    pair=ref('M7-return',b'DECLARED original normal M7 return')
+    core={'schema':'root_core_retirement_observer_operational_acceptance_v1','reviewed_by_root':True,'status':'QUALIFIED_IMAGE_AND_DEPLOYMENT_VERIFIED','source':cas.OLD_SOURCE,'amd64_D':cas.OLD_DIGEST,'process_replacement_ref':ref('Core6-process',b'DECLARED Core6 replacement original'),'native_observation_ref':ref('Core6-observe',b'DECLARED Core6 observation original'),'controller_pair_ref':pair,'qualified_image_and_deployment_verified':True}
+    refs={role:ref(role,b'DECLARED independent historical/release original')for role in ('qualified_business_release','business_Source_CI','Root_Goose94_acceptance','Root_Goose95_acceptance','Root_Goose96_acceptance','Root_separate_rollout_review')}
+    refs.update(current_Core6_operational_acceptance=ref('Core6-root9',core),inventory_readonly_operational_acceptance=ref('reader-root15',receipt))
+    def read(path,*_):events.append(('read',str(path)));return bodies[Path(path)]
+    def once(path,raw):events.append(('once',path.name));bodies[Path(path)]=raw
+    C=types.SimpleNamespace(read=read,wire=cas.canonical,once=once,digest=cas.digest_value)
+    return C,{'acceptance_refs':refs},receipt,dep,svc,{'items':[pod]},bodies,events,core
 
 
 def acceptance_operand():
@@ -116,7 +232,7 @@ def acceptance_operand():
 
 class G15CoreCASTests(unittest.TestCase):
     def test_forced_unbound_and_runtime_config_ref_before_io(self):
-        for call in (cas.main,lambda:cas.maintenance_inputs(None),lambda:cas.database_pre_read96(None,None,None,None,'BEFORE'),lambda:cas.g15_acceptance(None,None,None,None,None),lambda:cas.accepted_guardian(None,None),lambda:cas.patch_once(None,None,None,None,None,0)):
+        for call in (cas.main,lambda:cas.maintenance_inputs(None),lambda:cas.database_pre_read96(None,None,None,None,'BEFORE'),lambda:cas.deployment_ready_inputs(None,None),lambda:cas.inventory_reader(None,None,None,'BEFORE',None),lambda:cas.g15_acceptance(None,None,None,None,None),lambda:cas.accepted_guardian(None,None),lambda:cas.patch_once(None,None,None,None,None,0)):
             with self.subTest(call=repr(call)),patch.object(cas,'read')as read,patch.object(cas,'API')as api,patch.object(cas,'load_tools')as tools:
                 with self.assertRaises(cas.Hold):call()
                 read.assert_not_called();api.assert_not_called();tools.assert_not_called()
@@ -136,6 +252,8 @@ class G15CoreCASTests(unittest.TestCase):
         self.assertLess(lexical,min(reads));self.assertEqual(sum(isinstance(n,ast.If)and ast.unparse(n.test)=="__name__ == '__main__'"for n in tree.body),1)
 
     def test_current_core5_and_full_eight_operation_cas(self):
+        # Historical method ID stays in the existing283 census; operands are
+        # the distinct current Core6/gen279 and future Core7 target.
         with binding():
             d,p,C=core_operand();cas.core_before(d,p,C)
             for axis in ('source','uid','pod','container','image','generation','restart'):
@@ -151,39 +269,224 @@ class G15CoreCASTests(unittest.TestCase):
             ops=cas.build_patch(d,C);self.assertEqual(len(ops),8)
             self.assertEqual([r['path']for r in ops if r['op']=='test'],['/metadata/uid','/metadata/resourceVersion','/metadata/generation','/metadata/annotations','/spec'])
             self.assertEqual([r['path']for r in ops if r['op']!='test'],['/spec/template/spec/containers/0/image','/metadata/annotations/dakasa.io~1core-source-commit','/metadata/annotations/kubernetes.io~1change-cause'])
-            after=copy.deepcopy(d);after['spec']['template']['spec']['containers'][0]['image']=C.IMAGE_PREFIX+C.NEW_DIGEST;after['metadata']['annotations'].update({'dakasa.io/core-source-commit':cas.CORE_R,'kubernetes.io/change-cause':cas.CHANGE_CAUSE});after['metadata'].update(generation=279,resourceVersion='2');cas.result_shape(d,after,C)
+            after=copy.deepcopy(d);after['spec']['template']['spec']['containers'][0]['image']=C.IMAGE_PREFIX+C.NEW_DIGEST;after['metadata']['annotations'].update({'dakasa.io/core-source-commit':cas.CORE_R,'kubernetes.io/change-cause':cas.CHANGE_CAUSE});after['metadata'].update(generation=cas.GENERATION+1,resourceVersion='2');cas.result_shape(d,after,C)
             bad=copy.deepcopy(after);bad['spec']['template']['spec']['containers'][0]['env']=[]
             with self.assertRaises(cas.Hold):cas.result_shape(d,bad,C)
+        self.assertEqual(cas.ROOT_CORE6_SHA,'20529efa40348fa53bc625ff665a1399733530e319ce1a007c9a2804e8bfc157')
+        self.assertEqual(cas.M7_RETURN_SHA,'e04f0d09bd55295664b7b7d2b62a8df4421d7b92089e360765ae4cddceb70c7c')
+        with binding():
+            C,c,receipt,dep,svc,pods,bodies,events,core=reader_operand()
+            def ref(name,value):
+                raw=value if type(value)is bytes else cas.canonical(value);p=Path('/declared/reader/'+name);bodies[p]=raw
+                return {'path':str(p),'sha256':cas.sha(raw)}
+            # Only immutable historical-ID/hash boundary constants are scoped
+            # to declared originals; all validators/input_ref hashes are real.
+            with patch.multiple(cas,ROOT_CORE6_SHA=c['acceptance_refs']['current_Core6_operational_acceptance']['sha256'],M7_RETURN_SHA=core['controller_pair_ref']['sha256']):
+                self.assertEqual(cas.deployment_ready_inputs(C,c),receipt)
+                self.assertEqual(set(c['acceptance_refs']),set('qualified_business_release business_Source_CI Root_Goose94_acceptance Root_Goose95_acceptance Root_Goose96_acceptance Root_separate_rollout_review current_Core6_operational_acceptance inventory_readonly_operational_acceptance'.split()))
+                for fault in ('h7_source','normal_provider','wrong_operation','not_reviewed','missing_role','extra_role','wrong_original_hash'):
+                    r,b=copy.deepcopy(receipt),copy.deepcopy(c)
+                    if fault=='h7_source':r['source']='d8cbbf48873d24439216f98c30afe2669a525b54'
+                    elif fault=='normal_provider':r['provider']='aws'
+                    elif fault=='wrong_operation':r['operation']='observe_fleet_inventory'
+                    elif fault=='not_reviewed':r['reviewed_by_root']=False
+                    elif fault=='missing_role':r['original_refs'].pop('describe')
+                    elif fault=='extra_role':r['original_refs']['callback']=r['original_refs']['health']
+                    else:r['original_refs']['health']['sha256']='f'*64
+                    b['acceptance_refs']['inventory_readonly_operational_acceptance']=ref('bad-reader-'+fault,r)
+                    with self.subTest(reader=fault),self.assertRaises(cas.Hold):cas.deployment_ready_inputs(C,b)
+                for fault in ('target_source','target_image','root96_alias','wrong_m7'):
+                    old=copy.deepcopy(core);b=copy.deepcopy(c)
+                    if fault=='target_source':old['source']=cas.CORE_R
+                    elif fault=='target_image':old['amd64_D']=cas.NEW_DIGEST
+                    elif fault=='root96_alias':old['schema']='root_goose96_guest_retirement_pre_read_continuation_acceptance_v1'
+                    else:old['controller_pair_ref']['sha256']='f'*64
+                    oldref=ref('bad-core6-'+fault,old);b['acceptance_refs']['current_Core6_operational_acceptance']=oldref
+                    with self.subTest(old_core=fault),patch.object(cas,'ROOT_CORE6_SHA',oldref['sha256']),self.assertRaises(cas.Hold):cas.deployment_ready_inputs(C,b)
+            for fault in ('config_identity','no_layers','boolean_config_size','wrong_media_type'):
+                manifest=copy.deepcopy(DECLARED_INVENTORY_MANIFEST)
+                if fault=='config_identity':manifest['config']['digest']='sha256:'+'f'*64
+                elif fault=='no_layers':manifest['layers']=[]
+                elif fault=='boolean_config_size':manifest['config']['size']=True
+                else:manifest['mediaType']='application/json'
+                with patch.object(cas,'INVENTORY_DIGEST',cas.sha(cas.canonical(manifest))):
+                    other,config,*tail=reader_operand(manifest);oldcore=tail[-1]
+                    with self.subTest(reader_manifest=fault),patch.multiple(cas,ROOT_CORE6_SHA=config['acceptance_refs']['current_Core6_operational_acceptance']['sha256'],M7_RETURN_SHA=oldcore['controller_pair_ref']['sha256']),self.assertRaises(cas.Hold):cas.deployment_ready_inputs(other,config)
+            self.assertEqual(cas.inventory_objects(receipt,dep,svc,pods),'10.43.1.2')
+            config=copy.deepcopy(pods);config['items'][0]['status']['containerStatuses'][0]['imageID']='containerd://sha256:'+cas.INVENTORY_CONFIG_DIGEST
+            self.assertEqual(cas.inventory_objects(receipt,dep,svc,config),'10.43.1.2')
+            for fault in ('foreign_pod','foreign_image_id','normal_binary','foreign_service','extra_pod','unready','wrong_owner'):
+                d,s,p=copy.deepcopy(dep),copy.deepcopy(svc),copy.deepcopy(pods)
+                if fault=='foreign_pod':p['items'][0]['metadata']['uid']='20000000-0000-4000-8000-000000000099'
+                elif fault=='foreign_image_id':p['items'][0]['status']['containerStatuses'][0]['imageID']='sha256:'+'f'*64
+                elif fault=='normal_binary':d['spec']['template']['spec']['containers'][0]['command']=['/app/integration-aws']
+                elif fault=='foreign_service':s['spec']['selector']={'app':'integration-aws'}
+                elif fault=='extra_pod':p['items'].append(copy.deepcopy(p['items'][0]))
+                elif fault=='unready':p['items'][0]['status']['containerStatuses'][0]['ready']=False
+                else:p['items'][0]['metadata']['ownerReferences'][0]['kind']='Deployment'
+                with self.subTest(reader_objects=fault),self.assertRaises(cas.Hold):cas.inventory_objects(receipt,d,s,p)
+            descriptions=[]
+            for fault in ('h7','normal','mutations','boolean_zero','amqp','unknown'):
+                d=cas.expected_inventory_description()
+                if fault=='h7':d['source_commit']='d8cbbf48873d24439216f98c30afe2669a525b54'
+                elif fault=='normal':d['provider']='aws'
+                elif fault=='mutations':d['native_mutations']=1
+                elif fault=='boolean_zero':d['native_mutations']=False
+                elif fault=='amqp':d['amqp_registered']=True
+                else:d['foreign_authority']=True
+                descriptions.append((fault,d))
+            for fault,d in descriptions:
+                with self.subTest(reader_describe=fault),self.assertRaises(cas.Hold):cas.inventory_description(inventory_description_wire(d))
+            valid=inventory_description_wire();outer=json.loads(valid);inner=base64.b64decode(outer['body'],validate=True)
+            malformed={}
+            for fault in ('unknown_outer','duplicate_outer','trailing_outer','missing_body','missing_content_type','wrong_content_type','bad_base64','unknown_inner','duplicate_inner','trailing_inner','missing_ok','false_ok','missing_normal_flag','bare_inner'):
+                o=copy.deepcopy(outer);body=inner
+                if fault=='unknown_outer':o['foreign_authority']=True
+                elif fault=='duplicate_outer':malformed[fault]=valid.replace(b'"body":',b'"body":"unused","body":',1);continue
+                elif fault=='trailing_outer':malformed[fault]=valid+b' {}';continue
+                elif fault=='missing_body':del o['body']
+                elif fault=='missing_content_type':del o['content_type']
+                elif fault=='wrong_content_type':o['content_type']='text/plain'
+                elif fault=='bad_base64':o['body']='!'
+                elif fault=='unknown_inner':obj=json.loads(body);obj['foreign_authority']=True;body=cas.canonical(obj)
+                elif fault=='duplicate_inner':body=body.replace(b'"ok":true',b'"ok":true,"ok":true',1)
+                elif fault=='trailing_inner':body+=b' {}'
+                elif fault=='missing_ok':obj=json.loads(body);del obj['ok'];body=cas.canonical(obj)
+                elif fault=='false_ok':obj=json.loads(body);obj['ok']=False;body=cas.canonical(obj)
+                elif fault=='missing_normal_flag':obj=json.loads(body);del obj['data']['normal_adapter_operations'];body=cas.canonical(obj)
+                elif fault=='bare_inner':malformed[fault]=inner;continue
+                if fault in ('unknown_inner','duplicate_inner','trailing_inner','missing_ok','false_ok','missing_normal_flag'):o['body']=base64.b64encode(body).decode('ascii')
+                malformed[fault]=cas.canonical(o)
+            self.assertEqual(cas.inventory_description(valid),cas.expected_inventory_description())
+            for fault,wire in malformed.items():
+                with self.subTest(reader_layer=fault),self.assertRaises(cas.Hold):cas.inventory_description(wire)
+            calls=[]
+            class API:
+                def request(self,method,uri,body=None):
+                    calls.append((method,uri));self_values={cas.INVENTORY_DEP_URI:dep,cas.INVENTORY_SVC_URI:svc,cas.INVENTORY_PODS_URI:pods}
+                    if method!='GET' or uri not in self_values:raise AssertionError('not a read-only Kube metadata GET')
+                    return 200,cas.canonical(self_values[uri]),{}
+            class Connection:
+                sock=None
+                def __init__(self,address,port,timeout):
+                    if (address,port,timeout)!=('10.43.1.2',8081,2):raise AssertionError('unbound reader origin/deadline')
+                def request(self,method,uri,body,headers):
+                    calls.append((method,uri));self.uri=uri
+                    if (method,uri)==('GET','/healthz'):
+                        if body is not None:raise AssertionError('health GET body')
+                    elif (method,uri)==('POST','/rpc/describe'):
+                        if json.loads(body)!={'provider':'aws-original-inventory-readonly','expected_version':'1.0.0','expected_source_commit':cas.INVENTORY_SOURCE}:raise AssertionError('wrong closed Describe')
+                    else:raise AssertionError('SDK execute, mutation, or unreviewed path attempted')
+                def getresponse(self):return types.SimpleNamespace(status=200,read=lambda cap:b'readonly observer up'if self.uri=='/healthz'else inventory_description_wire())
+                def close(self):calls.append(('close',self.uri))
+            with patch.object(cas.http.client,'HTTPConnection',Connection),patch.object(cas.time,'monotonic',return_value=100):
+                identity=cas.inventory_reader(API(),C,Path('/declared/run'),'PRESEND',receipt)
+            self.assertEqual(identity['container_id'],receipt['container_id'])
+            self.assertEqual([x for x in calls if x[0]in ('GET','POST','PATCH')],[('GET',cas.INVENTORY_DEP_URI),('GET',cas.INVENTORY_SVC_URI),('GET',cas.INVENTORY_PODS_URI),('GET','/healthz'),('POST','/rpc/describe')])
+            self.assertEqual(sum(x[0]=='close'for x in calls),2)
 
     def test_known_s8_zero_any_own_read_and_full_pending_sdk_lineage(self):
-        value,case=pre_read_operand();self.assertTrue(cas.validate_pre_read96(value,case))
-        for fault in ('own_prepared','own_returned','missing_ack','unknown_run','foreign_owner','live_lease','deadline','sdk_status','sdk_action','latest_failure','foreign_pending','raw_hash'):
+        value,case=current_pre_read_operand()
+        self.assertEqual(set(case),set('retirement_request_id failed_admission_id root_admission_id destroy_grant_id expected_records_sha256 provider_lanes current_runtime_source current_generation current_fencing_token current_failed_run_id current_lease_owner'.split()))
+        self.assertEqual(len(value['records']['forward_rows']),8)
+        self.assertEqual(case['current_fencing_token'],57)
+        self.assertLess(cas.utc(value['records']['destroy_grants'][0]['grant_record']['grant']['expires_at']),cas.utc(value['observed_at_pg']))
+        self.assertTrue(cas.validate_pre_read96(value,case))
+        # Original Go96 inputs remain historical rather than inheriting the
+        # current CAS globals. They cannot become the current Core6 case.
+        historical,historical_case=pre_read_operand()
+        self.assertEqual(historical['records']['selected_runtime_source'],'33a846d31a5b123b2c1141192671bc830bf6d9c8')
+        with self.assertRaises(cas.Hold):cas.validate_pre_read96(historical,historical_case)
+        faults=('own_prepared','own_returned_error','own_returned_malformed','hidden_own_prepared','ancestor_own_read','missing_ack','running','unknown_job','foreign_owner','live_lease','generation_reset','counter_reset','sdk_status','sdk_action','sdk_next_action','new_delete','foreign_roster','latest_raw_failure','foreign_pending','classic_alias','missing_classic','parent_ack_clock','deadline','old_runtime_alias','raw_hash')
+        for fault in faults:
             v,c=copy.deepcopy(value),copy.deepcopy(case);r=v['records']
-            if fault.startswith('own_'):r['own_read_count']=1;r['all_read_rows'].append(dict(r['all_read_rows'][0],admission_id=cas.PRE_READ_TARGET['failed_admission_id'],stage='prepared'if fault=='own_prepared'else'returned'))
-            elif fault=='missing_ack':r['owning_dispatch_jobs'][-1]['finalization_ack_at']=None
-            elif fault=='unknown_run':r['workflow_runs'][-1]['status']='running'
-            elif fault=='foreign_owner':r['current_intent']['intent']['lease_owner']='foreign';r['current_intent_pgtext']=json.dumps(r['current_intent']['intent'])
-            elif fault=='live_lease':r['current_intent']['intent']['lease_expires_at']='2026-11-10T17:00:00Z';r['current_intent_pgtext']=json.dumps(r['current_intent']['intent'])
-            elif fault=='deadline':r['all_read_rows'][-1]['original_record']['original_returned_at_core']='2026-11-10T16:00:09Z'
+            current=next(x for x in r['forward_rows']if x['id']==c['failed_admission_id']and x['stage']=='admitted')
+            ownrun=next(x for x in r['workflow_runs']if x['id']==c['current_failed_run_id'])
+            ownjob=next(x for x in r['owning_dispatch_jobs']if x['run_id']==ownrun['id'])
+            if fault in ('own_prepared','own_returned_error','own_returned_malformed','hidden_own_prepared','ancestor_own_read'):
+                prepared=copy.deepcopy(r['all_read_rows'][0]);readid='10000000-0000-4000-8000-000000000080'
+                admission=current['original_record']['parent_admission_id']if fault=='ancestor_own_read'else current['id']
+                prepared.update(id=readid,admission_id=admission,kind='inventory',recorded_at='2026-11-10T16:02:14Z')
+                prepared['original_record'].update(read_id=readid,admission_id=admission,admission_sha256=current['record_sha256'],issued_at_core='2026-11-10T16:02:14Z',original_deadline_core='2026-11-10T16:02:19Z')
+                r['all_read_rows'].append(prepared)
+                if fault in ('own_returned_error','own_returned_malformed'):
+                    raw=copy.deepcopy(r['all_read_rows'][1]);raw.update(id=readid,admission_id=admission,kind='inventory',recorded_at='2026-11-10T16:02:19Z')
+                    raw['original_record']={'read':prepared['original_record'],'status':''if fault=='own_returned_error'else'unsupported-status','call_failed':fault=='own_returned_error','original_context_failed':fault=='own_returned_error','started_at_core':'2026-11-10T16:02:14Z','original_returned_at_core':'2026-11-10T16:02:19Z'}
+                    r['all_read_rows'].append(raw);r['own_read_count']=2
+                elif fault=='own_prepared':r['own_read_count']=1;r['unreturned_prepared']=[prepared]
+                # Hidden count/open summaries cannot hide any retained row of
+                # this owner or of an inherited zero-read typed predecessor.
+            elif fault=='missing_ack':ownjob['finalization_ack_at']=None
+            elif fault=='running':ownrun['status']='running';ownrun['finished_at']=None;ownjob.update(state='running',return_status=None,returned_at=None,finalization_ack_at=None)
+            elif fault=='unknown_job':ownjob.update(state='unknown',return_status='unknown',finalization_ack_at=None)
+            elif fault=='foreign_owner':r['current_intent']['intent']['lease_owner']='10000000-0000-4000-8000-000000000099'
+            elif fault=='live_lease':r['current_intent']['intent']['lease_expires_at']='2026-11-10T16:07:00Z'
+            elif fault=='generation_reset':r['current_intent']['intent']['generation']=30
+            elif fault=='counter_reset':r['current_intent']['intent']['fencing_token']=55
             elif fault=='sdk_status':r['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['response_status']=True
-            elif fault=='sdk_action':r['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['action_id']='foreign'
-            elif fault=='latest_failure':r['all_read_rows'].append(dict(r['all_read_rows'][-1],id='10000000-0000-4000-8000-000000000088',recorded_at='2026-11-10T16:00:30Z'))
-            elif fault=='foreign_pending':r['all_read_rows'][-1]['admission_id']=cas.PRE_READ_TARGET['failed_admission_id']
-            else:r['forward_rows'][-1]['original_record']['prefix_sha256']='f'*64
-            if fault in ('sdk_status','sdk_action'):
-                g=r['destroy_grants'][0];g['grant_pgtext']=json.dumps(g['grant_record'],separators=(',',':'),sort_keys=True)
+            elif fault=='sdk_action':r['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['action_id']='10000000-0000-4000-8000-000000000099'
+            elif fault=='sdk_next_action':r['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['next_action_ids']=['10000000-0000-4000-8000-000000000099']
+            elif fault=='new_delete':extra=copy.deepcopy(r['destroy_grants'][0]);extra['id']='10000000-0000-4000-8000-000000000099';r['destroy_grants'].append(extra)
+            elif fault=='foreign_roster':r['active_policies'].append({'id':'10000000-0000-4000-8000-000000000099','checksum':'f'*64})
+            elif fault=='latest_raw_failure':
+                ident='10000000-0000-4000-8000-000000000088'
+                prep=copy.deepcopy(r['all_read_rows'][0]);prep.update(id=ident,recorded_at='2026-11-10T16:00:06Z');prep['original_record'].update(read_id=ident,issued_at_core='2026-11-10T16:00:06Z',original_deadline_core='2026-11-10T16:00:11Z')
+                raw=copy.deepcopy(r['all_read_rows'][-1]);raw.update(id=ident,recorded_at='2026-11-10T16:00:07Z');raw['original_record']={'read':prep['original_record'],'status':'','call_failed':True,'original_context_failed':True,'started_at_core':'2026-11-10T16:00:06Z','original_returned_at_core':'2026-11-10T16:00:07Z'}
+                r['all_read_rows'].extend((prep,raw));r['latest_reads_all_outcomes']=r['all_read_rows'][:]
+            elif fault in ('foreign_pending','classic_alias'):
                 for row in r['forward_rows']:
-                    if row['id']==cas.PRE_READ_TARGET['failed_admission_id']:row['original_record']['continuation']['destroy_grant_sha256']=cas.sha(g['grant_pgtext'].encode())
-            reseal_pre_read(v,c)
-            if fault=='deadline':
-                pending=next(x for x in r['all_read_rows']if x['stage']=='returned')
-                for row in r['forward_rows']:
-                    if row['id']==cas.PRE_READ_TARGET['failed_admission_id']:row['original_record']['continuation']['pending_read_sha256']=pending['record_sha256']
-                reseal_pre_read(v,c)
-            with self.subTest(fault=fault),self.assertRaises((cas.Hold,KeyError,TypeError)):cas.validate_pre_read96(v,c)
-        # Whole Source guards are semantic: changing self-consistent snapshots
-        # cannot make any current owner's raw row disappear through filtering.
-        self.assertIn("'all_read_rows'",cas.PRE_READ_SQL);self.assertIn("WHERE admission_id='756a0af2",cas.PRE_READ_SQL);self.assertNotIn("kind='absence'",cas.PRE_READ_SQL)
+                    if row['id']==current['id']:row['original_record']['continuation']['pending_read_id'if fault=='foreign_pending'else'schema']='10000000-0000-4000-8000-000000000099'if fault=='foreign_pending'else'original_settled_absence_continuation_v1'
+            elif fault=='missing_classic':r['forward_rows']=[x for x in r['forward_rows']if not(x['id']=='756a0af2-3ce3-4992-8fe2-116bb8da12cd'and x['stage']=='requested')]
+            elif fault=='parent_ack_clock':
+                q=next(x for x in r['forward_rows']if x['id']==current['id']and x['stage']=='requested');q['recorded_at']=q['original_record']['recorded_at']='2026-11-10T16:01:14Z'
+            elif fault=='deadline':r['all_read_rows'][1]['recorded_at']=r['all_read_rows'][1]['original_record']['original_returned_at_core']='2026-11-10T16:00:09Z'
+            elif fault=='old_runtime_alias':r['selected_runtime_source']='33a846d31a5b123b2c1141192671bc830bf6d9c8'
+            reseal_current_pre_read(v,c)
+            if fault=='raw_hash':
+                r['forward_rows'][-1]['record_sha256']='f'*64
+                raw=json.dumps(r,separators=(',',':'),sort_keys=True);v['records_wire']=raw;v['records_sha256']=c['expected_records_sha256']=cas.sha(raw.encode())
+            with self.subTest(fault=fault),self.assertRaises(cas.Hold):cas.validate_pre_read96(v,c)
+        # BEFORE/PRESEND are bound to the same complete reviewed snapshot;
+        # self-consistent wire rehashing cannot replace any old SDK/original.
+        changed,pinned=copy.deepcopy(value),copy.deepcopy(case)
+        changed['records']['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['called_at']='2026-11-10T16:00:02.1Z'
+        reseal_current_pre_read(changed,pinned,update_expected=False)
+        with self.assertRaises(cas.Hold):cas.validate_pre_read96(changed,pinned)
+        # Exercise the real database admission composition with declared query
+        # returns. Catalog validation has its separate real cases below; no
+        # query or provider operation is sent by these in-memory boundaries.
+        with binding():
+            full={}
+            for provider in ('aws','hetzner'):
+                full[provider]={**copy.deepcopy(case['provider_lanes'][provider]),'intent_identity':{'declared':provider},'owned_slots':[{'slot':1,'retained':True}],'active_policies':[{'declared':provider}],'policy_catalog_wire':'DECLARED unchanged '+provider}
+            saved=cas.canonical(value);legacy=b'DECLARED existing catalog SQL'
+            refs={'/declared/preimage':saved,'/declared/catalog':legacy}
+            C=types.SimpleNamespace(read=lambda path,*args:refs[str(path)],digest=cas.digest_value)
+            config={'pre_read_case':copy.deepcopy(case),'policy_state':{provider:{k:copy.deepcopy(full[provider][k])for k in ('intent_identity','owned_slots','active_policies','policy_catalog_wire')}for provider in full},'pre_read_preimage_ref':{'path':'/declared/preimage','sha256':cas.sha(saved)},'legacy_catalog_sql_ref':{'path':'/declared/catalog','sha256':cas.sha(legacy)}}
+            sql={'queries':{'original_notify_aws_vm_members':'DECLARED AWS','original_notify_hetzner_vm_members':'DECLARED HZ'}}
+            for fault in ('none','foreign_roster','new_busy_lane','changed_original_presend'):
+                aws=copy.deepcopy(full['aws']);observed=copy.deepcopy(value);cfg=copy.deepcopy(config);calls=[]
+                if fault=='foreign_roster':aws['owned_slots'].append({'slot':8,'foreign':True})
+                elif fault=='new_busy_lane':aws['jobs_busy']=1
+                elif fault=='changed_original_presend':observed['records']['current_intent']['updated_at']='2026-11-10T16:02:58Z';reseal_current_pre_read(observed,cfg['pre_read_case'])
+                def query(cut,run,label,text):
+                    calls.append(text)
+                    if text==sql['queries']['original_notify_aws_vm_members']:return aws
+                    if text==sql['queries']['original_notify_hetzner_vm_members']:return full['hetzner']
+                    if text==cas.PRE_READ_SQL:return observed
+                    if text=='DECLARED catalog SELECT':return {'declared':'catalog returned'}
+                    raise AssertionError('new query/mutation outside reviewed four stages')
+                with self.subTest(database_admission=fault),patch.object(cas,'query',side_effect=query),patch.object(cas,'catalog94_select',return_value='DECLARED catalog SELECT'),patch.object(cas,'schema96_facts')as schema:
+                    invoke=lambda:cas.database_pre_read96(types.SimpleNamespace(C=C),Path('/declared/run'),cfg,sql,'PRESEND')
+                    if fault=='none':
+                        self.assertEqual(invoke(),case['provider_lanes']);schema.assert_called_once()
+                        self.assertEqual(len(calls),5)
+                    else:
+                        with self.assertRaises(cas.Hold):invoke()
+                        schema.assert_not_called()
+        self.assertIn("'all_read_rows'",cas.PRE_READ_SQL)
+        self.assertNotIn("WHERE admission_id='756a0af2",cas.PRE_READ_SQL)
+        self.assertNotIn("kind='absence'",cas.PRE_READ_SQL)
 
     def test_normal_g15_full120_own15_fresh15_and_once_markers(self):
         with binding():
@@ -208,6 +511,8 @@ class G15CoreCASTests(unittest.TestCase):
         class API:
             def request(self,method,uri,body=None):events.append((method,uri));return 200,b'{}',{}
         with binding(),patch.object(cas.time,'monotonic',return_value=100):
+            self.assertIn('CORE-IMAGE-R6-045-D85BE-TO-',str(cas.global_marker(C)))
+            self.assertNotIn('R5-33A-D35195',str(cas.global_marker(C)))
             cas.patch_once(API(),C,Path('/declared/run'),b'[]',{},99)
             self.assertEqual([x[0]for x in events],['durable','durable','PATCH','durable','durable'])
             self.assertEqual([x[1]for x in events[3:]],['PATCH-ACTUAL-RETURN.json','PATCH-ACTUAL-RETURN.HTTP.json'])
@@ -257,6 +562,37 @@ class G15CoreCASTests(unittest.TestCase):
             elif field=='Native_or_Job_qualification':bad[field]=True
             else:bad['after'][field]={'server_version_num':170000,'definition':'foreign','validated':False,'old_constraint_rows':1}[field]
             with self.subTest(artifact=field),self.assertRaises(cas.Hold):cas.constraint96_definition(prior,bad)
+        # The sole embedded historical public Root95 original is byte-exact,
+        # not a synthesized authority or a current Core7 acceptance. New Root96
+        # operands below are declared semantic CI data and never published.
+        prior95_raw=base64.b64decode('eyJhbWQ2NF9EIjoiMzUxOTVlNGRkZmYyYTY5ZjJhZTdmY2E4ZjI0YjQzMTc3YzYxYzQ5ZjEyMTE3YTRmZTQ5MjVhNDNlOWNkNmZkZSIsImJ1c2luZXNzX3NvdXJjZSI6IjMzYTg0NmQzMWE1YjEyM2IyYzExNDExOTI2NzFiYzgzMGJmNmQ5YzgiLCJjYXRhbG9nOTBfOTFfc2hhMjU2IjoiNmMwZTc2MDhkOTMxNGM3MGQ3NWVmNDA4NzJlODVlYWUyNGRlODNlYTBkZTg4MWVlOTAyMTVmOWE5ZDlhMGUxNiIsImNhdGFsb2c5NV9zaGEyNTYiOiJlOTE0ZTM3OThlZWU5YzAzMzBmMGNjNTk0NWNjMTExMzRhOTQ3Yjc2OTk5Zjg3MjBhNTZmMDY1NWI2MDE4NDc1IiwiY29tcGxldGVfaGlzdG9yeV9zaGEyNTYiOiJiNmM2ZTg3OTc4YzVhZGY5ZDYxMGZlNWJmMjRkOTVjZmY2OTdkM2I3ZjQyMzlkOGYzNjZiOTk0MjMzYTcxMTM5IiwiY3VycmVudF9jb3JlX3NvdXJjZSI6IjdjZDVjZWEwODM0YmNlZTkwMWMyODJiYzgxYjk0ODZkNWMxNjUxM2IiLCJjdXJyZW50X29wc19zb3VyY2UiOiI4NWJlNDllY2RjNGM1NjEwZjU3ZGMxMzMxYTU3ODFmMzc3MjFkNmQyIiwiZXhpdF9jb2RlIjowLCJpbmRleDkyX2RlZmluaXRpb25fc2hhMjU2IjoiZTEyOTdhMDhhYzgwOWY2YjljMWNmMDlhNGZmYzE3ZGYxNzgyMWQwMWU5YmQ3ODc0MzRmZjUyYzZkNjMyNDQyNiIsImpvYl91aWQiOiJiYWE1MGFkYy02NTBmLTQyY2UtOTY2ZS1jZjEzYzQzOTZlMGMiLCJtaWdyYXRpb245NV9zaGEyNTYiOiI1MGYyZjFmNzEyYTkxYWJmM2NjZDE3ZDBmYjIwNDBkMzBiNGJkMmM2NDU1MjY4OTAyZTE0NTJlOTIyYTk0ODA4Iiwib2xkX3JlY29yZHNfYW5kX3Nka19wcmVzZXJ2ZWQiOnRydWUsIm9yaWdpbmFsX3JlZnMiOnsiYWZ0ZXJfY2F0YWxvZyI6eyJwYXRoIjoiL3Zhci9saWIvZGFrYXNhLWNvcmUtcm9sbG91dC9nb29zZTk1LWZhaWxlZC1leHBhbnNpb24tcmVhZC1jb250aW51YXRpb24vbWlncmF0aW9uOTUtNDFkZGRiYzUtNzJhMi00MDBlLWE5ZDAtNDhiY2Q0NzVjYTcwL0FGVEVSLUNBVEFMT0cuc3Rkb3V0Iiwic2hhMjU2IjoiZmY2NDQ1Zjg0M2E2N2I5NjkzNWQ3ZTkzNGIxMDkxZmQ4MDdhYzI0NGRmODdlM2U2ZmU0YWUzY2FkYTg2ZjFjMCJ9LCJiZWZvcmVfY2F0YWxvZyI6eyJwYXRoIjoiL3Zhci9saWIvZGFrYXNhLWNvcmUtcm9sbG91dC9nb29zZTk1LWZhaWxlZC1leHBhbnNpb24tcmVhZC1jb250aW51YXRpb24vbWlncmF0aW9uOTUtNDFkZGRiYzUtNzJhMi00MDBlLWE5ZDAtNDhiY2Q0NzVjYTcwL0JFRk9SRS1DQVRBTE9HLnN0ZG91dCIsInNoYTI1NiI6IjY0Y2E5ZTBhZDcwZmIwNzQxOGMzMjVlZmQ1ZDQ0YWNhNWMxMzliMjJmNzZlMjU0NWNhNjIwMzZjNTJmMDczYmYifSwibWlncmF0aW9uX3Jlc3VsdCI6eyJwYXRoIjoiL3Zhci9saWIvZGFrYXNhLWNvcmUtcm9sbG91dC9nb29zZTk1LWZhaWxlZC1leHBhbnNpb24tcmVhZC1jb250aW51YXRpb24vbWlncmF0aW9uOTUtNDFkZGRiYzUtNzJhMi00MDBlLWE5ZDAtNDhiY2Q0NzVjYTcwL1JFVFVSTi5QVUJMSUMuanNvbiIsInNoYTI1NiI6ImUxNDc0NDZhNzA2MjQzNmU2MjJkNTNlMDRkOGQ0Y2I2ZTYyMGUxMTM0NDZmZmMyMTA0NjE5MzNjNTJiMDI5ZTMifSwicXVhbGlmaWVkX2ltYWdlIjp7InBhdGgiOiIvdmFyL2xpYi9kYWthc2EtY29yZS1yb2xsb3V0L2cxNHBhaXIvZ29vc2U5NS1yNS1pbnB1dHMtYjY4NDcxN2UtYzJkMC00N2RiLWE1ZDYtYTVmZWEzMjRhNDJkL1JFR0lTVFJZLUlNQUdFLkVYSVNUSU5HLUFCSS5ST09ULmpzb24iLCJzaGEyNTYiOiI2ZDVhZGU1ZTA1M2UyNGI3ZTEwODM4MTdiNWE3NTA2NmY2N2MyZWMzODJmMjdiNjM5MjIzZjgyMmZlN2VjZDc3In0sInNvdXJjZV9jaSI6eyJwYXRoIjoiL3Zhci9saWIvZGFrYXNhLWNvcmUtcm9sbG91dC9nMTRwYWlyL2dvb3NlOTUtcjUtaW5wdXRzLWI2ODQ3MTdlLWMyZDAtNDdkYi1hNWQ2LWE1ZmVhMzI0YTQyZC9SNS1TT1VSQ0UtQ0ktQUNDRVBUQU5DRS5QVUJMSUMuanNvbiIsInNoYTI1NiI6IjVkMzE2YzRlNmQ1ODhkODJiNDM2ZDBlNmM2ZDdkMDEyNDkwYmE0NmUzYzY5YmYxZDA2YzM3NjVhMDE2N2EyZmMifX0sInBvZF91aWQiOiJmNDM5ODk4NC0zM2VhLTQwYWYtODBjMi1kYjBiMGFkODY3NDAiLCJwcmlvcjk0X2hpc3Rvcnlfc2hhMjU2IjoiMWE2ODdmYmFhNjc2NzllYTc3YmViZjNjZTI0YTY5MGFlY2RkYTUyZDY5ZjM3YWYxYzU3YWIwMmRkYTc0MWI3MiIsInByb3ZpZGVyX2d1ZXN0X2NvcmVfbXV0YXRpb25zIjowLCJyZXZpZXdlZF9ieV9yb290Ijp0cnVlLCJzY2hlbWEiOiJyb290X2dvb3NlOTVfZmFpbGVkX2V4cGFuc2lvbl9yZWFkX2NvbnRpbnVhdGlvbl9hY2NlcHRhbmNlX3YxIiwic2NoZW1hX2FmdGVyIjo5NSwic2NoZW1hX2JlZm9yZSI6OTQsInNpbmdsZV9qb2JfY3JlYXRlIjp0cnVlfQo=',validate=True)
+        self.assertEqual(cas.sha(prior95_raw),'b80ec307962a67b8a28722c8fbf88add02c25de08847253fbae7838de1c0153d')
+        prior95=json.loads(prior95_raw);originals={}
+        def read_ref(ref):
+            raw=originals[ref['path']]
+            self.assertEqual(cas.sha(raw),ref['sha256']);return raw
+        def original(role):
+            raw=cas.canonical({'declared_complete_original':role});path='/declared/Root96/'+role;originals[path]=raw
+            return {'path':path,'sha256':cas.sha(raw)}
+        pins={'current_ops_source':cas.ROOT96_HISTORICAL_OPS_SOURCE,'business_source':cas.ROOT96_HISTORICAL_BUSINESS_SOURCE,'amd64_D':cas.ROOT96_HISTORICAL_AMD64_D,'complete_history_sha256':'a'*64,'prior95_history_sha256':prior95['complete_history_sha256'],'catalog96_sha256':'b'*64,'index92_definition_sha256':prior95['index92_definition_sha256'],'catalog90_91_sha256':'c'*64}
+        root96={'schema':'root_goose96_guest_retirement_pre_read_continuation_acceptance_v1','reviewed_by_root':True,'schema_before':95,'schema_after':96,'current_core_source':prior95['business_source'],'current_ops_source':pins['current_ops_source'],'business_source':pins['business_source'],'amd64_D':pins['amd64_D'],'migration96_sha256':cas.M96,'complete_history_sha256':pins['complete_history_sha256'],'prior95_history_sha256':pins['prior95_history_sha256'],'catalog96_sha256':pins['catalog96_sha256'],'index92_definition_sha256':pins['index92_definition_sha256'],'catalog90_91_sha256':pins['catalog90_91_sha256'],'job_uid':'30000000-0000-4000-8000-000000000001','pod_uid':'30000000-0000-4000-8000-000000000002','exit_code':0,'single_job_create':True,'provider_guest_core_mutations':0,'old_records_and_sdk_preserved':True,'original_refs':{role:original(role)for role in ('migration_result','before_catalog','after_catalog','source_ci','qualified_image')}}
+        self.assertEqual(cas.ROOT96_SHA,'c44e5ef3554ee494001815358434119c31832977db90a44eb925097df137c9d6')
+        self.assertEqual((pins['business_source'],pins['amd64_D'],pins['current_ops_source']),('045176d16947555ccbc33a8b51635b08d2d9270e','85be238c7f5b15760f7eb903646cc48f6b4b86a6995d0a4727a1ba0d86d06876','33873025539cfb5691154fb8ded4fc4fd94eaf94'))
+        self.assertEqual(cas.root96_overlay(cas.canonical(root96),prior95_raw,pins,read_ref),root96)
+        for fault in ('target_source','target_digest','new_ops_alias','wrong_schema','provider_effect','missing_original','extra_original','not_reviewed'):
+            bad=copy.deepcopy(root96)
+            if fault=='target_source':bad['business_source']='f'*40
+            elif fault=='target_digest':bad['amd64_D']='f'*64
+            elif fault=='new_ops_alias':bad['current_ops_source']='f'*40
+            elif fault=='wrong_schema':bad['schema']='root_core_retirement_observer_operational_acceptance_v1'
+            elif fault=='provider_effect':bad['provider_guest_core_mutations']=1
+            elif fault=='missing_original':bad['original_refs'].pop('before_catalog')
+            elif fault=='extra_original':bad['original_refs']['current_core7']=next(iter(bad['original_refs'].values()))
+            else:bad['reviewed_by_root']=False
+            with self.subTest(historical96=fault),self.assertRaises(cas.Hold):cas.root96_overlay(cas.canonical(bad),prior95_raw,pins,read_ref)
+        source=ast.parse(PATH.read_text());schemafn=next(n for n in source.body if isinstance(n,ast.FunctionDef)and n.name=='schema96_facts')
+        historical_pin_names={n.id for n in ast.walk(schemafn)if isinstance(n,ast.Name)and n.id.startswith('ROOT96_HISTORICAL_')}
+        self.assertEqual(historical_pin_names,{'ROOT96_HISTORICAL_OPS_SOURCE','ROOT96_HISTORICAL_BUSINESS_SOURCE','ROOT96_HISTORICAL_AMD64_D'})
         old=(ROOT/'rollout/core_image_cas_once_g14.py').read_text();new=PATH.read_text()
         def spans(s):return {n.name:ast.get_source_segment(s,n)for n in ast.parse(s).body if isinstance(n,(ast.FunctionDef,ast.ClassDef))}
         a,b=spans(old),spans(new)

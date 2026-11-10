@@ -55,3 +55,16 @@ directly must set `CONFIG_REF` with `validated_config_ref` and call
 `require_bound` before calling `load_tools` or another maintenance function.
 The configuration is actual Root data supplied after migration acceptance;
 it is not a future receipt embedded into the qualified operator Source.
+
+
+## Core6 to Core7 inventory-only image succession
+
+`core_image_cas_once_g15.py` keeps the G15 protocol while using a distinct Core6-to-Core7 once domain. Its current preimage is the actual qualified Core6 generation279. C16 rolls the active Core image window to D6/D7 and retains C15 D5/D6 as immutable history. The existing four network roles, runtime14, original43 references, Cold/Hub lifetimes and spent recovery budget remain unchanged.
+
+The Root96 receipt remains the original045/D6/Ops338 migration receipt. It is checked separately from the new Core image, operational package and dedicated inventory reader. The maintenance configuration still has16 top-level keys. Its current S8 case has11 closed fields and authenticates the full typed96 lineage to the original Pending and settled DELETE. It requires the current failed workflow/final ACK, naturally expired lease, zero own prepared/returned records of any kind, current policy/roster bytes and both provider lane snapshots. Nothing sends or renews a Guest grant, DELETE, lease or old deadline.
+
+The existing six acceptance roles gain two distinct roles: the exact genuine Core6 Root9 preimage and a Root-reviewed dedicated reader acceptance. The reader receipt has15 fields and7 original roles: qualified_image, source_ci, deployment, service, pod, describe and health. `qualified_image` is the original OCI/Docker platform manifest: its complete byte SHA is the immutable image digest and its config descriptor binds the independently named runtime config digest. `describe` is the full SDK HTTP envelope, retaining its base64 inner RPC bytes; the projection is not relabeled as the original. The receipt authorizes neither an inventory SDK call nor a normal adapter operation.
+
+Before and immediately before the one image PATCH, the client checks the same ready reader Deployment/Service/Pod incarnation and full specs, then only GETs health and POSTs Describe. It never calls the reader execute endpoint. Each metadata response retains its original two-second/8192-byte bound. All existing SQL, API, current15 and once/lost-ACK constraints remain in place.
+
+`post_core_inventory_schema96_readonly.py` retains the19-key operational-reader configuration and generic9-key Root acceptance boundary. It rechecks current Core7, the ordinary G15 successor, reader metadata, health/OIDC/SAML/DB references and fresh schema96 catalog/history. It only rereads the saved pre-PATCH maintenance snapshot; it does not freeze or query live S8, policy or business rows after the image change. Future image/config/source/receipt bindings are inert and no Root acceptance or cycle result is produced automatically.
