@@ -1,0 +1,8 @@
+[
+  "test_g15pair_core_cas.G15CoreCASTests.test_forced_unbound_and_runtime_config_ref_before_io",
+  "test_g15pair_core_cas.G15CoreCASTests.test_current_core5_and_full_eight_operation_cas",
+  "test_g15pair_core_cas.G15CoreCASTests.test_known_s8_zero_any_own_read_and_full_pending_sdk_lineage",
+  "test_g15pair_core_cas.G15CoreCASTests.test_normal_g15_full120_own15_fresh15_and_once_markers",
+  "test_g15pair_core_cas.G15CoreCASTests.test_lost_ack_get_only_and_expired_current15_no_send",
+  "test_g15pair_core_cas.G15CoreCASTests.test_exact96_function_constraint_delta_and_prior95_custody"
+]
