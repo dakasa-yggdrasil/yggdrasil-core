@@ -316,8 +316,10 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
             with patch.object(CUT, 'native', side_effect=replies) as calls:
                 self.assertEqual(CUT.core_overlap()['deployment_uid'], CUT.C.OLD_CORE_UID)
                 self.assertEqual(calls.call_count, 2)
-            with patch.object(CUT.C, 'OLD_DIGEST', '8e6d44d86bbae4463652d4bf9b3583241483a0813a4d34c7254b9c2e56dccafc'), patch.object(CUT, 'native', side_effect=replies):
-                with self.assertRaises(CUT.C.Hold): CUT.core_overlap()
+            for previous_digest in ('35195e4ddff2a69f2ae7fca8f24b43177c61c49f12117a4fe4925a43e9cd6fde',
+                                    '8e6d44d86bbae4463652d4bf9b3583241483a0813a4d34c7254b9c2e56dccafc'):
+                with self.subTest(previous_digest=previous_digest), patch.object(CUT.C, 'OLD_DIGEST', previous_digest), patch.object(CUT, 'native', side_effect=replies):
+                    with self.assertRaises(CUT.C.Hold): CUT.core_overlap()
 
         class OnceBackend:
             def __init__(self, fail=None):self.claimed=False;self.records={};self.calls=[];self.fail=fail
