@@ -196,7 +196,7 @@ def reader_operand(manifest=None):
     refs.update(current_Core6_operational_acceptance=ref('Core6-root9',core),inventory_readonly_operational_acceptance=ref('reader-root15',receipt))
     def read(path,*_):events.append(('read',str(path)));return bodies[Path(path)]
     def once(path,raw):events.append(('once',path.name));bodies[Path(path)]=raw
-    C=types.SimpleNamespace(read=read,wire=cas.canonical,once=once,digest=cas.digest_value)
+    C=types.SimpleNamespace(read=read,wire=cas.canonical,once=once,digest=cas.digest_value,loads=cas.loads)
     return C,{'acceptance_refs':refs},receipt,dep,svc,{'items':[pod]},bodies,events,core
 
 
