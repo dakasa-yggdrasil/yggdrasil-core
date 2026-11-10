@@ -13,6 +13,7 @@ import (
 
 const GuestRetirementForwardContinuationMode = "settled_absence_continuation"
 const GuestRetirementForwardContinuationSchema = "original_settled_absence_continuation_v1"
+const GuestRetirementForwardPreReadContinuationSchema = "original_settled_absence_pre_read_continuation_v1"
 
 // This records a closed failed owner and its last authenticated Pending read.
 // It is neither absence, a new mutation permission, nor a process replacement.
@@ -114,25 +115,33 @@ func (s CapacityStore) TryRequestGuestRetirementForwardContinuation(ctx context.
 		return false, continuationEligibilityError(err)
 	}
 	proof.PendingReadSHA256 = readSHA
-	if read.Read.AdmissionID != admitted.ID || read.Read.AdmissionSHA256 != admittedSHA || read.Read.Kind != "absence" || read.Read.RetirementRequestID != parent.RetirementRequestID || read.Read.DestroyGrantID != destroy || read.Read.PrefixSHA256 != parent.PrefixSHA256 || read.Read.OriginalCallerSHA256 != parent.OriginalCallerSHA256 || read.Read.Tuple != x.original.Request.Intent.Tuple || read.Read.AdapterSourceCommit != x.binding.OriginalProviderSourceCommit || read.Read.MutationBindingSHA256 != capacity.GuestRetirementSHA(x.binding) || !retirementForwardAbsenceReceiptValid(read, original) || !retirementForwardObserverValid(read, true, RetirementReadonlyAWSObserverSource()) {
-		return false, nil
-	}
-	if read.Read.Tuple.Provider == "aws" {
-		if !guestForwardAWSAbsencePending(*read.Observation, *read.OriginalDestroyReceipt) {
+	if parent.Mode == GuestRetirementForwardContinuationMode && read.Read.AdmissionID != admitted.ID {
+		eligible, e := s.retirementForwardPreReadContinuationTx(ctx, tx, parent, read, readSHA, original, proof)
+		if e != nil || !eligible {
+			return false, continuationEligibilityError(e)
+		}
+		proof.Schema = GuestRetirementForwardPreReadContinuationSchema
+	} else {
+		if read.Read.AdmissionID != admitted.ID || read.Read.AdmissionSHA256 != admittedSHA || read.Read.Kind != "absence" || read.Read.RetirementRequestID != parent.RetirementRequestID || read.Read.DestroyGrantID != destroy || read.Read.PrefixSHA256 != parent.PrefixSHA256 || read.Read.OriginalCallerSHA256 != parent.OriginalCallerSHA256 || read.Read.Tuple != x.original.Request.Intent.Tuple || read.Read.AdapterSourceCommit != x.binding.OriginalProviderSourceCommit || read.Read.MutationBindingSHA256 != capacity.GuestRetirementSHA(x.binding) || !retirementForwardAbsenceReceiptValid(read, original) || !retirementForwardObserverValid(read, true, RetirementReadonlyAWSObserverSource()) {
 			return false, nil
 		}
-	} else if !guestForwardHetznerAbsencePending(*read.Observation, *read.OriginalDestroyReceipt) {
-		return false, nil
-	}
-	// Keep the pending observation within its real original owner, before that
-	// owner's returned failed run; old Pending is not a fresh success claim.
-	var timeline bool
-	err = tx.QueryRowContext(ctx, `SELECT v.recorded_at<=j.returned_at AND v.recorded_at>=$3 AND v.recorded_at>=p.recorded_at AND v.recorded_at-p.recorded_at+interval '5 seconds'<=$4::int*interval '1 second' AND (v.original_record->>'original_returned_at_core')::timestamptz<=j.returned_at FROM public.capacity_guest_retirement_forward_reads v JOIN public.capacity_guest_retirement_forward_reads p ON p.id=v.id AND p.stage='prepared' JOIN public.capacity_dispatch_jobs j ON j.run_id=$2 WHERE v.id=$1 AND v.stage='returned'`, proof.PendingReadID, parent.RunID, admitted.RecordedAt, x.spec.MaxEvidenceAgeSeconds).Scan(&timeline)
-	if err != nil {
-		return false, err
-	}
-	if !timeline {
-		return false, nil
+		if read.Read.Tuple.Provider == "aws" {
+			if !guestForwardAWSAbsencePending(*read.Observation, *read.OriginalDestroyReceipt) {
+				return false, nil
+			}
+		} else if !guestForwardHetznerAbsencePending(*read.Observation, *read.OriginalDestroyReceipt) {
+			return false, nil
+		}
+		// Keep the pending observation within its real original owner, before that
+		// owner's returned failed run; old Pending is not a fresh success claim.
+		var timeline bool
+		err = tx.QueryRowContext(ctx, `SELECT v.recorded_at<=j.returned_at AND v.recorded_at>=$3 AND v.recorded_at>=p.recorded_at AND v.recorded_at-p.recorded_at+interval '5 seconds'<=$4::int*interval '1 second' AND (v.original_record->>'original_returned_at_core')::timestamptz<=j.returned_at FROM public.capacity_guest_retirement_forward_reads v JOIN public.capacity_guest_retirement_forward_reads p ON p.id=v.id AND p.stage='prepared' JOIN public.capacity_dispatch_jobs j ON j.run_id=$2 WHERE v.id=$1 AND v.stage='returned'`, proof.PendingReadID, parent.RunID, admitted.RecordedAt, x.spec.MaxEvidenceAgeSeconds).Scan(&timeline)
+		if err != nil {
+			return false, err
+		}
+		if !timeline {
+			return false, nil
+		}
 	}
 	if err = s.installedGuestDispatchRunTx(ctx, tx, policy, x.spec, s.OriginalRunID, nil); err != nil {
 		return false, err
@@ -164,6 +173,83 @@ func (s CapacityStore) TryRequestGuestRetirementForwardContinuation(ctx context.
 		return false, err
 	}
 	return true, nil
+}
+
+// A failed read-only continuation may have spent its original inventory/floor
+// budget before it could prepare even one absence read. Its own failure/ACK and
+// expired lease are checked by the caller; an ancestor's immutable Pending is
+// only a read/confirm anchor, never fresh absence or a renewed old invocation.
+func (s CapacityStore) retirementForwardPreReadContinuationTx(ctx context.Context, tx *sql.Tx, parent GuestRetirementForward, read GuestRetirementForwardReadReturn, readSHA string, original capacityMutationRecord, proof *GuestRetirementForwardContinuationProof) (bool, error) {
+	if parent.Mode != GuestRetirementForwardContinuationMode || parent.Stage != "admitted" || parent.Continuation == nil || parent.DestroyGrantID == "" || parent.DestroyGrantID != original.Grant.GrantID || (parent.Continuation.Schema != GuestRetirementForwardContinuationSchema && parent.Continuation.Schema != GuestRetirementForwardPreReadContinuationSchema) {
+		return false, nil
+	}
+	var own int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_retirement_forward_reads WHERE admission_id=$1`, parent.ID).Scan(&own); err != nil {
+		return false, err
+	}
+	if own != 0 || parent.Continuation.PendingReadID != read.Read.ReadID || parent.Continuation.PendingReadSHA256 != readSHA || parent.Continuation.DestroyGrantSHA256 != proof.DestroyGrantSHA256 || parent.Continuation.DeleteEligibilitySHA256 != proof.DeleteEligibilitySHA256 {
+		return false, nil
+	}
+	requested, _, err := loadRetirementForwardTx(ctx, tx, parent.ID, "requested")
+	if err != nil {
+		return false, err
+	}
+	if requested.Mode != parent.Mode || requested.RootAdmissionID != parent.RootAdmissionID || requested.ParentAdmissionID != parent.ParentAdmissionID || requested.ParentAdmissionSHA256 != parent.ParentAdmissionSHA256 || requested.RetirementRequestID != parent.RetirementRequestID || requested.DestroyGrantID != parent.DestroyGrantID || !reflect.DeepEqual(requested.Continuation, parent.Continuation) || !reflect.DeepEqual(requested.Evidence, parent.Evidence) || requested.RecordedAt.After(parent.RecordedAt) {
+		return false, nil
+	}
+	anchor, anchorSHA, err := loadRetirementForwardTx(ctx, tx, read.Read.AdmissionID, "admitted")
+	if err != nil {
+		return false, err
+	}
+	if anchor.ID == parent.ID || anchor.RootAdmissionID != parent.RootAdmissionID || anchor.RetirementRequestID != parent.RetirementRequestID || anchor.PrefixSHA256 != parent.PrefixSHA256 || anchor.OriginalCallerSHA256 != parent.OriginalCallerSHA256 || !reflect.DeepEqual(anchor.Evidence, parent.Evidence) || !anchor.RecordedAt.Before(parent.RecordedAt) || !read.OriginalReturnedAtCore.Before(parent.RecordedAt) || read.Read.AdmissionSHA256 != anchorSHA || read.Read.Kind != "absence" || read.Read.RetirementRequestID != parent.RetirementRequestID || read.Read.DestroyGrantID != parent.DestroyGrantID || read.Read.PrefixSHA256 != parent.PrefixSHA256 || read.Read.OriginalCallerSHA256 != parent.OriginalCallerSHA256 || read.Read.Tuple != parent.Original.Request.Intent.Tuple || read.Read.AdapterSourceCommit != original.Binding.OriginalProviderSourceCommit || read.Read.MutationBindingSHA256 != capacity.GuestRetirementSHA(original.Binding) || !retirementForwardAbsenceReceiptValid(read, original) || !retirementForwardObserverValid(read, true, RetirementReadonlyAWSObserverSource()) {
+		return false, nil
+	}
+	if read.Read.Tuple.Provider == "aws" {
+		if !guestForwardAWSAbsencePending(*read.Observation, *read.OriginalDestroyReceipt) {
+			return false, nil
+		}
+	} else if !guestForwardHetznerAbsencePending(*read.Observation, *read.OriginalDestroyReceipt) {
+		return false, nil
+	}
+	// Exactly one real classic request authenticated this anchor. Later typed
+	// pre-read children keep the same anchor; no recursive lineage traversal or
+	// newest-success selection can hide a later failed/malformed read.
+	rows, err := tx.QueryContext(ctx, `SELECT id::text FROM public.capacity_guest_retirement_forwards WHERE retirement_request_id=$1 AND stage='requested' AND original_record->>'mode'=$2 AND original_record#>>'{continuation,schema}'=$3 AND original_record#>>'{continuation,pending_read_id}'=$4 AND original_record#>>'{continuation,pending_read_sha256}'=$5 AND original_record->>'parent_admission_id'=$6 AND original_record->>'root_admission_id'=$7 ORDER BY id LIMIT 2`, parent.RetirementRequestID, GuestRetirementForwardContinuationMode, GuestRetirementForwardContinuationSchema, read.Read.ReadID, readSHA, anchor.ID, parent.RootAdmissionID)
+	if err != nil {
+		return false, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return false, err
+		}
+		ids = append(ids, id)
+	}
+	er, cl := rows.Err(), rows.Close()
+	if er != nil {
+		return false, er
+	}
+	if cl != nil {
+		return false, cl
+	}
+	if len(ids) != 1 {
+		return false, nil
+	}
+	classic, _, err := loadRetirementForwardTx(ctx, tx, ids[0], "requested")
+	if err != nil {
+		return false, err
+	}
+	if classic.Continuation == nil || classic.Continuation.Schema != GuestRetirementForwardContinuationSchema || classic.DestroyGrantID != parent.DestroyGrantID || !reflect.DeepEqual(classic.Evidence, parent.Evidence) {
+		return false, nil
+	}
+	// Revalidate the complete historical classic proof under this NEW actual
+	// requester's quiet predicate. The stored request, old failure, read clocks,
+	// ACK and SDK are not changed; the old requester need not be live again.
+	var valid bool
+	err = tx.QueryRowContext(ctx, `SELECT public.retirement_forward_continuation_valid(jsonb_set(original_record,'{continuation,requesting_run_id}',to_jsonb($2::text)),retirement_request_id) FROM public.capacity_guest_retirement_forwards WHERE id=$1 AND stage='requested'`, classic.ID, proof.RequestingRunID).Scan(&valid)
+	return valid, err
 }
 
 func continuationEligibilityError(err error) error {

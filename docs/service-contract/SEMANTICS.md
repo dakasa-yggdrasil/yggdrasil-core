@@ -751,6 +751,26 @@ introduced. Migration90 retains append-only admission/read lineage and checks
 the complete terminal intent. Declared recovery fixtures and CI cannot qualify
 a production Guest, provider effect or operational A/B.
 
+## Failed settled continuation before its first read (ADR-0108)
+
+A separate ten-field `original_settled_absence_pre_read_continuation_v1`
+proof lets the ordinary scheduler resume an admitted settled-absence continuation
+that failed before preparing any read. Its own failed workflow and returned,
+acknowledged dispatch, naturally expired lease, current policy/source and unchanged
+accepted SETTLED destroy remain mandatory. Any own read row of any kind or stage,
+open challenge or later failed/malformed return refuses this branch.
+
+The inherited Pending remains historical custody. Its exact wire, root, tuple,
+receipt and original classic requested frame authenticate the anchor; repeated
+pre-read failures cannot replace it or create another DELETE. Migration96 checks
+the separate proof while preserving classic validation and all old records.
+A new actual scheduler run claims a new fence, owner and finite lease under the
+actual Core executor. Fresh inventory, survivor canaries, a new bounded absence
+read and normal confirmation/completion remain required. No process restart,
+old deadline renewal, OFF permission or provider mutation is introduced.
+After typed96 custody is retained, downgrade refuses instead of erasing evidence.
+Declared PostgreSQL fixtures confer no production or cycle acceptance.
+
 ## Recorded context-refused HTTP maintenance disposition (ADR-0103)
 
 `POST /api/v1/ops/capacity/http-maintenance-dispatch-dispositions` and
