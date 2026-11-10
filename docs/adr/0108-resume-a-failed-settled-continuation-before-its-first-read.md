@@ -37,7 +37,8 @@ validation value so quiet belongs to the new invocation; stored records and all
 historical clocks remain exact. The classic schema forces one bounded validation
 call, including after repeated pre-read failures.
 
-The ordinary claim obtains a new fence, owner, executor, run and finite lease.
+The ordinary claim obtains a new fence, owner, run and finite lease, bound to
+the actual Core process executor. Ordinary ticks do not require a Core restart.
 Fresh inventory, the existing survivor canaries, a new bounded absence read and
 normal confirmation/completion remain required. No old Pending becomes absence,
 no inventory/floor guard is skipped, no deadline is extended, and no mutation or
