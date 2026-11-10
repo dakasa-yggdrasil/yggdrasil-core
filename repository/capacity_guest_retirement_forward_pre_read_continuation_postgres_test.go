@@ -131,8 +131,10 @@ func TestGuestRetirementForwardPreReadContinuationPostgres(t *testing.T) {
 		}
 		preReadProofRefusals(t, f, second)
 		preReadClaim(t, f, ctx, second)
+		// Ordinary scheduler ticks reuse this actual Core process executor.
+		// New run/fence/owner/lease authority does not require a process restart.
 		secondOwner := f.Intent
-		if secondOwner.FencingToken != firstOwner.FencingToken+1 || secondOwner.LeaseOwner == firstOwner.LeaseOwner || secondOwner.LeaseExecutorID == firstOwner.LeaseExecutorID || secondOwner.LeaseExpiresAt == nil || !secondOwner.LeaseExpiresAt.After(time.Now()) {
+		if secondOwner.FencingToken != firstOwner.FencingToken+1 || secondOwner.LeaseOwner == firstOwner.LeaseOwner || secondOwner.LeaseExecutorID != f.Store.ExecutorID || secondOwner.LeaseExpiresAt == nil || !secondOwner.LeaseExpiresAt.After(time.Now()) {
 			t.Fatal("second continuation did not acquire a fresh actual fenced lease", secondOwner)
 		}
 		if _, err = firstFinish.PrepareGuestRetirementForwardRead(ctx, f.Request.Intent.RequestID, "absence", receipt.Grant.GrantID); err == nil {
@@ -175,7 +177,7 @@ func TestGuestRetirementForwardPreReadContinuationPostgres(t *testing.T) {
 		}
 		preReadClaim(t, f, ctx, finalChild)
 		finalOwner := f.Intent
-		if finalOwner.FencingToken != typedFailedOwner.FencingToken+1 || finalOwner.LeaseOwner == typedFailedOwner.LeaseOwner || finalOwner.LeaseExecutorID == typedFailedOwner.LeaseExecutorID {
+		if finalOwner.FencingToken != typedFailedOwner.FencingToken+1 || finalOwner.LeaseOwner == typedFailedOwner.LeaseOwner || finalOwner.LeaseExecutorID != f.Store.ExecutorID || finalOwner.LeaseExpiresAt == nil || !finalOwner.LeaseExpiresAt.After(time.Now()) {
 			t.Fatal("repeated typed96 failure did not receive a new actual owner/fence", finalOwner)
 		}
 		finish = f.FinishStore()
