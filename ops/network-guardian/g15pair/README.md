@@ -1,5 +1,10 @@
-G15 ABI / C18 [Core8, Core9] Source proposal with concrete target bindings for one owning Ops qualification. Target Core9 Source110b2e370a8f2936d9a3faafa74d81ba1e357331 and amd64f02ec7b916b4d8b23a8bfe91703af2b3e8f33f25fd943b18642f9218baa1ee60 bind the exact Root-reviewed C18 DATAd8ed4b268c112fc396860b57f57b36090dcc8b63f768a3a47b291984aa6eab1a. PROPOSAL_BOUND means these Source/DATA literals are concrete. Full Source CI, ECR and Native acceptance remain pending; no runtime/adoption/cycle claim is made.
+# C19 / G19 retained Core8 network transition
 
-Whole actual M9 manifest4fa5 / return76ed and C17 config396a / Guardianf740 / standing7d2f remain predecessors. The Root review and exact controller proposal are copied byte-for-byte; this preparation authors no approval.
+This Source/DATA proposal retains actual Core8 D8 and replaces the rejected,
+never activated f02 target with compiler 9f0266de7a2982352b7ff8fd627e73ceba12c896 and amd64 ed5ee3a2a5e90e54acc3cc2492fcc302a85e1b7adb6f545c605c5bfe2a730b42. The exact Root controller proposal has SHA c5132de2b021eefdd0f3688edc3a65cee8d0d29d66f511d95a9bf05f70ac3e64. PROPOSAL_BOUND binds these concrete values for owning CI; full business CI,
+ECR, operational CI and Native acceptance remain independent requirements.
 
-Only prescribed module-level literals and dependent Source unit/PACKAGE/SUM metadata change from freezef21. Runtime14, 31 protected Owner methods, seven helpers, all other function/class spans, four roles, protected43/budget1, Cold/Hub, cap131072 and all clocks/commands/once domains remain unchanged. S18, the compiled controller unit, Ops CI and operational Source/Native receipts remain independently unbound.
+The strict g19-only rule authenticates original C18/S18 and requires the same
+live Core8 overlap. All historical links, Runtime14, 31 protected Owner methods,
+seven helpers, 43 refs, budget1, Cold/Hub, commands, caps and claim domains remain
+preserved. No M11/S19, migration98, Core9 activation or elasticity cycle is claimed.
