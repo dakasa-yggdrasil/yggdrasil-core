@@ -121,17 +121,30 @@ func EnqueueCapacityDispatch(ctx context.Context, tx *sql.Tx, e CapacityDispatch
 		if readErr != nil || job.Protocol != CapacityDispatchProtocol {
 			return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope
 		}
-		if job.PendingWakeCount >= MaxCapacityDispatchPendingWakes {
-			return CapacityDispatchJob{}, false, ErrCapacityDispatchSaturated
+		// A closed installed provisioning timeout has its own immutable
+		// disposition. Never replay the unknown original or synthesize its ACK.
+		// This precedes saturation, so accumulated wakes cannot block recovery.
+		disposed := false
+		if job.State == "unknown" {
+			disposed, err = reconcileInstalledProvisionTimeoutTx(ctx, tx, job, e)
+			if err != nil {
+				return CapacityDispatchJob{}, false, err
+			}
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_dispatch_jobs SET pending_wake_count=pending_wake_count+1, updated_at=clock_timestamp() WHERE id=$1`, job.JobID); err != nil {
-			return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope
+		if !disposed {
+			if job.PendingWakeCount >= MaxCapacityDispatchPendingWakes {
+				return CapacityDispatchJob{}, false, ErrCapacityDispatchSaturated
+			}
+			if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_dispatch_jobs SET pending_wake_count=pending_wake_count+1, updated_at=clock_timestamp() WHERE id=$1`, job.JobID); err != nil {
+				return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope
+			}
+			if err = insertCapacityDispatchWake(ctx, tx, e, job.JobID); err != nil {
+				return CapacityDispatchJob{}, false, err
+			}
+			job.PendingWakeCount++
+			return job, true, nil
 		}
-		if err = insertCapacityDispatchWake(ctx, tx, e, job.JobID); err != nil {
-			return CapacityDispatchJob{}, false, err
-		}
-		job.PendingWakeCount++
-		return job, true, nil
+		err = sql.ErrNoRows
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope

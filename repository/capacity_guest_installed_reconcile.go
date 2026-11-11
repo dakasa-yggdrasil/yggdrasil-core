@@ -177,16 +177,35 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 		}
 	}
 	rowErr, closeErr := rows.Err(), rows.Close()
-	if rowErr != nil || closeErr != nil || count != 1 || !originalInstalledFailureResult(result, selected.pre, s.WorkflowID) {
+	if rowErr != nil || closeErr != nil || count > 1 {
 		return old, false, ErrCapacityConflict
 	}
-	if err = s.installedGuestDispatchRunTx(ctx, tx, policy, p, uuid.MustParse(runID), result); err != nil {
-		return old, false, err
+	timeoutDispositionID := ""
+	if count == 0 {
+		origin, wire, originalResult, e := installedProvisionTimeoutOriginTx(ctx, tx, selected.pre, old, s.WorkflowID)
+		if e != nil || !installedProvisionTimeoutMembersEqual(origin, members) {
+			return old, false, ErrCapacityConflict
+		}
+		originalEpoch := old
+		originalEpoch.FencingToken, originalEpoch.LeaseOwner, originalEpoch.LeaseExecutorID = selected.pre.Fence, selected.pre.LeaseOwner, selected.pre.ExecutorID
+		currentMembers, _, e := installedProvisionTimeoutMembersTx(ctx, tx, policy, p, originalEpoch)
+		if e != nil || !installedProvisionTimeoutRecordedMembersEqual(origin.Members, currentMembers) {
+			return old, false, ErrCapacityConflict
+		}
+		jobID, runID, runWire, result = origin.JobID, origin.RunID, wire, originalResult
+		timeoutDispositionID = origin.ID
+	} else {
+		if !originalInstalledFailureResult(result, selected.pre, s.WorkflowID) {
+			return old, false, ErrCapacityConflict
+		}
+		if err = s.installedGuestDispatchRunTx(ctx, tx, policy, p, uuid.MustParse(runID), result); err != nil {
+			return old, false, err
+		}
 	}
 	previousResumeRun, previousResumeSHA := "", ""
 	if old.InstalledGuestReconcile != nil {
 		m := old.InstalledGuestReconcile
-		if m.PreregistrationID != selected.pre.PreregistrationID || m.OriginalRunID != runID || m.OriginalRunSHA256 != capacity.BusinessCreationSHA256(runWire) {
+		if m.PreregistrationID != selected.pre.PreregistrationID || m.OriginalRunID != runID || m.OriginalRunSHA256 != capacity.BusinessCreationSHA256(runWire) || m.InstalledProvisionTimeoutDispositionID != timeoutDispositionID {
 			return old, false, ErrCapacityConflict
 		}
 		var lastWire, lastResult []byte
@@ -221,6 +240,7 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 		previous = combined
 	}
 	marker := &model.CapacityInstalledGuestReconcile{Attempt: attempt, PreviousFence: old.FencingToken, PreviousResumeRunID: previousResumeRun, PreviousResumeRunSHA256: previousResumeSHA, Schema: "installed_original_guest_readiness_reconcile_v1", OriginalJobID: jobID, OriginalRunID: runID, OriginalRunSHA256: capacity.BusinessCreationSHA256(runWire), PreregistrationID: selected.pre.PreregistrationID, EnrollmentSHA256: capacity.GuestRetirementSHA(selectedReceipt.Enrollment), InstallationSHA256: capacity.GuestRetirementSHA(installation), OriginalGeneration: old.Generation, OriginalFence: originalFence, NewFence: old.FencingToken + 1, NewRunID: s.OriginalRunID.String(), NewExecutorID: s.ExecutorID, PreviousCanaries: previous, OriginalFailurePreserved: true, OriginalQuiescenceOrNoEffectClaimed: false}
+	marker.InstalledProvisionTimeoutDispositionID = timeoutDispositionID
 	next := old
 	next.Phase = "preparing"
 	next.InstalledGuestReconcile = marker
@@ -357,6 +377,16 @@ func (s CapacityStore) OriginalGuestInstalledResumeEpoch(ctx context.Context, po
 	}
 	if m.Schema != "installed_original_guest_readiness_reconcile_v1" || m.Attempt < 1 || m.Attempt > 3 || m.NewFence != current.FencingToken || m.OriginalGeneration != current.Generation || !m.OriginalFailurePreserved || m.OriginalQuiescenceOrNoEffectClaimed || s.checkLease(p, policy, &current, current.Generation, current.FencingToken, current.LeaseOwner, now) != nil {
 		return s, current, false, ErrCapacityConflict
+	}
+	if m.InstalledProvisionTimeoutDispositionID != "" {
+		jobID, e := uuid.Parse(m.OriginalJobID)
+		if e != nil {
+			return s, current, false, ErrCapacityConflict
+		}
+		origin, e := readInstalledProvisionTimeoutDisposition(ctx, tx, jobID)
+		if e != nil || origin.ID != m.InstalledProvisionTimeoutDispositionID || origin.RunID != m.OriginalRunID || origin.OriginalRunSHA256 != m.OriginalRunSHA256 || origin.Generation != current.Generation || origin.FencingToken != m.OriginalFence || origin.PreregistrationID != m.PreregistrationID {
+			return s, current, false, ErrCapacityConflict
+		}
 	}
 	if err = s.guestReconcileSourceTx(ctx, tx, policy, p); err != nil {
 		return s, current, false, err
