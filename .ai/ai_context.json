@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-11T09:33:56-03:00",
+  "generated_at": "2026-11-11T09:51:53-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1526,
-    ".json": 242,
-    ".py": 189,
+    ".json": 244,
+    ".py": 195,
     ".sql": 101,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "44cb3b9fe20a61361dc8822eba50c3ca9388edaf",
+    "commit": "b81f2dc6384dcafe1c25437ff4aff7cce28d4d47",
     "dirty": true,
     "files": [
       {
@@ -100,8 +100,8 @@
     },
     {
       "path": "ops/network-guardian/tests",
-      "files": 54,
-      "kb": 977
+      "files": 58,
+      "kb": 1138
     },
     {
       "path": "addons",
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 77,
+    "config_files": 79,
     "k8s_manifests": 25
   }
 }
