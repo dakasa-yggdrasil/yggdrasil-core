@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-11T01:49:23-03:00_
+_Generated from HEAD at: 2026-11-11T05:45:52-03:00_
 
 ## Languages
 
@@ -24,14 +24,14 @@ _Generated from HEAD at: 2026-11-11T01:49:23-03:00_
 
 ## Top Directories by File Count
 
-- repository: 381 files (5145.5 KB)
+- repository: 381 files (5145.6 KB)
 - controllers/httpapi: 259 files (2631.5 KB)
 - controllers/message: 202 files (1763.7 KB)
 - internal/capacity: 126 files (1377.0 KB)
 - db/migrations: 96 files (895.9 KB)
 - model: 88 files (480.0 KB)
 - manifest: 65 files (397.9 KB)
-- ops/network-guardian/tests: 54 files (955.7 KB)
+- ops/network-guardian/tests: 54 files (977.4 KB)
 - addons: 51 files (307.6 KB)
 - internal/capacitynativeqemu: 47 files (298.1 KB)
 - cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)

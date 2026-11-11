@@ -273,7 +273,21 @@ def seal_normal_finish_fixture(value,case,update_expected=True):
     if update_expected:case['expected_records_sha256']=value['records_sha256']
 
 
-def normal_finish_operand():
+# Declared expectations match actual PostgreSQL160013 timestamp-cast outputs.
+# The fixtures remain synthetic; these are not Native admission receipts.
+NORMAL_FINISH_PG_DEADLINE_CASES = (('2026-11-11T02:05:37.000000499Z', '2026-11-11T02:05:37+00:00'), ('2026-11-11T02:05:37.000000500Z', '2026-11-11T02:05:37+00:00'), ('2026-11-11T02:05:37.000000501Z', '2026-11-11T02:05:37.000001+00:00'), ('2026-11-11T02:05:37.000001499Z', '2026-11-11T02:05:37.000001+00:00'), ('2026-11-11T02:05:37.000001500Z', '2026-11-11T02:05:37.000002+00:00'), ('2026-11-11T02:05:37.000001501Z', '2026-11-11T02:05:37.000002+00:00'), ('2026-11-11T02:05:37.871732499Z', '2026-11-11T02:05:37.871732+00:00'), ('2026-11-11T02:05:37.871732500Z', '2026-11-11T02:05:37.871732+00:00'), ('2026-11-11T02:05:37.871732501Z', '2026-11-11T02:05:37.871733+00:00'), ('2026-11-11T02:05:37.871732949Z', '2026-11-11T02:05:37.871733+00:00'), ('2026-11-11T02:05:37.999999499Z', '2026-11-11T02:05:37.999999+00:00'), ('2026-11-11T02:05:37.999999500Z', '2026-11-11T02:05:38+00:00'), ('2026-11-11T02:05:37.999999501Z', '2026-11-11T02:05:38+00:00'))
+
+
+def reseal_normal_finish_caller(value,case):
+    r=value['records'];prepared,returned=r['native_poweroff_reads']
+    challenge=prepared['original_record']
+    challenge['original_caller_sha256']=cas.sha(normal_finish_encoded(r['caller_returns'][0]['original_record']))
+    returned['original_record']['challenge']=copy.deepcopy(challenge)
+    returned['original_native_join_wire']='\\x'+normal_finish_encoded(challenge).hex()
+    seal_normal_finish_fixture(value,case)
+
+
+def normal_finish_operand(wire_deadline=None, pg_deadline=None):
     """Synthetic G37 normal200, failed OFF, zero DELETE; never Native evidence."""
     old,oldcase=live_image_operand();old=old['records'];t=cas.NORMAL_FINISH_TARGET
     policy=copy.deepcopy(old['active_policies'][0]);create=copy.deepcopy(old['create_grants'][0])
@@ -283,7 +297,8 @@ def normal_finish_operand():
     for record in (grant['settlement'],grant['settlement']['original_provider_create_return']):
         record.update(resource_id=tuple_['resource_id'],resource_created_at=tuple_['resource_created_at'])
     workflow='10000000-0000-4000-8000-000000000007';attempt='10000000-0000-4000-8000-000000000008'
-    deadline='2026-11-11T02:05:37Z'
+    deadline='2026-11-11T02:05:37Z'if wire_deadline is None else wire_deadline
+    stored_deadline=deadline if pg_deadline is None else pg_deadline
     preflight={'schema':'original_guest_production_retirement_intent_v2','request_id':t['retirement_request_id'],
         'attempt_id':attempt,'preregistration_id':t['preregistration_id'],'workflow_id':workflow,'policy_id':policy['id'],
         'generation':37,'fence':76,'lease_owner':t['lease_owner'],
@@ -292,7 +307,7 @@ def normal_finish_operand():
     finalized=copy.deepcopy(preflight);finalized['nonce_hash']='7'*64
     final_sha=cas.sha(normal_finish_encoded(finalized))
     request={'id':t['retirement_request_id'],'preregistration_id':t['preregistration_id'],
-        'attempt_id':attempt,'intent_record':preflight,'original_deadline':deadline}
+        'attempt_id':attempt,'intent_record':preflight,'original_deadline':stored_deadline}
     nonce={'schema':'original_core_guest_retirement_nonce_return_v2',
         'preflight_sha256':cas.sha(normal_finish_encoded(preflight)),
         'final_request':{'intent':finalized,'signature':'DECLARED finalized signature','nonce':''}}
@@ -343,7 +358,7 @@ def normal_finish_operand():
         'current_intent_pgtext':'','active_policies':[policy],'retirement_requests':[request],
         'preregistrations':[{'id':t['preregistration_id'],'create_grant_id':create['id']}],
         'create_grants':[create],'retirement_contexts':[{'intent_id':request['id'],'executor_id':t['executor_id'],
-            'core_actual_source_commit':cas.ROOT97_CURRENT_CORE_SOURCE,'original_context_deadline':deadline}],
+            'core_actual_source_commit':cas.ROOT97_CURRENT_CORE_SOURCE,'original_context_deadline':stored_deadline}],
         'caller_returns':[caller],'original_returns':returns,'native_poweroff_reads':[prepared,reply],
         'forward_rows':[],'forward_reads':[],'delete_bindings':[],'destroy_grants':[],
         'workflow_runs':[run],'owning_dispatch_jobs':[job]}
@@ -440,6 +455,16 @@ def acceptance_operand():
         return ['/usr/bin/python3','-B',str(source/'network_guardian.py'),'--watch','--source-sha256',pin]
     cut=types.SimpleNamespace(C=C,Backend=Backend,physical_identity=physical,controller_argv=lambda *args:['declared-controller'],guardian_argv=guardian_argv)
     return cut,Path('/declared/package'),manifest,returned,Path('/declared/run'),events
+
+
+# Exact public Root96 catalog90 constraint rows (original aca4ecd7); CI operands only.
+ROOT96_CATALOG90_CONSTRAINTS = [{'name': 'capacity_guest_retirement_forwards_check', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((original_record = (convert_from(original_wire, 'UTF8'::name))::jsonb) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_check1', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((encode(digest(original_wire, 'sha256'::text), 'hex'::text) = record_sha256) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_check2', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((((original_record ->> 'id'::text) = (id)::text) AND ((original_record ->> 'stage'::text) = stage) AND ((original_record ->> 'retirement_request_id'::text) = (retirement_request_id)::text) AND ((original_record ->> 'preregistration_id'::text) = (preregistration_id)::text)) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_check3', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((((original_record ->> 'namespace'::text) = namespace) AND ((original_record ->> 'environment'::text) = environment) AND ((original_record ->> 'domain'::text) = domain) AND ((original_record ->> 'dimension'::text) = dimension)) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_check4', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((((original_record ->> 'root_admission_id'::text) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text) AND (((COALESCE((original_record ->> 'parent_admission_id'::text), ''::text) = ''::text) AND ((original_record ->> 'root_admission_id'::text) = (id)::text)) OR (((original_record ->> 'parent_admission_id'::text) ~ '^[0-9a-f-]{36}$'::text) AND ((original_record ->> 'parent_admission_sha256'::text) ~ '^[0-9a-f]{64}$'::text)))) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_check5', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((((original_record #>> '{original,Request,intent,tuple,integration_instance_id}'::text[]) = integration_instance_id) AND ((original_record #>> '{original,Request,intent,tuple,scope_checksum}'::text[]) = scope_checksum) AND ((original_record #>> '{original,Request,intent,tuple,profile}'::text[]) = profile_name) AND (((original_record #>> '{original,Request,intent,slot}'::text[]))::integer = slot)) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_check6', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((((original_record ->> 'recorded_at'::text))::timestamp with time zone = recorded_at) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_original_record_check', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK ((jsonb_typeof(original_record) = 'object'::text))"}, {'name': 'capacity_guest_retirement_forwards_original_record_check1', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK ((((original_record ->> 'schema'::text) = 'original_guest_partial_poweroff_forward_v1'::text) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_original_record_check3', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((encode(digest(decode((original_record ->> 'original_intent_wire'::text), 'base64'::text), 'sha256'::text), 'hex'::text) = (original_record ->> 'original_intent_sha256'::text)) IS TRUE))"}, {'name': 'capacity_guest_retirement_forwards_original_wire_check', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': 'CHECK (((octet_length(original_wire) >= 2) AND (octet_length(original_wire) <= 2097152)))'}, {'name': 'capacity_guest_retirement_forwards_pkey', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': 'PRIMARY KEY (id, stage)'}, {'name': 'capacity_guest_retirement_forwards_preregistration_id_fkey', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': 'FOREIGN KEY (preregistration_id) REFERENCES capacity_vm_original_enrollments(preregistration_id)'}, {'name': 'capacity_guest_retirement_forwards_record_sha256_check', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK ((record_sha256 ~ '^[0-9a-f]{64}$'::text))"}, {'name': 'capacity_guest_retirement_forwards_retirement_request_id_fkey', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': 'FOREIGN KEY (retirement_request_id) REFERENCES capacity_vm_retirement_intents(id)'}, {'name': 'capacity_guest_retirement_forwards_slot_check', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': 'CHECK (((slot >= 2) AND (slot <= 8)))'}, {'name': 'capacity_guest_retirement_forwards_stage_check', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK ((stage = ANY (ARRAY['requested'::text, 'admitted'::text, 'off_qualified'::text, 'terminal'::text])))"}, {'name': 'retirement_forward_continuation96', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK ((\nCASE\n    WHEN ((original_record ->> 'mode'::text) = 'settled_absence_continuation'::text) THEN ((jsonb_typeof((original_record -> 'continuation'::text)) = 'object'::text) AND ((original_record #>> '{continuation,schema}'::text[]) = ANY (ARRAY['original_settled_absence_continuation_v1'::text, 'original_settled_absence_pre_read_continuation_v1'::text])))\n    ELSE (NOT (original_record ? 'continuation'::text))\nEND IS TRUE))"}, {'name': 'retirement_forward_mode93', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': "CHECK (((((original_record ->> 'mode'::text) = ANY (ARRAY['live'::text, 'historical'::text, 'settled_absence_continuation'::text])) AND ((original_record ->> 'actual_core_source'::text) ~ '^[0-9a-f]{40}$'::text)) IS TRUE))"}, {'name': 'retirement_forward_terminal', 'table': 'capacity_guest_retirement_forwards', 'validated': True, 'definition': 'TRIGGER DEFERRABLE INITIALLY DEFERRED'}, {'name': 'capacity_guest_retirement_for_admission_id_admission_stage_fkey', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': 'FOREIGN KEY (admission_id, admission_stage) REFERENCES capacity_guest_retirement_forwards(id, stage)'}, {'name': 'capacity_guest_retirement_forward_re_retirement_request_id_fkey', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': 'FOREIGN KEY (retirement_request_id) REFERENCES capacity_vm_retirement_intents(id)'}, {'name': 'capacity_guest_retirement_forward_reads_admission_stage_check', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': "CHECK ((admission_stage = 'admitted'::text))"}, {'name': 'capacity_guest_retirement_forward_reads_check', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': "CHECK ((((original_record = (convert_from(original_wire, 'UTF8'::name))::jsonb) AND (encode(digest(original_wire, 'sha256'::text), 'hex'::text) = record_sha256)) IS TRUE))"}, {'name': 'capacity_guest_retirement_forward_reads_kind_check', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': "CHECK ((kind = ANY (ARRAY['off'::text, 'absence'::text])))"}, {'name': 'capacity_guest_retirement_forward_reads_original_record_check', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': "CHECK ((jsonb_typeof(original_record) = 'object'::text))"}, {'name': 'capacity_guest_retirement_forward_reads_original_wire_check', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': 'CHECK (((octet_length(original_wire) >= 2) AND (octet_length(original_wire) <= 2097152)))'}, {'name': 'capacity_guest_retirement_forward_reads_pkey', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': 'PRIMARY KEY (id, stage)'}, {'name': 'capacity_guest_retirement_forward_reads_record_sha256_check', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': "CHECK ((record_sha256 ~ '^[0-9a-f]{64}$'::text))"}, {'name': 'capacity_guest_retirement_forward_reads_stage_check', 'table': 'capacity_guest_retirement_forward_reads', 'validated': True, 'definition': "CHECK ((stage = ANY (ARRAY['prepared'::text, 'returned'::text])))"}]
+
+
+def catalog96_constraints_operand(continuation_check):
+    rows=copy.deepcopy(ROOT96_CATALOG90_CONSTRAINTS)
+    next(row for row in rows if row['name']=='retirement_forward_continuation96')['definition']=continuation_check
+    return rows
 
 
 class G15CoreCASTests(unittest.TestCase):
@@ -785,6 +810,36 @@ class G15CoreCASTests(unittest.TestCase):
         self.assertNotIn('retirement_forward',nr['current_intent']['intent'])
         self.assertEqual(nr['delete_bindings'],[])
         self.assertTrue(cas.validate_normal_finish97(normal,normalcase))
+        # Real retained949ns wire rounds up in PG; wire order is never rounded.
+        for wire_deadline,pg_deadline in NORMAL_FINISH_PG_DEADLINE_CASES+(
+                ('2026-11-10T23:05:37.871732949-03:00','2026-11-11T02:05:37.871733+00:00'),
+                ('2026-12-31T23:59:59.999999500Z','2027-01-01T00:00:00Z')):
+            with self.subTest(normal_deadline_precision=(wire_deadline,pg_deadline)):
+                self.assertTrue(cas.normal_finish_pg_deadline_equal(wire_deadline,pg_deadline))
+        exact,exactcase=normal_finish_operand(wire_deadline='2026-11-11T02:05:37.871732949Z',
+            pg_deadline='2026-11-11T02:05:37.871733+00:00')
+        self.assertTrue(cas.validate_normal_finish97(exact,exactcase))
+        offset,offsetcase=normal_finish_operand(wire_deadline='2026-11-10T23:05:37.871732949-03:00',
+            pg_deadline='2026-11-11T02:05:37.871733+00:00')
+        self.assertTrue(cas.validate_normal_finish97(offset,offsetcase))
+        self.assertEqual(cas.normal_finish_stamp_ns('2026-11-11T02:05:37.871732950Z')-
+            cas.normal_finish_stamp_ns('2026-11-11T02:05:37.871732949Z'),1)
+        for precision_fault in ('wrong_PG_microsecond','neighbor_PG_microsecond','PG_submicrosecond',
+                'wire_deadline_shift','one_ns_late','exact_wire_deadline','one_ns_order_inversion'):
+            bad,bcase=copy.deepcopy(exact),copy.deepcopy(exactcase);r=bad['records']
+            caller=r['caller_returns'][0]['original_record'];request=r['retirement_requests'][0]
+            if precision_fault=='wrong_PG_microsecond':request['original_deadline']='2026-11-11T02:05:37.871732+00:00'
+            elif precision_fault=='neighbor_PG_microsecond':request['original_deadline']='2026-11-11T02:05:37.871734+00:00'
+            elif precision_fault=='PG_submicrosecond':request['original_deadline']='2026-11-11T02:05:37.871733001Z'
+            elif precision_fault=='wire_deadline_shift':caller['original_deadline']='2026-11-11T02:05:37.871732950Z'
+            elif precision_fault=='one_ns_late':caller['driver_returned_at']='2026-11-11T02:05:37.871732950Z'
+            elif precision_fault=='exact_wire_deadline':caller['driver_returned_at']=caller['original_deadline']
+            else:
+                caller['read_returned_at']='2026-11-11T02:05:08.200000500Z'
+                caller['close_returned_at']='2026-11-11T02:05:08.200000499Z'
+            reseal_normal_finish_caller(bad,bcase)
+            with self.subTest(normal_deadline_precision_fault=precision_fault),self.assertRaises(cas.Hold):
+                cas.validate_normal_finish97(bad,bcase)
         nonce=nr['original_returns'][0]['original_return_record']
         preflight_raw=normal_finish_encoded(nr['retirement_requests'][0]['intent_record'])
         final_raw=normal_finish_encoded(nonce['final_request']['intent'])
@@ -1050,20 +1105,24 @@ class G15CoreCASTests(unittest.TestCase):
             function_row('retirement_forward_continuation_valid','DECLARED retained96 continuation','r jsonb, retirement uuid','boolean','s',['TimeZone=UTC']),
             function_row('retirement_forward_continuation_quiet','DECLARED retained96 quiet','r jsonb, retirement uuid','boolean','s',['TimeZone=UTC'])]
         before96=copy.deepcopy(prior);before96['functions93']=retained
-        before96['catalog90']['constraints']=[{'table':'capacity_guest_retirement_forwards','name':'retirement_forward_continuation96','validated':True,'definition':DECLARED_CHECK96},
-            {'table':'capacity_guest_retirement_forwards','name':'retirement_forward_mode93','validated':True,'definition':'CHECK (declared_modes93)'}]
+        before96['catalog90']['functions']=[{'name':name,'definition':retained[0]['definition']if name=='guard_retirement_forward'else'DECLARED retained legacy '+name}
+            for name in ('guard_retirement_forward','guard_retirement_forward_delete_binding','guard_retirement_forward_read','guard_retirement_forward_terminal')]
+        before96['catalog90']['constraints']=catalog96_constraints_operand(DECLARED_CHECK96)
         after97=copy.deepcopy(before96)
         for name in cas.M97_FUNCTIONS:
             row=function_row(name,**functions[name])
             if name=='guard_retirement_forward':after97['functions93'][0]=row
             else:after97['functions93'].append(row)
         after97['functions93'].sort(key=lambda x:x['name'])
-        after97['catalog90']['constraints'][1].update(name='retirement_forward_mode97',definition='CHECK (declared_modes97)')
+        after97['catalog90']['functions'][0]['definition']=next(x for x in after97['functions93']if x['name']=='guard_retirement_forward')['definition']
+        next(row for row in after97['catalog90']['constraints']if row['name']=='retirement_forward_mode93').update(name='retirement_forward_mode97',definition='CHECK (declared_modes97)')
         after97['catalog90']['constraints'].append({'table':'capacity_guest_retirement_forwards','name':'retirement_forward_normal_finish97','validated':True,'definition':'CHECK (declared_normal_finish97)'})
-        after97['catalog90']['constraints'].sort(key=lambda x:(x['table'],x['name']))
+        group_rank={}
+        for row in before96['catalog90']['constraints']:group_rank.setdefault(row['table'],len(group_rank))
+        after97['catalog90']['constraints'].sort(key=lambda row:(group_rank[row['table']],row['name']))
         def pg_view(catalog,major):
             return {'server_version_num':major*10000,'functions':{x['name']:x['definition']for x in catalog['functions93']},
-                'constraints':[{k:x[k]for k in ('name','validated','definition')}for x in catalog['catalog90']['constraints']]}
+                'constraints':[{k:x[k]for k in ('name','validated','definition')}for x in catalog['catalog90']['constraints']if x['table']=='capacity_guest_retirement_forwards'and x['definition'].startswith('CHECK (')]}
         def carrier_for(before,after,major=16,artifact_fault=None):
             saved={};carrier={}
             artifact={'schema':'normal_finish_recovery_schema97_pg_catalog_v1','source_commit':'a'*40,
@@ -1085,12 +1144,25 @@ class G15CoreCASTests(unittest.TestCase):
             carrier,reader=carrier_for(before,after,major)
             definitions=cas.constraint97_definitions(before96,carrier,reader,'a'*40)
             self.assertEqual(cas.catalog97_delta(before96,after97,functions,definitions),after97)
+        self.assertEqual(len(before96['catalog90']['constraints']),30)
+        self.assertEqual(list(group_rank),['capacity_guest_retirement_forwards','capacity_guest_retirement_forward_reads'])
+        self.assertNotEqual(list(group_rank),sorted(group_rank))
+        self.assertEqual(before96['catalog90']['constraints'][-10:],after97['catalog90']['constraints'][-10:])
+        self.assertEqual(len(before96['catalog90']['functions']),4)
+        self.assertEqual(before96['catalog90']['functions'][1:],after97['catalog90']['functions'][1:])
+        for fault in ('missing_legacy_guard','duplicate_legacy_guard','conflicting_legacy_guard','extra_legacy_guard_field'):
+            bad=copy.deepcopy(before96);rows=bad['catalog90']['functions']
+            if fault=='missing_legacy_guard':rows.pop(0)
+            elif fault=='duplicate_legacy_guard':rows.append(copy.deepcopy(rows[0]))
+            elif fault=='conflicting_legacy_guard':rows[0]['definition']+=' foreign'
+            else:rows[0]['invented_authority']=True
+            with self.subTest(prior97_duplicate_projection=fault),self.assertRaises(cas.Hold):cas.catalog97_delta(bad,after97,functions,definitions)
         for fault in ('prior_function_changed','retained_function_changed','extra_function','old_mode_retained','missing_check','unvalidated','foreign_constraint','server_changed','artifact_native','artifact_false','artifact_wrong_source','artifact_wrong_migration','artifact_wrong_size'):
             before,after=pg_view(before96,16),pg_view(after97,16);alter=None
             if fault=='prior_function_changed':before['functions']['guard_retirement_forward']+=' foreign'
             elif fault=='retained_function_changed':after['functions']['retirement_forward_continuation_quiet']+=' foreign'
             elif fault=='extra_function':after['functions']['unreviewed_function']='foreign'
-            elif fault=='old_mode_retained':after['constraints'].append(copy.deepcopy(before['constraints'][-1]))
+            elif fault=='old_mode_retained':after['constraints'].append(copy.deepcopy(next(row for row in before['constraints']if row['name']=='retirement_forward_mode93')))
             elif fault=='missing_check':after['constraints'].pop()
             elif fault=='unvalidated':after['constraints'][0]['validated']=False
             elif fault=='foreign_constraint':after['constraints'][0]['definition']='CHECK (true)'
@@ -1102,7 +1174,9 @@ class G15CoreCASTests(unittest.TestCase):
             else:alter=lambda a:a['after97_ref'].update(bytes=a['after97_ref']['bytes']+1)
             carrier,reader=carrier_for(before,after,artifact_fault=alter)
             with self.subTest(catalog97_originals=fault),self.assertRaises(cas.Hold):cas.constraint97_definitions(before96,carrier,reader,'a'*40)
-        for fault in ('other_column','old_function','new_body','signature','other_constraint','index','extra_function'):
+        for fault in ('other_column','old_function','new_body','signature','other_constraint','index','extra_function',
+                'legacy_guard_definition','missing_legacy_guard','duplicate_legacy_guard','extra_legacy_guard_field','other_legacy_function',
+                'read_constraint_changed','read_constraint_order','relation_group_order'):
             bad=copy.deepcopy(after97)
             if fault=='other_column':bad['columns90_91'].append({'unreviewed':True})
             elif fault=='old_function':next(x for x in bad['functions93']if x['name']=='retirement_forward_continuation_valid')['body']+=' foreign'
@@ -1110,6 +1184,14 @@ class G15CoreCASTests(unittest.TestCase):
             elif fault=='signature':next(x for x in bad['functions93']if x['name']=='guard_retirement_forward')['arguments']='foreign'
             elif fault=='other_constraint':bad['catalog90']['constraints'][0]['definition']='CHECK (true)'
             elif fault=='index':bad['index92_definition']='foreign'
+            elif fault=='legacy_guard_definition':bad['catalog90']['functions'][0]['definition']+=' foreign'
+            elif fault=='missing_legacy_guard':bad['catalog90']['functions'].pop(0)
+            elif fault=='duplicate_legacy_guard':bad['catalog90']['functions'].append(copy.deepcopy(bad['catalog90']['functions'][0]))
+            elif fault=='extra_legacy_guard_field':bad['catalog90']['functions'][0]['invented_authority']=True
+            elif fault=='other_legacy_function':bad['catalog90']['functions'][1]['definition']+=' foreign'
+            elif fault=='read_constraint_changed':bad['catalog90']['constraints'][-1]['definition']+=' foreign'
+            elif fault=='read_constraint_order':bad['catalog90']['constraints'][-2:]=reversed(bad['catalog90']['constraints'][-2:])
+            elif fault=='relation_group_order':bad['catalog90']['constraints'].sort(key=lambda row:(row['table'],row['name']))
             else:bad['functions93'].append(function_row('foreign','extra function'))
             with self.subTest(catalog97_delta=fault),self.assertRaises(cas.Hold):cas.catalog97_delta(before96,bad,functions,definitions)
         # A new Root97 cannot relabel historical96 or accept missing originals.

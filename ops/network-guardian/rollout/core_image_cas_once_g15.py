@@ -42,7 +42,7 @@ NORMAL_FINISH_TARGET = {
 ROOT_CORE7_SHA = '22c91f114e92a55fb0c38f96a4238f8a8eaf75f72d6175a90c553e466a1974d8'
 M8_RETURN_SHA = 'c21e08fd33064b4a334eb623d94e5a526c00c026050430709656bd0c2955cdbe'
 HISTORICAL_CORE6_SOURCE = '045176d16947555ccbc33a8b51635b08d2d9270e'
-NORMAL_FINISH_SQL = "WITH request AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_retirement_intents\n WHERE id='2c4f52ef-21d3-4f50-890a-34140caa79b4'::uuid\n AND preregistration_id='079677b7-fa87-4b8f-a2ff-3a87d33c0176'::uuid\n), pre AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_provisioning_preregistrations\n WHERE id='079677b7-fa87-4b8f-a2ff-3a87d33c0176'::uuid\n), owners AS MATERIALIZED (\n SELECT w.* FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id\n WHERE j.realm='dakasa-production' AND j.environment='production' AND j.domain='notify'\n AND j.dimension='original_notify_aws_vm_members' AND\n (w.id='f705fab4-e3f3-4529-baf8-4d60383caca7'::uuid OR\n  (w.result#>>'{steps,0,metadata,generation}'='37'\n   AND w.result#>>'{steps,0,metadata,fencing_token}'='76'\n   AND w.result#>>'{steps,0,metadata,lease_owner}'='83b746d8-c9bb-4e94-bd20-80ad9da7da39'))\n), bindings AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_retirement_delete_bindings\n WHERE intent_id='2c4f52ef-21d3-4f50-890a-34140caa79b4'::uuid\n), snapshot(v) AS (SELECT jsonb_build_object(\n 'selected_runtime_source','21003808115d0b5cd62ae503ef16e65e13d4798f',\n 'target',jsonb_build_object('retirement_request_id','2c4f52ef-21d3-4f50-890a-34140caa79b4','preregistration_id','079677b7-fa87-4b8f-a2ff-3a87d33c0176'),\n 'current_intent',(SELECT to_jsonb(i) FROM public.capacity_intents i WHERE i.namespace='dakasa-production' AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'current_intent_pgtext',(SELECT i.intent::text FROM public.capacity_intents i WHERE i.namespace='dakasa-production' AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'active_policies',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',p.id,'version',p.version,'checksum',p.checksum,'spec',p.spec) ORDER BY p.version),'[]'::jsonb) FROM public.manifests p WHERE p.kind='capacity_policy' AND p.namespace='dakasa-production' AND p.name='notify-aws-elastic-capacity' AND p.active),\n 'retirement_requests',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex'))),'[]'::jsonb) FROM request x),\n 'preregistrations',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex'))),'[]'::jsonb) FROM pre x),\n 'create_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb) FROM public.capacity_mutation_grants g JOIN pre ON pre.create_grant_id=g.id),\n 'retirement_contexts',(SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]'::jsonb) FROM public.capacity_guest_original_retirement_contexts x JOIN request r ON r.id=x.intent_id),\n 'caller_returns',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at),'[]'::jsonb) FROM public.capacity_guest_original_caller_returns x JOIN request r ON r.id=x.intent_id),\n 'original_returns',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.sequence),'[]'::jsonb) FROM public.capacity_vm_retirement_original_returns x JOIN request r ON r.id=x.intent_id),\n 'native_poweroff_reads',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at,x.id),'[]'::jsonb) FROM public.capacity_guest_original_native_poweroff_reads x JOIN request r ON r.id=x.intent_id),\n 'forward_rows',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM public.capacity_guest_retirement_forwards x JOIN request r ON r.id=x.retirement_request_id),\n 'forward_reads',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM public.capacity_guest_retirement_forward_reads x JOIN request r ON r.id=x.retirement_request_id),\n 'delete_bindings',(SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]'::jsonb) FROM bindings x),\n 'destroy_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb) FROM public.capacity_mutation_grants g WHERE g.id IN(SELECT destroy_grant_id FROM bindings) OR (g.generation=37 AND g.grant_record#>>'{grant,capability}'=g.grant_record#>>'{binding,destroy_capability}' AND EXISTS(SELECT 1 FROM pre JOIN public.capacity_mutation_grants created ON created.id=pre.create_grant_id WHERE g.integration_instance_id=created.integration_instance_id AND g.scope_checksum=created.scope_checksum AND g.profile_name=created.profile_name AND g.slot=created.slot))),\n 'workflow_runs',(SELECT COALESCE(jsonb_agg(to_jsonb(w)||jsonb_build_object('run_wire',row_to_json(w)::text) ORDER BY w.id),'[]'::jsonb) FROM owners w),\n 'owning_dispatch_jobs',(SELECT COALESCE(jsonb_agg(to_jsonb(j)||jsonb_build_object('dispatch_wire',to_jsonb(j)::text) ORDER BY j.created_at,j.id),'[]'::jsonb) FROM public.capacity_dispatch_jobs j JOIN owners w ON w.id=j.run_id)\n)) SELECT jsonb_build_object('observed_at_pg',clock_timestamp(),'records',v,'records_wire',v::text,'records_sha256',encode(sha256(convert_to(v::text,'UTF8')),'hex')) FROM snapshot"
+NORMAL_FINISH_SQL = "WITH request AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_retirement_intents\n WHERE id='2c4f52ef-21d3-4f50-890a-34140caa79b4'::uuid\n AND preregistration_id='079677b7-fa87-4b8f-a2ff-3a87d33c0176'::uuid\n), pre AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_provisioning_preregistrations\n WHERE id='079677b7-fa87-4b8f-a2ff-3a87d33c0176'::uuid\n), owners AS MATERIALIZED (\n SELECT w.* FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id\n CROSS JOIN LATERAL (SELECT w.result#>'{steps,0,metadata}' AS metadata OFFSET 0) m\n WHERE j.realm='dakasa-production' AND j.environment='production' AND j.domain='notify'\n AND j.dimension='original_notify_aws_vm_members' AND\n (w.id='f705fab4-e3f3-4529-baf8-4d60383caca7'::uuid OR\n  (m.metadata->>'generation'='37'\n   AND m.metadata->>'fencing_token'='76'\n   AND m.metadata->>'lease_owner'='83b746d8-c9bb-4e94-bd20-80ad9da7da39'))\n), bindings AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_retirement_delete_bindings\n WHERE intent_id='2c4f52ef-21d3-4f50-890a-34140caa79b4'::uuid\n), snapshot(v) AS MATERIALIZED (SELECT jsonb_build_object(\n 'selected_runtime_source','21003808115d0b5cd62ae503ef16e65e13d4798f',\n 'target',jsonb_build_object('retirement_request_id','2c4f52ef-21d3-4f50-890a-34140caa79b4','preregistration_id','079677b7-fa87-4b8f-a2ff-3a87d33c0176'),\n 'current_intent',(SELECT to_jsonb(i) FROM public.capacity_intents i WHERE i.namespace='dakasa-production' AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'current_intent_pgtext',(SELECT i.intent::text FROM public.capacity_intents i WHERE i.namespace='dakasa-production' AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'active_policies',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',p.id,'version',p.version,'checksum',p.checksum,'spec',p.spec) ORDER BY p.version),'[]'::jsonb) FROM public.manifests p WHERE p.kind='capacity_policy' AND p.namespace='dakasa-production' AND p.name='notify-aws-elastic-capacity' AND p.active),\n 'retirement_requests',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex'))),'[]'::jsonb) FROM request x),\n 'preregistrations',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex'))),'[]'::jsonb) FROM pre x),\n 'create_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb) FROM public.capacity_mutation_grants g JOIN pre ON pre.create_grant_id=g.id),\n 'retirement_contexts',(SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]'::jsonb) FROM public.capacity_guest_original_retirement_contexts x JOIN request r ON r.id=x.intent_id),\n 'caller_returns',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at),'[]'::jsonb) FROM public.capacity_guest_original_caller_returns x JOIN request r ON r.id=x.intent_id),\n 'original_returns',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.sequence),'[]'::jsonb) FROM public.capacity_vm_retirement_original_returns x JOIN request r ON r.id=x.intent_id),\n 'native_poweroff_reads',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at,x.id),'[]'::jsonb) FROM public.capacity_guest_original_native_poweroff_reads x JOIN request r ON r.id=x.intent_id),\n 'forward_rows',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM public.capacity_guest_retirement_forwards x JOIN request r ON r.id=x.retirement_request_id),\n 'forward_reads',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM public.capacity_guest_retirement_forward_reads x JOIN request r ON r.id=x.retirement_request_id),\n 'delete_bindings',(SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]'::jsonb) FROM bindings x),\n 'destroy_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb) FROM public.capacity_mutation_grants g WHERE g.id IN(SELECT destroy_grant_id FROM bindings) OR (g.generation=37 AND g.grant_record#>>'{grant,capability}'=g.grant_record#>>'{binding,destroy_capability}' AND EXISTS(SELECT 1 FROM pre JOIN public.capacity_mutation_grants created ON created.id=pre.create_grant_id WHERE g.integration_instance_id=created.integration_instance_id AND g.scope_checksum=created.scope_checksum AND g.profile_name=created.profile_name AND g.slot=created.slot))),\n 'workflow_runs',(SELECT COALESCE(jsonb_agg(to_jsonb(w)||jsonb_build_object('run_wire',row_to_json(w)::text) ORDER BY w.id),'[]'::jsonb) FROM owners w),\n 'owning_dispatch_jobs',(SELECT COALESCE(jsonb_agg(to_jsonb(j)||jsonb_build_object('dispatch_wire',to_jsonb(j)::text) ORDER BY j.created_at,j.id),'[]'::jsonb) FROM public.capacity_dispatch_jobs j JOIN owners w ON w.id=j.run_id)\n)) SELECT jsonb_build_object('observed_at_pg',clock_timestamp(),'records',v,'records_wire',v::text,'records_sha256',encode(sha256(convert_to(v::text,'UTF8')),'hex')) FROM snapshot"
 ROOT97_SHA = None
 ROOT97_CURRENT_CORE_SOURCE = '21003808115d0b5cd62ae503ef16e65e13d4798f'
 ROOT97_CURRENT_CORE_DIGEST = '311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce'
@@ -1235,6 +1235,14 @@ def catalog97_delta(prior96, actual97, functions, definitions):
     expected = copy.deepcopy(prior96)
     old = [row for row in expected['functions93'] if row['name'] == 'guard_retirement_forward']
     need(len(old) == 1, 'ONE_PRIOR96_FORWARD_GUARD')
+    old_legacy = [row for row in expected['catalog90']['functions']
+                  if row['name'] == 'guard_retirement_forward']
+    new_legacy = [row for row in actual97['catalog90']['functions']
+                  if row['name'] == 'guard_retirement_forward']
+    need(len(old_legacy) == len(new_legacy) == 1
+         and set(old_legacy[0]) == set(new_legacy[0]) == {'name', 'definition'}
+         and old_legacy[0]['definition'] == old[0]['definition'],
+         'ONE_PRIOR96_LEGACY_FORWARD_GUARD_MATCHES_FUNCTION93')
     for name in M97_FUNCTIONS:
         rows = [row for row in actual97['functions93'] if row['name'] == name]
         need(len(rows) == 1 and rows[0]['body'] == functions[name]['body']
@@ -1248,7 +1256,10 @@ def catalog97_delta(prior96, actual97, functions, definitions):
                  and all(rows[0][key] == old[0][key] for key in (
                      'name', 'arguments', 'result', 'language', 'volatility', 'config')),
                  'UNCHANGED97_FORWARD_GUARD_SIGNATURE')
+            need(new_legacy[0]['definition'] == rows[0]['definition'],
+                 'SAME97_FORWARD_GUARD_IN_BOTH_CATALOG_VIEWS')
             old[0].update(body=rows[0]['body'], definition=rows[0]['definition'])
+            old_legacy[0]['definition'] = rows[0]['definition']
         else:
             need(not any(row['name'] == name for row in expected['functions93']),
                  'NEW97_NORMAL_FINISH_FUNCTION_NOT_PRIOR_AUTHORITY')
@@ -1264,7 +1275,10 @@ def catalog97_delta(prior96, actual97, functions, definitions):
     new_check.update(name='retirement_forward_normal_finish97',
                      definition=definitions['checks']['retirement_forward_normal_finish97'])
     expected['catalog90']['constraints'].append(new_check)
-    expected['catalog90']['constraints'].sort(key=lambda row: (row['table'], row['name']))
+    group_rank = {}
+    for row in prior96['catalog90']['constraints']:
+        group_rank.setdefault(row['table'], len(group_rank))
+    expected['catalog90']['constraints'].sort(key=lambda row: (group_rank[row['table']], row['name']))
     need(expected == actual97, 'ALL_OTHER96_CATALOG_FUNCTION_INDEX_TRIGGER_BYTES_UNCHANGED')
     return actual97
 
@@ -1310,6 +1324,25 @@ def normal_pg_bytea(value):
     need(type(value) is str and re.fullmatch(r'\\x(?:[0-9a-f]{2})*',value),
          'CANONICAL_POSTGRES_JSON_BYTEA_HEX')
     return bytes.fromhex(value[2:])
+
+
+def normal_finish_stamp_ns(value):
+    """Keep original wire order; datetime precision is not deadline authority."""
+    stamp = utc(value).astimezone(datetime.timezone.utc)
+    delta = stamp - datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+    fraction = re.search(r'\.(\d{1,9})(?=Z|[+-])', value)
+    tail = int((fraction.group(1) + '000000000')[:9][-3:]) if fraction else 0
+    return ((delta.days * 86400 + delta.seconds) * 1000000 + delta.microseconds) * 1000 + tail
+
+
+def normal_finish_pg_deadline_equal(original, stored):
+    """Only the wire-to-PG join rounds to PG microseconds, nearest ties even."""
+    nanos = normal_finish_stamp_ns(original)
+    pg_nanos = normal_finish_stamp_ns(stored)
+    micros, remainder = divmod(nanos, 1000)
+    if remainder > 500 or (remainder == 500 and micros % 2):
+        micros += 1
+    return pg_nanos % 1000 == 0 and pg_nanos == micros * 1000
 
 
 def normal_finish_wire(row, record_key, digest_key):
@@ -1375,10 +1408,12 @@ def validate_normal_finish97(value, case):
          and c['attempt_id'] == request['attempt_id'] and type(c['status']) is int and c['status'] == 200
          and c['body_persisted'] is True and all(c[k] is False for k in (
              'preflight_failed','do_failed','read_failed','close_failed','original_context_failed'))
-         and utc(c['original_deadline']) == utc(request['original_deadline'])
-         and utc(request['intent_record']['issued_at']) <= utc(c['started_at']) <= utc(c['do_started_at'])
-         <= utc(c['do_returned_at']) <= utc(c['read_returned_at']) <= utc(c['close_returned_at'])
-         <= utc(c['driver_returned_at']) < utc(request['original_deadline']),
+         and normal_finish_stamp_ns(c['original_deadline']) == normal_finish_stamp_ns(intent['original_deadline'])
+         and normal_finish_pg_deadline_equal(c['original_deadline'], request['original_deadline'])
+         and normal_finish_stamp_ns(intent['issued_at']) <= normal_finish_stamp_ns(c['started_at'])
+         <= normal_finish_stamp_ns(c['do_started_at']) <= normal_finish_stamp_ns(c['do_returned_at'])
+         <= normal_finish_stamp_ns(c['read_returned_at']) <= normal_finish_stamp_ns(c['close_returned_at'])
+         <= normal_finish_stamp_ns(c['driver_returned_at']) < normal_finish_stamp_ns(c['original_deadline']),
          'GENUINE_ORIGINAL_NORMAL_CALLER200_COMPLETE_BEFORE_DEADLINE')
     original = r['original_returns']
     need(len(original) == 5 and [x['sequence'] for x in original] == [1,2,3,4,5]
