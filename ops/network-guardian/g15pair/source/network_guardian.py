@@ -386,6 +386,8 @@ def pair_chain_digests():
       if PAIR_CHAIN[index][0]=='g19pair':
         require(PAIR_CHAIN[index-1]==('g18pair',G18_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g18pair.production.json'),G18_CONTROLLER_CONFIG_SHA) and pairs==G19_CORE_IMAGE_PAIRS and pairs[0]==G18_CORE_IMAGE_PAIRS[0],'G19_EXACT_C18_RETAINS_LIVE_CORE8')
         overlap=True
+      elif PAIR_CHAIN[index][0]=='g20pair':
+        require(PAIR_CHAIN[index-1]==('g19pair',G19_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g19pair.production.json'),G19_CONTROLLER_CONFIG_SHA) and pairs==G20_CORE_IMAGE_PAIRS,'G20_EXACT_C19_RETAINS_CORE9')
       require(overlap and pairs[1]['image'] not in seen, 'PINNED_PAIR_CHAIN_OVERLAP_AND_NO_READMISSION')
     seen.extend(p['image'] for p in pairs if p['image'] not in seen)
   return seen
