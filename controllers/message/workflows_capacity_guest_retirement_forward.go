@@ -84,9 +84,10 @@ func planGuestRetirementForward(ctx context.Context, store repository.CapacitySt
 		return nil, true, errOriginalGuestStep
 	}
 	reason := "partial_poweroff_forward"
-	if r.Mode == repository.GuestRetirementForwardNormalFinishRecoveryMode {
+	switch r.Mode {
+	case repository.GuestRetirementForwardNormalFinishRecoveryMode:
 		reason = repository.GuestRetirementForwardNormalFinishRecoveryMode
-	} else if r.Mode == repository.GuestRetirementForwardContinuationMode {
+	case repository.GuestRetirementForwardContinuationMode:
 		reason = "settled_absence_continuation"
 	}
 	return originalGuestReconcilePlan{Mode: "retire", Reason: reason, Slot: claimed.Decision.Units + 1, Generation: claimed.Generation, FencingToken: claimed.FencingToken, LeaseOwner: claimed.LeaseOwner, PreregistrationID: preID}, true, nil
