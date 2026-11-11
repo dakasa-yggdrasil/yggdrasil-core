@@ -325,77 +325,9 @@ jobs:
                   assert (target in row.get('IgnoredGoFiles',[])) is (not present)
           print('BOTH_RECOVERY_FIXTURES_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')
           PY_EXCLUSION
-      - name: Qualify original forward and installed timeout on the same PostgreSQL owner
+      - name: Qualify original forward on its independent PostgreSQL owner
         shell: bash
         run: |
-          set -Eeuo pipefail
-          # Each qualification retains its original isolated databases, commands and censuses.
-          qualify_installed_timeout() (
-          set -Eeuo pipefail
-          umask 077
-          evidence="$RUNNER_TEMP/installed-timeout-source-pg$FAILED_SERVING_TEST_PG_MAJOR"
-          mkdir -m 0700 "$evidence"
-          export INSTALLED_TIMEOUT_LOGS="$evidence"
-          printf 'INSTALLED_TIMEOUT_LOGS=%s\n' "$evidence" >> "$GITHUB_ENV"
-          git rev-parse HEAD > "$evidence/source-head.txt"
-          for mode in default fixture native both; do
-            case "$mode" in
-              default) tags='' ;;
-              fixture) tags='recoveryfixture' ;;
-              native) tags='nativequalification' ;;
-              both) tags='recoveryfixture,nativequalification' ;;
-            esac
-            go list -json -tags="$tags" ./internal/capacity > "$evidence/build-$mode.json"
-          done
-          python3 - "$evidence" <<'PY_FIXTURE_EXCLUSION'
-          import json,pathlib,sys
-          p=pathlib.Path(sys.argv[1]);name='guest_installed_timeout_fixture_data.go'
-          for mode,present in [('default',False),('fixture',True),('native',False),('both',False)]:
-              row=json.loads((p/f'build-{mode}.json').read_text())
-              assert row['ImportPath']=='github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity'
-              assert (name in row.get('GoFiles',[])) is present,(mode,'fixture compiled outside explicit test build')
-              assert (name in row.get('IgnoredGoFiles',[])) is (not present)
-          PY_FIXTURE_EXCLUSION
-          # Each process owns its approval registry and disposable database.
-          # Keep the real five-minute original deadline in every case.
-          cases=(two_members eight_members live_original_lease wrong_failure_stage current_epoch_changed missing_or_foreign_installation concurrent_wakes old_ACK_origin)
-          pids=()
-          for case_name in "${cases[@]}"; do
-            (
-              set +e
-              GOMAXPROCS=1 GOMEMLIMIT=512MiB go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run "^TestInstalledProvisionTimeoutRecoveryPostgres/$case_name\$" > "$evidence/$case_name.jsonl" 2> "$evidence/$case_name.stderr"
-              original_exit=$?
-              printf '%s\n' "$original_exit" > "$evidence/$case_name.exit"
-              exit "$original_exit"
-            ) &
-            pids+=("$!")
-          done
-          failed=0
-          for pid in "${pids[@]}"; do
-            wait "$pid" || failed=1
-          done
-          printf '%s\n' "$failed" > "$evidence/original.exit"
-          [[ "$failed" == 0 ]]
-          python3 - "$evidence" <<'PY_TIMEOUT_CENSUS'
-          import collections,json,os,pathlib,sys
-          p=pathlib.Path(sys.argv[1]);root='TestInstalledProvisionTimeoutRecoveryPostgres'
-          children=['two_members','eight_members','live_original_lease','wrong_failure_stage','current_epoch_changed','missing_or_foreign_installation','concurrent_wakes','old_ACK_origin']
-          package='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
-          for child in children:
-              assert (p/(child+'.exit')).read_text().strip()=='0',child
-              rows=[json.loads(line) for line in (p/(child+'.jsonl')).read_text().splitlines() if line.strip()]
-              assert all(r.get('Package',package)==package for r in rows)
-              assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows),child
-              for action in ('run','pass'):
-                  actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r)
-                  assert actual==collections.Counter([root,root+'/'+child]),(child,action,actual)
-              assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1,child
-          assert (p/'source-head.txt').read_text().strip()==os.environ['SOURCE_COMMIT']
-          result={'schema':'installed_provision_timeout_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':98,'race':True,'count':1,'distinct_roots':1,'root_executions':len(children),'children':children,'processes':len(children),'original_dispatch_deadline_seconds':300,'original_exit':0,'old_acknowledgment_lane_unchanged':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
-          (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
-          PY_TIMEOUT_CENSUS
-          )
-          qualify_original_forward() (
           set -Eeuo pipefail
           record() {
             local name="$1"; shift
@@ -514,28 +446,6 @@ jobs:
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_FORWARD_CENSUS
-          )
-          # Observe both original returns before deciding this same job outcome.
-          set +e
-          qualify_installed_timeout &
-          installed_pid=$!
-          qualify_original_forward &
-          forward_pid=$!
-          wait "$installed_pid"
-          installed_status=$?
-          wait "$forward_pid"
-          forward_status=$?
-          set -e
-          printf 'INSTALLED_TIMEOUT_QUALIFICATION_EXIT=%s\nORIGINAL_FORWARD_QUALIFICATION_EXIT=%s\n' "$installed_status" "$forward_status"
-          [[ "$installed_status" == 0 && "$forward_status" == 0 ]]
-      - name: Retain installed timeout recovery originals
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: installed-timeout-source-pg${{ matrix.postgres }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.INSTALLED_TIMEOUT_LOGS }}
-          if-no-files-found: error
-          retention-days: 14
       - name: Build qualified rollback-only inspection companion
         shell: bash
         env:
@@ -565,5 +475,121 @@ jobs:
         with:
           name: retirement-forward-source-pg${{ matrix.postgres }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.RETIREMENT_FORWARD_LOGS }}
+          if-no-files-found: error
+          retention-days: 14
+
+  installed-provision-timeout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: failed-serving-ci-only
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 3s --health-timeout 5s --health-retries 30
+    env:
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      GOWORK: 'off'
+      GOFLAGS: -mod=readonly
+      CGO_ENABLED: '1'
+      CAPACITY_RECOVERY_FIXTURE_ONLY: 'true'
+      FAILED_SERVING_FIXTURE_ADMIN_URL: postgres://postgres:failed-serving-ci-only@127.0.0.1:5432/postgres?sslmode=disable
+      FAILED_SERVING_TEST_PG_MAJOR: ${{ matrix.postgres }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Assert exact Source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]]
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+      - name: Qualify installed timeout on its independent PostgreSQL owner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          evidence="$RUNNER_TEMP/installed-timeout-source-pg$FAILED_SERVING_TEST_PG_MAJOR"
+          mkdir -m 0700 "$evidence"
+          export INSTALLED_TIMEOUT_LOGS="$evidence"
+          printf 'INSTALLED_TIMEOUT_LOGS=%s\n' "$evidence" >> "$GITHUB_ENV"
+          git rev-parse HEAD > "$evidence/source-head.txt"
+          for mode in default fixture native both; do
+            case "$mode" in
+              default) tags='' ;;
+              fixture) tags='recoveryfixture' ;;
+              native) tags='nativequalification' ;;
+              both) tags='recoveryfixture,nativequalification' ;;
+            esac
+            go list -json -tags="$tags" ./internal/capacity > "$evidence/build-$mode.json"
+          done
+          python3 - "$evidence" <<'PY_FIXTURE_EXCLUSION'
+          import json,pathlib,sys
+          p=pathlib.Path(sys.argv[1]);name='guest_installed_timeout_fixture_data.go'
+          for mode,present in [('default',False),('fixture',True),('native',False),('both',False)]:
+              row=json.loads((p/f'build-{mode}.json').read_text())
+              assert row['ImportPath']=='github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity'
+              assert (name in row.get('GoFiles',[])) is present,(mode,'fixture compiled outside explicit test build')
+              assert (name in row.get('IgnoredGoFiles',[])) is (not present)
+          PY_FIXTURE_EXCLUSION
+          # Each process owns its approval registry and disposable database.
+          # Keep the real five-minute original deadline in every case.
+          cases=(two_members eight_members live_original_lease wrong_failure_stage current_epoch_changed missing_or_foreign_installation concurrent_wakes old_ACK_origin)
+          pids=()
+          for case_name in "${cases[@]}"; do
+            (
+              set +e
+              GOMAXPROCS=1 GOMEMLIMIT=512MiB go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run "^TestInstalledProvisionTimeoutRecoveryPostgres/$case_name\$" > "$evidence/$case_name.jsonl" 2> "$evidence/$case_name.stderr"
+              original_exit=$?
+              printf '%s\n' "$original_exit" > "$evidence/$case_name.exit"
+              exit "$original_exit"
+            ) &
+            pids+=("$!")
+          done
+          failed=0
+          for pid in "${pids[@]}"; do
+            wait "$pid" || failed=1
+          done
+          printf '%s\n' "$failed" > "$evidence/original.exit"
+          [[ "$failed" == 0 ]]
+          python3 - "$evidence" <<'PY_TIMEOUT_CENSUS'
+          import collections,json,os,pathlib,sys
+          p=pathlib.Path(sys.argv[1]);root='TestInstalledProvisionTimeoutRecoveryPostgres'
+          children=['two_members','eight_members','live_original_lease','wrong_failure_stage','current_epoch_changed','missing_or_foreign_installation','concurrent_wakes','old_ACK_origin']
+          package='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+          for child in children:
+              assert (p/(child+'.exit')).read_text().strip()=='0',child
+              rows=[json.loads(line) for line in (p/(child+'.jsonl')).read_text().splitlines() if line.strip()]
+              assert all(r.get('Package',package)==package for r in rows)
+              assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows),child
+              for action in ('run','pass'):
+                  actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r)
+                  assert actual==collections.Counter([root,root+'/'+child]),(child,action,actual)
+              assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1,child
+          assert (p/'source-head.txt').read_text().strip()==os.environ['SOURCE_COMMIT']
+          result={'schema':'installed_provision_timeout_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':98,'race':True,'count':1,'distinct_roots':1,'root_executions':len(children),'children':children,'processes':len(children),'original_dispatch_deadline_seconds':300,'original_exit':0,'old_acknowledgment_lane_unchanged':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          PY_TIMEOUT_CENSUS
+      - name: Retain installed timeout recovery originals
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installed-timeout-source-pg${{ matrix.postgres }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.INSTALLED_TIMEOUT_LOGS }}
           if-no-files-found: error
           retention-days: 14
