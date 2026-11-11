@@ -2202,11 +2202,14 @@ def database_installed_timeout98(cut, run, c, sql, label):
 
 def installed_timeout_lanes98(value, case, provider):
     lanes = {key:value[key] for key in ('jobs_busy','runs_busy','forward_unreturned_reads','live_unreturned_canaries','intent_count','intent_busy','pending_authority','forward_markers')}
-    need(all(type(v) is int for v in lanes.values()) and lanes == case['provider_lanes'][provider]
+    need(provider in ('aws','hetzner') and case.get('schema') == INSTALLED_TIMEOUT_CASE_SCHEMA
+         and all(case.get(key) == item for key, item in INSTALLED_TIMEOUT_TARGET.items())
+         and all(type(v) is int for v in lanes.values()) and lanes == case['provider_lanes'][provider]
+         and lanes['jobs_busy'] == (1 if provider == 'aws' else 0)
          and lanes['intent_count'] == 1 and lanes['intent_busy'] in (0,1)
-         and all(lanes[key] == 0 for key in ('jobs_busy','runs_busy','forward_unreturned_reads',
+         and all(lanes[key] == 0 for key in ('runs_busy','forward_unreturned_reads',
              'live_unreturned_canaries','pending_authority','forward_markers')),
-         'EXACT98_PROVIDER_LANES_NO_FALSE_QUIET_OR_UNKNOWN_ACK')
+         'EXACT98_PROVIDER_LANES_OWN_UNKNOWN_NO_FALSE_QUIET_OR_ACK')
     return lanes
 
 

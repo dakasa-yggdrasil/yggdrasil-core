@@ -133,8 +133,8 @@ def installed_operand98():
     run=dict(id=case['run_id'],status='failed',error=job['return_error'],started_at=start,finished_at=returned,metadata=metadata,inputs={},result=result)
     records=dict(job=job,run=run,intent=intent,policy=policy,members=members,proofs=proofs,current_grants=[proofs[-1]['grant']],
                  unresolved_grants=[],current_canaries=[],current_retirements=[],authority_slots=[],other_jobs=[],other_runs=[])
-    lanes=dict(jobs_busy=0,runs_busy=0,forward_unreturned_reads=0,live_unreturned_canaries=0,intent_count=1,intent_busy=1,pending_authority=0,forward_markers=0)
-    case['provider_lanes']={'aws':lanes,'hetzner':{**lanes,'intent_busy':0}}
+    lanes=dict(jobs_busy=1,runs_busy=0,forward_unreturned_reads=0,live_unreturned_canaries=0,intent_count=1,intent_busy=1,pending_authority=0,forward_markers=0)
+    case['provider_lanes']={'aws':lanes,'hetzner':{**lanes,'jobs_busy':0,'intent_busy':0}}
     value={'schema':'unknown_installed_provision_timeout_snapshot_v1','observed_at_core':'2026-11-11T10:20:00Z','records_wire':''}
     reseal_installed98(value,case,records)
     return value,case,records
@@ -165,8 +165,22 @@ class Schema98RolloutTests(unittest.TestCase):
         pr['preregistration_record']=original;pr['original_wire']='\\x'+data98(original).hex();pr['created_at']='2026-11-11T10:04:16.000001Z'
         reseal_installed98(value,case,records)
         self.assertEqual(C.validate_installed_timeout98(value,case),records)
-        for provider in ('aws','hetzner'):
-            self.assertEqual(C.installed_timeout_lanes98(case['provider_lanes'][provider],case,provider),case['provider_lanes'][provider])
+        # E70 counts this exact immutable AWS UNKNOWN job; retain raw1, never quiet0.
+        for module in (C,G):
+            for provider in ('aws','hetzner'):
+                self.assertEqual(module.installed_timeout_lanes98(case['provider_lanes'][provider],case,provider),case['provider_lanes'][provider])
+            for provider,busy in (('aws',0),('aws',2),('hetzner',1)):
+                altered=copy.deepcopy(case);altered['provider_lanes'][provider]['jobs_busy']=busy
+                with self.subTest(module=module.__name__,provider=provider,busy=busy),self.assertRaises(module.Hold):
+                    module.installed_timeout_lanes98(altered['provider_lanes'][provider],altered,provider)
+            with self.assertRaises(module.Hold):
+                module.installed_timeout_lanes98(case['provider_lanes']['aws'],case,'foreign')
+            altered=copy.deepcopy(case);altered['provider_lanes']['aws']['jobs_busy']=0
+            with self.assertRaises(module.Hold):
+                module.installed_timeout_lanes98(case['provider_lanes']['aws'],altered,'aws')
+            altered=copy.deepcopy(case);altered['job_id']=uuid98(904)
+            with self.assertRaises(module.Hold):
+                module.installed_timeout_lanes98(case['provider_lanes']['aws'],altered,'aws')
 
     def test_G44_preimage_rejects_resealed_wrong_history_and_effects(self):
         def change_record(label,r):
@@ -207,8 +221,9 @@ class Schema98RolloutTests(unittest.TestCase):
                       'wrong_capability','wrong_kind','bool_attempt','reordered','late_provision','inverted_wire','wrong_S1','unconfirmed','foreign_tuple',
                       'installation_v1','clock_schema','clock_digest','clock_order','clock_type'):
             value,case,records=installed_operand98();change_record(label,records);reseal_installed98(value,case,records)
-            with self.subTest(label=label),self.assertRaises((C.Hold,KeyError,TypeError,ValueError)):
-                C.validate_installed_timeout98(value,case)
+            for module in (C,G):
+                with self.subTest(label=label,module=module.__name__),self.assertRaises((module.Hold,KeyError,TypeError,ValueError)):
+                    module.validate_installed_timeout98(value,case)
         value,case,records=installed_operand98();case['current_runtime_source']=C.ROOT97_CURRENT_CORE_SOURCE
         with self.assertRaises(C.Hold):C.validate_installed_timeout98(value,case)
 
