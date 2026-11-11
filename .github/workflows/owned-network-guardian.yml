@@ -10,6 +10,7 @@ on:
       - 'db/migrations/00095_failed_expansion_read_failure_continuation.sql'
       - 'db/migrations/00096_guest_retirement_pre_read_continuation.sql'
       - 'db/migrations/00097_guest_retirement_normal_finish_recovery.sql'
+      - 'db/migrations/00098_installed_provision_timeout_dispositions.sql'
       - '.github/workflows/owned-network-guardian.yml'
   push:
     branches: [main]
@@ -21,6 +22,7 @@ on:
       - 'db/migrations/00095_failed_expansion_read_failure_continuation.sql'
       - 'db/migrations/00096_guest_retirement_pre_read_continuation.sql'
       - 'db/migrations/00097_guest_retirement_normal_finish_recovery.sql'
+      - 'db/migrations/00098_installed_provision_timeout_dispositions.sql'
       - '.github/workflows/owned-network-guardian.yml'
   workflow_dispatch:
 
@@ -137,7 +139,9 @@ jobs:
           sha256sum --check SHA256SUMS-G15
           sha256sum --check SHA256SUMS-GOOSE96
           sha256sum --check SHA256SUMS-GOOSE97
-      - name: Run exact preserved283 plus Goose97 companion7 census
+      - name: Verify additive schema98 rollout and catalog Source
+        run: sha256sum --check ops/network-guardian/rollout/SHA256SUMS-GOOSE98
+      - name: Run exact preserved census and additive schema98 checks
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
@@ -177,6 +181,7 @@ jobs:
             db/migrations/00095_failed_expansion_read_failure_continuation.sql
             db/migrations/00096_guest_retirement_pre_read_continuation.sql
             db/migrations/00097_guest_retirement_normal_finish_recovery.sql
+            db/migrations/00098_installed_provision_timeout_dispositions.sql
             ${{ runner.temp }}/owned-network-guardian/
           if-no-files-found: error
           retention-days: 30

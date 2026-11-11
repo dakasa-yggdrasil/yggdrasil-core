@@ -1,0 +1,7 @@
+[
+  "test_schema98_rollout.Schema98RolloutTests.test_unbound_schema98_operators_refuse_before_io",
+  "test_schema98_rollout.Schema98RolloutTests.test_original_G44_unknown_installed_roster_and_historical_axes",
+  "test_schema98_rollout.Schema98RolloutTests.test_G44_preimage_rejects_resealed_wrong_history_and_effects",
+  "test_schema98_rollout.Schema98RolloutTests.test_goose98_single_Job_and_CAS_single_PATCH_preserve_once",
+  "test_schema98_rollout.Schema98RolloutTests.test_post98_reads_catalog_only_with_distinct_saved_context"
+]

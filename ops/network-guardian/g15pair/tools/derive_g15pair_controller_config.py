@@ -36,7 +36,7 @@ PROPOSAL_BOUND = True
 G8_CONFIG = ETC / 'controller.r13-netlink-g8pair.production.json'
 G12_CONFIG = ETC / 'controller.r13-netlink-g12pair.production.json'
 G6_CONFIG = ETC / 'controller.r13-netlink-g6pair.production.json'
-GUARDIAN_SOURCE = Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g17pair-source-v1/network_guardian.py')
+GUARDIAN_SOURCE=Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g18pair-source-v1/network_guardian.py')
 # The package supplies the exact reviewed successor Guardian source hash.
 FIELDS = {'schema', 'execute', 'source_files_sha256', 'eks_endpoint', 'eks_public_ca_base64', 'core_service_uid',
           'core_container_images', 'root_review_attestation'}
@@ -51,7 +51,7 @@ CORE_A9FA = CORE_IMAGE_REF + 'sha256:a9fa2599db02016ff6a7cc90e95281448953fc4ee20
 CORE_9913 = CORE_IMAGE_REF + 'sha256:9913ebfb5afc3620b8d6f4136ea1b9cc5acfda0c339199a99be4444fa10f417e'
 # The ONE place the new head Core image digest appears in this file (set_head_digest.py).
 CORE_CADC = CORE_IMAGE_REF + 'sha256:cadc0c4491109d5791438b6187b53620008f8a634ae8d93903f664ae18c18edd'
-HEAD_NEW_CORE_DIGEST = 'sha256:9b6e2a5d06eed90b7b44d059d3f78a405a21430a7b104f17498c904f499bdd97'
+HEAD_NEW_CORE_DIGEST='sha256:a963c6acc8708f266d22e6405f2be1a56e22fb599730f69e3eaa31c65c6f25ba'
 HEAD_DIGEST_PLACEHOLDER = 'sha256:' + '0' * 64
 CORE_G5 = CORE_CADC
 CORE_G6 = CORE_IMAGE_REF + 'sha256:750d5e46aee679075c2b88c163d22036093cf893edbe16bb5c2ca484f4275838'
@@ -63,7 +63,7 @@ CORE_G13 = CORE_IMAGE_REF + 'sha256:d8a86c844f0b2df14aa3ae3b0281f43be14a7f6aed3b
 CORE_G14 = CORE_IMAGE_REF + 'sha256:35195e4ddff2a69f2ae7fca8f24b43177c61c49f12117a4fe4925a43e9cd6fde'
 CORE_G15 = CORE_IMAGE_REF + 'sha256:85be238c7f5b15760f7eb903646cc48f6b4b86a6995d0a4727a1ba0d86d06876'
 CORE_G16 = CORE_IMAGE_REF + 'sha256:311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce'
-CORE_G17 = CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST if isinstance(HEAD_NEW_CORE_DIGEST, str) else None
+CORE_G17=CORE_IMAGE_REF + 'sha256:9b6e2a5d06eed90b7b44d059d3f78a405a21430a7b104f17498c904f499bdd97'
 G14_CONFIG_SHA = '90fb39778f79963af7a515401df0e66d969de997d7762aed6f2c50284a733804'
 G14_CONFIG = ETC / 'controller.r13-netlink-g14pair.production.json'
 CORE_G9 = CORE_IMAGE_REF + 'sha256:7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6'
@@ -95,6 +95,10 @@ G16_CONFIG = ETC / 'controller.r13-netlink-g16pair.production.json'
 G17_CORE_IMAGE_PAIRS = [{'image': CORE_G16, 'image_id': CORE_G16}, {'image': CORE_G17, 'image_id': CORE_G17}]
 G17_CONFIG_SHA = '396a8f49baa8fd2851c7a93c3fb88ea67f9efe621c143bfff713e822e1116602'
 G17_CONFIG = ETC / 'controller.r13-netlink-g17pair.production.json'
+CORE_G18 = CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST if isinstance(HEAD_NEW_CORE_DIGEST, str) else None
+G18_CORE_IMAGE_PAIRS = [{'image': CORE_G17, 'image_id': CORE_G17}, {'image': CORE_G18, 'image_id': CORE_G18}]
+G18_CONFIG_SHA = 'ebae929e83f934809c961e96d6e69fd29b8bd7056642df21491b1a96dde5be0f'
+G18_CONFIG = ETC / 'controller.r13-netlink-g18pair.production.json'
 G13_CONFIG = ETC / 'controller.r13-netlink-g13pair.production.json'
 G15_CONFIG = ETC / 'controller.r13-netlink-g15pair.production.json'
 # Same order and pins as the G12 Guardian's PAIR_CHAIN. Head last (sha None).
@@ -116,7 +120,8 @@ PAIR_CHAIN = (
     ('g14pair', G14_CORE_IMAGE_PAIRS, G14_CONFIG, G14_CONFIG_SHA),
     ('g15pair', G15_CORE_IMAGE_PAIRS, G15_CONFIG, G15_CONFIG_SHA),
     ('g16pair', G16_CORE_IMAGE_PAIRS, G16_CONFIG, G16_CONFIG_SHA),
-    ('g17pair', G17_CORE_IMAGE_PAIRS, G17_CONFIG, None),
+    ('g17pair', G17_CORE_IMAGE_PAIRS, G17_CONFIG, G17_CONFIG_SHA),
+    ('g18pair', G18_CORE_IMAGE_PAIRS, G18_CONFIG, None),
 )
 # kube_native.approved_core_images (runtime-r13-prod, 9fae13d7...), verbatim rules.
 KN_REPOSITORY = r'(?:ghcr\.io/dakasa-yggdrasil/yggdrasil-core|153828470928\.dkr\.ecr\.us-east-1\.amazonaws\.com/ghcr/dakasa-yggdrasil/yggdrasil-core)'
@@ -202,8 +207,8 @@ def require_bound():
     require(PROPOSAL_BOUND is True and type(HEAD_NEW_CORE_DIGEST) is str
             and re.fullmatch('sha256:[a-f0-9]{64}', HEAD_NEW_CORE_DIGEST) is not None
             and HEAD_NEW_CORE_DIGEST != HEAD_DIGEST_PLACEHOLDER
-            and type(G17_CONFIG_SHA) is str and re.fullmatch('[a-f0-9]{64}', G17_CONFIG_SHA) is not None
-            and G17_CONFIG_SHA != '0' * 64 and CORE_G17 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
+            and type(G18_CONFIG_SHA) is str and re.fullmatch('[a-f0-9]{64}', G18_CONFIG_SHA) is not None
+            and G18_CONFIG_SHA != '0' * 64 and CORE_G18 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
             'G15_RELEASE_AND_ROOT_CONFIG_NOT_BOUND')
 
 
@@ -255,7 +260,7 @@ def derive(r42_raw, chain_prefix_raws, attestation):
     require(len(raw) <= 32768 and strict_loads(raw) == new, 'BOUNDED_CANONICAL_HEAD_CONFIG')
     require(sorted(k for k in FIELDS if new[k] != previous[k]) == ['core_container_images', 'root_review_attestation'],
             'HEAD_DELTA_EXACTLY_PAIR_AND_REVIEW')
-    require(sha(raw) == G17_CONFIG_SHA, 'EXACT_ROOT_REVIEWED_G15_CONFIG')
+    require(sha(raw) == G18_CONFIG_SHA, 'EXACT_ROOT_REVIEWED_G15_CONFIG')
     return raw
 
 
@@ -315,7 +320,7 @@ def main():
     status = write_new(a.out, raw) if a.out else 'not_requested'
     print(json.dumps({'schema': 'r13_g15pair_controller_config_derivation_v1',
                       'head_core_digest': HEAD_NEW_CORE_DIGEST,
-                      'pair_chain_config_sha256': {**{g: sha(v) for (g, _, _, _), v in zip(PAIR_CHAIN[:-1], prefix)}, 'g17pair': sha(raw)},
+                      'pair_chain_config_sha256': {**{g: sha(v) for (g, _, _, _), v in zip(PAIR_CHAIN[:-1], prefix)}, 'g18pair': sha(raw)},
                       'guardian_cross_check': cross, 'write': status}, sort_keys=True), flush=True)
 
 
