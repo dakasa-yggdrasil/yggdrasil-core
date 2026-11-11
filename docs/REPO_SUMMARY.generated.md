@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-11T00:56:42-03:00_
+_Generated from HEAD at: 2026-11-11T01:49:23-03:00_
 
 ## Languages
 
@@ -31,7 +31,7 @@ _Generated from HEAD at: 2026-11-11T00:56:42-03:00_
 - db/migrations: 96 files (895.9 KB)
 - model: 88 files (480.0 KB)
 - manifest: 65 files (397.9 KB)
-- ops/network-guardian/tests: 54 files (952.3 KB)
+- ops/network-guardian/tests: 54 files (955.7 KB)
 - addons: 51 files (307.6 KB)
 - internal/capacitynativeqemu: 47 files (298.1 KB)
 - cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)
