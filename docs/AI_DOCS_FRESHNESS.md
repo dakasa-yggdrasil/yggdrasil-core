@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 7068916422197a7aec83c7d1b865f4edeb2181cd
-verified_diff_sha256: 9ebaa2d7421e0260afb5c535fc66753dfc1407ac2a8301de6095b6689a1eafdb
+verified_at_commit: 9038a429c7d83b997304a8d7ec906101f9261179
+verified_diff_sha256: 2bcebaa55dd5f874880b2d4c73cc8710919c1715cf6cc373816a669f9aa20487
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -456,3 +456,5 @@ current_live_image_maintenance_review: Reviewed the separate current LIVE retire
 current_live_main_union_review: Reconciled the integrated Main tree after the standalone current retirement CAS scenario. Its four affected operator, test, checksum and README paths remain byte exact to the independently reviewed operational source. Existing Tartaro HTTP union, compiler210 and independently qualified C16 network code remain intact. The released CLI regenerated the real integrated context and summary; current integrated CI and native acceptance retain their distinct scope.
 
 normal_finish_recovery_review: Reviewed the distinct automatic recovery of a closed failed native OFF finish after complete authenticated Guest success. The original caller, signed journal, failed read, workflow ACK and original clocks remain immutable. Migration97 authenticates the original finalized nonce wire; the old partial-poweroff lane remains separate, and the new owner obtains fresh OFF and surviving-floor evidence before the first DELETE. Existing settled and pre-read continuations retain the same accepted DELETE and origin proof. Two additional CI roots and eleven children cover the real scheduler and PostgreSQL16/17 paths, including late callers and settled continuations. Regenerated the complete816-source census and rebound only its service-contract digest; both API mirrors advertise the new mode. Independent Source review and Source formatting only; no local product tests, builds or imports, CI pass or production migration is claimed.
+
+normal_finish_recovery_staticcheck_review: Replaced the reason-selection if chain with the equivalent tagged switch required by the original staticcheck QF1003 failure. The original three reasons, recovery contracts and tests remain unchanged. Regenerated the complete816-source census, rebound its guarded contract digest and refreshed generated metadata. Retained the original CI failure; exact successor remote CI remains required. No local product tests, builds or imports ran.
