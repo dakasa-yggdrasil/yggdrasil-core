@@ -23,6 +23,14 @@ type guestRetirementForwardEvidence struct {
 // Validate the WHOLE retained original, including an optional genuine fourth
 // Guest record. Authentication of a prefix never fabricates the missing ACK.
 func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRetirementOriginalV2) (guestRetirementForwardEvidence, error) {
+	return guestRetirementForwardEvidenceForCallerTx(ctx, tx, s, false)
+}
+
+func guestRetirementNormalFinishEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRetirementOriginalV2) (guestRetirementForwardEvidence, error) {
+	return guestRetirementForwardEvidenceForCallerTx(ctx, tx, s, true)
+}
+
+func guestRetirementForwardEvidenceForCallerTx(ctx context.Context, tx *sql.Tx, s GuestRetirementOriginalV2, normalFinish bool) (guestRetirementForwardEvidence, error) {
 	e := guestRetirementForwardEvidence{JournalSHA256: []string{}, AuthoritySHA256: []string{}, TransportSHA256: []string{}}
 	i := s.Request.Intent
 	forwardInspectionStage(ctx, "original_journal_rows")
@@ -87,7 +95,11 @@ func guestRetirementForwardEvidenceTx(ctx context.Context, tx *sql.Tx, s GuestRe
 	}
 	// Complete normal success must use the unchanged normal lane instead.
 	forwardInspectionStage(ctx, "original_caller_not_normal_success")
-	if c.Status == 200 && c.BodyPersisted && !c.DoFailed && !c.ReadFailed && !c.CloseFailed && !c.OriginalContextFailed && c.DriverReturnedAt.Before(i.OriginalDeadline) {
+	normalSuccess := c.Status == 200 && c.BodyPersisted && !c.DoFailed && !c.ReadFailed && !c.CloseFailed && !c.OriginalContextFailed && c.DriverReturnedAt.Before(i.OriginalDeadline)
+	if normalSuccess != normalFinish {
+		return e, ErrCapacityConflict
+	}
+	if normalFinish && (len(observations) != 4 || observations[3].Record.Sequence != 4 || !observations[3].Record.PoweroffCommandReturned || capacity.GuestRetirementV2Observation(observations[3], s.Receipt.Enrollment, i, false) != nil) {
 		return e, ErrCapacityConflict
 	}
 	forwardInspectionStage(ctx, "original_caller_body")

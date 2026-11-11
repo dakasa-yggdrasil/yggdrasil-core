@@ -22,45 +22,46 @@ const GuestRetirementForwardReadReturnSchema = "original_core_guest_retirement_f
 // Only explicitly projected fields belong in a public HTTP summary. The full
 // original frame is private retained evidence and can contain caller payloads.
 type GuestRetirementForward struct {
-	Schema                string                                   `json:"schema"`
-	ID                    string                                   `json:"id"`
-	RootAdmissionID       string                                   `json:"root_admission_id"`
-	ParentAdmissionID     string                                   `json:"parent_admission_id,omitempty"`
-	ParentAdmissionSHA256 string                                   `json:"parent_admission_sha256,omitempty"`
-	Stage                 string                                   `json:"stage"`
-	Mode                  string                                   `json:"mode"`
-	PreregistrationID     string                                   `json:"preregistration_id"`
-	RetirementRequestID   string                                   `json:"retirement_request_id"`
-	AdmissionSHA256       string                                   `json:"admission_sha256,omitempty"`
-	PrefixSHA256          string                                   `json:"prefix_sha256"`
-	OriginalCallerSHA256  string                                   `json:"original_caller_sha256"`
-	NativeOffSHA256       string                                   `json:"native_off_sha256,omitempty"`
-	DestroyGrantID        string                                   `json:"destroy_grant_id,omitempty"`
-	NativeAbsenceSHA256   string                                   `json:"native_absence_sha256,omitempty"`
-	RecordedAt            time.Time                                `json:"recorded_at"`
-	Namespace             string                                   `json:"namespace"`
-	Environment           string                                   `json:"environment"`
-	Domain                string                                   `json:"domain"`
-	Dimension             string                                   `json:"dimension"`
-	Issuer                string                                   `json:"issuer"`
-	ActualCoreSource      string                                   `json:"actual_core_source"`
-	OriginalIntentWire    []byte                                   `json:"original_intent_wire"`
-	OriginalIntentSHA256  string                                   `json:"original_intent_sha256"`
-	OriginalGeneration    int64                                    `json:"original_generation"`
-	OriginalFence         int64                                    `json:"original_fence"`
-	Generation            int64                                    `json:"generation"`
-	Fence                 int64                                    `json:"fence"`
-	LeaseOwner            string                                   `json:"lease_owner"`
-	ExecutorID            string                                   `json:"executor_id"`
-	RunID                 string                                   `json:"run_id"`
-	FailedRun             []byte                                   `json:"failed_run"`
-	Original              GuestRetirementOriginalV2                `json:"original"`
-	Evidence              guestRetirementForwardEvidence           `json:"evidence"`
-	Barrier               CapacityDispatchExecutorBarrier          `json:"barrier"`
-	NativeOffReadID       string                                   `json:"native_off_read_id,omitempty"`
-	TerminalIntentSHA256  string                                   `json:"terminal_intent_sha256,omitempty"`
-	TerminalIntentWire    []byte                                   `json:"terminal_intent_wire,omitempty"`
-	Continuation          *GuestRetirementForwardContinuationProof `json:"continuation,omitempty"`
+	Schema                string                                           `json:"schema"`
+	ID                    string                                           `json:"id"`
+	RootAdmissionID       string                                           `json:"root_admission_id"`
+	ParentAdmissionID     string                                           `json:"parent_admission_id,omitempty"`
+	ParentAdmissionSHA256 string                                           `json:"parent_admission_sha256,omitempty"`
+	Stage                 string                                           `json:"stage"`
+	Mode                  string                                           `json:"mode"`
+	PreregistrationID     string                                           `json:"preregistration_id"`
+	RetirementRequestID   string                                           `json:"retirement_request_id"`
+	AdmissionSHA256       string                                           `json:"admission_sha256,omitempty"`
+	PrefixSHA256          string                                           `json:"prefix_sha256"`
+	OriginalCallerSHA256  string                                           `json:"original_caller_sha256"`
+	NativeOffSHA256       string                                           `json:"native_off_sha256,omitempty"`
+	DestroyGrantID        string                                           `json:"destroy_grant_id,omitempty"`
+	NativeAbsenceSHA256   string                                           `json:"native_absence_sha256,omitempty"`
+	RecordedAt            time.Time                                        `json:"recorded_at"`
+	Namespace             string                                           `json:"namespace"`
+	Environment           string                                           `json:"environment"`
+	Domain                string                                           `json:"domain"`
+	Dimension             string                                           `json:"dimension"`
+	Issuer                string                                           `json:"issuer"`
+	ActualCoreSource      string                                           `json:"actual_core_source"`
+	OriginalIntentWire    []byte                                           `json:"original_intent_wire"`
+	OriginalIntentSHA256  string                                           `json:"original_intent_sha256"`
+	OriginalGeneration    int64                                            `json:"original_generation"`
+	OriginalFence         int64                                            `json:"original_fence"`
+	Generation            int64                                            `json:"generation"`
+	Fence                 int64                                            `json:"fence"`
+	LeaseOwner            string                                           `json:"lease_owner"`
+	ExecutorID            string                                           `json:"executor_id"`
+	RunID                 string                                           `json:"run_id"`
+	FailedRun             []byte                                           `json:"failed_run"`
+	Original              GuestRetirementOriginalV2                        `json:"original"`
+	Evidence              guestRetirementForwardEvidence                   `json:"evidence"`
+	Barrier               CapacityDispatchExecutorBarrier                  `json:"barrier"`
+	NativeOffReadID       string                                           `json:"native_off_read_id,omitempty"`
+	TerminalIntentSHA256  string                                           `json:"terminal_intent_sha256,omitempty"`
+	TerminalIntentWire    []byte                                           `json:"terminal_intent_wire,omitempty"`
+	Continuation          *GuestRetirementForwardContinuationProof         `json:"continuation,omitempty"`
+	NormalFinishRecovery  *GuestRetirementForwardNormalFinishRecoveryProof `json:"normal_finish_recovery,omitempty"`
 }
 
 type GuestRetirementForwardRead struct {
@@ -115,14 +116,15 @@ type retirementForwardScope struct {
 	slot int
 }
 type retirementForwardSnapshot struct {
-	original   GuestRetirementOriginalV2
-	policy     model.Manifest
-	spec       model.CapacityPolicySpec
-	current    model.CapacityIntent
-	binding    model.CapacityMutationBinding
-	evidence   guestRetirementForwardEvidence
-	intentWire []byte
-	now        time.Time
+	original             GuestRetirementOriginalV2
+	policy               model.Manifest
+	spec                 model.CapacityPolicySpec
+	current              model.CapacityIntent
+	binding              model.CapacityMutationBinding
+	evidence             guestRetirementForwardEvidence
+	intentWire           []byte
+	now                  time.Time
+	normalFinishRecovery *GuestRetirementForwardNormalFinishRecoveryProof
 }
 
 // Internal sparse storage JSON is distinct from signed Guest DTO decoding.
@@ -198,6 +200,10 @@ func persistRetirementForwardIntentTx(ctx context.Context, tx *sql.Tx, old, next
 }
 
 func (s CapacityStore) retirementForwardSnapshotTx(ctx context.Context, tx *sql.Tx, id string) (retirementForwardSnapshot, error) {
+	return s.retirementForwardSnapshotForNormalFinishTx(ctx, tx, id, false)
+}
+
+func (s CapacityStore) retirementForwardSnapshotForNormalFinishTx(ctx context.Context, tx *sql.Tx, id string, normalFinish bool) (retirementForwardSnapshot, error) {
 	var x retirementForwardSnapshot
 	forwardInspectionStage(ctx, "scope_lookup")
 	var ns, env, domain, dim string
@@ -303,7 +309,20 @@ func (s CapacityStore) retirementForwardSnapshotTx(ctx context.Context, tx *sql.
 		return x, ErrCapacityConflict
 	}
 	forwardInspectionStage(ctx, "original_evidence")
-	x.evidence, err = guestRetirementForwardEvidenceTx(ctx, tx, x.original)
+	if x.current.RetirementForward != nil {
+		m := x.current.RetirementForward
+		r, _, loadErr := loadRetirementForwardTx(ctx, tx, m.ID, m.Stage)
+		if loadErr != nil {
+			return x, loadErr
+		}
+		x.normalFinishRecovery = r.NormalFinishRecovery
+		normalFinish = normalFinish || r.NormalFinishRecovery != nil
+	}
+	if normalFinish {
+		x.evidence, err = guestRetirementNormalFinishEvidenceTx(ctx, tx, x.original)
+	} else {
+		x.evidence, err = guestRetirementForwardEvidenceTx(ctx, tx, x.original)
+	}
 	return x, err
 }
 

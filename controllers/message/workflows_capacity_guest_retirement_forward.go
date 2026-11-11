@@ -49,6 +49,9 @@ func historicalGuestRetirementForward(ctx context.Context, store repository.Capa
 
 func planGuestRetirementForward(ctx context.Context, store repository.CapacityStore, policy, wf model.Manifest, step model.WorkflowStepSpec) (any, bool, error) {
 	store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), "", "", model.CapacityVMFleetInventory{}, model.CapacityMetricRangeObservation{})
+	if _, err := store.TryRequestGuestRetirementNormalFinishRecovery(ctx, policy); err != nil {
+		return nil, true, err
+	}
 	r, waiting, err := store.GuestRetirementForwardWaiting(ctx, policy)
 	if err != nil || !waiting {
 		return nil, false, err
@@ -81,7 +84,9 @@ func planGuestRetirementForward(ctx context.Context, store repository.CapacitySt
 		return nil, true, errOriginalGuestStep
 	}
 	reason := "partial_poweroff_forward"
-	if r.Mode == repository.GuestRetirementForwardContinuationMode {
+	if r.Mode == repository.GuestRetirementForwardNormalFinishRecoveryMode {
+		reason = repository.GuestRetirementForwardNormalFinishRecoveryMode
+	} else if r.Mode == repository.GuestRetirementForwardContinuationMode {
 		reason = "settled_absence_continuation"
 	}
 	return originalGuestReconcilePlan{Mode: "retire", Reason: reason, Slot: claimed.Decision.Units + 1, Generation: claimed.Generation, FencingToken: claimed.FencingToken, LeaseOwner: claimed.LeaseOwner, PreregistrationID: preID}, true, nil

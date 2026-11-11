@@ -277,7 +277,12 @@ func (s CapacityStore) guestForwardCompletionTx(ctx context.Context, tx *sql.Tx,
 	if err != nil {
 		return err
 	}
-	evidence, err := guestRetirementForwardEvidenceTx(ctx, tx, stored)
+	var evidence guestRetirementForwardEvidence
+	if r.NormalFinishRecovery != nil {
+		evidence, err = guestRetirementNormalFinishEvidenceTx(ctx, tx, stored)
+	} else {
+		evidence, err = guestRetirementForwardEvidenceTx(ctx, tx, stored)
+	}
 	if err != nil || !reflect.DeepEqual(evidence, r.Evidence) {
 		return ErrCapacityConflict
 	}

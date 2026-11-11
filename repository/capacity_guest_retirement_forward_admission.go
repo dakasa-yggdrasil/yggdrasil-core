@@ -21,7 +21,7 @@ func forwardSourceOrigin(s CapacityStore, op string) bool {
 }
 func forwardRecord(x retirementForwardSnapshot, s CapacityStore, mode, stage, issuer string) GuestRetirementForward {
 	id := uuid.NewString()
-	return GuestRetirementForward{Schema: GuestRetirementForwardSchema, ID: id, RootAdmissionID: id, Stage: stage, Mode: mode, PreregistrationID: x.original.Preregistration.PreregistrationID, RetirementRequestID: x.original.Request.Intent.RequestID, PrefixSHA256: retirementForwardEvidenceSHA(x.evidence), OriginalCallerSHA256: x.evidence.CallerSHA256, RecordedAt: x.now, Namespace: x.policy.Metadata.Namespace, Environment: x.spec.Environment, Domain: x.spec.Domain, Dimension: x.spec.Dimension, Issuer: issuer, ActualCoreSource: capacity.CurrentGuestCoreSource(), OriginalIntentWire: append([]byte(nil), x.intentWire...), OriginalIntentSHA256: capacity.BusinessCreationSHA256(x.intentWire), OriginalGeneration: int64(x.original.Request.Intent.Generation), OriginalFence: int64(x.original.Request.Intent.Fence), Generation: x.current.Generation, Fence: x.current.FencingToken, LeaseOwner: x.current.LeaseOwner, ExecutorID: x.current.LeaseExecutorID, RunID: s.OriginalRunID.String(), FailedRun: []byte{}, Original: x.original, Evidence: x.evidence}
+	return GuestRetirementForward{Schema: GuestRetirementForwardSchema, ID: id, RootAdmissionID: id, Stage: stage, Mode: mode, PreregistrationID: x.original.Preregistration.PreregistrationID, RetirementRequestID: x.original.Request.Intent.RequestID, PrefixSHA256: retirementForwardEvidenceSHA(x.evidence), OriginalCallerSHA256: x.evidence.CallerSHA256, RecordedAt: x.now, Namespace: x.policy.Metadata.Namespace, Environment: x.spec.Environment, Domain: x.spec.Domain, Dimension: x.spec.Dimension, Issuer: issuer, ActualCoreSource: capacity.CurrentGuestCoreSource(), OriginalIntentWire: append([]byte(nil), x.intentWire...), OriginalIntentSHA256: capacity.BusinessCreationSHA256(x.intentWire), OriginalGeneration: int64(x.original.Request.Intent.Generation), OriginalFence: int64(x.original.Request.Intent.Fence), Generation: x.current.Generation, Fence: x.current.FencingToken, LeaseOwner: x.current.LeaseOwner, ExecutorID: x.current.LeaseExecutorID, RunID: s.OriginalRunID.String(), FailedRun: []byte{}, NormalFinishRecovery: x.normalFinishRecovery, Original: x.original, Evidence: x.evidence}
 }
 func (s CapacityStore) AdmitGuestRetirementForwardLive(ctx context.Context, policy model.Manifest, generation, fence int64, owner, id string) (GuestRetirementForward, error) {
 	var r GuestRetirementForward
@@ -72,6 +72,9 @@ func (s CapacityStore) RequestGuestRetirementForwardHistorical(ctx context.Conte
 	var r GuestRetirementForward
 	if s.DB == nil || revalidate == nil || issuer == "" || len(issuer) > 256 || !validCapacityExecutor(req.PreregistrationID) || !validCapacityExecutor(req.RetirementRequestID) || !validCapacityExecutor(req.PolicyID) || !capacity.ValidDigest(req.PolicyChecksum) || !capacity.ValidDigest(req.IntentSHA256) || req.Generation < 1 || req.FencingToken < 1 || !validCapacityDispatchExecutorBarrier(barrier) || barrier.SourceCommit != capacity.CurrentGuestCoreSource() {
 		return r, ErrCapacityConflict
+	}
+	if normal, selected, err := s.requestNormalFinishHistorical(ctx, req, issuer, revalidate); selected || err != nil {
+		return normal, err
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
