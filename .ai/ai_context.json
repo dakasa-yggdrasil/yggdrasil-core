@@ -1,31 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-10T23:19:10+00:00",
+  "generated_at": "2026-11-10T21:51:52-03:00",
   "primary_language": "go",
   "languages": {
-    ".dev": 1,
-    ".example": 1,
     ".go": 1509,
-    ".gz": 3,
-    ".html": 1,
-    ".jpeg": 26,
-    ".json": 241,
-    ".md": 205,
-    ".mod": 1,
+    ".json": 240,
     ".py": 186,
-    ".ql": 1,
-    ".service": 20,
-    ".sh": 7,
     ".sql": 99,
-    ".sum": 1,
-    ".tmpl": 44,
-    ".ts": 1,
-    ".txt": 1,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "5499395105b933d32ed1adcca34b708a780bd770",
+    "commit": "3541e48e7951631cfe68ba50836b2863d1fd0b59",
     "dirty": true,
     "files": [
       {
@@ -79,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 385,
-      "kb": 5421
+      "files": 375,
+      "kb": 5050
     },
     {
       "path": "controllers/httpapi",
@@ -89,13 +75,13 @@
     },
     {
       "path": "controllers/message",
-      "files": 199,
-      "kb": 1837
+      "files": 198,
+      "kb": 1724
     },
     {
       "path": "internal/capacity",
-      "files": 147,
-      "kb": 1596
+      "files": 126,
+      "kb": 1376
     },
     {
       "path": "db/migrations",
@@ -111,6 +97,11 @@
       "path": "manifest",
       "files": 65,
       "kb": 397
+    },
+    {
+      "path": "ops/network-guardian/tests",
+      "files": 52,
+      "kb": 876
     },
     {
       "path": "addons",
@@ -129,13 +120,8 @@
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
-      "files": 29,
-      "kb": 101
-    },
-    {
-      "path": "ops/network-guardian/tests",
-      "files": 80,
-      "kb": 1072
+      "files": 28,
+      "kb": 98
     }
   ],
   "top_files_by_size": [
@@ -194,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 91,
+    "migrations": 95,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -325,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 59,
+    "config_files": 76,
     "k8s_manifests": 25
   }
 }
