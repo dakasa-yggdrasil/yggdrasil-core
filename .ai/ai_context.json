@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-11T03:56:09-03:00",
+  "generated_at": "2026-11-11T04:32:31-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1522,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "17241a52d6514f303a456f185689b276c388e4f8",
+    "commit": "b50f73ba1c3e2b36cac3ac35b6fa4225fe509598",
     "dirty": true,
     "files": [
       {
@@ -101,7 +101,7 @@
     {
       "path": "ops/network-guardian/tests",
       "files": 54,
-      "kb": 967
+      "kb": 977
     },
     {
       "path": "addons",
