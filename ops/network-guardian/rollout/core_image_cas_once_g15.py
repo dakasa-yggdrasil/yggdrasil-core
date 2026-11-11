@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""INERT G15/Core6-to-Core7 image maintenance with a distinct read-only AWS inventory observer.
+"""INERT G15/Core7-to-Core8 image maintenance with a distinct read-only AWS inventory observer.
 
-No direct business/provider/Guest operation. The distinct current-LIVE scenario
+No direct business/provider/Guest operation. The distinct normal-finish recovery scenario
 authenticates closed failures for image maintenance only; it grants no business resume. Actual release, Root data/config and normal
 G15 acceptance remain independent unbound prerequisites. No action on import.
 """
@@ -26,6 +26,27 @@ import time
 import types
 
 SOURCE_BOUND = False
+M97 = 'b90086284a3a9230ed7fb19e2348b8ca785f6172b819e1a08fc28d6e5c8d550f'
+M97_FUNCTION_BODY_SHAS = {'guard_retirement_forward': '1f90291c1a8d1742f530c62d0cbf25ce33e66990a1045cb06571a793cb47cae0', 'retirement_forward_normal_finish_recovery_valid': '9813c29a5a449f41cd919cf6481e6c3e0ac9fc659ef1b76bc15308edacd24154'}
+
+NORMAL_FINISH_SCHEMA = 'g15_normal_finish_recovery_image_maintenance_v1'
+NORMAL_FINISH_CASE_SCHEMA = 'root_original_normal_finish_failed_case_v1'
+NORMAL_FINISH_TARGET = {
+    'retirement_request_id': '2c4f52ef-21d3-4f50-890a-34140caa79b4',
+    'preregistration_id': '079677b7-fa87-4b8f-a2ff-3a87d33c0176',
+    'run_id': 'f705fab4-e3f3-4529-baf8-4d60383caca7',
+    'generation': 37, 'fence': 76,
+    'lease_owner': '83b746d8-c9bb-4e94-bd20-80ad9da7da39',
+    'executor_id': '4c394a88-d210-4a70-931c-a67ff39554e1',
+}
+ROOT_CORE7_SHA = '22c91f114e92a55fb0c38f96a4238f8a8eaf75f72d6175a90c553e466a1974d8'
+M8_RETURN_SHA = 'c21e08fd33064b4a334eb623d94e5a526c00c026050430709656bd0c2955cdbe'
+HISTORICAL_CORE6_SOURCE = '045176d16947555ccbc33a8b51635b08d2d9270e'
+NORMAL_FINISH_SQL = "WITH request AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_retirement_intents\n WHERE id='2c4f52ef-21d3-4f50-890a-34140caa79b4'::uuid\n AND preregistration_id='079677b7-fa87-4b8f-a2ff-3a87d33c0176'::uuid\n), pre AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_provisioning_preregistrations\n WHERE id='079677b7-fa87-4b8f-a2ff-3a87d33c0176'::uuid\n), owners AS MATERIALIZED (\n SELECT w.* FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id\n WHERE j.realm='dakasa-production' AND j.environment='production' AND j.domain='notify'\n AND j.dimension='original_notify_aws_vm_members' AND\n (w.id='f705fab4-e3f3-4529-baf8-4d60383caca7'::uuid OR\n  (w.result#>>'{steps,0,metadata,generation}'='37'\n   AND w.result#>>'{steps,0,metadata,fencing_token}'='76'\n   AND w.result#>>'{steps,0,metadata,lease_owner}'='83b746d8-c9bb-4e94-bd20-80ad9da7da39'))\n), bindings AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_retirement_delete_bindings\n WHERE intent_id='2c4f52ef-21d3-4f50-890a-34140caa79b4'::uuid\n), snapshot(v) AS (SELECT jsonb_build_object(\n 'selected_runtime_source','21003808115d0b5cd62ae503ef16e65e13d4798f',\n 'target',jsonb_build_object('retirement_request_id','2c4f52ef-21d3-4f50-890a-34140caa79b4','preregistration_id','079677b7-fa87-4b8f-a2ff-3a87d33c0176'),\n 'current_intent',(SELECT to_jsonb(i) FROM public.capacity_intents i WHERE i.namespace='dakasa-production' AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'current_intent_pgtext',(SELECT i.intent::text FROM public.capacity_intents i WHERE i.namespace='dakasa-production' AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'active_policies',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',p.id,'version',p.version,'checksum',p.checksum,'spec',p.spec) ORDER BY p.version),'[]'::jsonb) FROM public.manifests p WHERE p.kind='capacity_policy' AND p.namespace='dakasa-production' AND p.name='notify-aws-elastic-capacity' AND p.active),\n 'retirement_requests',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex'))),'[]'::jsonb) FROM request x),\n 'preregistrations',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex'))),'[]'::jsonb) FROM pre x),\n 'create_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb) FROM public.capacity_mutation_grants g JOIN pre ON pre.create_grant_id=g.id),\n 'retirement_contexts',(SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]'::jsonb) FROM public.capacity_guest_original_retirement_contexts x JOIN request r ON r.id=x.intent_id),\n 'caller_returns',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at),'[]'::jsonb) FROM public.capacity_guest_original_caller_returns x JOIN request r ON r.id=x.intent_id),\n 'original_returns',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.sequence),'[]'::jsonb) FROM public.capacity_vm_retirement_original_returns x JOIN request r ON r.id=x.intent_id),\n 'native_poweroff_reads',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at,x.id),'[]'::jsonb) FROM public.capacity_guest_original_native_poweroff_reads x JOIN request r ON r.id=x.intent_id),\n 'forward_rows',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM public.capacity_guest_retirement_forwards x JOIN request r ON r.id=x.retirement_request_id),\n 'forward_reads',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM public.capacity_guest_retirement_forward_reads x JOIN request r ON r.id=x.retirement_request_id),\n 'delete_bindings',(SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]'::jsonb) FROM bindings x),\n 'destroy_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb) FROM public.capacity_mutation_grants g WHERE g.id IN(SELECT destroy_grant_id FROM bindings) OR (g.generation=37 AND g.grant_record#>>'{grant,capability}'=g.grant_record#>>'{binding,destroy_capability}' AND EXISTS(SELECT 1 FROM pre JOIN public.capacity_mutation_grants created ON created.id=pre.create_grant_id WHERE g.integration_instance_id=created.integration_instance_id AND g.scope_checksum=created.scope_checksum AND g.profile_name=created.profile_name AND g.slot=created.slot))),\n 'workflow_runs',(SELECT COALESCE(jsonb_agg(to_jsonb(w)||jsonb_build_object('run_wire',row_to_json(w)::text) ORDER BY w.id),'[]'::jsonb) FROM owners w),\n 'owning_dispatch_jobs',(SELECT COALESCE(jsonb_agg(to_jsonb(j)||jsonb_build_object('dispatch_wire',to_jsonb(j)::text) ORDER BY j.created_at,j.id),'[]'::jsonb) FROM public.capacity_dispatch_jobs j JOIN owners w ON w.id=j.run_id)\n)) SELECT jsonb_build_object('observed_at_pg',clock_timestamp(),'records',v,'records_wire',v::text,'records_sha256',encode(sha256(convert_to(v::text,'UTF8')),'hex')) FROM snapshot"
+ROOT97_SHA = None
+ROOT97_CURRENT_CORE_SOURCE = '21003808115d0b5cd62ae503ef16e65e13d4798f'
+ROOT97_CURRENT_CORE_DIGEST = '311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce'
+M97_FUNCTIONS = ('guard_retirement_forward', 'retirement_forward_normal_finish_recovery_valid')
 CORE_R = None
 NEW_DIGEST = None
 SOURCE_PIN = None
@@ -49,14 +70,14 @@ CHILD_ID = 'e0059c6d-4773-4232-b047-f7561601f613'
 CLEANUP_RUN = '6c23f323-f607-4015-9564-f676e8bc5d9d'
 CHILD_COLUMN = 'failed_unwitnessed_expansion_cleanup_id'
 SQL_DATA_REF = None
-OLD_SOURCE = '045176d16947555ccbc33a8b51635b08d2d9270e'
-OLD_DIGEST = '85be238c7f5b15760f7eb903646cc48f6b4b86a6995d0a4727a1ba0d86d06876'
+OLD_SOURCE = '21003808115d0b5cd62ae503ef16e65e13d4798f'
+OLD_DIGEST = '311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce'
 UID = 'a58ab8c2-da48-46c1-ae62-a650141eeb86'
-OLD_POD = 'cbae6429-e89e-4db4-bae7-e23ff29dd2c6'
-GENERATION = 279
+OLD_POD = '7fdef85a-0df0-4db0-99e2-39d1cb64fb6b'
+GENERATION = 280
 # Exact full container/config identities are fresh Root data, never prefixes.
-OLD_CONTAINER_ID = 'containerd://fad607fd4dc3e89f4ba6b365660512a4bc01c7147bc39558d480ee84b1ede2cb'
-OLD_IMAGE_CONFIG_DIGEST = 'sha256:e7bf90b02b720fbab0d1c240543c4939929833fcb296d925db54c14af8d0f73e'
+OLD_CONTAINER_ID = 'containerd://19a5ed4c87a28d4abbbd724248b3252d0be57c3e5fa1018c1d76f79f5e115d03'
+OLD_IMAGE_CONFIG_DIGEST = 'sha256:c3432f11bbd59585bd2c6983ebf67fe269d5854681b824c18c64324db6156354'
 A3_GRANT = 'c117f03f-27db-4da2-b990-c2729f98a46f'
 A3_PRE = '4677b2cf-9cfa-4218-bc3d-930de13591a8'
 A3_RUN = 'efad3324-4280-4928-b2e0-becc7eda08a9'
@@ -84,7 +105,7 @@ ROOT = Path('/var/lib/dakasa-core-rollout/g15pair')
 OPLOCK = ROOT/'CORE-IMAGE-CAS.LOCK'
 POLICY92_SQL_SHA = 'fa519e39989b31a7faa3c23358506992b057d6bf17ce2aad709dfe6fecd5c2c8'
 CAP = 16 << 20
-CHANGE_CAUSE = 'Root one Core6 to qualified Core7 image CAS; dedicated read-only AWS inventory, schema96 unchanged'
+CHANGE_CAUSE = 'Root one Core7 to qualified Core8 image CAS; normal finish recovery, schema97'
 
 EXPECTED_INHERITED_REFS = {'/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-CLOSING.JSONL': '42b5834830c09b9c4b044171c69c7c2d9d4aabe68223c4bbbc887162d3b61991',
  '/var/lib/dakasa-capacity-network-recovery/100b6c2d207cb8e39a6b52839c7cddca65bd8e0dde90f86386cf57e686d05a92-ORIGINAL-PREFIX.JSONL': '6240b7f21932747366be7ce5ce6778559b3a5b63594c6d521ba7c2ab293d55ca',
@@ -601,9 +622,10 @@ def inventory_objects(receipt, deployment, service, pods):
 
 def deployment_ready_inputs(C, c):
     require_bound()
-    oldref=c['acceptance_refs']['current_Core6_operational_acceptance'];need(oldref['sha256']==ROOT_CORE6_SHA,'IMMUTABLE_ACTUAL_CORE6_ROOT9_PREIMAGE')
+    normal = c.get('schema') == NORMAL_FINISH_SCHEMA
+    oldref=c['acceptance_refs']['current_Core7_operational_acceptance' if normal else 'current_Core6_operational_acceptance'];need(oldref['sha256']==(ROOT_CORE7_SHA if normal else ROOT_CORE6_SHA),'IMMUTABLE_ACTUAL_CURRENT_CORE_ROOT9_PREIMAGE')
     previous=loads(input_ref(C,oldref));closed(previous,'schema reviewed_by_root status source amd64_D process_replacement_ref native_observation_ref controller_pair_ref qualified_image_and_deployment_verified','CLOSED_REAL_CORE6_ROOT9')
-    need(previous['schema']=='root_core_retirement_observer_operational_acceptance_v1' and previous['reviewed_by_root']is True and previous['status']=='QUALIFIED_IMAGE_AND_DEPLOYMENT_VERIFIED' and previous['source']==OLD_SOURCE and previous['amd64_D']==OLD_DIGEST and previous['qualified_image_and_deployment_verified']is True and previous['controller_pair_ref']['sha256']==M7_RETURN_SHA,'ACTUAL_CORE6_ACCEPTANCE_NOT_TARGET_CORE7_OR_ROOT96_ALIAS')
+    need(previous['schema']=='root_core_retirement_observer_operational_acceptance_v1' and previous['reviewed_by_root']is True and previous['status']=='QUALIFIED_IMAGE_AND_DEPLOYMENT_VERIFIED' and previous['source']==(OLD_SOURCE if normal else HISTORICAL_CORE6_SOURCE) and previous['amd64_D']==(OLD_DIGEST if normal else ROOT96_HISTORICAL_AMD64_D) and previous['qualified_image_and_deployment_verified']is True and previous['controller_pair_ref']['sha256']==(M8_RETURN_SHA if normal else M7_RETURN_SHA),'ACTUAL_CURRENT_ACCEPTANCE_NOT_TARGET_OR_HISTORICAL_ROOT_ALIAS')
     for key in ('process_replacement_ref','native_observation_ref','controller_pair_ref'):input_ref(C,previous[key])
     receipt=loads(input_ref(C,c['acceptance_refs']['inventory_readonly_operational_acceptance']))
     closed(receipt,'schema reviewed_by_root status source amd64_D namespace deployment_uid service_uid pod_uid container_id provider version operation original_profile_source_commit original_refs','CLOSED_DISTINCT_READER_ROOT_ACCEPTANCE15')
@@ -644,6 +666,8 @@ def inventory_reader(api, C, run, label, receipt):
 
 def maintenance_inputs(C):
     require_bound();raw=input_ref(C,CONFIG_REF);c=loads(raw)
+    if c.get('schema') == NORMAL_FINISH_SCHEMA:
+        return maintenance_inputs97(C,c,raw)
     closed(c,'schema source_R amd64_D core_preimage pre_read_case schema_pins policy_state pre_read_preimage_ref schema94_catalog_ref schema95_catalog_ref prior93_history_ref prior94_history_ref legacy_catalog_sql_ref acceptance_refs schema96_catalog_ref prior95_history_ref','CLOSED16_PRE_READ96_MAINTENANCE')
     need(c['schema']in('g15_pre_read_continuation_image_maintenance_v1',LIVE_SCHEMA)and c['source_R']==CORE_R==C.SOURCE_R and c['amd64_D']==NEW_DIGEST==C.NEW_DIGEST and C.OLD_CORE_UID==UID and C.OLD_CORE_GENERATION==GENERATION and C.OLD_CORE_POD_UID==OLD_POD,'QUALIFIED_R7_AND_CURRENT_R6_PREIMAGE')
     p=c['core_preimage'];closed(p,'deployment_uid generation pod_uid container_id image_config_digest spec_sha256 annotations_sha256','CLOSED_CURRENT6_LIFETIME')
@@ -679,6 +703,8 @@ def schema96_facts(c, legacy, current, C):
 
 def database_pre_read96(cut,run,c,sql,label):
     require_bound()
+    if c.get('schema') == NORMAL_FINISH_SCHEMA:
+        return database_normal_finish97(cut,run,c,sql,label)
     result={}
     for provider,key in (('aws','original_notify_aws_vm_members'),('hetzner','original_notify_hetzner_vm_members')):
         value=query(cut,run,label+'-'+provider.upper(),sql['queries'][key]);expected=c['policy_state'][provider]
@@ -703,7 +729,7 @@ def database_pre_read96(cut,run,c,sql,label):
 
 
 def global_marker(C):
-    return ROOT/('CORE-IMAGE-R6-045-D85BE-TO-'+CORE_R+'-'+C.NEW_DIGEST+'-POSSIBLE.json')
+    return ROOT/('CORE-IMAGE-R7-210-D311-TO-'+CORE_R+'-'+C.NEW_DIGEST+'-POSSIBLE.json')
 
 
 def patch_once(api, C, run, wire, marker, observed):
@@ -767,14 +793,14 @@ def main():
     signal.alarm(120)
     try:
         with operation_lock() as inode:
-            need(not global_marker(C).exists(),'NEW_R6_TO_R7_GLOBAL_ONCE_ALREADY_CLAIMED')
+            need(not global_marker(C).exists(),'NEW_R7_TO_R8_GLOBAL_ONCE_ALREADY_CLAIMED')
             C.once(run/'MAINTENANCE-INPUT.original.json',original_config)
             api = API(cut)
             before = api_read(api,C,run,'DEPLOYMENT-BEFORE',DEP_URI)
             pods = api_read(api,C,run,'PODS-BEFORE',PODS_URI); old_tuple = core_before(before,pods,C)
-            need(sha(C.wire(before['spec'])) == c['core_preimage']['spec_sha256'] and sha(C.wire(before['metadata']['annotations'])) == c['core_preimage']['annotations_sha256'],'EXACT_ROOT_FULL_R6_PREIMAGE')
+            need(sha(C.wire(before['spec'])) == c['core_preimage']['spec_sha256'] and sha(C.wire(before['metadata']['annotations'])) == c['core_preimage']['annotations_sha256'],'EXACT_ROOT_FULL_R7_PREIMAGE')
             lineage=C.loads(C.read(returned_path.parent/'BEFORE.json',32<<20,0o600))
-            need(lineage['core']==old_tuple and lineage['controller']==manifest['expected_controller_identity']and lineage['guardian']==manifest['expected_guardian_identity']and lineage['protected_refs']==required_protected_refs(),'NEW_G15_BEFORE_IS_CURRENT_CORE6_AND_EXACT_PROTECTED_PREDECESSOR')
+            need(lineage['core']==old_tuple and lineage['controller']==manifest['expected_controller_identity']and lineage['guardian']==manifest['expected_guardian_identity']and lineage['protected_refs']==required_protected_refs(),'NEW_G15_BEFORE_IS_CURRENT_CORE7_AND_EXACT_PROTECTED_PREDECESSOR')
             wire = C.wire(build_patch(before,C)); C.once(run/'PATCH.json',wire)
             status, raw, headers = api.request('PATCH',DEP_URI+'?dryRun=All&fieldManager=core-image-cas-once',wire)
             C.once(run/'SERVER-DRYRUN.json',raw); C.once(run/'SERVER-DRYRUN.HTTP.json',C.wire({'status':status,**headers}))
@@ -795,14 +821,14 @@ def main():
             database_pre_read96(cut,run,c,sql,'PRESEND')
             current_lock = OPLOCK.lstat()
             need((current_lock.st_dev,current_lock.st_ino) == inode and time.monotonic()-observed <= 15,'SAME_MUTEX_AND_FRESH_CURRENT15')
-            marker = {'schema':'g15_R6_to_R7_core_image_possible_send_v1','at':now(),'method':'PATCH','uri':DEP_URI,
+            marker = {'schema':'g15_R7_to_R8_core_image_possible_send_v1','at':now(),'method':'PATCH','uri':DEP_URI,
                 'deployment_uid':UID,'generation':GENERATION,'resourceVersion':before['metadata']['resourceVersion'],
                 'patch_sha256':sha(wire),'script_sha256':sha(read(__file__)),'manifest_sha256':a.expected_manifest_sha256,
                 'G15_return_sha256':a.expected_g15_swap_return_sha256,'evidence_dir':str(run),'automatic_retry':False,
                 'effects_may_have_happened_after_this_marker':True}
             sent = True; after = patch_once(api,C,run,wire,marker,observed); result_shape(before,after,C)
             # Image ACK is not runtime readiness or cycle credit. The already
-            # admitted read-only retirement may resume as soon as Core7 starts.
+            # normal-finish recovery may begin as soon as Core8 starts.
             result = {'schema':'g15_core_image_cas_return_v1','status':'PATCH_ACKNOWLEDGED_ACCEPTANCE_PENDING',
                 'deployment_uid':UID,'generation':after['metadata']['generation'],'resourceVersion':after['metadata']['resourceVersion'],
                 'old_pod_uid':OLD_POD,'Core_source':CORE_R,'image':C.IMAGE_PREFIX+C.NEW_DIGEST,'manifest_sha256':a.expected_manifest_sha256,
@@ -855,6 +881,7 @@ def pre_read_wire(row, field='record_sha256'):
     b=bytes.fromhex(raw);need(sha(b)==row[field] and loads(b)==row['original_record'],'EXACT_RETIREMENT_RAW_WIRE_SHA_RECORD');return b
 
 def validate_pre_read96(v, case):
+    OLD_SOURCE = HISTORICAL_CORE6_SOURCE
     """Current failed Core6 S8 owner; historical Pending/DELETE never gain authority."""
     closed(v,'observed_at_pg records records_wire records_sha256','CLOSED_S8_PRE_READ_SNAPSHOT')
     closed(case,'retirement_request_id failed_admission_id root_admission_id destroy_grant_id expected_records_sha256 provider_lanes current_runtime_source current_generation current_fencing_token current_failed_run_id current_lease_owner','CLOSED_CURRENT_S8_ROOT_OPERANDS11')
@@ -1035,6 +1062,7 @@ def image_read_pair(records, read_id, admission):
     return p,r
 
 def validate_terminal_s8(value):
+    OLD_SOURCE = HISTORICAL_CORE6_SOURCE
     r=image_snapshot(value,value['records_sha256']);target=S8_TERMINAL_TARGET
     terminal=one_frame(r['forward_rows'],target['admission_id'],'terminal');p=terminal['original_record']
     admitted=one_frame(r['forward_rows'],p['id'],'admitted');a=admitted['original_record']
@@ -1053,6 +1081,7 @@ def validate_terminal_s8(value):
     return True
 
 def validate_current_live(value, case):
+    OLD_SOURCE = HISTORICAL_CORE6_SOURCE
     closed(case,'schema retirement_request_id admission_id preregistration_id current_runtime_source current_generation current_fencing_token current_lease_owner current_executor_id current_failed_run_id expected_records_sha256 provider_lanes historical_s8_ref','CLOSED_TERMINAL_S8_CURRENT_LIVE_CASE13')
     need(case['schema']==LIVE_CASE_SCHEMA and case['historical_s8_ref']==S8_TERMINAL_REF and case['retirement_request_id']==LIVE_TARGET['retirement_request_id'] and case['admission_id']==LIVE_TARGET['admission_id'] and case['preregistration_id']==LIVE_TARGET['preregistration_id'] and case['current_runtime_source']==OLD_SOURCE and type(case['current_generation'])is int and case['current_generation']==LIVE_TARGET['generation'] and type(case['current_fencing_token'])is int and case['current_fencing_token']==LIVE_TARGET['fence'] and case['current_lease_owner']==LIVE_TARGET['lease_owner'] and case['current_executor_id']==LIVE_TARGET['executor_id'] and case['current_failed_run_id']==LIVE_TARGET['run_id'],'EXACT_DISTINCT_ROOT_CURRENT_LIVE_OWNER_NOT_S8')
     r=image_snapshot(value,case['expected_records_sha256'])
@@ -1086,11 +1115,518 @@ def validate_current_live(value, case):
     return True
 
 def validate_maintenance_scenario(c, C):
+    if c['schema'] == NORMAL_FINISH_SCHEMA:
+        return validate_normal_finish97(loads(input_ref(C,c['normal_finish_preimage_ref'])),c['normal_finish_case'])
     if c['schema']=='g15_pre_read_continuation_image_maintenance_v1':
         return validate_pre_read96(loads(input_ref(C,c['pre_read_preimage_ref'])),c['pre_read_case'])
     need(c['schema']==LIVE_SCHEMA,'ONLY_EXPLICIT_IMAGE_MAINTENANCE_SCENARIOS')
     case=c['pre_read_case'];validate_current_live(loads(input_ref(C,c['pre_read_preimage_ref'])),case)
     need(case['historical_s8_ref']==S8_TERMINAL_REF,'EXACT_RETAINED_HISTORICAL_S8_SOURCE')
     return validate_terminal_s8(loads(input_ref(C,case['historical_s8_ref'])))
+
+def catalog97_select(legacy):
+    """Same seven-key catalog, explicitly retaining the new M97 function."""
+    sql = catalog94_select(legacy)
+    old = "p.proname IN('guard_retirement_forward','guard_retirement_forward_read','guard_retirement_forward_delete_binding','retirement_forward_continuation_quiet','retirement_forward_continuation_valid')"
+    need(sql.count(old) == 1, 'EXACT_HISTORICAL_FUNCTION_SELECTOR_FOR97')
+    return sql.replace(old, old[:-1] + ",'retirement_forward_normal_finish_recovery_valid')", 1)
+
+
+def migration97_functions(sql):
+    need(digest_value(M97) and sha(sql.encode()) == M97, 'EXACT_PINNED_M97_SOURCE')
+    up = sql.split('-- +goose Down', 1)[0]
+    patterns = {
+        'retirement_forward_normal_finish_recovery_valid':
+            (r"CREATE OR REPLACE FUNCTION public\.retirement_forward_normal_finish_recovery_valid\(r jsonb, retirement uuid\) RETURNS boolean\nLANGUAGE plpgsql STABLE SET timezone='UTC' AS \$\$(.*?)\$\$;",
+             'r jsonb, retirement uuid', 'boolean', 's', ['TimeZone=UTC']),
+        'guard_retirement_forward':
+            (r"CREATE OR REPLACE FUNCTION public\.guard_retirement_forward\(\) RETURNS trigger LANGUAGE plpgsql AS \$\$(.*?)\$\$;",
+             '', 'trigger', 'v', None),
+    }
+    result = {}
+    for name, (pattern, arguments, output, volatility, config) in patterns.items():
+        rows = re.findall(pattern, up, re.S)
+        need(len(rows) == 1 and rows[0], 'ONE_EXACT_SOURCE97_FUNCTION_' + name)
+        result[name] = {'arguments': arguments, 'result': output, 'language': 'plpgsql',
+                        'volatility': volatility, 'config': config, 'body': rows[0]}
+    return result
+
+
+def constraint97_definitions(prior96, carrier, read_ref, expected_source):
+    """Authenticate unchanged CI originals through explicit same-hash copies."""
+    closed(carrier, 'artifact_ref before96_ref after97_ref', 'CLOSED97_PG_ORIGINAL_CUSTODY_CARRIER')
+    raw = {key: read_ref(value) for key, value in carrier.items()}
+    artifact = loads(raw['artifact_ref'])
+    closed(artifact, 'schema source_commit postgres_major fixture_only native_authority before96_ref after97_ref migration97_sha256 old_continuation_functions_unchanged old_continuation_constraints_unchanged old_mode93_absent new_mode97_and_normal_finish97_validated', 'CLOSED_ACTUAL97_PG_CI_ARTIFACT12')
+    need(artifact['schema'] == 'normal_finish_recovery_schema97_pg_catalog_v1'
+         and source(expected_source) and artifact['source_commit'] == expected_source
+         and artifact['postgres_major'] in (16, 17)
+         and type(artifact['postgres_major']) is int and artifact['fixture_only'] is True
+         and artifact['native_authority'] is False and artifact['migration97_sha256'] == M97
+         and all(artifact[key] is True for key in (
+             'old_continuation_functions_unchanged', 'old_continuation_constraints_unchanged',
+             'old_mode93_absent', 'new_mode97_and_normal_finish97_validated')),
+         'ACTUAL97_SOURCE_PG_CI_FACTS_NOT_NATIVE_QUALIFICATION')
+    views = {}
+    for key in ('before96_ref', 'after97_ref'):
+        original = artifact[key]
+        closed(original, 'path sha256 bytes', 'CLOSED_CANONICAL97_PG_CI_ORIGINAL_REF')
+        need(type(original['path']) is str and Path(original['path']).is_absolute()
+             and digest_value(original['sha256']) and type(original['bytes']) is int
+             and 0 < original['bytes'] <= CAP and len(raw[key]) == original['bytes']
+             and sha(raw[key]) == original['sha256'] == carrier[key]['sha256'],
+             'COMPLETE97_PG_ORIGINAL_SAME_SHA_COPY')
+        view = loads(raw[key])
+        closed(view, 'server_version_num functions constraints', 'CLOSED97_PG_RAW_CATALOG')
+        need(type(view['server_version_num']) is int
+             and view['server_version_num'] // 10000 == artifact['postgres_major']
+             and type(view['functions']) is dict and type(view['constraints']) is list,
+             'ACTUAL97_PG_VERSION_AND_FULL_CATALOG_SHAPES')
+        views[key] = view
+    before, after = views['before96_ref'], views['after97_ref']
+    need(before['server_version_num'] == after['server_version_num'], 'SAME97_CI_PG_SERVER')
+    old_names = {'guard_retirement_forward', 'retirement_forward_continuation_valid',
+                 'retirement_forward_continuation_quiet'}
+    need(set(before['functions']) == old_names
+         and set(after['functions']) == old_names | {'retirement_forward_normal_finish_recovery_valid'}
+         and all(type(value) is str and value for value in before['functions'].values())
+         and all(type(value) is str and value for value in after['functions'].values()),
+         'EXACT97_CHANGED_ADDED_AND_HISTORICAL_FUNCTION_ROSTER')
+    prior_functions = {row['name']: row for row in prior96['functions93']}
+    need(all(before['functions'][name] == prior_functions[name]['definition'] for name in old_names)
+         and all(after['functions'][name] == before['functions'][name] for name in (
+             'retirement_forward_continuation_valid', 'retirement_forward_continuation_quiet'))
+         and after['functions']['guard_retirement_forward'] != before['functions']['guard_retirement_forward'],
+         'ORIGINAL96_FUNCTIONS_AND_ONLY97_GUARD_CHANGE')
+    checks = {}
+    for label, view in (('before', before), ('after', after)):
+        rows = view['constraints']
+        for row in rows:
+            closed(row, 'name validated definition', 'CLOSED97_PG_CHECK_ORIGINAL')
+            need(type(row['name']) is str and row['validated'] is True
+                 and type(row['definition']) is str and row['definition'].startswith('CHECK ('),
+                 'ALL97_PG_CHECKS_VALIDATED_AND_COMPLETE')
+        need(len({row['name'] for row in rows}) == len(rows), 'UNIQUE97_CHECK_NAMES')
+        checks[label] = {row['name']: row for row in rows}
+    prior_checks = {row['name']: {'name': row['name'], 'validated': row['validated'],
+                                'definition': row['definition']}
+                    for row in prior96['catalog90']['constraints']
+                    if row['table'] == 'capacity_guest_retirement_forwards'
+                    and row['definition'].startswith('CHECK (')}
+    need(checks['before'] == prior_checks and 'retirement_forward_mode93' in checks['before']
+         and set(checks['after']) == (set(checks['before']) - {'retirement_forward_mode93'}) |
+             {'retirement_forward_mode97', 'retirement_forward_normal_finish97'}
+         and all(checks['after'][name] == row for name, row in checks['before'].items()
+                 if name != 'retirement_forward_mode93'), 'ONLY97_MODE_REPLACEMENT_AND_NEW_PROOF_CHECK')
+    return {'checks': {name: checks['after'][name]['definition'] for name in (
+                'retirement_forward_mode97', 'retirement_forward_normal_finish97')},
+            'functions': after['functions']}
+
+
+def catalog97_delta(prior96, actual97, functions, definitions):
+    need(set(prior96) == set(actual97) == {
+        'catalog90', 'catalog91', 'columns90_91', 'functions93',
+        'index92_definition', 'index92_valid', 'schema94'},
+        'SAME_COMPLETE_SEVEN_KEY_CATALOG_AT97')
+    need(set(functions) == set(M97_FUNCTIONS)
+         and set(definitions['checks']) == {
+             'retirement_forward_mode97', 'retirement_forward_normal_finish97'},
+         'EXACT_SOURCE97_FUNCTION_AND_CHECK_DELTA')
+    expected = copy.deepcopy(prior96)
+    old = [row for row in expected['functions93'] if row['name'] == 'guard_retirement_forward']
+    need(len(old) == 1, 'ONE_PRIOR96_FORWARD_GUARD')
+    for name in M97_FUNCTIONS:
+        rows = [row for row in actual97['functions93'] if row['name'] == name]
+        need(len(rows) == 1 and rows[0]['body'] == functions[name]['body']
+             and all(rows[0][key] == functions[name][key] for key in (
+                 'arguments', 'result', 'language', 'volatility', 'config'))
+             and rows[0]['definition'] == definitions['functions'][name]
+             and rows[0]['definition'].count(rows[0]['body']) == 1,
+             'WHOLE97_SOURCE_AND_ACTUAL_PG_DEFINITION_' + name)
+        if name == 'guard_retirement_forward':
+            need(set(rows[0]) == set(old[0])
+                 and all(rows[0][key] == old[0][key] for key in (
+                     'name', 'arguments', 'result', 'language', 'volatility', 'config')),
+                 'UNCHANGED97_FORWARD_GUARD_SIGNATURE')
+            old[0].update(body=rows[0]['body'], definition=rows[0]['definition'])
+        else:
+            need(not any(row['name'] == name for row in expected['functions93']),
+                 'NEW97_NORMAL_FINISH_FUNCTION_NOT_PRIOR_AUTHORITY')
+            expected['functions93'].append(copy.deepcopy(rows[0]))
+    expected['functions93'].sort(key=lambda row: row['name'])
+    mode = [row for row in expected['catalog90']['constraints']
+            if row['table'] == 'capacity_guest_retirement_forwards'
+            and row['name'] == 'retirement_forward_mode93']
+    need(len(mode) == 1 and mode[0]['validated'] is True, 'ONE_PRIOR96_MODE_CHECK')
+    new_check = copy.deepcopy(mode[0])
+    mode[0].update(name='retirement_forward_mode97',
+                   definition=definitions['checks']['retirement_forward_mode97'])
+    new_check.update(name='retirement_forward_normal_finish97',
+                     definition=definitions['checks']['retirement_forward_normal_finish97'])
+    expected['catalog90']['constraints'].append(new_check)
+    expected['catalog90']['constraints'].sort(key=lambda row: (row['table'], row['name']))
+    need(expected == actual97, 'ALL_OTHER96_CATALOG_FUNCTION_INDEX_TRIGGER_BYTES_UNCHANGED')
+    return actual97
+
+
+def root97_overlay(receipt_raw, prior96_raw, pins, read_ref):
+    need(sha(prior96_raw) == ROOT96_SHA, 'IMMUTABLE_ROOT96_WHOLE_ORIGINAL')
+    previous, value = loads(prior96_raw), loads(receipt_raw)
+    closed(value, 'schema reviewed_by_root schema_before schema_after current_core_source current_ops_source business_source amd64_D migration97_sha256 complete_history_sha256 prior96_history_sha256 catalog97_sha256 index92_definition_sha256 catalog90_91_sha256 job_uid pod_uid exit_code single_job_create provider_guest_core_mutations old_records_and_sdk_preserved original_refs', 'ROOT97_CLOSED21')
+    need(previous['schema'] == 'root_goose96_guest_retirement_pre_read_continuation_acceptance_v1'
+         and previous['reviewed_by_root'] is True and previous['schema_after'] == 96
+         and value['schema'] == 'root_goose97_normal_finish_recovery_acceptance_v1'
+         and value['reviewed_by_root'] is True and value['schema_before'] == 96
+         and value['schema_after'] == 97, 'ROOT97_DISTINCT_FROM_HISTORICAL96')
+    need(value['current_core_source'] == ROOT97_CURRENT_CORE_SOURCE
+         and value['current_ops_source'] == pins['current_ops_source']
+         and source(value['current_ops_source']) and value['business_source'] == pins['business_source']
+         and source(value['business_source']) and value['amd64_D'] == pins['amd64_D']
+         and digest_value(value['amd64_D']), 'ROOT97_ACTUAL_CORE7_AND_QUALIFIED_CORE8_COMPANION')
+    need(digest_value(M97) and value['migration97_sha256'] == M97
+         and value['complete_history_sha256'] == pins['complete_history_sha256']
+         and value['prior96_history_sha256'] == previous['complete_history_sha256'] == pins['prior96_history_sha256']
+         and value['catalog97_sha256'] == pins['catalog97_sha256']
+         and value['index92_definition_sha256'] == previous['index92_definition_sha256'] == pins['index92_definition_sha256']
+         and value['catalog90_91_sha256'] == pins['catalog90_91_sha256'],
+         'ACTUAL97_WHOLE_HISTORY_CATALOG_AND_PRIOR96')
+    need(full_id(value['job_uid']) and full_id(value['pod_uid'])
+         and type(value['exit_code']) is int and value['exit_code'] == 0
+         and value['single_job_create'] is True
+         and type(value['provider_guest_core_mutations']) is int and value['provider_guest_core_mutations'] == 0
+         and value['old_records_and_sdk_preserved'] is True, 'ROOT97_ONE_JOB_NO_PROVIDER_OR_CORE_MUTATION')
+    closed(value['original_refs'], 'migration_result before_catalog after_catalog source_ci qualified_image',
+           'ROOT97_FIVE_ORIGINAL_ROLES')
+    need(len({ref['sha256'] for ref in value['original_refs'].values()}) == 5,
+         'ROOT97_DISTINCT_ORIGINAL_ROLES')
+    for ref in value['original_refs'].values():
+        original = read_ref(ref)
+        need(type(original) is bytes and len(original) > 1, 'ROOT97_COMPLETE_ORIGINAL_CUSTODY')
+    return value
+
+
+
+def normal_pg_bytea(value):
+    need(type(value) is str and re.fullmatch(r'\\x(?:[0-9a-f]{2})*',value),
+         'CANONICAL_POSTGRES_JSON_BYTEA_HEX')
+    return bytes.fromhex(value[2:])
+
+
+def normal_finish_wire(row, record_key, digest_key):
+    raw = bytes.fromhex(row['wire_hex'])
+    need(normal_pg_bytea(row['original_wire']) == raw
+         and loads(raw) == row[record_key] and sha(raw) == row[digest_key],
+         'COMPLETE_NORMAL_FINISH_ORIGINAL_WIRE')
+    return raw
+
+
+def validate_normal_finish97(value, case):
+    closed(case, 'schema retirement_request_id preregistration_id current_runtime_source current_generation current_fencing_token current_lease_owner current_executor_id current_failed_run_id expected_records_sha256 provider_lanes',
+           'CLOSED_NORMAL_FINISH_IMAGE_CASE11')
+    t = NORMAL_FINISH_TARGET
+    need(case['schema'] == NORMAL_FINISH_CASE_SCHEMA
+         and case['retirement_request_id'] == t['retirement_request_id']
+         and case['preregistration_id'] == t['preregistration_id']
+         and case['current_runtime_source'] == ROOT97_CURRENT_CORE_SOURCE
+         and type(case['current_generation']) is int and case['current_generation'] == t['generation']
+         and type(case['current_fencing_token']) is int and case['current_fencing_token'] == t['fence']
+         and case['current_lease_owner'] == t['lease_owner']
+         and case['current_executor_id'] == t['executor_id']
+         and case['current_failed_run_id'] == t['run_id'], 'EXACT_G37_NORMAL_FINISH_OWNER_NOT_LIVE')
+    r = image_snapshot(value, case['expected_records_sha256'])
+    closed(r, 'selected_runtime_source target current_intent current_intent_pgtext active_policies retirement_requests preregistrations create_grants retirement_contexts caller_returns original_returns native_poweroff_reads forward_rows forward_reads delete_bindings destroy_grants workflow_runs owning_dispatch_jobs',
+           'FULL_NORMAL_FINISH_RECORD_SET')
+    need(r['selected_runtime_source'] == ROOT97_CURRENT_CORE_SOURCE
+         and r['target'] == {k: t[k] for k in ('retirement_request_id','preregistration_id')}
+         and r['forward_rows'] == r['forward_reads'] == r['delete_bindings'] == r['destroy_grants'] == [],
+         'NO_NORMAL_FINISH_FORWARD_OR_DELETE_AUTHORITY_INVENTED')
+    current = r['current_intent']['intent']
+    need(loads(r['current_intent_pgtext']) == current
+         and current['generation'] == t['generation'] and current['fencing_token'] == t['fence']
+         and current['lease_owner'] == t['lease_owner'] and current['lease_executor_id'] == t['executor_id']
+         and current['phase'] in ('draining','drained') and current.get('recovery_only',False) is False
+         and current.get('floor_degraded',False) is False and current.get('retirement_forward') is None
+         and utc(current['lease_expires_at']) < utc(value['observed_at_pg']),
+         'EXACT_EXPIRED_NORMAL_EPOCH_NO_MARKER_OR_CLOCK_RESET')
+    need(len(r['active_policies']) == 1 and r['active_policies'][0]['id'] == current['policy_id']
+         and r['active_policies'][0]['checksum'] == current['policy_checksum'],
+         'NORMAL_FINISH_CURRENT_POLICY_NOT_RELABELED')
+    need(len(r['retirement_requests']) == len(r['preregistrations']) == len(r['create_grants'])
+         == len(r['retirement_contexts']) == len(r['caller_returns']) == 1,
+         'ONE_ORIGINAL_NORMAL_RETIREMENT_CALLER_AND_CREATE')
+    request, pre = r['retirement_requests'][0], r['preregistrations'][0]
+    need(request['id'] == t['retirement_request_id'] and request['preregistration_id'] == pre['id']
+         == t['preregistration_id'], 'ORIGINAL_NORMAL_REQUEST_PREREGISTRATION')
+    request_raw = bytes.fromhex(request['wire_hex'])
+    need(request_raw == normal_pg_bytea(request['original_wire'])
+         and loads(request_raw)['intent'] == request['intent_record']
+         and sha(raw_json_member(request_raw,'intent')) == request['intent_sha256'],
+         'COMPLETE_DURABLE_NORMAL_REQUEST_WITH_EXACT_INTENT_TOKEN_HASH')
+    intent = request['intent_record']
+    need(intent['schema'] == 'original_guest_production_retirement_intent_v2'
+         and intent['request_id'] == request['id'] and intent['attempt_id'] == request['attempt_id']
+         and intent['preregistration_id'] == pre['id']
+         and intent['generation'] == t['generation'] and intent['fence'] == t['fence']
+         and intent['lease_owner'] == t['lease_owner'] and loads(request_raw)['nonce'] == '',
+         'EXACT_ORIGINAL_NORMAL_REQUEST_OWNER_AND_DURABLE_REDACTED_NONCE')
+    caller = r['caller_returns'][0]; caller_raw = normal_finish_wire(caller,'original_record','return_sha256')
+    c = caller['original_record']
+    need(caller['intent_id'] == request['id'] and c['request_id'] == request['id']
+         and c['attempt_id'] == request['attempt_id'] and type(c['status']) is int and c['status'] == 200
+         and c['body_persisted'] is True and all(c[k] is False for k in (
+             'preflight_failed','do_failed','read_failed','close_failed','original_context_failed'))
+         and utc(c['original_deadline']) == utc(request['original_deadline'])
+         and utc(request['intent_record']['issued_at']) <= utc(c['started_at']) <= utc(c['do_started_at'])
+         <= utc(c['do_returned_at']) <= utc(c['read_returned_at']) <= utc(c['close_returned_at'])
+         <= utc(c['driver_returned_at']) < utc(request['original_deadline']),
+         'GENUINE_ORIGINAL_NORMAL_CALLER200_COMPLETE_BEFORE_DEADLINE')
+    original = r['original_returns']
+    need(len(original) == 5 and [x['sequence'] for x in original] == [1,2,3,4,5]
+         and all(x['intent_id'] == request['id'] for x in original)
+         and [x['original_return_record']['record']['sequence'] for x in original[1:]] == [1,2,3,4]
+         and [x['kind'] for x in original] == ['production_clock_nonce_v2'] + [
+             'production_retirement_v2:' + state for state in (
+                 'possible_start','quiescent','poweroff_possible_start','poweroff_command_returned')],
+         'ALL_FIVE_NORMAL_ORIGINAL_RETIREMENT_RETURNS')
+    raws = []
+    for index,row in enumerate(original):
+        raw = bytes.fromhex(row['wire_hex'])
+        need(raw == normal_pg_bytea(row['original_wire'])
+             and loads(raw) == row['original_return_record']
+             and sha(raw if index == 0 else raw_json_member(raw,'record')) == row['return_sha256'],
+             'COMPLETE_NORMAL_NONCE_OR_JOURNAL_WITH_ITS_SOURCE_DIGEST_DOMAIN')
+        raws.append(raw)
+    nonce = original[0]['original_return_record']
+    need(original[0]['kind'] == 'production_clock_nonce_v2'
+         and nonce['schema'] == 'original_core_guest_retirement_nonce_return_v2'
+         and nonce['preflight_sha256'] == request['intent_sha256'],
+         'AUTHENTICATED_ORIGINAL_NORMAL_NONCE_NOT_JSON_RECODE')
+    final_request = nonce['final_request']; final_intent = final_request['intent']
+    final_request_raw = raw_json_member(raws[0], 'final_request')
+    final_intent_raw = raw_json_member(final_request_raw, 'intent')
+    final_sha = sha(final_intent_raw)
+    need(loads(final_intent_raw) == final_intent and final_intent['tuple'] == request['intent_record']['tuple']
+         and final_request['nonce'] == ''
+         and all(final_intent[k] == intent[k] for k in (
+             'schema','request_id','attempt_id','preregistration_id','generation','fence','lease_owner')),
+         'EXACT_FINALIZED_NORMAL_INTENT_RAW_TOKEN')
+    returned = original[4]['original_return_record']
+    need(original[4]['kind'] == 'production_retirement_v2:poweroff_command_returned'
+         and loads(base64.b64decode(c['body'],validate=True)) == returned
+         and returned['journal_complete'] is True and returned['hold_reasons'] == []
+         and returned['record']['sequence'] == 4 and returned['record']['poweroff_command_returned'] is True
+         and returned['record']['writer_quiescence_evidence'] is True
+         and returned['record']['powered_off_observed'] is False,
+         'NORMAL_RETIRE_SUCCESS_IS_NOT_NATIVE_OFF_OR_DELETE_AUTHORITY')
+    tuple_ = final_intent['tuple']
+    need(tuple_['slot'] == 2 and current['decision']['units'] == 1
+         and final_intent['policy_id'] == current['policy_id']
+         and final_intent['policy_checksum'] == current['policy_checksum'],
+         'NORMAL_FINISH_EXACT_SLOT2_AND_CURRENT_POLICY')
+    created = paid_original_sdk(r['create_grants'][0],tuple_,False)
+    need(pre['create_grant_id'] == created['grant']['grant_id'], 'NORMAL_FINISH_SAME_PAID_ORIGINAL_CREATE')
+    context = r['retirement_contexts'][0]
+    need(context['intent_id'] == request['id']
+         and context['executor_id'] == t['executor_id']
+         and context['core_actual_source_commit'] == ROOT97_CURRENT_CORE_SOURCE
+         and utc(context['original_context_deadline']) < utc(value['observed_at_pg'])
+         and utc(request['original_deadline']) < utc(value['observed_at_pg']),
+         'NATURAL_NORMAL_CONTEXT_AND_LEASE_EXPIRY')
+    reads = r['native_poweroff_reads']
+    need(len(reads) == 2, 'EXACT_NORMAL_OFF_PREPARED_AND_FAILED_RETURN')
+    prepared = [x for x in reads if x['original_record'].get('schema') == 'original_core_guest_native_poweroff_read_challenge_v2']
+    replies = [x for x in reads if x['original_record'].get('schema') == 'original_core_guest_native_poweroff_read_return_v2']
+    need(len(prepared) == len(replies) == 1, 'NO_UNKNOWN_OR_EXTRA_NORMAL_OFF_ORIGINAL')
+    prepared, reply = prepared[0], replies[0]
+    challenge_raw = normal_finish_wire(prepared,'original_record','observation_sha256')
+    normal_finish_wire(reply,'original_record','observation_sha256')
+    d, v = prepared['original_record'], reply['original_record']
+    need(normal_pg_bytea(reply['original_native_join_wire']) == challenge_raw
+         and v['challenge'] == d and d['read_id'] == prepared['id'] and d['intent_id'] == request['id']
+         and d['intent_sha256'] == final_sha and d['original_caller_sha256'] == caller['return_sha256']
+         and d['tuple'] == tuple_ and digest_value(d['mutation_binding_sha256'])
+         and d['adapter_source_commit'] == created['binding']['original_provider_source_commit']
+         and utc(caller['recorded_at']) < utc(prepared['recorded_at']) <= utc(reply['recorded_at'])
+         and utc(d['issued_at_core']) < utc(d['original_deadline_core'])
+         <= utc(d['issued_at_core']) + datetime.timedelta(seconds=5),
+         'EXACT_ORIGINAL_NORMAL_OFF_CHALLENGE_JOIN_AND_FIVE_SECOND_CAP')
+    need(v['call_failed'] is True and v['original_context_failed'] is False
+         and v['status'] in ('','observed') and 'plan' not in v
+         and utc(d['issued_at_core']) <= utc(v['started_at_core'])
+         <= utc(v['original_returned_at_core']) < utc(d['original_deadline_core'])
+         and utc(v['original_returned_at_core']) <= utc(reply['recorded_at']),
+         'ACTUAL_FAILED_NORMAL_OFF_WITHOUT_OBSERVED_AUTHORITY')
+    need(len(r['workflow_runs']) == len(r['owning_dispatch_jobs']) == 1,
+         'UNIQUE_NORMAL_FINISH_ORIGINAL_WORKFLOW_OWNER')
+    w,j = r['workflow_runs'][0],r['owning_dispatch_jobs'][0]
+    need(loads(w['run_wire']) == {k:v for k,v in w.items() if k!='run_wire'}
+         and loads(j['dispatch_wire']) == {k:v for k,v in j.items() if k!='dispatch_wire'}
+         and w['id'] == j['run_id'] == t['run_id'] and w['status'] == w['result']['status']
+         == j['return_status'] == 'failed' and j['state'] == 'returned'
+         and utc(reply['recorded_at']) <= utc(w['finished_at']) == utc(j['returned_at'])
+         <= utc(j['finalization_ack_at']) <= utc(value['observed_at_pg'])
+         and w['metadata']['capacity_dispatch_job_id'] == j['id']
+         and w['metadata']['triggered_by'] == 'workflow_scheduler'
+         and loads(j['envelope'])['workflow']['id'] == final_intent['workflow_id'],
+         'EXACT_NORMAL_FINISH_FAILED_WORKFLOW_AND_FINAL_ACK')
+    steps=w['result']['steps'];need(len(steps)==7 and len({x['id'] for x in steps})==7,
+                                  'EXACT_NORMAL_FINISH_SEVEN_STEPS')
+    steps={x['id']:x for x in steps};plan=steps['plan-original-guest'];retired=steps['retire-original-guest']
+    need(plan['status']=='succeeded' and plan['metadata']['generation']==t['generation']
+         and plan['metadata']['fencing_token']==t['fence']
+         and plan['metadata']['lease_owner']==t['lease_owner']
+         and retired['status']=='succeeded' and retired['metadata']['request_id']==request['id']
+         and retired['metadata']['intent_sha256']==final_sha
+         and retired['metadata']['native_poweroff_known'] is False
+         and steps['finish-original-retirement']['status']=='failed'
+         and all(steps[k]['status']=='skipped' for k in (
+             'provision-original-notify','complete-original-provision',
+             'refresh-original-membership','complete-original-retirement')),
+         'FAILED_NORMAL_FINISH_NOT_FAILED_PLAN_OR_LIVE_FORWARD')
+    return True
+
+
+
+def maintenance_inputs97(C, c, raw):
+    closed(c, 'schema source_R amd64_D core_preimage normal_finish_case schema_pins policy_state normal_finish_preimage_ref schema94_catalog_ref schema95_catalog_ref prior93_history_ref prior94_history_ref legacy_catalog_sql_ref acceptance_refs schema96_catalog_ref prior95_history_ref schema97_catalog_ref prior96_history_ref', 'CLOSED18_NORMAL_FINISH97_MAINTENANCE')
+    need(c['schema'] == NORMAL_FINISH_SCHEMA and c['source_R'] == CORE_R == C.SOURCE_R
+         and c['amd64_D'] == NEW_DIGEST == C.NEW_DIGEST and C.OLD_CORE_UID == UID
+         and C.OLD_CORE_GENERATION == GENERATION and C.OLD_CORE_POD_UID == OLD_POD,
+         'QUALIFIED_CORE8_AND_CURRENT_CORE7_PREIMAGE')
+    p = c['core_preimage']
+    closed(p, 'deployment_uid generation pod_uid container_id image_config_digest spec_sha256 annotations_sha256', 'CLOSED_CURRENT7_LIFETIME')
+    need(p['deployment_uid'] == UID and p['generation'] == GENERATION and p['pod_uid'] == OLD_POD
+         and p['container_id'] == OLD_CONTAINER_ID and p['image_config_digest'] == OLD_IMAGE_CONFIG_DIGEST
+         and all(digest_value(p[k]) for k in ('spec_sha256','annotations_sha256')),
+         'EXACT_CURRENT7_WHOLE_SPEC_AND_ANNOTATIONS')
+    closed(c['acceptance_refs'], 'qualified_business_release business_Source_CI Root_Goose94_acceptance Root_Goose95_acceptance Root_Goose96_acceptance Root_Goose97_acceptance Root_separate_rollout_review current_Core7_operational_acceptance inventory_readonly_operational_acceptance', 'DISTINCT_ROOT97_CORE7_READER_TARGET_AND_HISTORICAL_ACCEPTANCES')
+    for r in c['acceptance_refs'].values():
+        need(len(input_ref(C,r)) > 1, 'ACTUAL_COMPLETE_PINNED_ACCEPTANCE_ORIGINAL')
+    need(c['acceptance_refs']['Root_Goose97_acceptance']['sha256'] == ROOT97_SHA
+         and digest_value(ROOT97_SHA), 'ACTUAL_ROOT97_NOT_FUTURE_OR_HISTORICAL_ALIAS')
+    need(type(c['policy_state']) is dict and set(c['policy_state']) == {'aws','hetzner'}
+         and all(type(v) is dict and set(v) == {'intent_identity','owned_slots','active_policies','policy_catalog_wire'}
+                 for v in c['policy_state'].values()), 'BOTH_WHOLE_POLICY_ROSTERS_UNCHANGED')
+    deployment_ready_inputs(C,c)
+    validate_normal_finish97(loads(input_ref(C,c['normal_finish_preimage_ref'])),c['normal_finish_case'])
+    sql = loads(input_ref(C,SQL_DATA_REF))
+    need(sql['schema'] == 'fixed_policy_publication_schema92_SQL_data_v1'
+         and set(sql['queries']) == {'original_notify_aws_vm_members','original_notify_hetzner_vm_members'},
+         'EXACT_SOURCE_E70_QUERIES_WITHOUT_RECONSTRUCTION')
+    return c, raw, sql
+
+
+def schema97_facts(c, legacy, current, C):
+    v, pins = legacy['schema_facts'], c['schema_pins']
+    versions = [0] + [x for x in range(1,98) if x != 40]
+    need(current['legacy']['database'] == v['database'] == 'yggdrasil'
+         and current['legacy']['readonly'] == v['readonly'] == 'on'
+         and current['legacy']['latest_versions'] == v['latest_versions'] == versions
+         and v['history_max_version'] == 97 and v['rows90'] == v['rows91'] == v['rows92'] == 1
+         and legacy['index89_valid'] is True and legacy['index92_valid'] is True,
+         'EXACT97_HEAD_AND_OLD_INDEXES_NO_SCHEMA_ALIAS')
+    closed(pins, 'complete_history_sha256 index92_definition_sha256 catalog90_91_sha256 schema94_catalog_sha256 schema95_catalog_sha256 schema96_catalog_sha256 constraint96_deparse_ref schema97_catalog_sha256 constraint97_deparse_ref', 'CLOSED97_CATALOG_HISTORY_PINS')
+    need(all(digest_value(pins[k]) for k in pins if k not in ('constraint96_deparse_ref','constraint97_deparse_ref')),
+         'REAL97_DIGEST_PINS')
+    prior96_raw = input_ref(C,c['prior96_history_ref'])
+    prior95_raw = input_ref(C,c['prior95_history_ref'])
+    prior96, prior95 = loads(prior96_raw), loads(prior95_raw)
+    full = loads(v['complete_history_wire'])
+    need(loads(current['legacy']['complete_history_wire']) == full
+         and len(full) == len(prior96) + 1 and [x for x in full if x['version_id'] != 97] == prior96
+         and len([x for x in full if x['version_id'] == 97 and x['is_applied'] is True]) == 1
+         and next(x['id'] for x in full if x['version_id'] == 97) > max(x['id'] for x in prior96)
+         and all(x['is_applied'] is True for x in full)
+         and sha(v['complete_history_wire'].encode()) == pins['complete_history_sha256'],
+         'SOLE97_WHOLE_PRIOR96_HISTORY_RAW_VALUES_PRESERVED')
+    need(len(prior96) == len(prior95) + 1
+         and [x for x in prior96 if x['version_id'] != 96] == prior95
+         and len([x for x in prior96 if x['version_id'] == 96 and x['is_applied'] is True]) == 1,
+         'HISTORICAL96_SOLE_APPEND_TO95')
+    prior96_catalog = loads(input_ref(C,c['schema96_catalog_ref']))
+    prior95_catalog = loads(input_ref(C,c['schema95_catalog_ref']))
+    actual = catalog94_projection(current)
+    need(actual == loads(input_ref(C,c['schema97_catalog_ref']))
+         and sha(C.wire(actual)) == pins['schema97_catalog_sha256']
+         and sha(C.wire(prior96_catalog)) == pins['schema96_catalog_sha256']
+         and sha(C.wire(prior95_catalog)) == pins['schema95_catalog_sha256']
+         and sha(legacy['index92_definition'].encode()) == pins['index92_definition_sha256']
+         and sha(C.wire({'catalog90':v['catalog90'],'catalog91':v['catalog91']})) == pins['catalog90_91_sha256'],
+         'EXACT97_CATALOG_AND_DISTINCT_PRIOR96_95_ORIGINALS')
+    prior_rows = [x for x in prior96_catalog['functions93'] if x['name'] == M96_FUNCTION]
+    need(len(prior_rows) == 1 and sha(prior_rows[0]['body'].encode()) == M96_BODY_SHA, 'HISTORICAL96_EXACT_SOURCE_BODY')
+    catalog96_delta(prior95_catalog,prior96_catalog,prior_rows[0]['body'],
+                    constraint96_definition(prior95_catalog,loads(input_ref(C,pins['constraint96_deparse_ref']))))
+    definitions = constraint97_definitions(prior96_catalog,pins['constraint97_deparse_ref'],lambda r:input_ref(C,r),CORE_R)
+    functions = {}
+    specs = {
+        'guard_retirement_forward': {'arguments':'','result':'trigger','language':'plpgsql','volatility':'v','config':None},
+        'retirement_forward_normal_finish_recovery_valid': {'arguments':'r jsonb, retirement uuid','result':'boolean','language':'plpgsql','volatility':'s','config':['TimeZone=UTC']},
+    }
+    for name in M97_FUNCTIONS:
+        rows = [x for x in actual['functions93'] if x['name'] == name]
+        need(len(rows) == 1 and sha(rows[0]['body'].encode()) == M97_FUNCTION_BODY_SHAS[name],
+             'EXACT_IMMUTABLE97_SOURCE_BODY_' + name)
+        functions[name] = {**specs[name],'body':rows[0]['body']}
+    catalog97_delta(prior96_catalog,actual,functions,definitions)
+    need(all(v[k] == 0 and current['legacy'][k] == 0 for k in ('other_migrators_ddl','other_cic','ddl_locks')),
+         'NO_OTHER_MIGRATOR_CIC_OR_DDL_LOCK')
+    refs = c['acceptance_refs']
+    need(refs['Root_Goose95_acceptance']['sha256'] == ROOT95_SHA
+         and refs['Root_Goose96_acceptance']['sha256'] == ROOT96_SHA
+         and refs['Root_Goose97_acceptance']['sha256'] == ROOT97_SHA
+         and refs['Root_Goose94_acceptance']['sha256'] == '3ad88f1ada8cc96db0d6c6b0c3844a4de070e18f458cd6b053ab3a468b90c5e4',
+         'DISTINCT_UNREWRITTEN_ROOT94_95_96_AND_ACTUAL97')
+    r95_raw, r96_raw = input_ref(C,refs['Root_Goose95_acceptance']), input_ref(C,refs['Root_Goose96_acceptance'])
+    r95, r96 = loads(r95_raw), loads(r96_raw)
+    need(r95['catalog95_sha256'] == pins['schema95_catalog_sha256']
+         and r95['complete_history_sha256'] == sha(prior95_raw)
+         and r95['prior94_history_sha256'] == sha(input_ref(C,c['prior94_history_ref']))
+         and sha(C.wire(loads(input_ref(C,c['schema94_catalog_ref'])))) == pins['schema94_catalog_sha256'],
+         'HISTORICAL95_AND94_RECEIPTS_AND_WHOLE_HISTORY')
+    root96_overlay(r96_raw,r95_raw,{
+        'current_ops_source':ROOT96_HISTORICAL_OPS_SOURCE,
+        'business_source':ROOT96_HISTORICAL_BUSINESS_SOURCE,'amd64_D':ROOT96_HISTORICAL_AMD64_D,
+        'complete_history_sha256':sha(prior96_raw),'prior95_history_sha256':sha(prior95_raw),
+        'catalog96_sha256':pins['schema96_catalog_sha256'],
+        'index92_definition_sha256':pins['index92_definition_sha256'],
+        'catalog90_91_sha256':sha(C.wire({'catalog90':prior96_catalog['catalog90'],'catalog91':prior96_catalog['catalog91']}))
+    },lambda r:input_ref(C,r))
+    root97_overlay(input_ref(C,refs['Root_Goose97_acceptance']),r96_raw,{
+        'current_ops_source':G15_OPS_P,'business_source':CORE_R,'amd64_D':NEW_DIGEST,
+        'complete_history_sha256':pins['complete_history_sha256'],
+        'prior96_history_sha256':sha(prior96_raw),'catalog97_sha256':pins['schema97_catalog_sha256'],
+        'index92_definition_sha256':pins['index92_definition_sha256'],
+        'catalog90_91_sha256':pins['catalog90_91_sha256']
+    },lambda r:input_ref(C,r))
+
+
+def database_normal_finish97(cut, run, c, sql, label):
+    require_bound()
+    result = {}
+    case = c['normal_finish_case']
+    for provider,key in (('aws','original_notify_aws_vm_members'),('hetzner','original_notify_hetzner_vm_members')):
+        value = query(cut,run,label+'-'+provider.upper(),sql['queries'][key])
+        need(all(value[k] == c['policy_state'][provider][k] for k in (
+                 'intent_identity','owned_slots','active_policies','policy_catalog_wire')),
+             'ALL_OTHER_POLICY_AND_ROSTER_BYTES_EXACT')
+        lanes = {k:value[k] for k in ('jobs_busy','runs_busy','forward_unreturned_reads','live_unreturned_canaries','intent_count','intent_busy','pending_authority','forward_markers')}
+        need(all(type(v) is int for v in lanes.values())
+             and lanes == case['provider_lanes'][provider] and lanes['intent_count'] == 1
+             and all(type(lanes[k]) is int and lanes[k] == 0 for k in (
+                 'jobs_busy','runs_busy','forward_unreturned_reads','live_unreturned_canaries'))
+             and lanes['forward_markers'] == lanes['pending_authority'] == 0
+             and type(lanes['intent_busy']) is int and lanes['intent_busy'] in (0,1),
+             'EXACT_NORMAL_FINISH_QUIET_NO_FORWARD_OR_GUESSED_LANES')
+        result[provider] = lanes
+    actual = query(cut,run,label+'-NORMAL-FINISH',NORMAL_FINISH_SQL)
+    validate_normal_finish97(actual,case)
+    need(actual['records_wire'] == loads(input_ref(cut.C,c['normal_finish_preimage_ref']))['records_wire'],
+         'WHOLE_NORMAL_FINISH_ORIGINALS_UNCHANGED_BEFORE_PRESEND')
+    current = query(cut,run,label+'-SCHEMA97',catalog97_select(input_ref(cut.C,c['legacy_catalog_sql_ref']).decode()))
+    first = query(cut,run,label+'-SOURCE-SCHEMA97',sql['queries']['original_notify_aws_vm_members'])
+    schema97_facts(c,first,current,cut.C)
+    return result
+
 
 if __name__=="__main__":main()

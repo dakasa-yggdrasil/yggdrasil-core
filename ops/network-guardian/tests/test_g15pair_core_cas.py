@@ -168,7 +168,7 @@ def live_image_operand():
     tuple_={'provider':'aws','integration_instance_id':'10000000-0000-4000-8000-000000000010','instance_checksum':'1'*64,'integration_type_id':'20000000-0000-4000-8000-000000000010','type_checksum':'2'*64,'scope_checksum':'a'*64,'profile_checksum':'3'*64,'profile':'declared','slot':t['slot'],'resource_id':t['resource_id'],'resource_created_at':t['resource_created_at']}
     original_intent={'generation':34,'fencing_token':70,'phase':'draining'}
     a=copy.deepcopy(r['forward_rows'][0]['original_record'])
-    a.update(schema='original_guest_partial_poweroff_forward_v1',id=t['admission_id'],root_admission_id=t['admission_id'],stage='admitted',mode='live',issuer='source:ordinary-retirement',actual_core_source=cas.OLD_SOURCE,preregistration_id=t['preregistration_id'],retirement_request_id=t['retirement_request_id'],generation=34,fence=70,lease_owner=t['lease_owner'],executor_id=t['executor_id'],run_id=t['run_id'],recorded_at='2026-11-10T16:00:00Z',original_generation=34,original_fence=70,original_intent_wire=base64.b64encode(encoded(original_intent).encode()).decode(),original_intent_sha256=cas.sha(encoded(original_intent).encode()))
+    a.update(schema='original_guest_partial_poweroff_forward_v1',id=t['admission_id'],root_admission_id=t['admission_id'],stage='admitted',mode='live',issuer='source:ordinary-retirement',actual_core_source=cas.HISTORICAL_CORE6_SOURCE,preregistration_id=t['preregistration_id'],retirement_request_id=t['retirement_request_id'],generation=34,fence=70,lease_owner=t['lease_owner'],executor_id=t['executor_id'],run_id=t['run_id'],recorded_at='2026-11-10T16:00:00Z',original_generation=34,original_fence=70,original_intent_wire=base64.b64encode(encoded(original_intent).encode()).decode(),original_intent_sha256=cas.sha(encoded(original_intent).encode()))
     a.pop('destroy_grant_id',None);a['original']['Request']['intent']['tuple']=tuple_
     create_id='20000000-0000-4000-8000-000000000001'
     a['original']['Preregistration']={'original_create_grant_id':create_id,'original_create_request_sha256':'d'*64}
@@ -202,9 +202,9 @@ def live_image_operand():
     st={x['id']:x for x in run['result']['steps']};st['plan-original-guest']['metadata'].update(generation=34,fencing_token=70,lease_owner=t['lease_owner']);st['retire-original-guest']['metadata'].update(retirement_forward_id=a['id'],request_id=a['retirement_request_id'])
     job=copy.deepcopy(r['owning_dispatch_jobs'][-1]);job.update(id=t['dispatch_id'],run_id=run['id'],returned_at=run['finished_at'],finalization_ack_at='2026-11-10T16:00:21Z')
     intent={'policy_id':r['active_policies'][0]['id'],'policy_checksum':r['active_policies'][0]['checksum'],'generation':34,'fencing_token':70,'phase':'drained','lease_owner':a['lease_owner'],'lease_executor_id':a['executor_id'],'lease_expires_at':'2026-11-10T16:00:43Z','retirement_forward':cas.forward_marker_data(off)}
-    r.update(selected_runtime_source=cas.OLD_SOURCE,target={'parent_forward_id':a['id'],'retirement_request_id':a['retirement_request_id'],'preregistration_id':a['preregistration_id'],'resource_id':tuple_['resource_id']},current_intent={'intent':intent},forward_rows=[admitted,q],create_grants=[create],delete_bindings=[delete],destroy_grants=[paid],all_read_rows=rows,own_read_count=len(rows),unreturned_prepared=[],latest_reads_all_outcomes=rows[-6:],workflow_runs=[run],owning_dispatch_jobs=[job])
+    r.update(selected_runtime_source=cas.HISTORICAL_CORE6_SOURCE,target={'parent_forward_id':a['id'],'retirement_request_id':a['retirement_request_id'],'preregistration_id':a['preregistration_id'],'resource_id':tuple_['resource_id']},current_intent={'intent':intent},forward_rows=[admitted,q],create_grants=[create],delete_bindings=[delete],destroy_grants=[paid],all_read_rows=rows,own_read_count=len(rows),unreturned_prepared=[],latest_reads_all_outcomes=rows[-6:],workflow_runs=[run],owning_dispatch_jobs=[job])
     value['observed_at_pg']='2026-11-10T16:01:00Z'
-    case={'schema':cas.LIVE_CASE_SCHEMA,'retirement_request_id':a['retirement_request_id'],'admission_id':a['id'],'preregistration_id':a['preregistration_id'],'current_runtime_source':cas.OLD_SOURCE,'current_generation':34,'current_fencing_token':70,'current_lease_owner':a['lease_owner'],'current_executor_id':a['executor_id'],'current_failed_run_id':a['run_id'],'expected_records_sha256':'0'*64,'provider_lanes':oldcase['provider_lanes'],'historical_s8_ref':cas.S8_TERMINAL_REF}
+    case={'schema':cas.LIVE_CASE_SCHEMA,'retirement_request_id':a['retirement_request_id'],'admission_id':a['id'],'preregistration_id':a['preregistration_id'],'current_runtime_source':cas.HISTORICAL_CORE6_SOURCE,'current_generation':34,'current_fencing_token':70,'current_lease_owner':a['lease_owner'],'current_executor_id':a['executor_id'],'current_failed_run_id':a['run_id'],'expected_records_sha256':'0'*64,'provider_lanes':oldcase['provider_lanes'],'historical_s8_ref':cas.S8_TERMINAL_REF}
     seal_image_fixture(value,case)
     # PG column timestamps use +00:00; original Go wire retains Z.
     for row in r['forward_rows']+r['all_read_rows']:row['recorded_at']=row['recorded_at'].replace('Z','+00:00')
@@ -214,7 +214,7 @@ def live_image_operand():
 def terminal_image_operand():
     value,case=current_pre_read_operand();r=value['records'];a=r['forward_rows'][-1]['original_record']
     # A synthetic terminal of the historical31 epoch, independently of LIVE34.
-    a.update(schema='original_guest_partial_poweroff_forward_v1',actual_core_source=cas.OLD_SOURCE,original_intent_sha256='e'*64,original_generation=31,original_fence=54,preregistration_id=cas.PRE_READ_TARGET['preregistration_id'])
+    a.update(schema='original_guest_partial_poweroff_forward_v1',actual_core_source=cas.HISTORICAL_CORE6_SOURCE,original_intent_sha256='e'*64,original_generation=31,original_fence=54,preregistration_id=cas.PRE_READ_TARGET['preregistration_id'])
     tuple_=a['original']['Request']['intent']['tuple'];tuple_['profile']=tuple_.pop('profile_name');tuple_.update(slot=8,instance_checksum='1'*64,integration_type_id='20000000-0000-4000-8000-000000000010',type_checksum='2'*64,profile_checksum='3'*64)
     # Preserve actual admitted bytes and append an independent own absence pair.
     seal_image_fixture(value);admitted=r['forward_rows'][-1]
@@ -243,6 +243,121 @@ def terminal_image_operand():
     seal_image_fixture(value)
     target={'admission_id':a['id'],'record_sha256':tr['record_sha256'],'native_absence_sha256':returned['record_sha256'],'terminal_intent_sha256':terminal['terminal_intent_sha256'],'run_id':a['run_id'],'read_id':ident,'generation':a['generation'],'fence':a['fence']}
     return value,target
+
+def normal_finish_encoded(value):
+    # Deliberate spaces and insertion order retain a real JSON token domain;
+    # hashing a sorted/compact reconstruction cannot satisfy these operands.
+    return json.dumps(value,separators=(', ',': '),ensure_ascii=False).encode()
+
+
+def seal_normal_finish_fixture(value,case,update_expected=True):
+    """Declared SQL bytea shapes; request/journal hashes have distinct domains."""
+    r=value['records']
+    for row in r['retirement_requests']:
+        wire={'intent':row['intent_record'],'signature':'DECLARED preflight signature','nonce':''}
+        raw=normal_finish_encoded(wire)
+        row.update(wire_hex=raw.hex(),original_wire='\\x'+raw.hex(),intent_sha256=cas.sha(normal_finish_encoded(wire['intent'])))
+    for row in r['original_returns']:
+        raw=normal_finish_encoded(row['original_return_record'])
+        domain=raw if row['sequence']==1 else normal_finish_encoded(row['original_return_record']['record'])
+        row.update(wire_hex=raw.hex(),original_wire='\\x'+raw.hex(),return_sha256=cas.sha(domain))
+    for name,digest in (('caller_returns','return_sha256'),('native_poweroff_reads','observation_sha256')):
+        for row in r[name]:
+            raw=normal_finish_encoded(row['original_record'])
+            row.update(wire_hex=raw.hex(),original_wire='\\x'+raw.hex(),**{digest:cas.sha(raw)})
+    for row in r['create_grants']:row['grant_pgtext']=normal_finish_encoded(row['grant_record']).decode()
+    for row,key in [(w,'run_wire')for w in r['workflow_runs']]+[(j,'dispatch_wire')for j in r['owning_dispatch_jobs']]:
+        row[key]=normal_finish_encoded({k:v for k,v in row.items()if k!=key}).decode()
+    r['current_intent_pgtext']=normal_finish_encoded(r['current_intent']['intent']).decode()
+    value['records_wire']=normal_finish_encoded(r).decode();value['records_sha256']=cas.sha(value['records_wire'].encode())
+    if update_expected:case['expected_records_sha256']=value['records_sha256']
+
+
+def normal_finish_operand():
+    """Synthetic G37 normal200, failed OFF, zero DELETE; never Native evidence."""
+    old,oldcase=live_image_operand();old=old['records'];t=cas.NORMAL_FINISH_TARGET
+    policy=copy.deepcopy(old['active_policies'][0]);create=copy.deepcopy(old['create_grants'][0])
+    tuple_=copy.deepcopy(old['forward_rows'][0]['original_record']['original']['Request']['intent']['tuple'])
+    tuple_.update(slot=2,resource_id='i-08345e76daa5167db',resource_created_at='2026-11-10T14:59:09Z')
+    grant=create['grant_record'];grant['grant']['slot']=2
+    for record in (grant['settlement'],grant['settlement']['original_provider_create_return']):
+        record.update(resource_id=tuple_['resource_id'],resource_created_at=tuple_['resource_created_at'])
+    workflow='10000000-0000-4000-8000-000000000007';attempt='10000000-0000-4000-8000-000000000008'
+    deadline='2026-11-11T02:05:37Z'
+    preflight={'schema':'original_guest_production_retirement_intent_v2','request_id':t['retirement_request_id'],
+        'attempt_id':attempt,'preregistration_id':t['preregistration_id'],'workflow_id':workflow,'policy_id':policy['id'],
+        'generation':37,'fence':76,'lease_owner':t['lease_owner'],
+        'policy_checksum':policy['checksum'],'tuple':tuple_,'issued_at':'2026-11-11T02:05:07Z',
+        'original_deadline':deadline,'nonce_hash':''}
+    finalized=copy.deepcopy(preflight);finalized['nonce_hash']='7'*64
+    final_sha=cas.sha(normal_finish_encoded(finalized))
+    request={'id':t['retirement_request_id'],'preregistration_id':t['preregistration_id'],
+        'attempt_id':attempt,'intent_record':preflight,'original_deadline':deadline}
+    nonce={'schema':'original_core_guest_retirement_nonce_return_v2',
+        'preflight_sha256':cas.sha(normal_finish_encoded(preflight)),
+        'final_request':{'intent':finalized,'signature':'DECLARED finalized signature','nonce':''}}
+    returns=[dict(intent_id=request['id'],sequence=1,kind='production_clock_nonce_v2',original_return_record=nonce)]
+    kinds=('possible_start','quiescent','poweroff_possible_start','poweroff_command_returned')
+    for sequence,kind in enumerate(kinds,1):
+        record={'sequence':sequence,'kind':kind,'request_id':request['id'],'intent_sha256':final_sha,
+            'poweroff_command_returned':sequence==4,'writer_quiescence_evidence':sequence>=2,
+            'powered_off_observed':False}
+        observed={'record':record,'journal_complete':sequence==4,'hold_reasons':[],
+            'request_id':request['id'],'intent_sha256':final_sha}
+        returns.append(dict(intent_id=request['id'],sequence=sequence+1,
+            kind='production_retirement_v2:'+kind,original_return_record=observed))
+    caller={'intent_id':request['id'],'recorded_at':'2026-11-11T02:05:09Z','original_record':{
+        'request_id':request['id'],'attempt_id':attempt,'status':200,'body_persisted':True,
+        'preflight_failed':False,'do_failed':False,'read_failed':False,'close_failed':False,
+        'original_context_failed':False,'original_deadline':deadline,
+        'started_at':'2026-11-11T02:05:07Z','do_started_at':'2026-11-11T02:05:07.1Z',
+        'do_returned_at':'2026-11-11T02:05:08Z','read_returned_at':'2026-11-11T02:05:08.1Z',
+        'close_returned_at':'2026-11-11T02:05:08.2Z','driver_returned_at':'2026-11-11T02:05:08.3Z',
+        'body':base64.b64encode(normal_finish_encoded(returns[-1]['original_return_record'])).decode()}}
+    challenge={'schema':'original_core_guest_native_poweroff_read_challenge_v2',
+        'read_id':'10000000-0000-4000-8000-000000000090','intent_id':request['id'],
+        'intent_sha256':final_sha,'original_caller_sha256':cas.sha(normal_finish_encoded(caller['original_record'])),
+        'tuple':copy.deepcopy(tuple_),'mutation_binding_sha256':'6'*64,'adapter_source_commit':cas.A3_CREATOR,
+        'issued_at_core':'2026-11-11T02:05:09.4Z','original_deadline_core':'2026-11-11T02:05:14.4Z'}
+    prepared={'id':challenge['read_id'],'intent_id':request['id'],'recorded_at':'2026-11-11T02:05:09.4Z','original_record':challenge}
+    reply={'id':'10000000-0000-4000-8000-000000000091','intent_id':request['id'],
+        'recorded_at':'2026-11-11T02:05:10.21Z','original_native_join_wire':'\\x'+normal_finish_encoded(challenge).hex(),
+        'original_record':{'schema':'original_core_guest_native_poweroff_read_return_v2','challenge':copy.deepcopy(challenge),
+            'status':'observed','call_failed':True,'original_context_failed':False,
+            'started_at_core':'2026-11-11T02:05:09.4Z','original_returned_at_core':'2026-11-11T02:05:10.2Z'}}
+    steps=[{'id':'plan-original-guest','status':'succeeded','metadata':{'generation':37,'fencing_token':76,'lease_owner':t['lease_owner']}},
+        {'id':'retire-original-guest','status':'succeeded','metadata':{'request_id':request['id'],'intent_sha256':final_sha,'native_poweroff_known':False}},
+        {'id':'finish-original-retirement','status':'failed','metadata':{'original_guest_refusal_predicate':'original-guest-step-17'}}]
+    steps.extend({'id':name,'status':'skipped'}for name in ('provision-original-notify','complete-original-provision','refresh-original-membership','complete-original-retirement'))
+    job_id='10000000-0000-4000-8000-000000000092'
+    run={'id':t['run_id'],'status':'failed','finished_at':'2026-11-11T02:05:10.3Z',
+        'metadata':{'capacity_dispatch_job_id':job_id,'triggered_by':'workflow_scheduler'},'result':{'status':'failed','steps':steps}}
+    job={'id':job_id,'run_id':run['id'],'state':'returned','return_status':'failed',
+        'returned_at':run['finished_at'],'finalization_ack_at':'2026-11-11T02:05:10.4Z',
+        'envelope':normal_finish_encoded({'workflow':{'id':workflow}}).decode()}
+    intent={'policy_id':policy['id'],'policy_checksum':policy['checksum'],'generation':37,'fencing_token':76,
+        'phase':'draining','lease_owner':t['lease_owner'],'lease_executor_id':t['executor_id'],
+        'lease_expires_at':'2026-11-11T02:10:05Z','decision':{'units':1},'recovery_only':False,'floor_degraded':False}
+    records={'selected_runtime_source':cas.ROOT97_CURRENT_CORE_SOURCE,
+        'target':{k:t[k]for k in ('retirement_request_id','preregistration_id')},'current_intent':{'intent':intent},
+        'current_intent_pgtext':'','active_policies':[policy],'retirement_requests':[request],
+        'preregistrations':[{'id':t['preregistration_id'],'create_grant_id':create['id']}],
+        'create_grants':[create],'retirement_contexts':[{'intent_id':request['id'],'executor_id':t['executor_id'],
+            'core_actual_source_commit':cas.ROOT97_CURRENT_CORE_SOURCE,'original_context_deadline':deadline}],
+        'caller_returns':[caller],'original_returns':returns,'native_poweroff_reads':[prepared,reply],
+        'forward_rows':[],'forward_reads':[],'delete_bindings':[],'destroy_grants':[],
+        'workflow_runs':[run],'owning_dispatch_jobs':[job]}
+    lanes=copy.deepcopy(oldcase['provider_lanes'])
+    lanes['aws']['forward_markers']=lanes['aws']['pending_authority']=0
+    case={'schema':cas.NORMAL_FINISH_CASE_SCHEMA,'retirement_request_id':request['id'],
+        'preregistration_id':t['preregistration_id'],'current_runtime_source':cas.ROOT97_CURRENT_CORE_SOURCE,
+        'current_generation':37,'current_fencing_token':76,'current_lease_owner':t['lease_owner'],
+        'current_executor_id':t['executor_id'],'current_failed_run_id':t['run_id'],
+        'expected_records_sha256':'0'*64,'provider_lanes':lanes}
+    value={'observed_at_pg':'2026-11-11T02:11:00Z','records':records,'records_wire':'','records_sha256':''}
+    seal_normal_finish_fixture(value,case)
+    return value,case
+
 
 DECLARED_CHECK96='CHECK (declared_old_proof OR declared_pre_read_proof)'
 DECLARED_INVENTORY_MANIFEST={'schemaVersion':2,'mediaType':'application/vnd.oci.image.manifest.v1+json','config':{'mediaType':'application/vnd.oci.image.config.v1+json','size':12,'digest':'sha256:'+'4'*64},'layers':[{'mediaType':'application/vnd.oci.image.layer.v1.tar+gzip','size':12,'digest':'sha256:'+'5'*64}]}
@@ -288,7 +403,7 @@ def reader_operand(manifest=None):
     pod={'metadata':{'namespace':'dakasa','name':app+'-abc123-unit','uid':uid(3),'labels':labels,'ownerReferences':[{'controller':True,'kind':'ReplicaSet','name':app+'-abc123','uid':uid(4)}]},'spec':{'containers':[{'name':app,'image':image}]},'status':{'phase':'Running','conditions':[{'type':'Ready','status':'True'}],'containerStatuses':[{'name':app,'ready':True,'restartCount':0,'containerID':'containerd://'+'3'*64,'imageID':image,'state':{'running':{'startedAt':'2026-11-10T20:00:00Z'}}}]}}
     receipt={'schema':'root_aws_original_inventory_readonly_operational_acceptance_v1','reviewed_by_root':True,'status':'QUALIFIED_IMAGE_AND_DEPLOYMENT_VERIFIED','source':cas.INVENTORY_SOURCE,'amd64_D':cas.INVENTORY_DIGEST,'namespace':'dakasa','deployment_uid':uid(1),'service_uid':uid(2),'pod_uid':uid(3),'container_id':'containerd://'+'3'*64,'provider':'aws-original-inventory-readonly','version':'1.0.0','operation':'observe_original_profile_inventory','original_profile_source_commit':cas.A3_CREATOR,'original_refs':{'qualified_image':ref('image',DECLARED_INVENTORY_MANIFEST if manifest is None else manifest),'source_ci':ref('ci',b'DECLARED complete Source-CI boundary'),'deployment':ref('deployment',dep),'service':ref('service',svc),'pod':ref('pod',pod),'describe':ref('describe',inventory_description_wire()),'health':ref('health',b'readonly observer up')}}
     pair=ref('M7-return',b'DECLARED original normal M7 return')
-    core={'schema':'root_core_retirement_observer_operational_acceptance_v1','reviewed_by_root':True,'status':'QUALIFIED_IMAGE_AND_DEPLOYMENT_VERIFIED','source':cas.OLD_SOURCE,'amd64_D':cas.OLD_DIGEST,'process_replacement_ref':ref('Core6-process',b'DECLARED Core6 replacement original'),'native_observation_ref':ref('Core6-observe',b'DECLARED Core6 observation original'),'controller_pair_ref':pair,'qualified_image_and_deployment_verified':True}
+    core={'schema':'root_core_retirement_observer_operational_acceptance_v1','reviewed_by_root':True,'status':'QUALIFIED_IMAGE_AND_DEPLOYMENT_VERIFIED','source':cas.HISTORICAL_CORE6_SOURCE,'amd64_D':cas.ROOT96_HISTORICAL_AMD64_D,'process_replacement_ref':ref('Core6-process',b'DECLARED Core6 replacement original'),'native_observation_ref':ref('Core6-observe',b'DECLARED Core6 observation original'),'controller_pair_ref':pair,'qualified_image_and_deployment_verified':True}
     refs={role:ref(role,b'DECLARED independent historical/release original')for role in ('qualified_business_release','business_Source_CI','Root_Goose94_acceptance','Root_Goose95_acceptance','Root_Goose96_acceptance','Root_separate_rollout_review')}
     refs.update(current_Core6_operational_acceptance=ref('Core6-root9',core),inventory_readonly_operational_acceptance=ref('reader-root15',receipt))
     def read(path,*_):events.append(('read',str(path)));return bodies[Path(path)]
@@ -329,7 +444,7 @@ def acceptance_operand():
 
 class G15CoreCASTests(unittest.TestCase):
     def test_forced_unbound_and_runtime_config_ref_before_io(self):
-        for call in (cas.main,lambda:cas.maintenance_inputs(None),lambda:cas.database_pre_read96(None,None,None,None,'BEFORE'),lambda:cas.deployment_ready_inputs(None,None),lambda:cas.inventory_reader(None,None,None,'BEFORE',None),lambda:cas.g15_acceptance(None,None,None,None,None),lambda:cas.accepted_guardian(None,None),lambda:cas.patch_once(None,None,None,None,None,0)):
+        for call in (cas.main,lambda:cas.maintenance_inputs(None),lambda:cas.database_pre_read96(None,None,None,None,'BEFORE'),lambda:cas.database_normal_finish97(None,None,None,None,'BEFORE'),lambda:cas.deployment_ready_inputs(None,None),lambda:cas.inventory_reader(None,None,None,'BEFORE',None),lambda:cas.g15_acceptance(None,None,None,None,None),lambda:cas.accepted_guardian(None,None),lambda:cas.patch_once(None,None,None,None,None,0)):
             with self.subTest(call=repr(call)),patch.object(cas,'read')as read,patch.object(cas,'API')as api,patch.object(cas,'load_tools')as tools:
                 with self.assertRaises(cas.Hold):call()
                 read.assert_not_called();api.assert_not_called();tools.assert_not_called()
@@ -350,7 +465,7 @@ class G15CoreCASTests(unittest.TestCase):
 
     def test_current_core5_and_full_eight_operation_cas(self):
         # Historical method ID stays in the existing283 census; operands are
-        # the distinct current Core6/gen279 and future Core7 target.
+        # declared current Core7 lifetime and future Core8 target.
         with binding():
             d,p,C=core_operand();cas.core_before(d,p,C)
             for axis in ('source','uid','pod','container','image','generation','restart'):
@@ -409,6 +524,23 @@ class G15CoreCASTests(unittest.TestCase):
                 with patch.object(cas,'INVENTORY_DIGEST',cas.sha(cas.canonical(manifest))):
                     other,config,*tail=reader_operand(manifest);oldcore=tail[-1]
                     with self.subTest(reader_manifest=fault),patch.multiple(cas,ROOT_CORE6_SHA=config['acceptance_refs']['current_Core6_operational_acceptance']['sha256'],M7_RETURN_SHA=oldcore['controller_pair_ref']['sha256']),self.assertRaises(cas.Hold):cas.deployment_ready_inputs(other,config)
+            # Current Core7/M8 is a distinct normal97 predecessor; the old
+            # Core6/M7/Root96 fixture above retains its historical identity.
+            current=copy.deepcopy(core);current.update(source=cas.OLD_SOURCE,amd64_D=cas.OLD_DIGEST)
+            current['controller_pair_ref']=ref('M8-normal97',b'DECLARED full M8 original')
+            cfg=copy.deepcopy(c);cfg['schema']=cas.NORMAL_FINISH_SCHEMA
+            cfg['acceptance_refs']['current_Core7_operational_acceptance']=ref('Core7-root9',current)
+            cfg['acceptance_refs'].pop('current_Core6_operational_acceptance')
+            with patch.multiple(cas,ROOT_CORE7_SHA=cfg['acceptance_refs']['current_Core7_operational_acceptance']['sha256'],M8_RETURN_SHA=current['controller_pair_ref']['sha256']):
+                self.assertEqual(cas.deployment_ready_inputs(C,cfg),receipt)
+                for fault in ('old_source','old_digest','old_pair','historical_root96'):
+                    bad=copy.deepcopy(current);conf=copy.deepcopy(cfg)
+                    if fault=='old_source':bad['source']=cas.HISTORICAL_CORE6_SOURCE
+                    elif fault=='old_digest':bad['amd64_D']=cas.ROOT96_HISTORICAL_AMD64_D
+                    elif fault=='old_pair':bad['controller_pair_ref']=core['controller_pair_ref']
+                    else:bad['schema']='root_goose96_guest_retirement_pre_read_continuation_acceptance_v1'
+                    conf['acceptance_refs']['current_Core7_operational_acceptance']=ref('bad-Core7-'+fault,bad)
+                    with self.subTest(current_core7=fault),patch.object(cas,'ROOT_CORE7_SHA',conf['acceptance_refs']['current_Core7_operational_acceptance']['sha256']),self.assertRaises(cas.Hold):cas.deployment_ready_inputs(C,conf)
             self.assertEqual(cas.inventory_objects(receipt,dep,svc,pods),'10.43.1.2')
             config=copy.deepcopy(pods);config['items'][0]['status']['containerStatuses'][0]['imageID']='containerd://sha256:'+cas.INVENTORY_CONFIG_DIGEST
             self.assertEqual(cas.inventory_objects(receipt,dep,svc,config),'10.43.1.2')
@@ -641,6 +773,141 @@ class G15CoreCASTests(unittest.TestCase):
                     continue
                 seal_image_fixture(v)
                 with self.subTest(historical_terminal=fault),self.assertRaises(cas.Hold):cas.validate_terminal_s8(v)
+        # A normal200 finish failure has no LIVE marker or prior DELETE. The
+        # original nonce/four journal records and failed native OFF remain
+        # whole originals, with their distinct raw-token digest domains.
+        normal,normalcase=normal_finish_operand();nr=normal['records']
+        self.assertEqual(len(nr),18);self.assertEqual(len(normalcase),11)
+        self.assertEqual(len(nr['original_returns']),5)
+        self.assertEqual(nr['caller_returns'][0]['original_record']['status'],200)
+        self.assertTrue(nr['native_poweroff_reads'][-1]['original_record']['call_failed'])
+        self.assertNotIn('plan',nr['native_poweroff_reads'][-1]['original_record'])
+        self.assertNotIn('retirement_forward',nr['current_intent']['intent'])
+        self.assertEqual(nr['delete_bindings'],[])
+        self.assertTrue(cas.validate_normal_finish97(normal,normalcase))
+        nonce=nr['original_returns'][0]['original_return_record']
+        preflight_raw=normal_finish_encoded(nr['retirement_requests'][0]['intent_record'])
+        final_raw=normal_finish_encoded(nonce['final_request']['intent'])
+        self.assertNotEqual(cas.sha(preflight_raw),cas.sha(final_raw))
+        self.assertNotEqual(cas.sha(final_raw),cas.sha(cas.canonical(nonce['final_request']['intent'])))
+        self.assertEqual(cas.raw_json_member(bytes.fromhex(nr['original_returns'][0]['wire_hex']),'final_request'),normal_finish_encoded(nonce['final_request']))
+        for row in nr['original_returns'][1:]:
+            self.assertNotEqual(row['return_sha256'],cas.sha(bytes.fromhex(row['wire_hex'])))
+        with self.assertRaises(cas.Hold):cas.validate_current_live(normal,normalcase)
+        with self.assertRaises(cas.Hold):cas.validate_pre_read96(normal,normalcase)
+        faults=('extra_case','old_source','old_generation','wrong_fence','wrong_owner','wrong_executor','wrong_run',
+            'foreign_target','extra_records','live_lease','live_context','new_marker','recovery_only','floor_degraded',
+            'foreign_policy','missing_ack','ambiguous_ack','running_owner','wrong_envelope','retire_failed','finish_succeeded',
+            'partial_caller','late_caller','caller_context_failed','caller_body_not_persisted','journal_incomplete','missing_journal','wrong_journal_kind',
+            'wrong_nonce','final_nonce_not_redacted','wrong_final_owner','wrong_final_tuple','wrong_context_executor','wrong_context_source','missing_off','open_off','foreign_off_tuple','wrong_off_adapter','wrong_off_caller',
+            'off_not_failed','off_context_failed','off_plan','off_null_plan','late_off','renewed_off_clock','unknown_off_status',
+            'prior_delete','prior_destroy','create_sdk_failed','preflight_hash_alias','journal_whole_hash_alias',
+            'final_intent_reencoded_hash','bytea_base64_alias','native_join_foreign','wire_hash','expected_hash')
+        for fault in faults:
+            v,c=copy.deepcopy(normal),copy.deepcopy(normalcase);r=v['records']
+            current=r['current_intent']['intent'];caller=r['caller_returns'][0]['original_record']
+            challenge=r['native_poweroff_reads'][0]['original_record'];reply=r['native_poweroff_reads'][-1]['original_record']
+            steps={x['id']:x for x in r['workflow_runs'][0]['result']['steps']}
+            if fault=='extra_case':c['admission_id']=cas.LIVE_TARGET['admission_id']
+            elif fault=='old_source':c['current_runtime_source']=r['selected_runtime_source']=cas.HISTORICAL_CORE6_SOURCE
+            elif fault=='old_generation':c['current_generation']=current['generation']=34
+            elif fault=='wrong_fence':current['fencing_token']=70
+            elif fault=='wrong_owner':current['lease_owner']=cas.LIVE_TARGET['lease_owner']
+            elif fault=='wrong_executor':c['current_executor_id']=cas.LIVE_TARGET['executor_id']
+            elif fault=='wrong_run':r['workflow_runs'][0]['id']=cas.LIVE_TARGET['run_id']
+            elif fault=='foreign_target':r['target']['retirement_request_id']=cas.LIVE_TARGET['retirement_request_id']
+            elif fault=='extra_records':r['own_read_count']=0
+            elif fault=='live_lease':current['lease_expires_at']='2026-11-11T02:12:00Z'
+            elif fault=='live_context':r['retirement_contexts'][0]['original_context_deadline']='2026-11-11T02:12:00Z'
+            elif fault=='new_marker':current['retirement_forward']={'mode':'live','id':cas.LIVE_TARGET['admission_id']}
+            elif fault=='recovery_only':current['recovery_only']=True
+            elif fault=='floor_degraded':current['floor_degraded']=True
+            elif fault=='foreign_policy':r['active_policies'].append(copy.deepcopy(r['active_policies'][0]))
+            elif fault=='missing_ack':r['owning_dispatch_jobs'][0]['finalization_ack_at']=None
+            elif fault=='ambiguous_ack':r['owning_dispatch_jobs'].append(copy.deepcopy(r['owning_dispatch_jobs'][0]))
+            elif fault=='running_owner':r['workflow_runs'][0]['status']='running'
+            elif fault=='wrong_envelope':r['owning_dispatch_jobs'][0]['envelope']='{"workflow":{"id":"foreign"}}'
+            elif fault=='retire_failed':steps['retire-original-guest']['status']='failed'
+            elif fault=='finish_succeeded':steps['finish-original-retirement']['status']='succeeded'
+            elif fault=='partial_caller':caller['status']=500
+            elif fault=='late_caller':caller['driver_returned_at']=caller['original_deadline']
+            elif fault=='caller_context_failed':caller['original_context_failed']=True
+            elif fault=='caller_body_not_persisted':caller['body_persisted']=False
+            elif fault=='journal_incomplete':r['original_returns'][-1]['original_return_record']['journal_complete']=False
+            elif fault=='missing_journal':r['original_returns'].pop(2)
+            elif fault=='wrong_journal_kind':r['original_returns'][1]['kind']='production_retirement_v2:accepted'
+            elif fault=='wrong_nonce':r['original_returns'][0]['original_return_record']['preflight_sha256']='f'*64
+            elif fault=='final_nonce_not_redacted':r['original_returns'][0]['original_return_record']['final_request']['nonce']='not redacted'
+            elif fault=='wrong_final_owner':r['original_returns'][0]['original_return_record']['final_request']['intent']['lease_owner']=cas.LIVE_TARGET['lease_owner']
+            elif fault=='wrong_final_tuple':r['original_returns'][0]['original_return_record']['final_request']['intent']['tuple']['slot']=3
+            elif fault=='wrong_context_executor':r['retirement_contexts'][0]['executor_id']=cas.LIVE_TARGET['executor_id']
+            elif fault=='wrong_context_source':r['retirement_contexts'][0]['core_actual_source_commit']=cas.HISTORICAL_CORE6_SOURCE
+            elif fault=='missing_off':r['native_poweroff_reads']=[]
+            elif fault=='open_off':r['native_poweroff_reads'].pop()
+            elif fault=='foreign_off_tuple':challenge['tuple']['resource_id']='i-fffffffffffffffff'
+            elif fault=='wrong_off_adapter':challenge['adapter_source_commit']='f'*40
+            elif fault=='wrong_off_caller':challenge['original_caller_sha256']='f'*64
+            elif fault=='off_not_failed':reply['call_failed']=False
+            elif fault=='off_context_failed':reply['original_context_failed']=True
+            elif fault=='off_plan':reply['plan']={'server':{'status':'stopped'}}
+            elif fault=='off_null_plan':reply['plan']=None
+            elif fault=='late_off':reply['original_returned_at_core']=challenge['original_deadline_core']
+            elif fault=='renewed_off_clock':challenge['original_deadline_core']='2026-11-11T02:05:19.4Z'
+            elif fault=='unknown_off_status':reply['status']='unknown'
+            elif fault=='prior_delete':r['delete_bindings']=[{'intent_id':c['retirement_request_id']}]
+            elif fault=='prior_destroy':r['destroy_grants']=[{'id':'declared earlier DELETE'}]
+            elif fault=='create_sdk_failed':r['create_grants'][0]['grant_record']['settlement']['original_provider_create_return']['response_status']=500
+            seal_normal_finish_fixture(v,c)
+            if fault=='preflight_hash_alias':r['retirement_requests'][0]['intent_sha256']=cas.sha(bytes.fromhex(r['retirement_requests'][0]['wire_hex']))
+            elif fault=='journal_whole_hash_alias':r['original_returns'][1]['return_sha256']=cas.sha(bytes.fromhex(r['original_returns'][1]['wire_hex']))
+            elif fault=='final_intent_reencoded_hash':challenge['intent_sha256']=cas.sha(cas.canonical(nonce['final_request']['intent']));seal_normal_finish_fixture(v,c)
+            elif fault=='bytea_base64_alias':r['caller_returns'][0]['original_wire']=base64.b64encode(bytes.fromhex(r['caller_returns'][0]['wire_hex'])).decode()
+            elif fault=='native_join_foreign':r['native_poweroff_reads'][-1]['original_native_join_wire']='\\x7b7d'
+            elif fault=='wire_hash':r['native_poweroff_reads'][-1]['observation_sha256']='f'*64
+            v['records_wire']=normal_finish_encoded(r).decode();v['records_sha256']=cas.sha(v['records_wire'].encode());c['expected_records_sha256']=v['records_sha256']
+            if fault=='expected_hash':c['expected_records_sha256']='f'*64
+            with self.subTest(normal_finish=fault),self.assertRaises(cas.Hold):cas.validate_normal_finish97(v,c)
+        # Rehashing a self-consistent newer frame never replaces the reviewed
+        # whole preimage. The real admission path checks both providers and97.
+        with binding():
+            full={provider:{**copy.deepcopy(normalcase['provider_lanes'][provider]),
+                'intent_identity':{'declared':provider},'owned_slots':[{'slot':1,'retained':True}],
+                'active_policies':[{'declared':provider}],'policy_catalog_wire':'DECLARED unchanged '+provider}
+                for provider in ('aws','hetzner')}
+            saved=cas.canonical(normal);legacy=b'DECLARED existing catalog SQL'
+            refs={'/declared/normal-preimage':saved,'/declared/catalog97':legacy}
+            C=types.SimpleNamespace(read=lambda path,*args:refs[str(path)],digest=cas.digest_value)
+            config={'schema':cas.NORMAL_FINISH_SCHEMA,'normal_finish_case':copy.deepcopy(normalcase),
+                'policy_state':{p:{k:copy.deepcopy(full[p][k])for k in ('intent_identity','owned_slots','active_policies','policy_catalog_wire')}for p in full},
+                'normal_finish_preimage_ref':{'path':'/declared/normal-preimage','sha256':cas.sha(saved)},
+                'legacy_catalog_sql_ref':{'path':'/declared/catalog97','sha256':cas.sha(legacy)}}
+            self.assertTrue(cas.validate_maintenance_scenario(config,C))
+            sql={'queries':{'original_notify_aws_vm_members':'DECLARED AWS97','original_notify_hetzner_vm_members':'DECLARED HZ97'}}
+            for fault in ('none','foreign_roster','busy_job','busy_run','open_forward_read','live_canary','forward_marker','pending_authority','boolean_count','boolean_marker','boolean_pending','boolean_busy','changed_original_presend'):
+                observed=copy.deepcopy(normal);cfg=copy.deepcopy(config);aws=copy.deepcopy(full['aws']);calls=[]
+                if fault=='foreign_roster':aws['owned_slots'].append({'slot':2,'foreign':True})
+                elif fault in ('busy_job','busy_run','open_forward_read','live_canary','forward_marker','pending_authority'):
+                    key={'busy_job':'jobs_busy','busy_run':'runs_busy','open_forward_read':'forward_unreturned_reads','live_canary':'live_unreturned_canaries','forward_marker':'forward_markers','pending_authority':'pending_authority'}[fault];aws[key]=cfg['normal_finish_case']['provider_lanes']['aws'][key]=1
+                elif fault in ('boolean_count','boolean_marker','boolean_pending','boolean_busy'):
+                    key={'boolean_count':'intent_count','boolean_marker':'forward_markers','boolean_pending':'pending_authority','boolean_busy':'jobs_busy'}[fault]
+                    aws[key]=cfg['normal_finish_case']['provider_lanes']['aws'][key]=key=='intent_count'
+                elif fault=='changed_original_presend':observed['records']['current_intent']['updated_at']='2026-11-11T02:10:59Z';seal_normal_finish_fixture(observed,cfg['normal_finish_case'])
+                def query(cut,run,label,text):
+                    calls.append(text)
+                    if text==sql['queries']['original_notify_aws_vm_members']:return aws
+                    if text==sql['queries']['original_notify_hetzner_vm_members']:return full['hetzner']
+                    if text==cas.NORMAL_FINISH_SQL:return observed
+                    if text=='DECLARED catalog97 SELECT':return {'declared':'catalog97 returned'}
+                    raise AssertionError('query outside existing normal97 admission stages')
+                with self.subTest(normal_database_admission=fault),patch.object(cas,'query',side_effect=query),patch.object(cas,'catalog97_select',return_value='DECLARED catalog97 SELECT'),patch.object(cas,'schema97_facts')as schema:
+                    invoke=lambda:cas.database_normal_finish97(types.SimpleNamespace(C=C),Path('/declared/run'),cfg,sql,'PRESEND')
+                    if fault=='none':self.assertEqual(invoke(),normalcase['provider_lanes']);schema.assert_called_once();self.assertEqual(len(calls),5)
+                    else:
+                        with self.assertRaises(cas.Hold):invoke()
+                        schema.assert_not_called()
+        self.assertIn("'native_poweroff_reads'",cas.NORMAL_FINISH_SQL)
+        self.assertIn("'original_returns'",cas.NORMAL_FINISH_SQL)
+        self.assertNotIn("kind='absence'",cas.NORMAL_FINISH_SQL)
         # Metadata remains one exact8-op image CAS. Standalone Source need not
         # equal the independently-qualified network package, or reroll it.
         module=ast.parse(PATH.read_bytes())
@@ -651,7 +918,7 @@ class G15CoreCASTests(unittest.TestCase):
         self.assertIn("'all_read_rows'",cas.CURRENT_LIVE_SQL)
         self.assertNotIn("kind='absence'",cas.CURRENT_LIVE_SQL)
         with binding():
-            self.assertEqual(cas.global_marker(types.SimpleNamespace(NEW_DIGEST='d'*64)).name,'CORE-IMAGE-R6-045-D85BE-TO-'+cas.CORE_R+'-'+'d'*64+'-POSSIBLE.json')
+            self.assertEqual(cas.global_marker(types.SimpleNamespace(NEW_DIGEST='d'*64)).name,'CORE-IMAGE-R7-210-D311-TO-'+cas.CORE_R+'-'+'d'*64+'-POSSIBLE.json')
 
     def test_normal_g15_full120_own15_fresh15_and_once_markers(self):
         with binding():
@@ -676,7 +943,7 @@ class G15CoreCASTests(unittest.TestCase):
         class API:
             def request(self,method,uri,body=None):events.append((method,uri));return 200,b'{}',{}
         with binding(),patch.object(cas.time,'monotonic',return_value=100):
-            self.assertIn('CORE-IMAGE-R6-045-D85BE-TO-',str(cas.global_marker(C)))
+            self.assertIn('CORE-IMAGE-R7-210-D311-TO-',str(cas.global_marker(C)))
             self.assertNotIn('R5-33A-D35195',str(cas.global_marker(C)))
             cas.patch_once(API(),C,Path('/declared/run'),b'[]',{},99)
             self.assertEqual([x[0]for x in events],['durable','durable','PATCH','durable','durable'])
@@ -764,3 +1031,153 @@ class G15CoreCASTests(unittest.TestCase):
         for name in ('API','operation_lock','read','api_read','result_shape','query','workflow_busy_logical_index92_sql','catalog_sql','catalog_projection','catalog_select','catalog94_projection','catalog94_select','patch_once','validated_config_ref','require_bound','utc'):self.assertEqual(a[name],b[name],name)
         self.assertIn("statement_timeout='3s'",b['query']);self.assertIn("lock_timeout='500ms'",b['query']);self.assertIn('timeout=8',b['query'])
         self.assertIn("'b80ec307962a67b8a28722c8fbf88add02c25de08847253fbae7838de1c0153d'",b['root96_overlay']);self.assertNotIn('Root_Goose95_acceptance',b['root96_overlay'])
+        # M97 changes only the active guard, adds its proof validator and two
+        # CHECKs. Its before96 corpus and Root96 remain separate old custody.
+        self.assertEqual(cas.M97,'b90086284a3a9230ed7fb19e2348b8ca785f6172b819e1a08fc28d6e5c8d550f')
+        self.assertEqual(set(cas.M97_FUNCTION_BODY_SHAS),set(cas.M97_FUNCTIONS))
+        declared_sql=("-- +goose Up\nCREATE OR REPLACE FUNCTION public.retirement_forward_normal_finish_recovery_valid(r jsonb, retirement uuid) RETURNS boolean\n"
+            "LANGUAGE plpgsql STABLE SET timezone='UTC' AS $$\nBEGIN RETURN true; END\n$$;\n"
+            "CREATE OR REPLACE FUNCTION public.guard_retirement_forward() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN RETURN NEW; END\n$$;\n-- +goose Down\n")
+        with patch.object(cas,'M97',cas.sha(declared_sql.encode())):
+            functions=cas.migration97_functions(declared_sql)
+            self.assertEqual(set(functions),set(cas.M97_FUNCTIONS))
+            for fault in ('whole_hash','missing_function','duplicate_function'):
+                bad=declared_sql+'-- changed'if fault=='whole_hash'else declared_sql.replace('CREATE OR REPLACE FUNCTION public.guard_retirement_forward()', 'CREATE OR REPLACE FUNCTION public.foreign_guard()')if fault=='missing_function'else declared_sql.split('-- +goose Down')[0]+declared_sql
+                with self.subTest(migration97=fault),self.assertRaises(cas.Hold):cas.migration97_functions(bad)
+        def function_row(name,body,arguments='',result='trigger',volatility='v',config=None,language='plpgsql'):
+            return dict(name=name,arguments=arguments,result=result,language=language,volatility=volatility,config=config,body=body,definition='DECLARED PG HEADER '+body+' DECLARED PG TAIL')
+        retained=[function_row('guard_retirement_forward','DECLARED prior96 active guard'),
+            function_row('retirement_forward_continuation_valid','DECLARED retained96 continuation','r jsonb, retirement uuid','boolean','s',['TimeZone=UTC']),
+            function_row('retirement_forward_continuation_quiet','DECLARED retained96 quiet','r jsonb, retirement uuid','boolean','s',['TimeZone=UTC'])]
+        before96=copy.deepcopy(prior);before96['functions93']=retained
+        before96['catalog90']['constraints']=[{'table':'capacity_guest_retirement_forwards','name':'retirement_forward_continuation96','validated':True,'definition':DECLARED_CHECK96},
+            {'table':'capacity_guest_retirement_forwards','name':'retirement_forward_mode93','validated':True,'definition':'CHECK (declared_modes93)'}]
+        after97=copy.deepcopy(before96)
+        for name in cas.M97_FUNCTIONS:
+            row=function_row(name,**functions[name])
+            if name=='guard_retirement_forward':after97['functions93'][0]=row
+            else:after97['functions93'].append(row)
+        after97['functions93'].sort(key=lambda x:x['name'])
+        after97['catalog90']['constraints'][1].update(name='retirement_forward_mode97',definition='CHECK (declared_modes97)')
+        after97['catalog90']['constraints'].append({'table':'capacity_guest_retirement_forwards','name':'retirement_forward_normal_finish97','validated':True,'definition':'CHECK (declared_normal_finish97)'})
+        after97['catalog90']['constraints'].sort(key=lambda x:(x['table'],x['name']))
+        def pg_view(catalog,major):
+            return {'server_version_num':major*10000,'functions':{x['name']:x['definition']for x in catalog['functions93']},
+                'constraints':[{k:x[k]for k in ('name','validated','definition')}for x in catalog['catalog90']['constraints']]}
+        def carrier_for(before,after,major=16,artifact_fault=None):
+            saved={};carrier={}
+            artifact={'schema':'normal_finish_recovery_schema97_pg_catalog_v1','source_commit':'a'*40,
+                'postgres_major':major,'fixture_only':True,'native_authority':False,'migration97_sha256':cas.M97,
+                'old_continuation_functions_unchanged':True,'old_continuation_constraints_unchanged':True,
+                'old_mode93_absent':True,'new_mode97_and_normal_finish97_validated':True}
+            for key,view in (('before96_ref',before),('after97_ref',after)):
+                raw=cas.canonical(view);path='/declared/local-copy/'+key;saved[path]=raw
+                carrier[key]={'path':path,'sha256':cas.sha(raw)}
+                artifact[key]={'path':'/declared/CI-canonical/'+key,'sha256':cas.sha(raw),'bytes':len(raw)}
+            if artifact_fault:artifact_fault(artifact)
+            raw=cas.canonical(artifact);saved['/declared/CI-artifact']=raw
+            carrier['artifact_ref']={'path':'/declared/CI-artifact','sha256':cas.sha(raw)}
+            def read(ref):
+                raw=saved[ref['path']];self.assertEqual(cas.sha(raw),ref['sha256']);return raw
+            return carrier,read
+        for major in (16,17):
+            before,after=pg_view(before96,major),pg_view(after97,major)
+            carrier,reader=carrier_for(before,after,major)
+            definitions=cas.constraint97_definitions(before96,carrier,reader,'a'*40)
+            self.assertEqual(cas.catalog97_delta(before96,after97,functions,definitions),after97)
+        for fault in ('prior_function_changed','retained_function_changed','extra_function','old_mode_retained','missing_check','unvalidated','foreign_constraint','server_changed','artifact_native','artifact_false','artifact_wrong_source','artifact_wrong_migration','artifact_wrong_size'):
+            before,after=pg_view(before96,16),pg_view(after97,16);alter=None
+            if fault=='prior_function_changed':before['functions']['guard_retirement_forward']+=' foreign'
+            elif fault=='retained_function_changed':after['functions']['retirement_forward_continuation_quiet']+=' foreign'
+            elif fault=='extra_function':after['functions']['unreviewed_function']='foreign'
+            elif fault=='old_mode_retained':after['constraints'].append(copy.deepcopy(before['constraints'][-1]))
+            elif fault=='missing_check':after['constraints'].pop()
+            elif fault=='unvalidated':after['constraints'][0]['validated']=False
+            elif fault=='foreign_constraint':after['constraints'][0]['definition']='CHECK (true)'
+            elif fault=='server_changed':after['server_version_num']=170000
+            elif fault=='artifact_native':alter=lambda a:a.update(native_authority=True)
+            elif fault=='artifact_false':alter=lambda a:a.update(old_continuation_functions_unchanged=False)
+            elif fault=='artifact_wrong_source':alter=lambda a:a.update(source_commit='b'*40)
+            elif fault=='artifact_wrong_migration':alter=lambda a:a.update(migration97_sha256='f'*64)
+            else:alter=lambda a:a['after97_ref'].update(bytes=a['after97_ref']['bytes']+1)
+            carrier,reader=carrier_for(before,after,artifact_fault=alter)
+            with self.subTest(catalog97_originals=fault),self.assertRaises(cas.Hold):cas.constraint97_definitions(before96,carrier,reader,'a'*40)
+        for fault in ('other_column','old_function','new_body','signature','other_constraint','index','extra_function'):
+            bad=copy.deepcopy(after97)
+            if fault=='other_column':bad['columns90_91'].append({'unreviewed':True})
+            elif fault=='old_function':next(x for x in bad['functions93']if x['name']=='retirement_forward_continuation_valid')['body']+=' foreign'
+            elif fault=='new_body':next(x for x in bad['functions93']if x['name']=='retirement_forward_normal_finish_recovery_valid')['body']+=' foreign'
+            elif fault=='signature':next(x for x in bad['functions93']if x['name']=='guard_retirement_forward')['arguments']='foreign'
+            elif fault=='other_constraint':bad['catalog90']['constraints'][0]['definition']='CHECK (true)'
+            elif fault=='index':bad['index92_definition']='foreign'
+            else:bad['functions93'].append(function_row('foreign','extra function'))
+            with self.subTest(catalog97_delta=fault),self.assertRaises(cas.Hold):cas.catalog97_delta(before96,bad,functions,definitions)
+        # A new Root97 cannot relabel historical96 or accept missing originals.
+        root96_raw=cas.canonical(root96)
+        pins97={'current_ops_source':'d'*40,'business_source':'e'*40,'amd64_D':'f'*64,
+            'complete_history_sha256':'1'*64,'prior96_history_sha256':root96['complete_history_sha256'],
+            'catalog97_sha256':'2'*64,'index92_definition_sha256':root96['index92_definition_sha256'],'catalog90_91_sha256':'3'*64}
+        root97={'schema':'root_goose97_normal_finish_recovery_acceptance_v1','reviewed_by_root':True,
+            'schema_before':96,'schema_after':97,'current_core_source':cas.ROOT97_CURRENT_CORE_SOURCE,
+            'current_ops_source':pins97['current_ops_source'],'business_source':pins97['business_source'],'amd64_D':pins97['amd64_D'],
+            'migration97_sha256':cas.M97,**{k:pins97[k]for k in ('complete_history_sha256','prior96_history_sha256','catalog97_sha256','index92_definition_sha256','catalog90_91_sha256')},
+            'job_uid':'40000000-0000-4000-8000-000000000001','pod_uid':'40000000-0000-4000-8000-000000000002',
+            'exit_code':0,'single_job_create':True,'provider_guest_core_mutations':0,'old_records_and_sdk_preserved':True,
+            'original_refs':{role:original('Root97-'+role)for role in ('migration_result','before_catalog','after_catalog','source_ci','qualified_image')}}
+        with patch.object(cas,'ROOT96_SHA',cas.sha(root96_raw)):
+            self.assertEqual(cas.root97_overlay(cas.canonical(root97),root96_raw,pins97,read_ref),root97)
+            for fault in ('historical_source_alias','wrong_business_source','wrong_ops','wrong_digest','not_reviewed','provider_mutation','missing_role','duplicate_role','wrong_prior96','boolean_exit'):
+                bad=copy.deepcopy(root97)
+                if fault=='historical_source_alias':bad['current_core_source']=cas.HISTORICAL_CORE6_SOURCE
+                elif fault=='wrong_business_source':bad['business_source']=cas.HISTORICAL_CORE6_SOURCE
+                elif fault=='wrong_ops':bad['current_ops_source']=cas.ROOT96_HISTORICAL_OPS_SOURCE
+                elif fault=='wrong_digest':bad['amd64_D']=cas.ROOT96_HISTORICAL_AMD64_D
+                elif fault=='not_reviewed':bad['reviewed_by_root']=False
+                elif fault=='provider_mutation':bad['provider_guest_core_mutations']=1
+                elif fault=='missing_role':bad['original_refs'].pop('after_catalog')
+                elif fault=='duplicate_role':bad['original_refs']['after_catalog']=bad['original_refs']['before_catalog']
+                elif fault=='wrong_prior96':bad['prior96_history_sha256']='f'*64
+                else:bad['exit_code']=False
+                with self.subTest(root97=fault),self.assertRaises(cas.Hold):cas.root97_overlay(cas.canonical(bad),root96_raw,pins97,read_ref)
+        # Post-CAS reads may observe a progressed G37. They authenticate the
+        # saved normal cfg and query only current catalog/history, never a
+        # second G37/preimage/roster or business-ledger equality snapshot.
+        postpath=ROOT/'rollout/post_core_inventory_schema97_readonly.py'
+        post=types.ModuleType('declared_post97_CI');post.__file__=str(postpath)
+        exec(compile(postpath.read_bytes(),str(postpath),'exec'),post.__dict__)
+        normal,case=normal_finish_operand();saved={};events=[]
+        cfg={'schema':cas.NORMAL_FINISH_SCHEMA,'normal_finish_case':case}
+        for name in ('prior93_history_ref','prior94_history_ref','prior95_history_ref','prior96_history_ref',
+            'schema94_catalog_ref','schema95_catalog_ref','schema96_catalog_ref','schema97_catalog_ref','legacy_catalog_sql_ref'):
+            raw=b'BEGIN TRANSACTION READ ONLY;\nSELECT jsonb_build_object(\'declared_catalog\',true);\nCOMMIT;'if name=='legacy_catalog_sql_ref'else cas.canonical({'declared_original':name})
+            path='/declared/post97/'+name;saved[path]=raw;cfg[name]={'path':path,'sha256':cas.sha(raw)}
+        refs={name:{'path':'/declared/post97/Root'+str(version),'sha256':str(version//10)*64}
+            for name,version in (('ROOT94_REF',94),('ROOT95_REF',95),('ROOT96_REF',96),('ROOT97_REF',97))}
+        cfg['acceptance_refs']={role:refs[name]for role,name in (
+            ('Root_Goose94_acceptance','ROOT94_REF'),('Root_Goose95_acceptance','ROOT95_REF'),
+            ('Root_Goose96_acceptance','ROOT96_REF'),('Root_Goose97_acceptance','ROOT97_REF'))}
+        actual={'legacy':{'complete_history_wire':'DECLARED complete97 wire'},
+            'supplement':{'index92_valid':True,'index92_definition':'DECLARED preserved index'}}
+        C=types.SimpleNamespace(read=lambda path,*args:saved[str(path)],digest=cas.digest_value,
+            wire=cas.canonical,sha=cas.sha,once=lambda path,raw:events.append(('once',str(path),raw)))
+        def catalog_query(cut,run,label,text):
+            events.append(('query',label,text))
+            self.assertEqual(label,'CURRENT-STABLE-SCHEMA97-CATALOG-AND-HISTORY')
+            self.assertNotIn(post.BUSINESS_LEDGER_PROJECTION,text)
+            self.assertIn('public.goose_db_version',text)
+            self.assertIn('retirement_forward_normal_finish_recovery_valid',text)
+            for table in ('capacity_intents','capacity_vm_slots','manifests','capacity_guest_retirement_forwards',
+                'capacity_guest_retirement_forward_reads','capacity_dispatch_http_maintenance_dispositions'):
+                self.assertNotIn('FROM public.'+table+' ',text)
+            self.assertNotIn(cas.NORMAL_FINISH_SQL,text)
+            return {'catalog':actual,'index89_valid':True,'rows92':1,'history_max_version':97}
+        with (patch.multiple(post,**refs,LEGACY_CATALOG_SHA=cfg['legacy_catalog_sql_ref']['sha256']),
+            patch.object(cas,'LEGACY_CATALOG_SHA',cfg['legacy_catalog_sql_ref']['sha256']),
+            patch.object(cas,'maintenance_inputs',return_value=(cfg,b'DECLARED saved cfg18',{}))as admission,
+            patch.object(cas,'query',side_effect=catalog_query),patch.object(cas,'schema97_facts')as facts,
+            patch.object(cas,'catalog94_projection',return_value={'declared_catalog97':True})):
+            result=post.schema97(cas,C,types.SimpleNamespace(),Path('/declared/post97/run'),cfg)
+            admission.assert_called_once_with(C);facts.assert_called_once()
+            self.assertEqual(result['schema_version'],97)
+            self.assertFalse(result['business_ledger_rows_compared']);self.assertFalse(result['business_ledger_rows_queried'])
+            self.assertEqual([event[0]for event in events],['query','once'])

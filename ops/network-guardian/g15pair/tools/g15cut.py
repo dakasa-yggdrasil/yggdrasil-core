@@ -24,7 +24,7 @@ import threading
 import time
 
 
-PROPOSAL_BOUND = True
+PROPOSAL_BOUND = False
 
 def sibling(name):
     if PROPOSAL_BOUND is not True:
@@ -333,7 +333,7 @@ def core_overlap():
     pods = native(KUBE + ['-n', 'dakasa', 'get', 'pods', '-l', 'app=yggdrasil', '-o', 'json'], 12)
     C.need(dep.returncode == pods.returncode == 0, 'CORE_READONLY_CENSUS_ZERO')
     d, ps = C.loads(dep.stdout), C.loads(pods.stdout)['items']
-    C.need(C.OLD_DIGEST == '85be238c7f5b15760f7eb903646cc48f6b4b86a6995d0a4727a1ba0d86d06876', 'EXACT_CURRENT_R6_OVERLAP_DIGEST')
+    C.need(C.OLD_DIGEST == '311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce', 'EXACT_CURRENT_R7_OVERLAP_DIGEST')
     image = C.IMAGE_PREFIX + C.OLD_DIGEST
     C.need(d['metadata']['uid'] == C.OLD_CORE_UID and d['metadata'].get('annotations', {}).get('dakasa.io/core-source-commit') == C.OLD_CORE_SOURCE
            and d['metadata']['generation'] == C.OLD_CORE_GENERATION and not d['metadata'].get('deletionTimestamp')
@@ -345,7 +345,7 @@ def core_overlap():
     C.need(p['metadata']['uid'] == C.OLD_CORE_POD_UID and p['metadata'].get('deletionTimestamp') is None and p['status']['phase'] == 'Running' and [(x['name'], x['image']) for x in p['spec']['containers']] == [('core', image)]
            and len(p['status']['containerStatuses']) == 1, 'ONE_CURRENT_OVERLAP_CORE_CONTAINER')
     s = p['status']['containerStatuses'][0]
-    C.need(s['name'] == 'core' and s['ready'] is True and s['restartCount'] == 0 and s.get('state', {}).get('running') and s['imageID'].rsplit(':', 1)[-1] == C.OLD_DIGEST, 'EXACT_OVERLAP_AMD64_IMAGEID_ZERO_RESTART')
+    C.need(s['name'] == 'core' and s['ready'] is True and s['restartCount'] == 0 and s.get('state', {}).get('running') and s['imageID'].rsplit(':', 1)[-1] == C.OLD_DIGEST and s['containerID'] == C.OLD_CORE_CONTAINER_ID, 'EXACT_OVERLAP_AMD64_IMAGEID_ZERO_RESTART')
     return {'deployment_uid': d['metadata']['uid'], 'generation': d['metadata']['generation'], 'pod_uid': p['metadata']['uid'],
             'pod_name': p['metadata']['name'], 'pod_ip': p['status']['podIP'], 'image': image, 'imageID': s['imageID'], 'containerID': s['containerID']}
 
