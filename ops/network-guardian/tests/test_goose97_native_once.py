@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 import test_goose96_native_once as historical
 from test_g15pair_core_cas import (normal_finish_operand, seal_normal_finish_fixture, normal_finish_encoded,
-    NORMAL_FINISH_PG_DEADLINE_CASES, reseal_normal_finish_caller)
+    NORMAL_FINISH_PG_DEADLINE_CASES, reseal_normal_finish_caller, catalog96_constraints_operand)
 
 ROOT=Path(__file__).resolve().parents[3]
 SOURCE=ROOT/'ops/network-guardian/rollout/goose97_native_once.py'
@@ -33,12 +33,8 @@ def catalog96_operand():
     fn=value['supplement']['functions93'][0]
     body=historical.G.source_functions(historical.MIGRATION.read_text())['retirement_forward_continuation_valid']['body']
     fn['definition']=fn['definition'].replace(fn['body'],body,1);fn['body']=body
-    check=value['legacy']['catalog90']['constraints'][0]
-    check.update(name='retirement_forward_continuation96',
-        definition=historical.declared_constraint96_artifact(historical.catalog95_operand())['after']['definition'])
-    value['legacy']['catalog90']['constraints'].append({'table':'capacity_guest_retirement_forwards',
-        'name':'retirement_forward_mode93','validated':True,
-        'definition':"CHECK ((original_record ->> 'mode'::text) = ANY (ARRAY['live'::text, 'historical'::text, 'settled_absence_continuation'::text]))"})
+    value['legacy']['catalog90']['constraints']=catalog96_constraints_operand(
+        historical.declared_constraint96_artifact(historical.catalog95_operand())['after']['definition'])
     down=MIGRATION.read_text().split('-- +goose Down',1)[1]
     guard=re.findall(r"CREATE OR REPLACE FUNCTION public\.guard_retirement_forward\(\) RETURNS trigger LANGUAGE plpgsql AS \$\$(.*?)\$\$;",down,re.S)
     assert len(guard)==1
@@ -54,7 +50,6 @@ def catalog96_operand():
     prior_guard=next(row for row in value['supplement']['functions93']if row['name']=='guard_retirement_forward')
     value['legacy']['catalog90']['functions']=[{'name':name,'definition':prior_guard['definition']if name=='guard_retirement_forward'else'DECLARED retained legacy '+name}
         for name in ('guard_retirement_forward','guard_retirement_forward_delete_binding','guard_retirement_forward_read','guard_retirement_forward_terminal')]
-    value['legacy']['catalog90']['constraints'].sort(key=lambda row:(row['table'],row['name']))
     return value
 
 
@@ -77,7 +72,9 @@ def catalog97_operand(before):
     mode.update(name='retirement_forward_mode97',definition="CHECK ((original_record ->> 'mode'::text) = ANY (ARRAY['live'::text, 'historical'::text, 'settled_absence_continuation'::text, 'normal_finish_recovery'::text]))")
     normal.update(name='retirement_forward_normal_finish97',definition="CHECK ((original_record ->> 'mode'::text) <> 'normal_finish_recovery'::text OR (original_record #>> '{normal_finish_recovery,schema}'::text[]) = 'original_normal_finish_recovery_v1'::text)")
     after['legacy']['catalog90']['constraints'].append(normal)
-    after['legacy']['catalog90']['constraints'].sort(key=lambda row:(row['table'],row['name']))
+    group_rank={}
+    for row in before['legacy']['catalog90']['constraints']:group_rank.setdefault(row['table'],len(group_rank))
+    after['legacy']['catalog90']['constraints'].sort(key=lambda row:(group_rank[row['table']],row['name']))
     refs={}
     def ref(path,raw):
         r={'path':path,'sha256':G.sha(raw)};refs[path]=raw;return r
@@ -85,7 +82,7 @@ def catalog97_operand(before):
         return {'server_version_num':160000,
             'functions':{row['name']:row['definition']for row in value['supplement']['functions93']
                 if row['name']in('guard_retirement_forward','retirement_forward_continuation_valid','retirement_forward_continuation_quiet','retirement_forward_normal_finish_recovery_valid')},
-            'constraints':[{k:row[k]for k in('name','validated','definition')}for row in value['legacy']['catalog90']['constraints']]}
+            'constraints':[{k:row[k]for k in('name','validated','definition')}for row in value['legacy']['catalog90']['constraints']if row['table']=='capacity_guest_retirement_forwards'and row['definition'].startswith('CHECK (')]}
     before_raw,after_raw=G.wire(view(before)),G.wire(view(after))
     br=ref('/declared/copied-before96.json',before_raw);ar=ref('/declared/copied-after97.json',after_raw)
     artifact={'schema':'normal_finish_recovery_schema97_pg_catalog_v1','source_commit':'c'*40,
@@ -283,6 +280,10 @@ with tempfile.TemporaryDirectory(prefix='goose97-baseline-')as name:
         with mock.patch.object(G,'COMPANION_SOURCE_Q','c'*40),mock.patch.object(G,'reference',side_effect=read_ref):
             G.check_catalog(before,accepted,functions,migration=carrier)
             G.check_catalog(after,accepted,functions,old=before,migration=carrier)
+            self.assertEqual(len(before['legacy']['catalog90']['constraints']),30)
+            self.assertEqual([before['legacy']['catalog90']['constraints'][i]['table']for i in (0,-1)],
+                ['capacity_guest_retirement_forwards','capacity_guest_retirement_forward_reads'])
+            self.assertEqual(before['legacy']['catalog90']['constraints'][-10:],after['legacy']['catalog90']['constraints'][-10:])
             self.assertEqual(len(before['legacy']['catalog90']['functions']),4)
             self.assertEqual(before['legacy']['catalog90']['functions'][1:],after['legacy']['catalog90']['functions'][1:])
             definitions=G.constraint97_definitions(G.catalog94_projection(before),carrier,read_ref,'c'*40)
@@ -298,7 +299,8 @@ with tempfile.TemporaryDirectory(prefix='goose97-baseline-')as name:
                     'function_definition','extra_function','old_quiet_function','check_definition','check_name',
                     'check_not_validated','extra_constraint','old_table','old_column','old_trigger',
                     'old_index','old94_function','old_SDK','ledger','legacy_guard_definition',
-                    'missing_legacy_guard','duplicate_legacy_guard','extra_legacy_guard_field','other_legacy_function'):
+                    'missing_legacy_guard','duplicate_legacy_guard','extra_legacy_guard_field','other_legacy_function',
+                    'read_constraint_changed','read_constraint_order','relation_group_order'):
                 bad=copy.deepcopy(after)
                 f=next(row for row in bad['supplement']['functions93']if row['name']=='retirement_forward_normal_finish_recovery_valid')
                 check=next(row for row in bad['legacy']['catalog90']['constraints']if row['name']=='retirement_forward_normal_finish97')
@@ -330,6 +332,9 @@ with tempfile.TemporaryDirectory(prefix='goose97-baseline-')as name:
                 elif fault=='duplicate_legacy_guard':bad['legacy']['catalog90']['functions'].append(copy.deepcopy(bad['legacy']['catalog90']['functions'][0]))
                 elif fault=='extra_legacy_guard_field':bad['legacy']['catalog90']['functions'][0]['invented_authority']=True
                 elif fault=='other_legacy_function':bad['legacy']['catalog90']['functions'][1]['definition']+=' foreign'
+                elif fault=='read_constraint_changed':bad['legacy']['catalog90']['constraints'][-1]['definition']+=' foreign'
+                elif fault=='read_constraint_order':bad['legacy']['catalog90']['constraints'][-2:]=reversed(bad['legacy']['catalog90']['constraints'][-2:])
+                elif fault=='relation_group_order':bad['legacy']['catalog90']['constraints'].sort(key=lambda row:(row['table'],row['name']))
                 else:bad['ledgers94'][0]['rows']+=1
                 with self.subTest(catalog97_fault=fault),self.assertRaises(G.Hold):
                     G.check_catalog(bad,accepted,functions,old=before,migration=carrier)

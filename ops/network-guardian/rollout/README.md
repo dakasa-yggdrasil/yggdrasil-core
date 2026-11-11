@@ -85,4 +85,4 @@ Original wire deadlines and caller ordering retain nanosecond precision. Only th
 
 The normal-finish snapshot query extracts each candidate run's first-step metadata once and materializes the complete JSON snapshot once. It preserves every scoped job/run pair, including duplicates, all original fields and exact wire hashes. The existing read-only transaction, 3s statement timeout and 500ms lock timeout remain unchanged.
 
-Schema97 verification authenticates the forward guard's exact definition in both the legacy catalog90 and functions93 projections before comparing the complete catalog. The two projections must agree on the qualified change; every other function, index, trigger and constraint remains checked in full.
+Schema97 verification authenticates the forward guard's exact definition in both the legacy catalog90 and functions93 projections before comparing the complete catalog. The two projections must agree on the qualified change; every other function, index, trigger and constraint remains checked in full. Constraint predictions preserve PostgreSQL's authenticated relation order and name order within each relation.

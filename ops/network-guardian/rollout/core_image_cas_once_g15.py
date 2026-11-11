@@ -1275,7 +1275,10 @@ def catalog97_delta(prior96, actual97, functions, definitions):
     new_check.update(name='retirement_forward_normal_finish97',
                      definition=definitions['checks']['retirement_forward_normal_finish97'])
     expected['catalog90']['constraints'].append(new_check)
-    expected['catalog90']['constraints'].sort(key=lambda row: (row['table'], row['name']))
+    group_rank = {}
+    for row in prior96['catalog90']['constraints']:
+        group_rank.setdefault(row['table'], len(group_rank))
+    expected['catalog90']['constraints'].sort(key=lambda row: (group_rank[row['table']], row['name']))
     need(expected == actual97, 'ALL_OTHER96_CATALOG_FUNCTION_INDEX_TRIGGER_BYTES_UNCHANGED')
     return actual97
 
