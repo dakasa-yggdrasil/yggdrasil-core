@@ -626,7 +626,7 @@ func (f *installedTimeoutFixture) inventory(t *testing.T, count int, now time.Ti
 		member.DesiredSpec = *f.p.MutationBindings[0].Slots[i].DesiredSpec
 		member.RequestSHA256 = f.p.MutationBindings[0].Slots[i].DesiredSpecSHA256
 		member.Server.ID, member.Server.CreatedAt, member.Server.Name = reg.Result.Tuple.ResourceID, reg.Result.Tuple.CreatedAt, member.DesiredSpec.NativeName
-		member.Server.Labels = map[string]string{"yggdrasil.io/owner": f.p.Owner, "yggdrasil.io/scope": vmLabelDigest(f.p.MutationBindings[0].ScopeChecksum), "yggdrasil.io/spec": vmLabelDigest(member.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": f.p.MutationBindings[0].ProfileName, "yggdrasil.io/slot": string(rune('0' + i + 1))}
+		member.Server.Labels = map[string]string{"yggdrasil.io/owner": f.p.Owner, "yggdrasil.io/scope": forwardFixtureVMLabelDigest(f.p.MutationBindings[0].ScopeChecksum), "yggdrasil.io/spec": forwardFixtureVMLabelDigest(member.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": f.p.MutationBindings[0].ProfileName, "yggdrasil.io/slot": string(rune('0' + i + 1))}
 		inv.Members = append(inv.Members, member)
 	}
 	for i := count + 1; i <= 8; i++ {
@@ -972,8 +972,10 @@ func TestInstalledProvisionTimeoutRecoveryPostgres(t *testing.T) {
 					f.sqlProofVectors(t)
 				}
 				old, err := readCapacityDispatchJob(context.Background(), f.db, f.original.JobID, false)
-				if err != nil || old.State != CapacityDispatchInstalledProvisionTimeoutState || old.FinalizationAckAt != nil || old.ReturnedAt == nil || old.ReturnStatus != "failed" {
-					t.Fatal("historical unknown return or absent ACK rewritten", old.State, err)
+				var originalReturnStatus string
+				statusErr := f.db.QueryRow("SELECT COALESCE(return_status,'') FROM public.capacity_dispatch_jobs WHERE id=$1", f.original.JobID).Scan(&originalReturnStatus)
+				if err != nil || statusErr != nil || old.State != CapacityDispatchInstalledProvisionTimeoutState || old.FinalizationAckAt != nil || old.ReturnedAt == nil || originalReturnStatus != "failed" {
+					t.Fatal("historical unknown return or absent ACK rewritten", old.State, err, statusErr)
 				}
 			}
 			claimed, err := ClaimCapacityDispatch(context.Background(), f.db, e.Realm, e.Environment, uuid.New(), 30*time.Second)
