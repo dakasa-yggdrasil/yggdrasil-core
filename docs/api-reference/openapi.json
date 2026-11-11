@@ -2055,7 +2055,8 @@
             "enum": [
               "live",
               "historical",
-              "settled_absence_continuation"
+              "settled_absence_continuation",
+              "normal_finish_recovery"
             ]
           },
           "preregistration_id": {

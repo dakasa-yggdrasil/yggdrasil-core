@@ -1,5 +1,7 @@
-G15 ABI / explicit C16 [D6,D7] Source DATA proposal. Business Source 21003808115d0b5cd62ae503ef16e65e13d4798f; D7 311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce.
-Historical C15 [D5,D6] config9094, Guardian88af, standingdb526 and controller-unitcd4 remain immutable.
-C16 changes only the new Core pair and distinct Root review. All function spans,31Owner,7helpers, runtime14,43refs, budget and Cold/Hub remain exact.
-The unit change is only C15 to C16 config path; prepared Guardian units bind only this exact Source hash.
-No Ops commit/CI, future standing16, native qualification or Root/business acceptance is created here.
+G15 ABI / C17 [D7,D8] Source binding for Core7 to Core8 normal_finish_recovery with schema97. Compiler Source0764e6b267d3d6ddbfb4d7a4b9fb4024018bf89f and D8 9b6e2a5d06eed90b7b44d059d3f78a405a21430a7b104f17498c904f499bdd97 have independent image qualification. The C17 controller configuration is396a8f49baa8fd2851c7a93c3fb88ea67f9efe621c143bfff713e822e1116602. The Source proposal flags are bound; exact operational Source CI, Native installation and acceptance remain separate requirements.
+
+C16 [D6,D7] config0549, Guardian3b7, standingc981 and controller-unitc7f remain the authenticated whole predecessor. Historical C15 [D5,D6] config9094, Guardian88af, standingdb526 and controller-unitcd4 remain immutable. The original schema96 receipt retains its045/D6/Ops338 provenance independently of the schema97 proposal.
+
+C17 appends its new pair and distinct Root review. Its two ancestry fields authenticate the saved whole C16 standing; the old ancestry helpers consume that original C16 configuration. The31 protected Owner methods retain their AST, the7 helper files remain byte-exact, and runtime14,43refs, existing budgets and Cold/Hub authority retain their meaning.
+
+The controller path advances from g16pair to g17pair; the successor Source and standing paths are distinct. Unit Source hash arguments identify the actual bound Guardian bytes. The tracked package remains a Source package; the separately accepted manifest and existing Native qualification are required before installation. These bindings do not establish operational CI, Native acceptance, Core adoption or cycle results.

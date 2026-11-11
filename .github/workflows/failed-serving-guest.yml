@@ -320,7 +320,7 @@ jobs:
           for name,present in [('default',False),('fixture',True),('native',False),('both',False)]:
               row=json.loads((p/f'build-{name}.json').read_text())
               assert row['ImportPath']=='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
-              for target in ('failed_serving_recoveryfixture.go','guest_retirement_forward_recoveryfixture.go','failed_expansion_cleanup_recoveryfixture.go'):
+              for target in ('failed_serving_recoveryfixture.go','guest_retirement_forward_recoveryfixture.go','failed_expansion_cleanup_recoveryfixture.go','guest_retirement_normal_finish_recoveryfixture.go'):
                   assert (target in row.get('GoFiles',[])) is present,(name,target,'fixture inclusion drift')
                   assert (target in row.get('IgnoredGoFiles',[])) is (not present)
           print('BOTH_RECOVERY_FIXTURES_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')
@@ -340,13 +340,20 @@ jobs:
           }
           failed=0
           record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
+          # Separate processes keep Goose/registry globals independent while
+          # unique disposable databases overlap their unchanged natural clocks.
+          record normal_finish_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForwardNormalFinishRecoveryPostgres$' &
+          normal_finish_pid=$!
           record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|ClosedGuardsPostgres|MissingPrefixPostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
+          normal_finish_rc=0
+          wait "$normal_finish_pid" || normal_finish_rc=$?
+          if [[ "$normal_finish_rc" != 0 ]]; then failed=1; fi
           record continuation_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=6m -json ./repository -run '^TestGuestRetirementForwardContinuationPostgres$' || failed=1
           record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^(TestGuestRetirementForward.*|TestInventoryReadonly(DescribeRequiresIndependentPublishedSource|EnvelopePreservesProducerAndRemovesCallback|HTTPSourceDeadlineAndClosedReturn|SettledForwardRefreshPostgres))$' || failed=1
           record http go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^TestGuestRetirementForward' || failed=1
           [[ "$failed" == 0 ]]
           python3 - <<'PY_FORWARD_CENSUS'
-          import collections,json,os,pathlib,subprocess
+          import collections,hashlib,json,os,pathlib,subprocess
           p=pathlib.Path(os.environ['RETIREMENT_FORWARD_LOGS']);base='github.com/dakasa-yggdrasil/yggdrasil-core/'
           expected={
             'capacity':('internal/capacity',['TestGuestRetirementForwardAuthenticatedWholePrefix']),
@@ -362,6 +369,7 @@ jobs:
               'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
               'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres',
               'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn']),
+            'normal_finish_repository':('repository',['TestGuestRetirementForwardNormalFinishRecoveryPostgres']),
             'continuation_repository':('repository',['TestGuestRetirementForwardContinuationPostgres']),
             'message':('controllers/message',[
               'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
@@ -373,6 +381,7 @@ jobs:
               'TestGuestRetirementForwardSourceReadClocksPostgres',
               'TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority',
               'TestGuestRetirementForwardOrdinaryReadonlySourceClocksPostgres',
+              'TestGuestRetirementForwardNormalFinishRecoveryPlanPostgres',
               'TestInventoryReadonlyDescribeRequiresIndependentPublishedSource',
               'TestInventoryReadonlyEnvelopePreservesProducerAndRemovesCallback',
               'TestInventoryReadonlyHTTPSourceDeadlineAndClosedReturn',
@@ -383,6 +392,12 @@ jobs:
               'TestGuestRetirementForwardSummaryPreservesFailureAndHidesOriginals',
               'TestGuestRetirementForwardHistoricalHTTPPostgres'])}
           summary={}
+          normal_finish_children={
+            'normal_finish_repository':{'TestGuestRetirementForwardNormalFinishRecoveryPostgres':[
+              'aws','hetzner','missing_ACK_then_live_lease','ambiguous_failed_ACK',
+              'open_original_native_read','prior_DELETE','partial_caller_stays_in_old_lane',
+              'late_original_caller_stays_in_old_lane','normal_origin_settled_then_pre_read_continuation']},
+            'message':{'TestGuestRetirementForwardNormalFinishRecoveryPlanPostgres':['aws','hetzner']}}
           inventory_children={
             'TestInventoryReadonlyDescribeRequiresIndependentPublishedSource':[
               'exact','missing_false','missing_zero','extra','normal_provider',
@@ -404,6 +419,9 @@ jobs:
               for action in ('run','pass'):
                   actual=collections.Counter(r['Test'] for r in rows if r['Action']==action and 'Test' in r and '/' not in r['Test'])
                   assert actual==collections.Counter(roots),(name,action,actual)
+                  for root,children in normal_finish_children.get(name,{}).items():
+                      actual=collections.Counter(r['Test'] for r in rows if r['Action']==action and r.get('Test','').startswith(root+'/'))
+                      assert actual==collections.Counter(root+'/'+child for child in children),(name,action,'normal finish recovery case census',root,actual)
                   if name=='message':
                       continuation='TestGuestRetirementForwardContinuationKnownDestroyOnly/'
                       children=['settled','confirmed','missing_receipt','foreign_grant','empty_expected_grant','empty_receipt_grant','issued','uncertain','rejected','transport_incomplete','receipt_error','inventory_error','floor_error','floor_cancelled','completion_error','no_deadline','insufficient_reserve','cancelled']
@@ -416,7 +434,15 @@ jobs:
               summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':93,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'inventory_readonly_roots':4,'inventory_readonly_children':sum(len(v) for v in inventory_children.values()),'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          catalog97=json.loads((p/'M97-PG-CHECK-DEPARSE.RESULT.PUBLIC.json').read_text())
+          assert catalog97['source_commit']==os.environ['SOURCE_COMMIT']
+          assert catalog97['postgres_major']==int(os.environ['FAILED_SERVING_TEST_PG_MAJOR'])
+          assert catalog97['fixture_only'] is True and catalog97['native_authority'] is False
+          assert catalog97['migration97_sha256']==hashlib.sha256(pathlib.Path('db/migrations/00097_guest_retirement_normal_finish_recovery.sql').read_bytes()).hexdigest()
+          for role,name in [('before96_ref','M97-PG-BEFORE96-CATALOG.original.json'),('after97_ref','M97-PG-AFTER97-CATALOG.original.json')]:
+              original=p/name;raw=original.read_bytes();ref=catalog97[role]
+              assert ref=={'path':str(original),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':93,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'inventory_readonly_roots':4,'inventory_readonly_children':sum(len(v) for v in inventory_children.values()),'normal_finish_recovery_schema_version':97,'normal_finish_recovery_roots':sum(len(v) for v in normal_finish_children.values()),'normal_finish_recovery_children':sum(len(children) for roots in normal_finish_children.values() for children in roots.values()),'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_FORWARD_CENSUS

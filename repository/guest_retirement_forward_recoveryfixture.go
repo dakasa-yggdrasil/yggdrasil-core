@@ -161,6 +161,7 @@ type GuestRetirementForwardRecoveryFixture struct {
 	t                  *testing.T
 	fractionalOriginal bool
 	ordinarySuccess    bool
+	callerVariant      string
 }
 
 // NewGuestRetirementForwardRecoveryFixture accepts only the same test-process,
@@ -191,7 +192,7 @@ func NewGuestRetirementOrdinaryRecoveryFixture(tb testing.TB, provider string) *
 	return newGuestRetirementForwardRecoveryFixture(tb, provider, 2, 4, 300, false, true)
 }
 
-func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords, initialLeaseSeconds int, fractionalOriginal, ordinarySuccess bool) *GuestRetirementForwardRecoveryFixture {
+func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, tail, prefixRecords, initialLeaseSeconds int, fractionalOriginal, ordinarySuccess bool, callerVariant ...string) *GuestRetirementForwardRecoveryFixture {
 	tb.Helper()
 	t, ok := tb.(*testing.T)
 	if !ok || !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
@@ -203,8 +204,18 @@ func newGuestRetirementForwardRecoveryFixture(tb testing.TB, provider string, ta
 	if fractionalOriginal && (tail != 2 || prefixRecords != 3 || initialLeaseSeconds != 30) {
 		t.Fatal("closed initial fractional original fixture")
 	}
+	variant := ""
+	if len(callerVariant) > 1 {
+		t.Fatal("one closed initial caller variant only")
+	}
+	if len(callerVariant) == 1 {
+		variant = callerVariant[0]
+		if variant != "late" || ordinarySuccess || fractionalOriginal || tail != 2 || prefixRecords != 4 || initialLeaseSeconds != 30 {
+			t.Fatal("closed late original caller fixture")
+		}
+	}
 	base := newFailedServingFixtureLease(t, provider, true, initialLeaseSeconds)
-	f := &GuestRetirementForwardRecoveryFixture{DB: base.db, Store: base.store, Policy: base.policy, Workflow: base.workflow, Spec: base.p, private: base, t: t, members: []*failedServingFixture{base}, fractionalOriginal: fractionalOriginal, ordinarySuccess: ordinarySuccess}
+	f := &GuestRetirementForwardRecoveryFixture{DB: base.db, Store: base.store, Policy: base.policy, Workflow: base.workflow, Spec: base.p, private: base, t: t, members: []*failedServingFixture{base}, fractionalOriginal: fractionalOriginal, ordinarySuccess: ordinarySuccess, callerVariant: variant}
 	// Complete declared read catalog for actual bounded message supplier calls;
 	// version0.1.0 remains explicitly synthetic, never an enrolled adapter claim.
 	typeSpec := failedServingTypeSpec(provider, f.Spec.MutationBindings[0])
@@ -664,8 +675,33 @@ func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 		f.Caller.ResponseSHA256, f.Caller.RetainedPrefixSHA256 = sha, sha
 		f.Caller.ResponseBodyScope = capacity.GuestOriginalBodyCompleteRead
 	}
+	if f.callerVariant == "late" {
+		// Declare a complete original HTTP read whose actual driver closes
+		// AFTER its unchanged original deadline. Authentic Guest journal bytes
+		// do not turn this late caller into a normal retained body success.
+		body := failedServingWire(t, f.Journal[3])
+		digest := capacity.BusinessCreationSHA256(body)
+		deadline := f.Request.Intent.OriginalDeadline
+		if parentDeadline, ok := ctx.Deadline(); ok && parentDeadline.After(deadline) {
+			deadline = parentDeadline
+		}
+		f.Caller.DoFailed, f.Caller.Status, f.Caller.OriginalContextFailed = false, 200, true
+		f.Caller.DoReturnedAt = deadline.Add(-5 * time.Millisecond)
+		f.Caller.ReadReturnedAt = deadline.Add(-3 * time.Millisecond)
+		f.Caller.CloseReturnedAt = deadline.Add(-time.Millisecond)
+		f.Caller.DriverReturnedAt = deadline.Add(2 * time.Millisecond)
+		f.Caller.ReceivedBodyBytes, f.Caller.RetainedPrefixBytes = len(body), len(body)
+		f.Caller.ResponseSHA256, f.Caller.RetainedPrefixSHA256 = digest, digest
+		f.Caller.ResponseBodyScope = capacity.GuestOriginalBodyCompleteRead
+	}
 	time.Sleep(time.Until(f.Caller.DriverReturnedAt) + time.Millisecond)
-	if err = store.RecordGuestCallerReturnV2(ctx, f.Caller); err != nil {
+	retention := ctx
+	if f.callerVariant == "late" {
+		var cancel context.CancelFunc
+		retention, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+	}
+	if err = store.RecordGuestCallerReturnV2(retention, f.Caller); err != nil {
 		t.Fatal("real failed caller retained", err)
 	}
 }
