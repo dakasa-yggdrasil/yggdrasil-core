@@ -312,6 +312,13 @@ class G15MaintenanceTests(unittest.TestCase):
             self.assertEqual(current_package['base_Core_source'], core_source)
             self.assertEqual(current_package['amd64_Core_manifest_digest'], core_digest)
             self.assertEqual(current_package['controller_config_sha256'], config_sha)
+            proposal = D.strict_loads((NEW / 'proposal/CONTROLLER.PROPOSAL.json').read_bytes())
+            review = (NEW / 'proposal/ROOT-CONTROLLER-REVIEW.txt').read_bytes().decode()
+            self.assertEqual(proposal['root_review_attestation'], review.removesuffix('\n'))
+            proposal_sha = digest(D.canonical(proposal))
+            self.assertEqual(proposal_sha, G.G20_CONTROLLER_CONFIG_SHA)
+            self.assertEqual(proposal_sha, C.G20_CONFIG_SHA)
+            self.assertEqual(proposal_sha, D.G20_CONFIG_SHA)
             self.assertIs(type(current_package['bound_Guardian_bytes']), int)
             self.assertEqual(current_package['bound_Guardian_bytes'], len(source_raw))
         program = r"""
