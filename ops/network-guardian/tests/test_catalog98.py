@@ -72,6 +72,13 @@ def fixture98():
                       'definition': 'CREATE TRIGGER fixture_retained_trigger BEFORE UPDATE ON public.capacity_intents FOR EACH ROW EXECUTE FUNCTION public.guard_capacity_dispatch_job()'}],
         'columns': [{'table': 'capacity_dispatch_jobs', 'name': 'id', 'number': 1, 'type': 'uuid', 'not_null': True}],
     }
+    later_trigger = copy.deepcopy(before_supp['triggers'][0])
+    later_trigger['name'] = 'zz_fixture_retained_trigger'
+    later_trigger['definition'] = later_trigger['definition'].replace('fixture_retained_trigger', later_trigger['name'])
+    before_supp['triggers'].append(later_trigger)
+    prior['schema94']['triggers'] = [
+        {**row, 'table': 'public.' + row['table'], 'function': 'guard_capacity_dispatch_job()'}
+        for row in before_supp['triggers']]
     after_supp = copy.deepcopy(before_supp)
     after_supp['functions'] = copy.deepcopy(AFTER98_FUNCTIONS)
     after_supp['constraints'] = [row for row in after_supp['constraints'] if row['table'] != 'capacity_dispatch_jobs']
@@ -96,8 +103,9 @@ def fixture98():
                      ('workflow_runs', 'installed_timeout_workflow_immutable', 'guard_installed_provision_timeout_workflow', 'BEFORE UPDATE OR DELETE'),
                      ('capacity_intents', 'installed_timeout_readiness_origin', 'guard_installed_timeout_origin', 'BEFORE INSERT OR UPDATE')]
     for relation, name, function, timing in trigger_specs:
+        qualified_function = function if name == 'installed_timeout_readiness_origin' else 'public.' + function
         after_supp['triggers'].append({'table': relation, 'name': name, 'enabled': 'O',
-                                      'definition': f'CREATE TRIGGER {name} {timing} ON public.{relation} FOR EACH ROW EXECUTE FUNCTION public.{function}()'})
+                                      'definition': f'CREATE TRIGGER {name} {timing} ON public.{relation} FOR EACH ROW EXECUTE FUNCTION {qualified_function}()'})
     after_supp['triggers'].sort(key=lambda row: (row['table'], row['name']))
     column_specs = [('id', 'uuid'), ('job_id', 'uuid'), ('run_id', 'uuid'), ('original_record', 'jsonb'),
                     ('original_wire', 'bytea'), ('original_dispatch_wire', 'bytea'), ('original_run_wire', 'bytea'),
@@ -127,6 +135,9 @@ def fixture98():
     after_prior['catalog91']['shared_dispatch_guard'][0]['definition'] = new_guard['definition']
     after_prior['catalog91']['dispatch_constraints'] = [{key: row[key] for key in ('name', 'validated', 'definition')}
         for row in after_supp['constraints'] if row['table'] == 'capacity_dispatch_jobs']
+    origin = next(row for row in after_supp['triggers'] if row['name'] == 'installed_timeout_readiness_origin')
+    after_prior['schema94']['triggers'].insert(1, {
+        **origin, 'table': 'public.capacity_intents', 'function': 'guard_installed_timeout_origin()'})
     native_before = full(prior, before_supp, history97, structural_before)
     native_after = full(after_prior, after_supp, history_after, structural_after)
     def ci_view(supplement, history):
@@ -188,6 +199,11 @@ class Catalog98Tests(unittest.TestCase):
         actual = self.M.catalog98_delta(value['prior'], value['before'], value['after'], functions, definitions)
         self.assertEqual(actual, self.M.catalog98_projection(value['after']))
         self.assertEqual(set(actual), set(self.M.OLD7.split()) | {'schema98'})
+        self.assertEqual(actual['schema94']['triggers'][1], {
+            'table': 'public.capacity_intents', 'name': 'installed_timeout_readiness_origin',
+            'enabled': 'O', 'function': 'guard_installed_timeout_origin()',
+            'definition': 'CREATE TRIGGER installed_timeout_readiness_origin BEFORE INSERT OR UPDATE ON public.capacity_intents FOR EACH ROW EXECUTE FUNCTION guard_installed_timeout_origin()'})
+        self.assertEqual(actual['schema94']['triggers'][::2], value['prior']['schema94']['triggers'])
         self.assertEqual(value['prior']['catalog91']['shared_dispatch_guard'][0]['definition'], OLD97_GUARD)
         self.assertFalse(self.M.SOURCE_BOUND)
         self.assertIsNone(self.M.QUALIFIED_SOURCE)
@@ -316,6 +332,31 @@ class Catalog98Tests(unittest.TestCase):
                     bad['after']['supplement'][key] = 'foreign'
                 with self.assertRaises(RuntimeError):
                     self.M.catalog98_delta(bad['prior'], bad['before'], bad['after'], functions, definitions)
+        trigger_faults = {
+            'missing_origin': lambda rows: rows.pop(1),
+            'duplicate_origin': lambda rows: rows.append(copy.deepcopy(rows[1])),
+            'foreign_table': lambda rows: rows[1].__setitem__('table', 'public.workflow_runs'),
+            'foreign_name': lambda rows: rows[1].__setitem__('name', 'foreign_origin'),
+            'foreign_function': lambda rows: rows[1].__setitem__('function', 'guard_capacity_dispatch_job()'),
+            'disabled_origin': lambda rows: rows[1].__setitem__('enabled', 'D'),
+            'changed_definition': lambda rows: rows[1].__setitem__('definition', rows[1]['definition'] + ' FOREIGN'),
+            'changed_retained': lambda rows: rows[0].__setitem__('definition', 'foreign retained trigger'),
+            'missing_retained': lambda rows: rows.pop(0),
+            'extra_foreign': lambda rows: rows.append({**rows[0], 'name': 'foreign_trigger'}),
+            'reordered_retained': lambda rows: rows.__setitem__(slice(None), [rows[2], rows[1], rows[0]]),
+            'reordered_origin': lambda rows: rows.append(rows.pop(1)),
+        }
+        for label, mutate in trigger_faults.items():
+            with self.subTest(schema94_trigger=label):
+                bad = copy.deepcopy(value)
+                mutate(bad['after']['schema94']['triggers'])
+                with self.assertRaises(RuntimeError):
+                    self.M.catalog98_delta(bad['prior'], bad['before'], bad['after'], functions, definitions)
+        bad = copy.deepcopy(value)
+        bad['prior']['schema94']['triggers'].insert(1, copy.deepcopy(bad['after']['schema94']['triggers'][1]))
+        bad['before']['schema94'] = copy.deepcopy(bad['prior']['schema94'])
+        with self.assertRaises(RuntimeError):
+            self.M.catalog98_delta(bad['prior'], bad['before'], bad['after'], functions, definitions)
         bad = copy.deepcopy(value)
         bad['after']['supplement']['index92_valid'] = 1
         with self.assertRaises(RuntimeError):

@@ -356,6 +356,18 @@ def catalog98_delta(prior97catalog7, beforeFull, afterFull, source_functions, de
     expected['catalog91']['dispatch_constraints'] = [
         {key: row[key] for key in ('name', 'validated', 'definition')}
         for row in defs['after']['constraints'] if row['table'] == 'capacity_dispatch_jobs' and row['name'] in NEW_CHECKS98]
+    origins = [row for row in defs['after']['triggers']
+               if row['table'] == 'capacity_intents' and row['name'] == 'installed_timeout_readiness_origin']
+    need98(len(origins) == 1 and origins[0]['enabled'] == 'O', 'EXACT98_CI_READINESS_ORIGIN_TRIGGER')
+    origin = {'table': 'public.capacity_intents', 'name': origins[0]['name'], 'enabled': 'O',
+              'function': 'guard_installed_timeout_origin()', 'definition': origins[0]['definition']}
+    retained_triggers = expected['schema94']['triggers']
+    origin_key = (origin['table'], origin['name'])
+    need98(not any((row['table'], row['name']) == origin_key for row in retained_triggers),
+           'NO98_READINESS_ORIGIN_IN_PRIOR94_TRIGGER_VIEW')
+    position = next((index for index, row in enumerate(retained_triggers)
+                     if (row['table'], row['name']) > origin_key), len(retained_triggers))
+    retained_triggers.insert(position, origin)
     need98(len(expected['catalog91']['dispatch_constraints']) == 2
            and same98(projection97_98(afterFull), expected), 'ALL_OTHER97_CATALOG_BYTES_AND_ARRAYS_UNCHANGED')
     history98(beforeFull['legacy']['complete_history_wire'], afterFull['legacy']['complete_history_wire'])
