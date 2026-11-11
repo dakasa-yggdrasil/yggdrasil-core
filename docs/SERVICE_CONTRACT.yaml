@@ -85,7 +85,7 @@
     {
       "evidence": "docs/service-contract/PREACTION_FAILED_PLAN_SOURCE_REVIEW.json",
       "id": "preaction_failed_plan_source_review",
-      "sha256": "e7952e8e291e0a01f21b60ae6e92b260299f397c062c6e0767ddf846a3db2be0"
+      "sha256": "de846c2bf17f6a0fda9687eeced9df5e0102d9dd50287792126da81c5838bfe0"
     }
   ],
   "coverage": "complete",
@@ -134,7 +134,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "52be8db23b18c03aefa84dd25d8aff79740d178d4ed9385aebfa70db0dbc5c8e"
+    "sha256": "1095abc6ddbec340bc0bbe991ee4f44781844429e344ef5984af7cefd542620c"
   },
   "unresolved": []
 }

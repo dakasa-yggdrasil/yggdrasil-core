@@ -1,7 +1,8 @@
 {
   "independent_Source_reviews": {
     "Go": "4552a13f/7781eca4/2446fdf4 independently reviewed before formatting; static only",
-    "SQL_and_tests_sha256": "a7c05ac62b2d6faabf10f2867b6207cdbeeefe023e653b1451ba59807007f221"
+    "SQL_and_tests_sha256": "a7c05ac62b2d6faabf10f2867b6207cdbeeefe023e653b1451ba59807007f221",
+    "raw_scan_JSON_fix_finding_sha256": "06eba6b066dc2cb4985adfcc65fb0bd5dbf35d8dbc1d5820c49fcfc09a1ca17d"
   },
   "production_or_native_qualification": false,
   "reviewed_contracts": [
@@ -9,7 +10,8 @@
     "Existing enqueue scope locks, one immutable receipt and explicit distinct queued successor job/run/wake in the same transaction; terminal changes only state and updated_at.",
     "Historical receipt reads retain original proof after a legitimate successor advances; old M87/M91/M98 meanings remain unchanged.",
     "The existing 641-byte historical failed-installed lookup is unchanged; a regular transactional partial index adds only an access path within existing migration limits.",
-    "No REST, message, event, Guest or provider mutation API changes; all existing interface census evidence remains unchanged apart from the complete source inventory."
+    "No REST, message, event, Guest or provider mutation API changes; all existing interface census evidence remains unchanged apart from the complete source inventory.",
+    "The existing strict native decoder receives json.RawMessage for complete raw SQL JSON, matching its owning marshal-first API. No guard, scan schema, counter or authority criterion changes."
   ],
   "schema": "preaction_failed_plan_source_review_v1",
   "scope": "Automatic disposition of an expired recorded failed PLAN with no committed authority, anchored to an immutable installed-timeout receipt; no ACK, replay or provider authority is manufactured.",
@@ -27,8 +29,8 @@
       "sha256": "2446fdf469846470d24b4916416a73c45d2c222c79feb93411e56deee42ff75a"
     },
     "repository/capacity_dispatch_preaction_plan_disposition.go": {
-      "bytes": 18421,
-      "sha256": "4d54ab638553935fd17c5623067a8c15deddfd8522c2c99478555ee01e0aeace"
+      "bytes": 18438,
+      "sha256": "4cb5c7f7e11beaaa5d2252b3a5e3fe18d8940d7bc4c4b6b7fac394dd98f41d26"
     },
     "repository/capacity_guest_installed_reconcile.go": {
       "bytes": 24955,
@@ -38,6 +40,6 @@
   "validation": {
     "CI_pass_claimed": false,
     "local": "Source review, static data/hash checks and gofmt only.",
-    "required_CI": "Existing full qualification plus nine PostgreSQL16/17 pre-action cases, three real 300s dispatch expirations across two repeat phases, exact child censuses, complete raw catalogs and immutable/deferred negative cases."
+    "required_CI": "Existing full qualification plus nine PostgreSQL16/17 pre-action cases, three real 300s dispatch expirations across two repeat phases, exact child censuses, complete raw catalogs and immutable/deferred negative cases. Ordinary default unit CI additionally exercises TestPreActionPlanEffectScanJSONWire with a complete closed11/base47 positive and fifteen invalid/effectful representations before the existing natural-expiry PostgreSQL cases."
   }
 }
