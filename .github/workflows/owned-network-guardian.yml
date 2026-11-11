@@ -141,6 +141,8 @@ jobs:
           sha256sum --check SHA256SUMS-GOOSE97
       - name: Verify additive schema98 rollout and catalog Source
         run: sha256sum --check ops/network-guardian/rollout/SHA256SUMS-GOOSE98
+      - name: Verify additive schema98 recovery lineage Source
+        run: sha256sum --check ops/network-guardian/rollout/SHA256SUMS-RESTORE98
       - name: Run exact preserved census and additive schema98 checks
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}

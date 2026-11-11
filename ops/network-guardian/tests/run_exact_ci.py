@@ -101,7 +101,10 @@ def main():
     rollout98 = json.loads((HERE / 'EXPECTED-TESTS-SCHEMA98-ROLLOUT.json').read_bytes())
     if type(rollout98) is not list or len(rollout98) != 5 or len(set(rollout98)) != 5:
         raise RuntimeError('EXACT_ROLLOUT98_5_TEST_IDS_REQUIRED')
-    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93 + g13 + g13cas + goose94 + g14 + g14cas + goose95 + g15 + goose96 + g15cas + goose97 + catalog98 + rollout98
+    restore98 = json.loads((HERE / 'EXPECTED-TESTS-RESTORE98-LINEAGE.json').read_bytes())
+    if type(restore98) is not list or len(restore98) != 5 or len(set(restore98)) != 5:
+        raise RuntimeError('EXACT_RESTORE98_LINEAGE_5_TEST_IDS_REQUIRED')
+    expected = historical + current + r6 + index92 + goose92 + g10 + g11 + g12 + g12cas + goose93 + g13 + g13cas + goose94 + g14 + g14cas + goose95 + g15 + goose96 + g15cas + goose97 + catalog98 + rollout98 + restore98
     if len(set(expected)) != len(expected):
         raise RuntimeError('all preserved and additive test rosters must be disjoint')
     suite = unittest.defaultTestLoader.discover(str(HERE), pattern='test_*.py')
@@ -132,6 +135,7 @@ def main():
              'goose97_expected': goose97, 'goose97_count': len(goose97),
              'catalog98_expected': catalog98, 'catalog98_count': len(catalog98),
              'rollout98_expected': rollout98, 'rollout98_count': len(rollout98),
+             'restore98_lineage_expected': restore98, 'restore98_lineage_count': len(restore98),
              'index92_count': len(index92), 'goose92_count': len(goose92),
              'executed': result.runs, 'passed': result.passes,
              'failures': [test.id() for test, _ in result.failures],

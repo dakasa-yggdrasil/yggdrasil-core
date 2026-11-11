@@ -51,7 +51,7 @@ CORE_A9FA = CORE_IMAGE_REF + 'sha256:a9fa2599db02016ff6a7cc90e95281448953fc4ee20
 CORE_9913 = CORE_IMAGE_REF + 'sha256:9913ebfb5afc3620b8d6f4136ea1b9cc5acfda0c339199a99be4444fa10f417e'
 # The ONE place the new head Core image digest appears in this file (set_head_digest.py).
 CORE_CADC = CORE_IMAGE_REF + 'sha256:cadc0c4491109d5791438b6187b53620008f8a634ae8d93903f664ae18c18edd'
-HEAD_NEW_CORE_DIGEST='sha256:a963c6acc8708f266d22e6405f2be1a56e22fb599730f69e3eaa31c65c6f25ba'
+HEAD_NEW_CORE_DIGEST='sha256:f02ec7b916b4d8b23a8bfe91703af2b3e8f33f25fd943b18642f9218baa1ee60'
 HEAD_DIGEST_PLACEHOLDER = 'sha256:' + '0' * 64
 CORE_G5 = CORE_CADC
 CORE_G6 = CORE_IMAGE_REF + 'sha256:750d5e46aee679075c2b88c163d22036093cf893edbe16bb5c2ca484f4275838'
@@ -97,7 +97,7 @@ G17_CONFIG_SHA = '396a8f49baa8fd2851c7a93c3fb88ea67f9efe621c143bfff713e822e11166
 G17_CONFIG = ETC / 'controller.r13-netlink-g17pair.production.json'
 CORE_G18 = CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST if isinstance(HEAD_NEW_CORE_DIGEST, str) else None
 G18_CORE_IMAGE_PAIRS = [{'image': CORE_G17, 'image_id': CORE_G17}, {'image': CORE_G18, 'image_id': CORE_G18}]
-G18_CONFIG_SHA = 'ebae929e83f934809c961e96d6e69fd29b8bd7056642df21491b1a96dde5be0f'
+G18_CONFIG_SHA = 'd8ed4b268c112fc396860b57f57b36090dcc8b63f768a3a47b291984aa6eab1a'
 G18_CONFIG = ETC / 'controller.r13-netlink-g18pair.production.json'
 G13_CONFIG = ETC / 'controller.r13-netlink-g13pair.production.json'
 G15_CONFIG = ETC / 'controller.r13-netlink-g15pair.production.json'
