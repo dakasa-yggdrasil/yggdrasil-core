@@ -130,6 +130,12 @@ func EnqueueCapacityDispatch(ctx context.Context, tx *sql.Tx, e CapacityDispatch
 			if err != nil {
 				return CapacityDispatchJob{}, false, err
 			}
+			if !disposed {
+				disposed, err = reconcilePreActionFailedPlanTx(ctx, tx, job, e)
+				if err != nil {
+					return CapacityDispatchJob{}, false, err
+				}
+			}
 		}
 		if !disposed {
 			if job.PendingWakeCount >= MaxCapacityDispatchPendingWakes {

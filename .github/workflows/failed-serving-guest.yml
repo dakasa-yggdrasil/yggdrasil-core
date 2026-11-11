@@ -585,6 +585,72 @@ jobs:
           result={'schema':'installed_provision_timeout_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':98,'race':True,'count':1,'distinct_roots':1,'root_executions':len(children),'children':children,'processes':len(children),'original_dispatch_deadline_seconds':300,'original_exit':0,'old_acknowledgment_lane_unchanged':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
           PY_TIMEOUT_CENSUS
+      - name: Qualify pre-action failed PLAN on the same isolated PostgreSQL owner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          evidence="$INSTALLED_TIMEOUT_LOGS/preaction99"
+          mkdir -m 0700 "$evidence"
+          export PREACTION_PLAN_LOGS="$evidence"
+          export PREACTION_PLAN_HANDOFF="$evidence/repeat-owned-ids.json"
+          git rev-parse HEAD > "$evidence/source-head.txt"
+          record_case() {
+            local case_name="$1"
+            set +e
+            GOMAXPROCS=1 GOMEMLIMIT=512MiB go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run "^TestCapacityDispatchPreActionFailedPlanDispositionPostgres/$case_name\$" > "$evidence/$case_name.jsonl" 2> "$evidence/$case_name.stderr"
+            original_exit=$?
+            printf '%s\n' "$original_exit" > "$evidence/$case_name.exit"
+            exit "$original_exit"
+          }
+          # Seven separate processes use at most eight DB connections: only
+          # the racing case opens two. All old M98 processes already finished.
+          first=(closed_failed_plan_after_M98_anchor second_failed_plan_phase_a concurrent_wakes_single_successor committed_resume_cannot_be_relabelled wire_shape_and_effect_guards deferred_links_and_immutability catalog_index_and_old_schema)
+          pids=()
+          for case_name in "${first[@]}"; do
+            (record_case "$case_name") &
+            pids+=("$!")
+          done
+          failed=0
+          for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+          pids=()
+          # Continue the authentic retained fixture even if another case failed,
+          # so phase B owns cleanup. No clock or database row is reconstructed.
+          if [[ "$(cat "$evidence/second_failed_plan_phase_a.exit")" == 0 ]]; then
+            (record_case second_failed_plan_phase_b) &
+            pids+=("$!")
+          else
+            printf '125\n' > "$evidence/second_failed_plan_phase_b.exit"
+            printf 'Phase A did not complete; no retained fixture is eligible.\n' > "$evidence/second_failed_plan_phase_b.not-started"
+            failed=1
+          fi
+          (record_case unanchored_plan_refused) &
+          pids+=("$!")
+          for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+          printf '%s\n' "$failed" > "$evidence/original.exit"
+          [[ "$failed" == 0 ]]
+          python3 - "$evidence" <<'PY_PREACTION_CENSUS'
+          import collections,hashlib,json,os,pathlib,re,sys
+          p=pathlib.Path(sys.argv[1]);root='TestCapacityDispatchPreActionFailedPlanDispositionPostgres'
+          children=['closed_failed_plan_after_M98_anchor','second_failed_plan_phase_a','second_failed_plan_phase_b','concurrent_wakes_single_successor','committed_resume_cannot_be_relabelled','wire_shape_and_effect_guards','deferred_links_and_immutability','catalog_index_and_old_schema','unanchored_plan_refused']
+          package='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+          for child in children:
+              assert (p/(child+'.exit')).read_text().strip()=='0',child
+              rows=[json.loads(line) for line in (p/(child+'.jsonl')).read_text().splitlines() if line.strip()]
+              assert all(r.get('Package',package)==package for r in rows),child
+              assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows),child
+              assert not any('WARNING: DATA RACE' in r.get('Output','') for r in rows),child
+              for action in ('run','pass'):
+                  actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r)
+                  assert actual==collections.Counter([root,root+'/'+child]),(child,action,actual)
+              assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1,child
+          assert (p/'source-head.txt').read_text().strip()==os.environ['SOURCE_COMMIT']
+          source=pathlib.Path('repository/capacity_guest_installed_reconcile.go').read_text()
+          query=re.search(r'const installedGuestOriginalFailedRunQuery = `([^`]+)`',source).group(1).encode()
+          assert hashlib.sha256(query).hexdigest()=='2d400ff15f2496c5c1ff1f5b712c4ecb8323f299b5f0a9efe853d5d5b0913b28'
+          result={'schema':'preaction_failed_plan_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':99,'race':True,'count':1,'distinct_roots':1,'root_executions':len(children),'children':children,'processes':len(children),'original_dispatch_deadline_seconds':300,'repeat_natural_dispatches':3,'repeat_process_phases':2,'max_concurrent_fixture_DB_connections':8,'old_query_641_sha256':hashlib.sha256(query).hexdigest(),'original_exit':0,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          PY_PREACTION_CENSUS
       - name: Retain installed timeout recovery originals
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
