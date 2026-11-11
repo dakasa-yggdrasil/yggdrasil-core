@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-04T11:33:59-03:00",
+  "generated_at": "2026-11-10T21:58:50-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1491,
-    ".json": 220,
-    ".py": 113,
-    ".sql": 93,
+    ".go": 1518,
+    ".json": 240,
+    ".py": 186,
+    ".sql": 99,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "ef10666ba8cc648720564f22ae833a6b1656cc32",
+    "commit": "962936a7e0669365dd61dda74719ba55e7e2c265",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "c0b0392eac270a59e4c38c4bc95eaa1011966b98fd33d2f3ed4e4fdc10c0445a"
+        "sha256": "d9b1b4d0fe72292b54021a7775582bf3640582f44e7be50214daf85c8b4b1467"
       },
       {
         "path": "AGENTS.md",
@@ -28,7 +28,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "d8a5f649b8f38c0dd8df7e71630c40f6b8c7a5f6030e7fae499aa4449957ad75"
+        "sha256": "15ea29956798cfc049edb7686d948d442e254ecb8ced68f21ca17d51d43bca26"
       },
       {
         "path": "README.md",
@@ -65,18 +65,18 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 365,
-      "kb": 4831
+      "files": 378,
+      "kb": 5092
     },
     {
       "path": "controllers/httpapi",
-      "files": 254,
-      "kb": 2570
+      "files": 259,
+      "kb": 2631
     },
     {
       "path": "controllers/message",
-      "files": 193,
-      "kb": 1682
+      "files": 201,
+      "kb": 1758
     },
     {
       "path": "internal/capacity",
@@ -85,18 +85,23 @@
     },
     {
       "path": "db/migrations",
-      "files": 91,
-      "kb": 683
+      "files": 95,
+      "kb": 843
     },
     {
       "path": "model",
-      "files": 87,
-      "kb": 478
+      "files": 88,
+      "kb": 480
     },
     {
       "path": "manifest",
       "files": 65,
       "kb": 397
+    },
+    {
+      "path": "ops/network-guardian/tests",
+      "files": 52,
+      "kb": 876
     },
     {
       "path": "addons",
@@ -117,11 +122,6 @@
       "path": "docs/bootstrap/manifests/integrations",
       "files": 28,
       "kb": 98
-    },
-    {
-      "path": "ops/network-guardian/tests",
-      "files": 28,
-      "kb": 452
     }
   ],
   "top_files_by_size": [
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 91,
+    "migrations": 95,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 59,
+    "config_files": 76,
     "k8s_manifests": 25
   }
 }

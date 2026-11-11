@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**102 decisions.**
+**105 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -147,3 +147,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0105](0105-continue-settled-retirement-absence-under-a-new-owner.md) | Continue settled retirement absence under a new owner | Proposed | 2026-11-04 | Original Guest retirement / automatic GET-only settled-absence continuation |
 | [0106](0106-close-an-accepted-unwitnessed-expansion-with-a-separate-cleanup.md) | Close an accepted unwitnessed expansion with a separate cleanup | Proposed | 2026-11-05 | Core / failed unwitnessed expansion cleanup, normal one-shot destroy and truthful physical closure |
 | [0107](0107-count-tartaro-action-holders-with-the-effective-actions-predicate.md) | Count Tartaro action holders with the same predicate as the effective-actions read | Accepted | 2026-11-08 | yggdrasil-core / Tartaro action-holder roster (`GET /api/v1/tartaro/action-holders`) |
+| [0108](0108-resume-a-failed-settled-continuation-before-its-first-read.md) | Resume a failed settled continuation before its first read | Proposed | 2026-11-10 | Original Guest retirement / typed automatic pre-read-failure provenance |
+| [0109](0109-read-legacy-profile-inventory-through-an-independent-observer.md) | Read legacy profile inventory through an independent observer | Proposed | 2026-11-10 | Core / exact AWS/c34 forward inventory, independent actual observer source and unchanged mutation authority |

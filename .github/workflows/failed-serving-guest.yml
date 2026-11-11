@@ -69,6 +69,39 @@ jobs:
               assert (target in row.get('IgnoredGoFiles',[])) is (not present)
           print('FAILED_SERVING_FIXTURE_EXCLUDED_FROM_DEFAULT_AND_NATIVEQUALIFICATION')
           PY
+      - name: Qualify schema96 failed pre-read settled-absence continuation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=6m -json ./repository -run '^TestGuestRetirementForwardPreReadContinuationPostgres$' > "$FAILED_SERVING_LOGS/continuation96-repository.stdout" 2> "$FAILED_SERVING_LOGS/continuation96-repository.stderr"
+          rc=$?
+          set -e
+          printf '%s\n' "$rc" > "$FAILED_SERVING_LOGS/continuation96-repository.exit"
+          [[ "$rc" == 0 ]]
+          python3 - <<'PY_CONTINUATION96'
+          import collections,hashlib,json,os,pathlib,subprocess
+          p=pathlib.Path(os.environ['FAILED_SERVING_LOGS'])
+          root='TestGuestRetirementForwardPreReadContinuationPostgres'
+          rows=[json.loads(line) for line in (p/'continuation96-repository.stdout').read_text().splitlines() if line.strip()]
+          run=[r['Test'] for r in rows if r.get('Action')=='run' and r.get('Test')]
+          passed=[r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')]
+          assert run.count(root)==passed.count(root)==1
+          assert len(run)==len(set(run)) and collections.Counter(run)==collections.Counter(passed)
+          assert all(n==root or n.startswith(root+'/') for n in run)
+          assert not any(r.get('Action') in ('fail','skip') for r in rows)
+          assert any(r.get('Action')=='pass' and r.get('Package')=='github.com/dakasa-yggdrasil/yggdrasil-core/repository' and not r.get('Test') for r in rows)
+          assert 'WARNING: DATA RACE' not in (p/'continuation96-repository.stderr').read_text()
+          migration=pathlib.Path('db/migrations/00096_guest_retirement_pre_read_continuation.sql').read_bytes()
+          result={'schema':'failed_pre_read_continuation_schema96_ci_census_v1','source_commit':os.environ['SOURCE_COMMIT'],
+                  'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'database_schema':96,
+                  'fixture_only':True,'native_cloud':False,'runtime_or_cycle_credit':False,'test_flags':['-buildvcs=true','-tags=recoveryfixture','-p=1','-race','-count=1','-timeout=6m'],
+                  'root':root,'executed':run,'passed':passed,'skipped':[],'exit_code':0,
+                  'migration96_sha256':hashlib.sha256(migration).hexdigest(),
+                  'current_head_sql_source_roster':subprocess.check_output(['git','ls-tree','-r','--name-only',os.environ['SOURCE_COMMIT'],'db/migrations'],text=True).splitlines()}
+          (p/'continuation96-CENSUS.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          print('SCHEMA96_REAL_POSTGRES_FIXTURE_CLOSED_CENSUS_PASSED_NO_NATIVE_OR_CYCLE_CREDIT')
+          PY_CONTINUATION96
       - name: Qualify separate schema94 unwitnessed expansion cleanup
         shell: bash
         run: |
@@ -309,7 +342,7 @@ jobs:
           record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
           record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|ClosedGuardsPostgres|MissingPrefixPostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
           record continuation_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=6m -json ./repository -run '^TestGuestRetirementForwardContinuationPostgres$' || failed=1
-          record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^TestGuestRetirementForward' || failed=1
+          record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^(TestGuestRetirementForward.*|TestInventoryReadonly(DescribeRequiresIndependentPublishedSource|EnvelopePreservesProducerAndRemovesCallback|HTTPSourceDeadlineAndClosedReturn|SettledForwardRefreshPostgres))$' || failed=1
           record http go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^TestGuestRetirementForward' || failed=1
           [[ "$failed" == 0 ]]
           python3 - <<'PY_FORWARD_CENSUS'
@@ -339,13 +372,29 @@ jobs:
               'TestGuestRetirementForwardContinuationKnownDestroyOnly',
               'TestGuestRetirementForwardSourceReadClocksPostgres',
               'TestGuestRetirementForwardReadonlyEnvelopeHasNoCallbackAuthority',
-              'TestGuestRetirementForwardOrdinaryReadonlySourceClocksPostgres']),
+              'TestGuestRetirementForwardOrdinaryReadonlySourceClocksPostgres',
+              'TestInventoryReadonlyDescribeRequiresIndependentPublishedSource',
+              'TestInventoryReadonlyEnvelopePreservesProducerAndRemovesCallback',
+              'TestInventoryReadonlyHTTPSourceDeadlineAndClosedReturn',
+              'TestInventoryReadonlySettledForwardRefreshPostgres']),
             'http':('controllers/httpapi',[
               'TestGuestRetirementForwardClosedHistoricalCAS',
               'TestGuestRetirementForwardRequiresCurrentAdministrativeHuman',
               'TestGuestRetirementForwardSummaryPreservesFailureAndHidesOriginals',
               'TestGuestRetirementForwardHistoricalHTTPPostgres'])}
           summary={}
+          inventory_children={
+            'TestInventoryReadonlyDescribeRequiresIndependentPublishedSource':[
+              'exact','missing_false','missing_zero','extra','normal_provider',
+              'normal_operations','foreign_source','foreign_producer','foreign_version',
+              'foreign_route','foreign_schema','duplicate_field','trailing'],
+            'TestInventoryReadonlyHTTPSourceDeadlineAndClosedReturn':[
+              'exact','diagnostic_metadata','foreign_observer','foreign_producer',
+              'foreign_read','foreign_hash','renewed_deadline','unknown_output',
+              'missing_inventory','missing_false','unknown_reply','post_guard',
+              'post_describe','cancelled','no_deadline','renewed_budget'],
+            'TestInventoryReadonlySettledForwardRefreshPostgres':[
+              'incomplete','foreign_native_tuple','changed_admission','wrong_owner','exact_survivors']}
           for name,(package,roots) in expected.items():
               assert (p/(name+'.exit')).read_text().strip()=='0',name+' original go exit'
               rows=[json.loads(line) for line in (p/(name+'.stdout')).read_text().splitlines()]
@@ -360,11 +409,14 @@ jobs:
                       children=['settled','confirmed','missing_receipt','foreign_grant','empty_expected_grant','empty_receipt_grant','issued','uncertain','rejected','transport_incomplete','receipt_error','inventory_error','floor_error','floor_cancelled','completion_error','no_deadline','insufficient_reserve','cancelled']
                       actual=collections.Counter(r['Test'] for r in rows if r['Action']==action and r.get('Test','').startswith(continuation))
                       assert actual==collections.Counter(continuation+child for child in children),(name,action,'continuation case census',actual)
+                      for root,children in inventory_children.items():
+                          actual=collections.Counter(r['Test'] for r in rows if r['Action']==action and r.get('Test','').startswith(root+'/'))
+                          assert actual==collections.Counter(root+'/'+child for child in children),(name,action,'inventory read-only case census',root,actual)
               assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1,name+' package pass'
               summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':93,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          value={'schema':'guest_retirement_partial_poweroff_forward_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':93,'race':True,'count':1,'total_roots':sum(len(v[1]) for v in expected.values()),'summary':summary,'inventory_readonly_roots':4,'inventory_readonly_children':sum(len(v) for v in inventory_children.values()),'historical16_root_census_preserved_separately':True,'declared_storage_and_transport_fixtures_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_FORWARD_CENSUS

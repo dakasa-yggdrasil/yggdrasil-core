@@ -8,6 +8,7 @@ on:
       - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
       - 'db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql'
       - 'db/migrations/00095_failed_expansion_read_failure_continuation.sql'
+      - 'db/migrations/00096_guest_retirement_pre_read_continuation.sql'
       - '.github/workflows/owned-network-guardian.yml'
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - 'db/migrations/00093_guest_retirement_settled_absence_continuation.sql'
       - 'db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql'
       - 'db/migrations/00095_failed_expansion_read_failure_continuation.sql'
+      - 'db/migrations/00096_guest_retirement_pre_read_continuation.sql'
       - '.github/workflows/owned-network-guardian.yml'
   workflow_dispatch:
 
@@ -103,6 +105,12 @@ jobs:
           sha256sum --check SHA256SUMS
           cd tools
           sha256sum --check SHA256SUMS
+      - name: Check inert G15 Source checksums
+        run: |
+          cd ops/network-guardian/g15pair
+          sha256sum --check SHA256SUMS
+          cd tools
+          sha256sum --check SHA256SUMS
       - name: Verify separate additive G12 Core CAS and Goose93 companion Source
         run: |
           cd ops/network-guardian/rollout
@@ -121,7 +129,12 @@ jobs:
         run: |
           cd ops/network-guardian/rollout
           sha256sum --check SHA256SUMS-GOOSE95
-      - name: Run exact preserved245 plus G14 network6 CoreCAS6 Goose95 companion7 census
+      - name: Verify additive G15 Core CAS and Goose96 Source
+        run: |
+          cd ops/network-guardian/rollout
+          sha256sum --check SHA256SUMS-G15
+          sha256sum --check SHA256SUMS-GOOSE96
+      - name: Run exact preserved264 plus G15 network6 CoreCAS6 Goose96 companion7 census
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           GUARDIAN_CI_EVIDENCE: ${{ runner.temp }}/owned-network-guardian
@@ -159,6 +172,7 @@ jobs:
             db/migrations/00093_guest_retirement_settled_absence_continuation.sql
             db/migrations/00094_failed_unwitnessed_expansion_cleanups.sql
             db/migrations/00095_failed_expansion_read_failure_continuation.sql
+            db/migrations/00096_guest_retirement_pre_read_continuation.sql
             ${{ runner.temp }}/owned-network-guardian/
           if-no-files-found: error
           retention-days: 30
