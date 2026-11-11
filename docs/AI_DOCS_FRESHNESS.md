@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 440517483d23fedf1d128a38f8e8a44045bdfada
-verified_diff_sha256: 8c715d986ae03af4bc0b9da382df7c7abc5ff94271f0b320986edd6430ce2701
+verified_at_commit: c8e20babb53b2c4ec1c17d6d1ab73a4d4e3a47cd
+verified_diff_sha256: ebe380731cbe7e8dd47a46b07de6ecb2b1a5c53c10846e118fe5edef63a54e03
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -478,3 +478,5 @@ normal_finish_catalog_relation_order_review: Reviewed the complete actual catalo
 The recoveryfixture dispatch helper now retains the actual UTC instant at nanosecond precision and rejects a coalesced enqueue or a different returned job/run before claiming. This closes a reachable same-second fixture collision with an acknowledged predecessor. The original PG17 failure remains retained; its exact runtime collision is inferred from Source, not established by a captured database wake. Production deduplication, deadlines, claims and the independently accepted compiler image are unchanged. Current full remote CI remains required.
 
 installed_timeout_declared_inventory_protection_review: Reviewed the retained PG16 failure in all eight declared scenarios: the fixture marked its first inventory member protected while the source policy declares zero provider-protected slots. The fixture now derives the flag from the exact mutation binding, matching the existing inventory predicate. The unchanged timeout qualification and its original artifact upload run before the longer historical suite for earlier failure feedback. Independent downstream Source review found no further deterministic mismatch; current remote CI remains required. Product guards, migration, five-minute original deadline and test census are unchanged.
+
+installed_timeout_metadata_extraction_precedence_review: Reviewed the actual PostgreSQL deferred-trigger failure at commit: subtraction bound before metadata extraction and attempted to parse the literal key as JSON. Both extracted metadata objects are now explicitly grouped before the same scheduled-field subtraction and complete comparison. The independent Source scan found no other unparenthesized arrow-arithmetic site in this migration or its new Go SQL. The unapplied migration and source-evidence pins were updated together; production remains on schema97. All five negative and acknowledged-origin scenarios passed in the retained failed candidate, while its three positive scenarios failed at this same guard. Full successor CI and a distinct candidate image remain required; no prior candidate or failed run is adopted.
