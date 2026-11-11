@@ -1,0 +1,49 @@
+{
+  "independent_reviews": {
+    "migration98": "1a8b7faefb4a78b270bdb6c5fadfaf6997f4d3f15561436f2127b4d2d011a73b",
+    "production_source": "9116dadd37761f20bf26964b05cd890932e150437fb4eca717f5472f6f8ca377"
+  },
+  "production_or_native_qualification": false,
+  "reviewed_contracts": [
+    "The original ACK-qualified selectors remain byte-identical; timeout origins use a separately authenticated receipt.",
+    "The original scope transaction closes the classified job and creates one distinct queued successor atomically, before wake saturation.",
+    "Recorded provider return, confirmed CREATE, witness, enrollment, installation and the entire current member roster must agree.",
+    "Historical disposed SETTLED grants remain closed; undisposed mutation authority still refuses admission.",
+    "The new owner receives its own finite fence and fresh inventory, coverage and canaries; it cannot replay provisioning or retirement.",
+    "Migration98 preserves the original dispatch guard outside its new terminal branch and refuses rollback once retained provenance depends on it."
+  ],
+  "schema": "installed_provision_timeout_source_review_v1",
+  "scope": "A recorded successful original provision followed only by a source_assessment timeout may receive an immutable typed terminal and a separate installed-readiness owner. The original failed run, unknown provenance, NULL ACK and original deadlines remain unchanged.",
+  "source_files": {
+    "db/migrations/00098_installed_provision_timeout_dispositions.sql": {
+      "bytes": 51560,
+      "sha256": "aa091e01bddd41000395ae7d6bf392d7ec8892d58ea298120400035e0eb397cf"
+    },
+    "model/capacity_guest_installed_reconcile.go": {
+      "bytes": 2976,
+      "sha256": "b49452eee0c872a239f6e2878cbb2ab94b5aea0b6c9af909949cc98f5a3b5f16"
+    },
+    "model/capacity_installed_provision_timeout.go": {
+      "bytes": 3116,
+      "sha256": "3bafc77bf2b4d0f280336fd85832b20f021e637f631a1b6292077e19afed00fb"
+    },
+    "repository/capacity_dispatch.go": {
+      "bytes": 44530,
+      "sha256": "afc5c501e9caee0750d592bb6ec57f430d647c1c4aed68e8ad2d28b4d311f8f1"
+    },
+    "repository/capacity_dispatch_installed_provision_timeout.go": {
+      "bytes": 23811,
+      "sha256": "7d23199b9bc02d8bc86d7a653dfb6948af1af15f1bb1adcbeca9701c5a91df2c"
+    },
+    "repository/capacity_guest_installed_reconcile.go": {
+      "bytes": 24955,
+      "sha256": "40917bf6c59cd1d98aa1de0e2b4d52aad20f972e9e1c454acd36a193130d155a"
+    }
+  },
+  "validation": {
+    "CI_pass_claimed": false,
+    "declared_CI": "The existing PostgreSQL16/17 owner runs eight isolated test processes with genuine original five-minute deadlines, exact child censuses and retained original outcomes.",
+    "local": "Static source review and gofmt only. Product and SQL execution are restricted to CI and explicitly qualified native operations.",
+    "provider_or_Guest_effect_claimed": false
+  }
+}
