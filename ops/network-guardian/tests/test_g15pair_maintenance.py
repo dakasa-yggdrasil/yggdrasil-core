@@ -382,7 +382,7 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
             expected = copy.deepcopy(previous)
             expected.update(core_container_images=G.G20_CORE_IMAGE_PAIRS, root_review_attestation=review)
             chain = (*D.PAIR_CHAIN[:-12],
-                *((name.lower()+'pair', pairs, getattr(D,name+'_CONFIG'),digest(raw))
+                *((name.lower()+'pair', pairs, (D.PAIR_CHAIN[-2][2] if name=='G19' else getattr(D,name+'_CONFIG')),digest(raw))
                   for (name,pairs),raw in zip(generations,added)),
                 ('g20pair',G.G20_CORE_IMAGE_PAIRS,G.NEW_CONFIG,None))
             with patch.multiple(D, PROPOSAL_BOUND=True, HEAD_NEW_CORE_DIGEST=G.HEAD_NEW_CORE_DIGEST,
