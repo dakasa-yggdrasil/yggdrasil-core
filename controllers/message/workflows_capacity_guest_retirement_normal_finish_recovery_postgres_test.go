@@ -60,6 +60,11 @@ func TestGuestRetirementForwardNormalFinishRecoveryPlanPostgres(t *testing.T) {
 			if !ok || metadata["request_id"] != f.Request.Intent.RequestID || metadata["guest_command_replayed"] != false || metadata["native_destroy_sent"] != false {
 				t.Fatal("recovery hook lost retained original identity", out)
 			}
+			requestID, ok := metadata["request_id"].(string)
+			if !ok || requestID != f.Request.Intent.RequestID {
+				t.Fatal("finish input needs the verified retirement output request ID", out)
+			}
+			input.RequestID = requestID
 			calls := 0
 			finish := f.FinishStore()
 			observe := func(status string) error {

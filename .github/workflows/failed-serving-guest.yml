@@ -340,7 +340,14 @@ jobs:
           }
           failed=0
           record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
-          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|ClosedGuardsPostgres|MissingPrefixPostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres|NormalFinishRecoveryPostgres)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
+          # Separate processes keep Goose/registry globals independent while
+          # unique disposable databases overlap their unchanged natural clocks.
+          record normal_finish_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForwardNormalFinishRecoveryPostgres$' &
+          normal_finish_pid=$!
+          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|ClosedGuardsPostgres|MissingPrefixPostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
+          normal_finish_rc=0
+          wait "$normal_finish_pid" || normal_finish_rc=$?
+          if [[ "$normal_finish_rc" != 0 ]]; then failed=1; fi
           record continuation_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=6m -json ./repository -run '^TestGuestRetirementForwardContinuationPostgres$' || failed=1
           record message go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=5m -json ./controllers/message -run '^(TestGuestRetirementForward.*|TestInventoryReadonly(DescribeRequiresIndependentPublishedSource|EnvelopePreservesProducerAndRemovesCallback|HTTPSourceDeadlineAndClosedReturn|SettledForwardRefreshPostgres))$' || failed=1
           record http go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^TestGuestRetirementForward' || failed=1
@@ -361,8 +368,8 @@ jobs:
               'TestGuestRetirementForwardReadonlyObserverJoins',
               'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
               'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres',
-              'TestGuestRetirementForwardNormalFinishRecoveryPostgres',
               'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn']),
+            'normal_finish_repository':('repository',['TestGuestRetirementForwardNormalFinishRecoveryPostgres']),
             'continuation_repository':('repository',['TestGuestRetirementForwardContinuationPostgres']),
             'message':('controllers/message',[
               'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
@@ -386,7 +393,7 @@ jobs:
               'TestGuestRetirementForwardHistoricalHTTPPostgres'])}
           summary={}
           normal_finish_children={
-            'repository':{'TestGuestRetirementForwardNormalFinishRecoveryPostgres':[
+            'normal_finish_repository':{'TestGuestRetirementForwardNormalFinishRecoveryPostgres':[
               'aws','hetzner','missing_ACK_then_live_lease','ambiguous_failed_ACK',
               'open_original_native_read','prior_DELETE','partial_caller_stays_in_old_lane',
               'late_original_caller_stays_in_old_lane','normal_origin_settled_then_pre_read_continuation']},
