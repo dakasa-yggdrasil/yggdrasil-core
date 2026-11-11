@@ -213,6 +213,58 @@ class Schema98RolloutTests(unittest.TestCase):
         with self.assertRaises(C.Hold):C.validate_installed_timeout98(value,case)
 
     def test_goose98_single_Job_and_CAS_single_PATCH_preserve_once(self):
+        # Exercise the real whole14 Core preimage guard before any Job/claim path.
+        dep_uid,pod_uid,rs_uid=uuid98(810),uuid98(811),uuid98(812)
+        rs_name='yggdrasil-declared-core8';pod_name=rs_name+'-declared'
+        rs_uri='/apis/apps/v1/namespaces/dakasa/replicasets/'+rs_name
+        config_digest='c'*64;started='2026-11-11T01:20:26Z'
+        image=G.PREFIX+G.CURRENT_CORE_D
+        dep={'metadata':{'uid':dep_uid,'generation':281,'annotations':{'dakasa.io/core-source-commit':G.CURRENT_CORE_R}},
+             'spec':{'replicas':1,'template':{'spec':{'containers':[{'name':'core','image':image}]}}},
+             'status':{'observedGeneration':281,'readyReplicas':1,'updatedReplicas':1,'availableReplicas':1,'unavailableReplicas':0}}
+        rs={'metadata':{'uid':rs_uid,'name':rs_name,'ownerReferences':[{'uid':dep_uid,'controller':True}]},
+            'spec':{'replicas':1,'template':copy.deepcopy(dep['spec']['template'])}}
+        pod={'metadata':{'uid':pod_uid,'name':pod_name,'ownerReferences':[{'uid':rs_uid,'controller':True}]},
+             'spec':{'nodeName':'declared-brain','containers':[{'name':'core','image':image}]},
+             'status':{'phase':'Running','containerStatuses':[{'name':'core','ready':True,'restartCount':0,
+                       'containerID':'containerd://declared-core8','state':{'running':{'startedAt':started}},
+                       'imageID':image,'image':'sha256:'+config_digest}]}}
+        expected={'deployment_uid':dep_uid,'generation':281,
+                  'deployment_spec_sha256':G.sha(G.wire(dep['spec'])),
+                  'deployment_metadata_sha256':G.sha(G.wire(G.stable_metadata(dep))),
+                  'replicaset_name':rs_name,'replicaset_uid':rs_uid,
+                  'replicaset_spec_sha256':G.sha(G.wire(rs['spec'])),
+                  'replicaset_metadata_sha256':G.sha(G.wire(G.stable_metadata(rs))),
+                  'pod_name':pod_name,'pod_uid':pod_uid,'container_id':'containerd://declared-core8',
+                  'container_started_at':started,'node_name':'declared-brain',
+                  'pod_spec_sha256':G.sha(G.wire(pod['spec']))}
+        objects={G.DEP_URI:dep,rs_uri:rs,G.CORE_PODS_URI:{'kind':'PodList','metadata':{},'items':[pod]}}
+        with mock.patch.multiple(G,CURRENT_CORE_GENERATION=281,CURRENT_CORE_UID=dep_uid,
+                                 CURRENT_CORE_POD_UID=pod_uid,CURRENT_RS_UID=rs_uid,
+                                 RS_URI=rs_uri,CURRENT_CORE_CONFIG=config_digest):
+            api=mock.Mock();api.get.side_effect=lambda uri:copy.deepcopy(objects[uri])
+            actual=G.core(api,expected)
+            self.assertEqual(actual,expected);self.assertIsNot(actual,expected)
+            self.assertEqual(api.get.call_args_list,[mock.call(G.DEP_URI),mock.call(rs_uri),mock.call(G.CORE_PODS_URI)])
+            api.request.assert_not_called()
+            stale=copy.deepcopy(expected);stale['generation']=280
+            api.get.reset_mock()
+            with self.assertRaises(G.Hold):G.core(api,stale)
+            api.get.assert_not_called();api.request.assert_not_called()
+            with mock.patch.object(G,'CURRENT_CORE_GENERATION',280):
+                with self.assertRaises(G.Hold):G.core(api,stale)
+            for fault in ('deployment_uid','deployment_spec','deployment_metadata','replicaset_uid','pod_spec','api_generation'):
+                with self.subTest(core_preimage_fault=fault):
+                    bad=copy.deepcopy(objects)
+                    if fault=='deployment_uid':bad[G.DEP_URI]['metadata']['uid']=uuid98(813)
+                    elif fault=='deployment_spec':bad[G.DEP_URI]['spec']['replicas']=2
+                    elif fault=='deployment_metadata':bad[G.DEP_URI]['metadata']['annotations']['foreign']='changed'
+                    elif fault=='replicaset_uid':bad[rs_uri]['metadata']['uid']=uuid98(814)
+                    elif fault=='pod_spec':bad[G.CORE_PODS_URI]['items'][0]['spec']['nodeName']='foreign'
+                    else:bad[G.DEP_URI]['status']['observedGeneration']=280
+                    api.get.side_effect=lambda uri,bad=bad:copy.deepcopy(bad[uri])
+                    with self.assertRaises(G.Hold):G.core(api,expected)
+                    api.request.assert_not_called()
         uid=uuid98(800);new_digest='d'*64
         with mock.patch.multiple(G,JOB_UUID=uuid98(801),COMPANION_IMAGE_D=new_digest):
             job=G.job_manifest();self.assertEqual(job['metadata']['name'],'core-goose98-'+uuid98(801).replace('-',''))

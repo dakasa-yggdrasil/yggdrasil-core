@@ -432,7 +432,7 @@ def stable_metadata(value):
 def core(api, expected):
     closed(expected, 'deployment_uid generation deployment_spec_sha256 deployment_metadata_sha256 replicaset_name replicaset_uid replicaset_spec_sha256 replicaset_metadata_sha256 pod_name pod_uid container_id container_started_at node_name pod_spec_sha256', 'CLOSED_ACTUAL_CORE14')
     need(expected['deployment_uid'] == CURRENT_CORE_UID
-         and expected['generation'] == CURRENT_CORE_GENERATION == 280 and expected['pod_uid'] == CURRENT_CORE_POD_UID
+         and expected['generation'] == CURRENT_CORE_GENERATION == 281 and expected['pod_uid'] == CURRENT_CORE_POD_UID
          and expected['replicaset_uid'] == CURRENT_RS_UID
          and expected['replicaset_name'] == RS_URI.rsplit('/', 1)[-1], 'ACTUAL_RETAINED_CORE5_LIFETIME_NOT_CORE6_ADOPTION')
     dep, rs, pods = api.get(DEP_URI), api.get(RS_URI), api.get(CORE_PODS_URI)
