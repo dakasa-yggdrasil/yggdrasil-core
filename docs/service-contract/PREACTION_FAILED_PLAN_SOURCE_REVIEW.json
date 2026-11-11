@@ -1,0 +1,43 @@
+{
+  "independent_Source_reviews": {
+    "Go": "4552a13f/7781eca4/2446fdf4 independently reviewed before formatting; static only",
+    "SQL_and_tests_sha256": "a7c05ac62b2d6faabf10f2867b6207cdbeeefe023e653b1451ba59807007f221"
+  },
+  "production_or_native_qualification": false,
+  "reviewed_contracts": [
+    "Current anchor, complete members, source graph, independently authenticated errors and nanosecond result clocks; independent complete no-claim effect scan.",
+    "Existing enqueue scope locks, one immutable receipt and explicit distinct queued successor job/run/wake in the same transaction; terminal changes only state and updated_at.",
+    "Historical receipt reads retain original proof after a legitimate successor advances; old M87/M91/M98 meanings remain unchanged.",
+    "The existing 641-byte historical failed-installed lookup is unchanged; a regular transactional partial index adds only an access path within existing migration limits.",
+    "No REST, message, event, Guest or provider mutation API changes; all existing interface census evidence remains unchanged apart from the complete source inventory."
+  ],
+  "schema": "preaction_failed_plan_source_review_v1",
+  "scope": "Automatic disposition of an expired recorded failed PLAN with no committed authority, anchored to an immutable installed-timeout receipt; no ACK, replay or provider authority is manufactured.",
+  "source_files": {
+    "db/migrations/00099_preaction_failed_plan_dispositions.sql": {
+      "bytes": 55020,
+      "sha256": "bbfecef9888c27eacda8c732bcfe28e606d566decadf56ecc65acfb687020a41"
+    },
+    "model/capacity_dispatch_preaction_plan_disposition.go": {
+      "bytes": 1407,
+      "sha256": "73645b78170f41e8309fdb1a23c4f5cde12b716d3996f62c108ad495fd837872"
+    },
+    "repository/capacity_dispatch.go": {
+      "bytes": 44693,
+      "sha256": "2446fdf469846470d24b4916416a73c45d2c222c79feb93411e56deee42ff75a"
+    },
+    "repository/capacity_dispatch_preaction_plan_disposition.go": {
+      "bytes": 18421,
+      "sha256": "4d54ab638553935fd17c5623067a8c15deddfd8522c2c99478555ee01e0aeace"
+    },
+    "repository/capacity_guest_installed_reconcile.go": {
+      "bytes": 24955,
+      "sha256": "40917bf6c59cd1d98aa1de0e2b4d52aad20f972e9e1c454acd36a193130d155a"
+    }
+  },
+  "validation": {
+    "CI_pass_claimed": false,
+    "local": "Source review, static data/hash checks and gofmt only.",
+    "required_CI": "Existing full qualification plus nine PostgreSQL16/17 pre-action cases, three real 300s dispatch expirations across two repeat phases, exact child censuses, complete raw catalogs and immutable/deferred negative cases."
+  }
+}

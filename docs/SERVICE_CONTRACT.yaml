@@ -81,6 +81,11 @@
       "evidence": "docs/service-contract/INSTALLED_PROVISION_TIMEOUT_SOURCE_REVIEW.json",
       "id": "installed_provision_timeout_source_review",
       "sha256": "26378138f5112bcd76525f625d22caca1493a6b0e459e27d53b195c5913a5f79"
+    },
+    {
+      "evidence": "docs/service-contract/PREACTION_FAILED_PLAN_SOURCE_REVIEW.json",
+      "id": "preaction_failed_plan_source_review",
+      "sha256": "e7952e8e291e0a01f21b60ae6e92b260299f397c062c6e0767ddf846a3db2be0"
     }
   ],
   "coverage": "complete",
@@ -129,7 +134,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "3569a8f12551dbc3bed2a4f3903d18111fcbcdd13b822f2e400af19599466ff9"
+    "sha256": "52be8db23b18c03aefa84dd25d8aff79740d178d4ed9385aebfa70db0dbc5c8e"
   },
   "unresolved": []
 }

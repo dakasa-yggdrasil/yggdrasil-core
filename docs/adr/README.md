@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**105 decisions.**
+**109 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -151,3 +151,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0109](0109-read-legacy-profile-inventory-through-an-independent-observer.md) | Read legacy profile inventory through an independent observer | Proposed | 2026-11-10 | Core / exact AWS/c34 forward inventory, independent actual observer source and unchanged mutation authority |
 | [0110](0110-recover-a-closed-failed-finish-after-normal-guest-poweroff.md) | Recover a closed failed finish after normal Guest poweroff | Proposed | 2026-11-11 | Original Guest retirement / automatic normal-success failed-finish provenance and fresh fenced native owner |
 | [0111](0111-resume-installed-readiness-after-a-recorded-provision-timeout.md) | Resume installed readiness after a recorded provision timeout | Proposed | 2026-11-11 | Core / distinct automatic unknown installed-provision timeout disposition and fresh readiness origin |
+| [0112](0112-close-a-recorded-failed-plan-without-committed-authority.md) | Close a recorded failed plan without committed authority | Proposed | 2026-11-11 | Core / automatic pre-action dispatch disposition |
