@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: dba0bfd8059dec7745e56b5e0c59cb65d4a2efa0
-verified_diff_sha256: 02e816079389cc83a49b777baceba0709cf0399e4534cd8ba3a695aa7c180c93
+verified_at_commit: 440517483d23fedf1d128a38f8e8a44045bdfada
+verified_diff_sha256: 8c715d986ae03af4bc0b9da382df7c7abc5ff94271f0b320986edd6430ce2701
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -476,3 +476,5 @@ normal_finish_catalog_relation_order_review: Reviewed the complete actual catalo
 ## Distinct successor fixture wakes
 
 The recoveryfixture dispatch helper now retains the actual UTC instant at nanosecond precision and rejects a coalesced enqueue or a different returned job/run before claiming. This closes a reachable same-second fixture collision with an acknowledged predecessor. The original PG17 failure remains retained; its exact runtime collision is inferred from Source, not established by a captured database wake. Production deduplication, deadlines, claims and the independently accepted compiler image are unchanged. Current full remote CI remains required.
+
+installed_timeout_declared_inventory_protection_review: Reviewed the retained PG16 failure in all eight declared scenarios: the fixture marked its first inventory member protected while the source policy declares zero provider-protected slots. The fixture now derives the flag from the exact mutation binding, matching the existing inventory predicate. The unchanged timeout qualification and its original artifact upload run before the longer historical suite for earlier failure feedback. Independent downstream Source review found no further deterministic mismatch; current remote CI remains required. Product guards, migration, five-minute original deadline and test census are unchanged.
