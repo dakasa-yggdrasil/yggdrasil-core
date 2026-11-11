@@ -622,7 +622,7 @@ func (f *installedTimeoutFixture) inventory(t *testing.T, count int, now time.Ti
 	inv.MissingSlots = nil
 	for i, reg := range f.reg[:count] {
 		member := first
-		member.Slot, member.Protected = i+1, i == 0
+		member.Slot, member.Protected = i+1, i+1 <= f.p.MutationBindings[0].ProtectedSlots
 		member.DesiredSpec = *f.p.MutationBindings[0].Slots[i].DesiredSpec
 		member.RequestSHA256 = f.p.MutationBindings[0].Slots[i].DesiredSpecSHA256
 		member.Server.ID, member.Server.CreatedAt, member.Server.Name = reg.Result.Tuple.ResourceID, reg.Result.Tuple.CreatedAt, member.DesiredSpec.NativeName
