@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: b81f2dc6384dcafe1c25437ff4aff7cce28d4d47
-verified_diff_sha256: e4185bd63013fd1a5d31423135391e8c99f6e0752266717e06eb5a04c64dd632
+verified_at_commit: dbf40031777fd5cb876b9447b0ec4905962d4194
+verified_diff_sha256: 81d4f43a90edd671b2dd1fcee9f65437e3523970bd3fa6fb979f22593780adac
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -483,4 +483,4 @@ installed_timeout_metadata_extraction_precedence_review: Reviewed the actual Pos
 
 installed_timeout_same_owner_parallel_CI_review: The real PG16/17 eight-case timeout gate passed with all original five-minute deadlines, but its measured 8m24s before the historical suite exhausted the existing thirty-minute job budget. The same two complete qualification bodies now run concurrently in isolated subshells; the parent observes both original returns and requires both to be zero. The PostgreSQL matrix, job budget, commands, flags, case censuses, upload obligations and rollback-only inspection remain required. Product code and migration a739 are unchanged. Only shell syntax was parsed locally; full successor CI remains required and no improvement or production credit is claimed from the cancelled parent.
 
-installed_timeout_operational_integration_review: Reviewed additive schema98 catalog and rollout operators, immutable Core8/schema97 predecessor evidence, actual installed-timeout V2 operands and the concrete C18 Core8/Core9 Source pair. The old290 declared tests remain unchanged and ten additive criteria extend the exact owning census to300. New wrappers retain single Job and single CAS domains, whole catalog and original deadline checks; Source proposal bindings grant no runtime acceptance. The guarded runtime service contract remains fresh. Exact integrated remote CI, image registry verification and Native adoption remain required.
+independent_postgres_qualification_review: Reviewed real historical PostgreSQL16/17 deadline and lease failures under the shared qualification job, alongside the eight new timeout cases passing on both versions. Isolated the two unchanged command bodies into separate PostgreSQL runners, preserving original deadlines, both mandatory outcomes, full censuses, inspection and always-retained artifacts. CPU/RAM causality was not measured. Product, fixtures and migration bytes remain unchanged. The guarded service contract remains fresh; successor full remote CI and image qualification remain required.
