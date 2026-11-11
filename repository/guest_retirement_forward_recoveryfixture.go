@@ -557,7 +557,7 @@ func (f *GuestRetirementForwardRecoveryFixture) startDispatch() {
 	} else {
 		f.private.exec(t, `INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec,active)VALUES($1,'v1','rbac',$2,$3,1,$4,'{}'::jsonb,true)`, rbac.ID, rbac.Namespace, rbac.Name, rbac.Checksum)
 	}
-	e := CapacityDispatchEnvelope{Protocol: CapacityDispatchProtocol, JobID: uuid.New(), RunID: uuid.New(), Realm: f.Policy.Metadata.Namespace, Environment: f.Spec.Environment, Domain: f.Spec.Domain, Dimension: f.Spec.Dimension, SourceTick: time.Now().UTC().Truncate(time.Second).Format(time.RFC3339), Policy: pin(f.Policy), Workflow: pin(f.Workflow), RBAC: rbac, MachinePrincipalID: "capacity-controller", PrincipalSHA256: capacityDispatchSHA([]byte("declared-forward-principal")), BindingSHA256: capacityDispatchSHA([]byte("declared-forward-binding"))}
+	e := CapacityDispatchEnvelope{Protocol: CapacityDispatchProtocol, JobID: uuid.New(), RunID: uuid.New(), Realm: f.Policy.Metadata.Namespace, Environment: f.Spec.Environment, Domain: f.Spec.Domain, Dimension: f.Spec.Dimension, SourceTick: time.Now().UTC().Format(time.RFC3339Nano), Policy: pin(f.Policy), Workflow: pin(f.Workflow), RBAC: rbac, MachinePrincipalID: "capacity-controller", PrincipalSHA256: capacityDispatchSHA([]byte("declared-forward-principal")), BindingSHA256: capacityDispatchSHA([]byte("declared-forward-binding"))}
 	e.Inputs = map[string]any{"policy": map[string]any{"namespace": f.Policy.Metadata.Namespace, "name": f.Policy.Metadata.Name}}
 	e.Metadata = map[string]any{WorkflowRunCreatorMachinePrincipalMetadataKey: e.MachinePrincipalID, "triggered_by": "workflow_scheduler", "manifest_id": f.Workflow.ID.String(), "scheduled_for": e.SourceTick, "capacity_dispatch_job_id": e.JobID.String(), "capacity_dispatch_protocol": e.Protocol}
 	var err error
@@ -570,8 +570,9 @@ func (f *GuestRetirementForwardRecoveryFixture) startDispatch() {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	if _, _, err = EnqueueCapacityDispatch(context.Background(), tx, e); err != nil {
-		t.Fatal(err)
+	enqueued, coalesced, err := EnqueueCapacityDispatch(context.Background(), tx, e)
+	if err != nil || coalesced || enqueued.JobID != e.JobID || enqueued.RunID != e.RunID {
+		t.Fatal("new fixture dispatch requires its distinct wake and original job/run", coalesced, err)
 	}
 	if err = tx.Commit(); err != nil {
 		t.Fatal(err)
