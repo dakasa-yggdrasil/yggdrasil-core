@@ -24,7 +24,7 @@ import threading
 import time
 
 
-PROPOSAL_BOUND = True
+PROPOSAL_BOUND=True
 
 def sibling(name):
     if PROPOSAL_BOUND is not True:
