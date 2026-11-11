@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-11T10:09:56-03:00",
+  "generated_at": "2026-11-11T13:01:47-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1526,
-    ".json": 242,
-    ".py": 189,
+    ".json": 245,
+    ".py": 197,
     ".sql": 101,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "dbf40031777fd5cb876b9447b0ec4905962d4194",
+    "commit": "0398aa0e64ec85b11be259b3f07703bd8377866a",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "09347458219f54bf77e9fe2f59957cf36367e6266b40e4b7ca266d3e5885a482"
+        "sha256": "9d40fd83e45fc0e7e61acbf231b78c75941f67ed8e161dd8d9175b479f722854"
       },
       {
         "path": "AGENTS.md",
@@ -66,7 +66,7 @@
     {
       "path": "repository",
       "files": 383,
-      "kb": 5225
+      "kb": 5228
     },
     {
       "path": "controllers/httpapi",
@@ -100,8 +100,8 @@
     },
     {
       "path": "ops/network-guardian/tests",
-      "files": 54,
-      "kb": 977
+      "files": 60,
+      "kb": 1171
     },
     {
       "path": "addons",
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 77,
+    "config_files": 80,
     "k8s_manifests": 25
   }
 }

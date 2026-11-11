@@ -2,6 +2,7 @@
   "independent_reviews": {
     "migration98": "1a8b7faefb4a78b270bdb6c5fadfaf6997f4d3f15561436f2127b4d2d011a73b",
     "migration98_metadata_extraction_precedence": "c617dece1e908ac4256b7d8e6d2a529bbe19e22c91b19ef0d58090faf688615b",
+    "original_conditional_skip_metadata": "0e5b5b79736a4e49fe69eebcfbcec89c8d25eb0cc46395e44a1901af8f658f55",
     "production_source": "9116dadd37761f20bf26964b05cd890932e150437fb4eca717f5472f6f8ca377"
   },
   "production_or_native_qualification": false,
@@ -12,14 +13,15 @@
     "Historical disposed SETTLED grants remain closed; undisposed mutation authority still refuses admission.",
     "The new owner receives its own finite fence and fresh inventory, coverage and canaries; it cannot replay provisioning or retirement.",
     "Migration98 preserves the original dispatch guard outside its new terminal branch and refuses rollback once retained provenance depends on it.",
-    "The successor metadata object is extracted before scheduled_for and capacity_dispatch_job_id are subtracted; the complete remaining metadata comparison stays mandatory."
+    "The successor metadata object is extracted before scheduled_for and capacity_dispatch_job_id are subtracted; the complete remaining metadata comparison stays mandatory.",
+    "The two original condition skips retain exactly their condition and skip_reason metadata; the remaining aborted skips retain empty metadata. This preserves the actual immutable original without adding an aborted-error requirement."
   ],
   "schema": "installed_provision_timeout_source_review_v1",
   "scope": "A recorded successful original provision followed only by a source_assessment timeout may receive an immutable typed terminal and a separate installed-readiness owner. The original failed run, unknown provenance, NULL ACK and original deadlines remain unchanged.",
   "source_files": {
     "db/migrations/00098_installed_provision_timeout_dispositions.sql": {
-      "bytes": 51564,
-      "sha256": "a739323d44b526beeef229c9faa17d0e8d27a2460028835e6fe7650b60b1904f"
+      "bytes": 51913,
+      "sha256": "b1ef412772f6d50fbd6a3becfd68965748951e94010d5e845f1a9af5563fdde6"
     },
     "model/capacity_guest_installed_reconcile.go": {
       "bytes": 2976,
@@ -34,8 +36,8 @@
       "sha256": "afc5c501e9caee0750d592bb6ec57f430d647c1c4aed68e8ad2d28b4d311f8f1"
     },
     "repository/capacity_dispatch_installed_provision_timeout.go": {
-      "bytes": 23811,
-      "sha256": "7d23199b9bc02d8bc86d7a653dfb6948af1af15f1bb1adcbeca9701c5a91df2c"
+      "bytes": 24289,
+      "sha256": "6837609eacbbb84ebab0d073f36409e6bf4d517f706ac3598fe2ef500f5486ce"
     },
     "repository/capacity_guest_installed_reconcile.go": {
       "bytes": 24955,

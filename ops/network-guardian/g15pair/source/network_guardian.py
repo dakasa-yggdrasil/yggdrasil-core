@@ -12,9 +12,9 @@ import stat
 import time
 import types
 ROOT=Path('/opt/dakasa/capacity-network')
-HERE=ROOT/'network-boot-recovery-r13-g17pair-source-v1'
+HERE=ROOT/'network-boot-recovery-r13-g18pair-source-v1'
 SELF=HERE/'network_guardian.py'
-CONFIG=Path('/etc/dakasa/capacity-network/network-recovery.r13-g17pair.production.json')
+CONFIG=Path('/etc/dakasa/capacity-network/network-recovery.r13-g18pair.production.json')
 R13_PREDECESSOR_HERE=ROOT/'network-boot-recovery-r13-netlink-source-v1'
 R13_PREDECESSOR_SOURCE_SHA='2f5bb7e1946d905fbfc83c0662b0df281f6fb9f1fba2c85b4036ba825376021c'
 R13_PREDECESSOR_CONFIG=Path('/etc/dakasa/capacity-network/network-recovery.r13-netlink.production.json')
@@ -29,7 +29,7 @@ HUB='dakasa-capacity-network-hub.service'
 COLD='dakasa-capacity-network-cold-transport.service'
 GUARDIAN='dakasa-capacity-network-guardian.service'
 RUNTIME=ROOT/'source-r13-netlink-v1'
-NEW_CONFIG=Path('/etc/dakasa/capacity-network/controller.r13-netlink-g17pair.production.json')
+NEW_CONFIG=Path('/etc/dakasa/capacity-network/controller.r13-netlink-g18pair.production.json')
 BASE_CONFIG=Path('/etc/dakasa/capacity-network/controller.r13-netlink.production.json')
 BASE_CONFIG_SHA='460b0fd49191248fecffa7009636a82391815a64fc23db11e039b7ee9f5d928a'
 F5PAIR_CONFIG=Path('/etc/dakasa/capacity-network/controller.r13-netlink-f5pair.production.json')
@@ -54,8 +54,8 @@ CORE_A9FA=CORE_IMAGE_REF+'sha256:a9fa2599db02016ff6a7cc90e95281448953fc4ee201609
 CORE_9913=CORE_IMAGE_REF+'sha256:9913ebfb5afc3620b8d6f4136ea1b9cc5acfda0c339199a99be4444fa10f417e'
 CORE_CADC=CORE_IMAGE_REF+'sha256:cadc0c4491109d5791438b6187b53620008f8a634ae8d93903f664ae18c18edd'
 PROPOSAL_BOUND=True
-HEAD_CORE_SOURCE='0764e6b267d3d6ddbfb4d7a4b9fb4024018bf89f'
-HEAD_NEW_CORE_DIGEST='sha256:9b6e2a5d06eed90b7b44d059d3f78a405a21430a7b104f17498c904f499bdd97'
+HEAD_CORE_SOURCE='110b2e370a8f2936d9a3faafa74d81ba1e357331'
+HEAD_NEW_CORE_DIGEST='sha256:f02ec7b916b4d8b23a8bfe91703af2b3e8f33f25fd943b18642f9218baa1ee60'
 HEAD_DIGEST_PLACEHOLDER='sha256:'+'0'*64
 CORE_G5=CORE_CADC
 CORE_G6=CORE_IMAGE_REF+'sha256:750d5e46aee679075c2b88c163d22036093cf893edbe16bb5c2ca484f4275838'
@@ -67,9 +67,12 @@ CORE_G13=CORE_IMAGE_REF+'sha256:d8a86c844f0b2df14aa3ae3b0281f43be14a7f6aed3b1bf9
 CORE_G14=CORE_IMAGE_REF+'sha256:35195e4ddff2a69f2ae7fca8f24b43177c61c49f12117a4fe4925a43e9cd6fde'
 CORE_G15=CORE_IMAGE_REF+'sha256:85be238c7f5b15760f7eb903646cc48f6b4b86a6995d0a4727a1ba0d86d06876'
 CORE_G16=CORE_IMAGE_REF+'sha256:311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce'
-CORE_G17=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
+CORE_G17=CORE_IMAGE_REF+'sha256:9b6e2a5d06eed90b7b44d059d3f78a405a21430a7b104f17498c904f499bdd97'
 G17_CONTROLLER_CONFIG_SHA='396a8f49baa8fd2851c7a93c3fb88ea67f9efe621c143bfff713e822e1116602'
 G17_CORE_IMAGE_PAIRS=[{'image':CORE_G16,'image_id':CORE_G16},{'image':CORE_G17,'image_id':CORE_G17}]
+CORE_G18=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
+G18_CONTROLLER_CONFIG_SHA='d8ed4b268c112fc396860b57f57b36090dcc8b63f768a3a47b291984aa6eab1a'
+G18_CORE_IMAGE_PAIRS=[{'image':CORE_G17,'image_id':CORE_G17},{'image':CORE_G18,'image_id':CORE_G18}]
 G14_CONTROLLER_CONFIG_SHA='90fb39778f79963af7a515401df0e66d969de997d7762aed6f2c50284a733804'
 CORE_G9=CORE_IMAGE_REF+'sha256:7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6'
 G9_CONTROLLER_CONFIG_SHA='3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111'
@@ -101,7 +104,7 @@ G13_CONTROLLER_CONFIG_SHA='2fafe364344596ec0ab4a87a1887c8a4bcc581b103937fedb807e
 G12_CONTROLLER_CONFIG_SHA='7c05da2f2ab22a08abd57d5e514e71c7c378e03387a532a8189e1845e3865879'
 G11_CONTROLLER_CONFIG_SHA='a3706d21323a4cce2ef1d0746a9daffd81c1dad538f028635765bcbc116c7777'
 G16_CONTROLLER_CONFIG_SHA='0549d1941ebc50fd77cd3800c3b4afb78505d0de6daa76c4fd0b04a2f73abe7d'
-PAIR_CHAIN=(('base',R42_CORE_IMAGE_PAIRS,BASE_CONFIG,BASE_CONFIG_SHA),('f5pair',F5_CORE_IMAGE_PAIRS,F5PAIR_CONFIG,F5PAIR_CONFIG_SHA),('g2pair',G2_CORE_IMAGE_PAIRS,G2PAIR_CONFIG,G2PAIR_CONFIG_SHA),('g3pair',G3_CORE_IMAGE_PAIRS,G3PAIR_CONFIG,G3PAIR_CONFIG_SHA),('g4pair',G4_CORE_IMAGE_PAIRS,G4PAIR_CONFIG,G4PAIR_CONFIG_SHA),('g5pair',G5_CORE_IMAGE_PAIRS,G5PAIR_CONFIG,G5PAIR_CONFIG_SHA),('g6pair',G6_CORE_IMAGE_PAIRS,G6PAIR_CONFIG,G6PAIR_CONFIG_SHA),('g7pair',G7_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g7pair.production.json'),'d68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf'),('g8pair',G8_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g8pair.production.json'),'42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5'),('g9pair',G9_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g9pair.production.json'),G9_CONTROLLER_CONFIG_SHA),('g10pair',G10_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g10pair.production.json'),G10_CONTROLLER_CONFIG_SHA),('g11pair',G11_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g11pair.production.json'),G11_CONTROLLER_CONFIG_SHA),('g12pair',G12_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g12pair.production.json'),G12_CONTROLLER_CONFIG_SHA),('g13pair',G13_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g13pair.production.json'),G13_CONTROLLER_CONFIG_SHA),('g14pair',G14_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g14pair.production.json'),G14_CONTROLLER_CONFIG_SHA),('g15pair',G15_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g15pair.production.json'),'9094bab152bae7be581b524fb32417c7cfb320ce1ad46f9a171347d3043fa4a5'),('g16pair',G16_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g16pair.production.json'),G16_CONTROLLER_CONFIG_SHA),('g17pair',G17_CORE_IMAGE_PAIRS,NEW_CONFIG,None),)
+PAIR_CHAIN=(('base',R42_CORE_IMAGE_PAIRS,BASE_CONFIG,BASE_CONFIG_SHA),('f5pair',F5_CORE_IMAGE_PAIRS,F5PAIR_CONFIG,F5PAIR_CONFIG_SHA),('g2pair',G2_CORE_IMAGE_PAIRS,G2PAIR_CONFIG,G2PAIR_CONFIG_SHA),('g3pair',G3_CORE_IMAGE_PAIRS,G3PAIR_CONFIG,G3PAIR_CONFIG_SHA),('g4pair',G4_CORE_IMAGE_PAIRS,G4PAIR_CONFIG,G4PAIR_CONFIG_SHA),('g5pair',G5_CORE_IMAGE_PAIRS,G5PAIR_CONFIG,G5PAIR_CONFIG_SHA),('g6pair',G6_CORE_IMAGE_PAIRS,G6PAIR_CONFIG,G6PAIR_CONFIG_SHA),('g7pair',G7_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g7pair.production.json'),'d68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf'),('g8pair',G8_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g8pair.production.json'),'42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5'),('g9pair',G9_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g9pair.production.json'),G9_CONTROLLER_CONFIG_SHA),('g10pair',G10_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g10pair.production.json'),G10_CONTROLLER_CONFIG_SHA),('g11pair',G11_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g11pair.production.json'),G11_CONTROLLER_CONFIG_SHA),('g12pair',G12_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g12pair.production.json'),G12_CONTROLLER_CONFIG_SHA),('g13pair',G13_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g13pair.production.json'),G13_CONTROLLER_CONFIG_SHA),('g14pair',G14_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g14pair.production.json'),G14_CONTROLLER_CONFIG_SHA),('g15pair',G15_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g15pair.production.json'),'9094bab152bae7be581b524fb32417c7cfb320ce1ad46f9a171347d3043fa4a5'),('g16pair',G16_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g16pair.production.json'),G16_CONTROLLER_CONFIG_SHA),('g17pair',G17_CORE_IMAGE_PAIRS,Path('/etc/dakasa/capacity-network/controller.r13-netlink-g17pair.production.json'),G17_CONTROLLER_CONFIG_SHA),('g18pair',G18_CORE_IMAGE_PAIRS,NEW_CONFIG,None),)
 ALLOWED_CORE_IMAGE_PAIRS=tuple(pairs for _,pairs,_,_ in PAIR_CHAIN)
 F5PAIR_PREDECESSOR_SOURCE_SHA='d83f892b087b6c604928d9a21e47af5f6086124eeecadb08e6560f47e631afeb'
 F5PAIR_PREDECESSOR_CONFIG=Path('/etc/dakasa/capacity-network/network-recovery.r13-f5pair.production.json')
@@ -231,6 +234,13 @@ G16_PREDECESSOR_HERE=ROOT/'network-boot-recovery-r13-g15pair-source-v2'
 G16_PREDECESSOR_CONFIG=Path('/etc/dakasa/capacity-network/network-recovery.r13-g15pair-v2.production.json')
 G16_PREDECESSOR_SOURCE_SHA='3b7bfc8b63d86daed56e66daf04e7bdbc37671ab557832cca9294abf59a8a725'
 G16_PREDECESSOR_CONFIG_SHA='c981f3770ef9895c2d8af8822df5e75ea0a8e1d54527ae1d6266fe6e8e3bade1'
+HISTORICAL_G17_FIELDS=frozenset(FIELDS)
+FIELDS=FIELDS|{'g17_predecessor_guardian_source_sha256','g17_predecessor_standing_config_sha256'}
+G17_PREDECESSOR_HERE=ROOT/'network-boot-recovery-r13-g17pair-source-v1'
+G17_PREDECESSOR_CONFIG=Path('/etc/dakasa/capacity-network/network-recovery.r13-g17pair.production.json')
+G17_PREDECESSOR_SOURCE_SHA='f7407c9b938ea00e5f73a7f976f15d8c208edad732bbad3ab80051338af9847a'
+G17_PREDECESSOR_CONFIG_SHA='7d2f5e6f0baf80ddb7cf760bf9913fb09a51d74a3425d8aa0a01fd118b30bc89'
+
 def require(ok, guard):
   if not ok:
     raise RuntimeError(guard)
@@ -239,14 +249,14 @@ def require_bound():
       and type(HEAD_NEW_CORE_DIGEST) is str
       and re.fullmatch('sha256:[a-f0-9]{64}', HEAD_NEW_CORE_DIGEST) is not None
       and HEAD_NEW_CORE_DIGEST != HEAD_DIGEST_PLACEHOLDER
-      and type(G17_CONTROLLER_CONFIG_SHA) is str
-      and re.fullmatch('[a-f0-9]{64}', G17_CONTROLLER_CONFIG_SHA) is not None
-      and G17_CONTROLLER_CONFIG_SHA != '0' * 64
+      and type(G18_CONTROLLER_CONFIG_SHA) is str
+      and re.fullmatch('[a-f0-9]{64}', G18_CONTROLLER_CONFIG_SHA) is not None
+      and G18_CONTROLLER_CONFIG_SHA != '0' * 64
       and type(HEAD_CORE_SOURCE) is str and re.fullmatch('[a-f0-9]{40}', HEAD_CORE_SOURCE) is not None
       and HEAD_CORE_SOURCE != '0' * 40
       and type(G9_PREDECESSOR_CONFIG_SHA) is str and re.fullmatch('[a-f0-9]{64}', G9_PREDECESSOR_CONFIG_SHA) is not None
       and G9_PREDECESSOR_CONFIG_SHA != '0' * 64
-      and CORE_G17 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
+      and CORE_G18 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
       'G15_CONCRETE_QUALIFIED_BINDING_REQUIRED')
 def sha(raw):
   return hashlib.sha256(raw).hexdigest()
@@ -426,7 +436,7 @@ def exact_ref(value):
   require(type(value)is dict and set(value)=={'path','sha256'}and type(value['path'])is str and value['path'].startswith('/')and re.fullmatch('[a-f0-9]{64}',str(value['sha256'])),'EXACT_PUBLIC_ORIGINAL_OR_COPY_REF')
 def standing_config(source_sha, controller_unit_sha, hub_unit_sha, cold_unit_sha,
           guardian_unit_sha, new_controller_raw, new_hub_raw, root_review, *, R43_proofs, Core262_context_ref, proof_index_ref, context_sources, hub_source_sha, r13_predecessor_standing_sha):
-  value={'g15_predecessor_guardian_source_sha256':G15_PREDECESSOR_SOURCE_SHA,'g15_predecessor_standing_config_sha256':G15_PREDECESSOR_CONFIG_SHA,'g14_predecessor_guardian_source_sha256':G14_PREDECESSOR_SOURCE_SHA,'g14_predecessor_standing_config_sha256':G14_PREDECESSOR_CONFIG_SHA,'g13_predecessor_guardian_source_sha256':G13_PREDECESSOR_SOURCE_SHA,'g13_predecessor_standing_config_sha256':G13_PREDECESSOR_CONFIG_SHA,'g12_predecessor_guardian_source_sha256':G12_PREDECESSOR_SOURCE_SHA,'g12_predecessor_standing_config_sha256':G12_PREDECESSOR_CONFIG_SHA,'g11_predecessor_guardian_source_sha256':G11_PREDECESSOR_SOURCE_SHA,'g11_predecessor_standing_config_sha256':G11_PREDECESSOR_CONFIG_SHA,'g10_predecessor_guardian_source_sha256':G10_PREDECESSOR_SOURCE_SHA,'g10_predecessor_standing_config_sha256':G10_PREDECESSOR_CONFIG_SHA,'g9_predecessor_guardian_source_sha256':G9_PREDECESSOR_SOURCE_SHA,'g9_predecessor_standing_config_sha256':G9_PREDECESSOR_CONFIG_SHA,'g8_predecessor_guardian_source_sha256':G8_PREDECESSOR_SOURCE_SHA,'g8_predecessor_standing_config_sha256':G8_PREDECESSOR_CONFIG_SHA,'g7_predecessor_guardian_source_sha256':G7_PREDECESSOR_SOURCE_SHA,'g7_predecessor_standing_config_sha256':G7_PREDECESSOR_CONFIG_SHA,'g6_boot_v2_predecessor_guardian_source_sha256':G6_BOOT_V2_PREDECESSOR_SOURCE_SHA,'g6_boot_v2_predecessor_standing_config_sha256':G6_BOOT_V2_PREDECESSOR_CONFIG_SHA,'g6_predecessor_guardian_source_sha256':G6_PREDECESSOR_SOURCE_SHA,'g6_predecessor_standing_config_sha256':G6_PREDECESSOR_CONFIG_SHA,'schema':SCHEMA,'pair_predecessor_standing_configs':pair_predecessor_refs(),'r13_predecessor_guardian_source_sha256':R13_PREDECESSOR_SOURCE_SHA,'r13_predecessor_standing_config_sha256':r13_predecessor_standing_sha,'hub_source_sha256':hub_source_sha,'predecessor_guardian_source_sha256':PREDECESSOR_SOURCE_SHA,'predecessor_standing_config_sha256':PREDECESSOR_CONFIG_SHA,'guardian_source_sha256':source_sha,'controller_unit_sha256':controller_unit_sha,'hub_unit_sha256':hub_unit_sha,'cold_unit_sha256':cold_unit_sha,'guardian_unit_sha256':guardian_unit_sha,'new_controller_config_sha256':sha(new_controller_raw),'hub_boot_config_sha256':sha(new_hub_raw),'Root_review':root_review,'R43_proofs':R43_proofs,'Core262_context_ref':Core262_context_ref,'proof_index_ref':proof_index_ref,'context_sources':context_sources,'g16_predecessor_guardian_source_sha256':G16_PREDECESSOR_SOURCE_SHA,'g16_predecessor_standing_config_sha256':G16_PREDECESSOR_CONFIG_SHA}
+  value={'g15_predecessor_guardian_source_sha256':G15_PREDECESSOR_SOURCE_SHA,'g15_predecessor_standing_config_sha256':G15_PREDECESSOR_CONFIG_SHA,'g14_predecessor_guardian_source_sha256':G14_PREDECESSOR_SOURCE_SHA,'g14_predecessor_standing_config_sha256':G14_PREDECESSOR_CONFIG_SHA,'g13_predecessor_guardian_source_sha256':G13_PREDECESSOR_SOURCE_SHA,'g13_predecessor_standing_config_sha256':G13_PREDECESSOR_CONFIG_SHA,'g12_predecessor_guardian_source_sha256':G12_PREDECESSOR_SOURCE_SHA,'g12_predecessor_standing_config_sha256':G12_PREDECESSOR_CONFIG_SHA,'g11_predecessor_guardian_source_sha256':G11_PREDECESSOR_SOURCE_SHA,'g11_predecessor_standing_config_sha256':G11_PREDECESSOR_CONFIG_SHA,'g10_predecessor_guardian_source_sha256':G10_PREDECESSOR_SOURCE_SHA,'g10_predecessor_standing_config_sha256':G10_PREDECESSOR_CONFIG_SHA,'g9_predecessor_guardian_source_sha256':G9_PREDECESSOR_SOURCE_SHA,'g9_predecessor_standing_config_sha256':G9_PREDECESSOR_CONFIG_SHA,'g8_predecessor_guardian_source_sha256':G8_PREDECESSOR_SOURCE_SHA,'g8_predecessor_standing_config_sha256':G8_PREDECESSOR_CONFIG_SHA,'g7_predecessor_guardian_source_sha256':G7_PREDECESSOR_SOURCE_SHA,'g7_predecessor_standing_config_sha256':G7_PREDECESSOR_CONFIG_SHA,'g6_boot_v2_predecessor_guardian_source_sha256':G6_BOOT_V2_PREDECESSOR_SOURCE_SHA,'g6_boot_v2_predecessor_standing_config_sha256':G6_BOOT_V2_PREDECESSOR_CONFIG_SHA,'g6_predecessor_guardian_source_sha256':G6_PREDECESSOR_SOURCE_SHA,'g6_predecessor_standing_config_sha256':G6_PREDECESSOR_CONFIG_SHA,'schema':SCHEMA,'pair_predecessor_standing_configs':pair_predecessor_refs(),'r13_predecessor_guardian_source_sha256':R13_PREDECESSOR_SOURCE_SHA,'r13_predecessor_standing_config_sha256':r13_predecessor_standing_sha,'hub_source_sha256':hub_source_sha,'predecessor_guardian_source_sha256':PREDECESSOR_SOURCE_SHA,'predecessor_standing_config_sha256':PREDECESSOR_CONFIG_SHA,'guardian_source_sha256':source_sha,'controller_unit_sha256':controller_unit_sha,'hub_unit_sha256':hub_unit_sha,'cold_unit_sha256':cold_unit_sha,'guardian_unit_sha256':guardian_unit_sha,'new_controller_config_sha256':sha(new_controller_raw),'hub_boot_config_sha256':sha(new_hub_raw),'Root_review':root_review,'R43_proofs':R43_proofs,'Core262_context_ref':Core262_context_ref,'proof_index_ref':proof_index_ref,'context_sources':context_sources,'g16_predecessor_guardian_source_sha256':G16_PREDECESSOR_SOURCE_SHA,'g16_predecessor_standing_config_sha256':G16_PREDECESSOR_CONFIG_SHA,'g17_predecessor_guardian_source_sha256':G17_PREDECESSOR_SOURCE_SHA,'g17_predecessor_standing_config_sha256':G17_PREDECESSOR_CONFIG_SHA}
   validate(value);return value
 def validate(value):
   require_bound()
@@ -436,7 +446,7 @@ def validate(value):
       and value['predecessor_standing_config_sha256']==PREDECESSOR_CONFIG_SHA,'EXPLICIT_D211_PREDECESSOR_BINDING')
   require(value['r13_predecessor_guardian_source_sha256']==R13_PREDECESSOR_SOURCE_SHA,'EXPLICIT_R13_PREDECESSOR_BINDING')
   require(value['pair_predecessor_standing_configs']==pair_predecessor_refs(),'EXPLICIT_PAIR_PREDECESSOR_CHAIN_BINDING')
-  require(value['g6_predecessor_guardian_source_sha256']==G6_PREDECESSOR_SOURCE_SHA and value['g6_predecessor_standing_config_sha256']==G6_PREDECESSOR_CONFIG_SHA and value['new_controller_config_sha256']==G17_CONTROLLER_CONFIG_SHA,'EXPLICIT_G6_AUTHORITY_AND_CURRENT_G15_CONTROLLER')
+  require(value['g6_predecessor_guardian_source_sha256']==G6_PREDECESSOR_SOURCE_SHA and value['g6_predecessor_standing_config_sha256']==G6_PREDECESSOR_CONFIG_SHA and value['new_controller_config_sha256']==G18_CONTROLLER_CONFIG_SHA,'EXPLICIT_G6_AUTHORITY_AND_CURRENT_G15_CONTROLLER')
   require(value['g6_boot_v2_predecessor_guardian_source_sha256']==G6_BOOT_V2_PREDECESSOR_SOURCE_SHA and value['g6_boot_v2_predecessor_standing_config_sha256']==G6_BOOT_V2_PREDECESSOR_CONFIG_SHA,'EXPLICIT_G6_BOOT_V2_PREDECESSOR_BINDING')
   require(value['g7_predecessor_guardian_source_sha256']==G7_PREDECESSOR_SOURCE_SHA and value['g7_predecessor_standing_config_sha256']==G7_PREDECESSOR_CONFIG_SHA,'EXPLICIT_G7_PREDECESSOR_BINDING')
   require(value['g8_predecessor_guardian_source_sha256']==G8_PREDECESSOR_SOURCE_SHA and value['g8_predecessor_standing_config_sha256']==G8_PREDECESSOR_CONFIG_SHA,'EXPLICIT_G8_PREDECESSOR_BINDING')
@@ -453,6 +463,7 @@ def validate(value):
   require(type(value['context_sources'])is dict and set(value['context_sources'])=={'network_anchor_source_ref','network_qualification_source_ref','Core_context_source_ref','Root_factual_Source_review_ref'},'EXACT_EXPLICIT_OWNING_CONTEXT_SOURCES')
   for r in value['context_sources'].values():exact_ref(r)
   require(value['g16_predecessor_guardian_source_sha256']==G16_PREDECESSOR_SOURCE_SHA and value['g16_predecessor_standing_config_sha256']==G16_PREDECESSOR_CONFIG_SHA,'EXACT_G16_PREFIX')
+  require(value['g17_predecessor_guardian_source_sha256']==G17_PREDECESSOR_SOURCE_SHA and value['g17_predecessor_standing_config_sha256']==G17_PREDECESSOR_CONFIG_SHA,'EXACT_G17_PREFIX')
 def r13_predecessor_standing(config):
   """The installed R13 Guardian standing config this successor names, by bytes.
 
@@ -799,6 +810,15 @@ def g16_predecessor_config(c):
 def g16_predecessor_standing(c):
   g16_predecessor_config(c)
   return G16_PREDECESSOR_SOURCE_SHA,G16_PREDECESSOR_CONFIG_SHA
+def g17_predecessor_config(c):
+  require_bound()
+  require(type(c)is dict and c.get('new_controller_config_sha256')==G18_CONTROLLER_CONFIG_SHA and c.get('g17_predecessor_guardian_source_sha256')==G17_PREDECESSOR_SOURCE_SHA and c.get('g17_predecessor_standing_config_sha256')==G17_PREDECESSOR_CONFIG_SHA,'G17_C18_PREFIX')
+  require(sha(read(G17_PREDECESSOR_HERE/'network_guardian.py',1<<20))==G17_PREDECESSOR_SOURCE_SHA,'G17_SOURCE')
+  raw=read(G17_PREDECESSOR_CONFIG,32768,384)
+  require(sha(raw)==G17_PREDECESSOR_CONFIG_SHA,'G17_STANDING')
+  p=loads(raw);changed={'guardian_source_sha256','controller_unit_sha256','cold_unit_sha256','guardian_unit_sha256','new_controller_config_sha256','Root_review'}
+  require(type(p)is dict and set(p)==HISTORICAL_G17_FIELDS and p['schema']==SCHEMA and p['guardian_source_sha256']==G17_PREDECESSOR_SOURCE_SHA and p['new_controller_config_sha256']==G17_CONTROLLER_CONFIG_SHA and tuple(p[k]for k in ('controller_unit_sha256','cold_unit_sha256','guardian_unit_sha256'))==('b71682b08f04e0e057b839dd06e2c2dad3674b91f4d34fc968e1c7b8ab999149','cea597842b8648e3d763f530b0cafe4f9f2ea4b34b0c30c00503d9926f0d9584','b9b087825a3be2052693608b32c4a80dcbc4cb96ce4b03df96d183b4d973a437')and all(p[k]==c[k]for k in HISTORICAL_G17_FIELDS-changed),'G17_WHOLE_PREFIX')
+  return p
 class Owner:
   def __init__(self, source_sha):
     require_bound()
@@ -810,7 +830,8 @@ class Owner:
     self.raw_config = read(CONFIG, 32768, 0o600)
     self.config = loads(self.raw_config)
     validate(self.config)
-    self.predecessor_config=g16_predecessor_config(self.config)
+    self.head_predecessor_config=g17_predecessor_config(self.config)
+    self.predecessor_config=g16_predecessor_config(self.head_predecessor_config)
     require(self.config['guardian_source_sha256'] == source_sha, 'STANDING_SAME_SOURCE')
 
 
@@ -827,7 +848,7 @@ class Owner:
     g13_predecessor_standing(self.predecessor_config)
     g14_predecessor_standing(self.predecessor_config)
     g15_predecessor_standing(self.predecessor_config)
-    self.authorities = frozenset({(source_sha, sha(self.raw_config)), (G16_PREDECESSOR_SOURCE_SHA,G16_PREDECESSOR_CONFIG_SHA),
+    self.authorities = frozenset({(source_sha, sha(self.raw_config)), (G17_PREDECESSOR_SOURCE_SHA,G17_PREDECESSOR_CONFIG_SHA), (G16_PREDECESSOR_SOURCE_SHA,G16_PREDECESSOR_CONFIG_SHA),
                    (PREDECESSOR_SOURCE_SHA, PREDECESSOR_CONFIG_SHA),
                    (R13_PREDECESSOR_SOURCE_SHA, self.config['r13_predecessor_standing_config_sha256']),
                    *pair_predecessor_standings(self.predecessor_config), g6_predecessor_standing(self.predecessor_config),
@@ -868,7 +889,7 @@ class Owner:
 
   def static(self):
     require(read(CONFIG, 32768, 0o600) == self.raw_config, 'UNCHANGED_STANDING_ROOT_AUTHORITY')
-    require(g16_predecessor_config(self.config)==self.predecessor_config,'UNCHANGED_G16_PREFIX')
+    require(g17_predecessor_config(self.config)==self.head_predecessor_config and g16_predecessor_config(self.head_predecessor_config)==self.predecessor_config,'UNCHANGED_G17_AND_G16_PREFIX')
     for unit, key in ((UNIT, 'controller_unit_sha256'), (HUB, 'hub_unit_sha256'),
              (COLD, 'cold_unit_sha256'), (GUARDIAN, 'guardian_unit_sha256')):
       require(sha(read('/etc/systemd/system/' + unit, 32768)) == self.config[key],

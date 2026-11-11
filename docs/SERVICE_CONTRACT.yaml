@@ -80,7 +80,7 @@
     {
       "evidence": "docs/service-contract/INSTALLED_PROVISION_TIMEOUT_SOURCE_REVIEW.json",
       "id": "installed_provision_timeout_source_review",
-      "sha256": "7b4669549fd4efb10192fd9664fb657c5d77af7b06ed541162ceace03fb0845c"
+      "sha256": "26378138f5112bcd76525f625d22caca1493a6b0e459e27d53b195c5913a5f79"
     }
   ],
   "coverage": "complete",
@@ -129,7 +129,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "019130b06b1e69cf1253b07e87d1f5903f3aa570388eddb13082581d78160cd1"
+    "sha256": "3569a8f12551dbc3bed2a4f3903d18111fcbcdd13b822f2e400af19599466ff9"
   },
   "unresolved": []
 }

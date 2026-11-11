@@ -43,7 +43,16 @@ func installedProvisionTimeoutResult(raw []byte, pre model.CapacityGuestOriginal
 			return false
 		}
 		if step.Status == "skipped" {
-			if step.Attempts != 0 || len(step.Metadata) != 0 {
+			expectedCondition := ""
+			switch step.ID {
+			case "retire-original-guest":
+				expectedCondition = "{{ steps.plan-original-guest.metadata.mode }} == retire"
+			case "refresh-original-membership":
+				expectedCondition = "{{ steps.plan-original-guest.metadata.mode }} == refresh"
+			}
+			if step.Attempts != 0 ||
+				expectedCondition == "" && len(step.Metadata) != 0 ||
+				expectedCondition != "" && (len(step.Metadata) != 2 || step.Metadata["condition"] != expectedCondition || step.Metadata["skip_reason"] != "condition") {
 				return false
 			}
 		} else if step.Attempts != 1 {

@@ -1,0 +1,7 @@
+[
+  "test_catalog98.Catalog98Tests.test_complete_carrier_source_delta_and_selector",
+  "test_catalog98.Catalog98Tests.test_carrier_full_originals_and_source_fail_closed",
+  "test_catalog98.Catalog98Tests.test_structural_heap_columns_and_three_indexes",
+  "test_catalog98.Catalog98Tests.test_history_and_whole_prior_catalog_are_not_rewritten",
+  "test_catalog98.Catalog98Tests.test_root98_is_explicit_distinct_and_requires_all_originals"
+]
