@@ -1312,6 +1312,25 @@ def normal_pg_bytea(value):
     return bytes.fromhex(value[2:])
 
 
+def normal_finish_stamp_ns(value):
+    """Keep original wire order; datetime precision is not deadline authority."""
+    stamp = utc(value).astimezone(datetime.timezone.utc)
+    delta = stamp - datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+    fraction = re.search(r'\.(\d{1,9})(?=Z|[+-])', value)
+    tail = int((fraction.group(1) + '000000000')[:9][-3:]) if fraction else 0
+    return ((delta.days * 86400 + delta.seconds) * 1000000 + delta.microseconds) * 1000 + tail
+
+
+def normal_finish_pg_deadline_equal(original, stored):
+    """Only the wire-to-PG join rounds to PG microseconds, nearest ties even."""
+    nanos = normal_finish_stamp_ns(original)
+    pg_nanos = normal_finish_stamp_ns(stored)
+    micros, remainder = divmod(nanos, 1000)
+    if remainder > 500 or (remainder == 500 and micros % 2):
+        micros += 1
+    return pg_nanos % 1000 == 0 and pg_nanos == micros * 1000
+
+
 def normal_finish_wire(row, record_key, digest_key):
     raw = bytes.fromhex(row['wire_hex'])
     need(normal_pg_bytea(row['original_wire']) == raw
@@ -1375,10 +1394,12 @@ def validate_normal_finish97(value, case):
          and c['attempt_id'] == request['attempt_id'] and type(c['status']) is int and c['status'] == 200
          and c['body_persisted'] is True and all(c[k] is False for k in (
              'preflight_failed','do_failed','read_failed','close_failed','original_context_failed'))
-         and utc(c['original_deadline']) == utc(request['original_deadline'])
-         and utc(request['intent_record']['issued_at']) <= utc(c['started_at']) <= utc(c['do_started_at'])
-         <= utc(c['do_returned_at']) <= utc(c['read_returned_at']) <= utc(c['close_returned_at'])
-         <= utc(c['driver_returned_at']) < utc(request['original_deadline']),
+         and normal_finish_stamp_ns(c['original_deadline']) == normal_finish_stamp_ns(intent['original_deadline'])
+         and normal_finish_pg_deadline_equal(c['original_deadline'], request['original_deadline'])
+         and normal_finish_stamp_ns(intent['issued_at']) <= normal_finish_stamp_ns(c['started_at'])
+         <= normal_finish_stamp_ns(c['do_started_at']) <= normal_finish_stamp_ns(c['do_returned_at'])
+         <= normal_finish_stamp_ns(c['read_returned_at']) <= normal_finish_stamp_ns(c['close_returned_at'])
+         <= normal_finish_stamp_ns(c['driver_returned_at']) < normal_finish_stamp_ns(c['original_deadline']),
          'GENUINE_ORIGINAL_NORMAL_CALLER200_COMPLETE_BEFORE_DEADLINE')
     original = r['original_returns']
     need(len(original) == 5 and [x['sequence'] for x in original] == [1,2,3,4,5]

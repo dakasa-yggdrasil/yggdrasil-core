@@ -13,7 +13,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 import test_goose96_native_once as historical
-from test_g15pair_core_cas import normal_finish_operand, seal_normal_finish_fixture, normal_finish_encoded
+from test_g15pair_core_cas import (normal_finish_operand, seal_normal_finish_fixture, normal_finish_encoded,
+    NORMAL_FINISH_PG_DEADLINE_CASES, reseal_normal_finish_caller)
 
 ROOT=Path(__file__).resolve().parents[3]
 SOURCE=ROOT/'ops/network-guardian/rollout/goose97_native_once.py'
@@ -350,6 +351,42 @@ with tempfile.TemporaryDirectory(prefix='goose97-baseline-')as name:
     def test_normal_finish_original_success_failed_off_and_same_paid_create(self):
         value,case=normal_finish_operand();saved=copy.deepcopy(value);saved_case=copy.deepcopy(case)
         self.assertTrue(G.validate_normal_finish97(value,case))
+        def source_spans(path):
+            raw=path.read_text()
+            return {n.name:ast.get_source_segment(raw,n)for n in ast.parse(raw).body if isinstance(n,ast.FunctionDef)}
+        own,shared=source_spans(SOURCE),source_spans(ROOT/'ops/network-guardian/rollout/core_image_cas_once_g15.py')
+        for name in ('normal_finish_stamp_ns','normal_finish_pg_deadline_equal','validate_normal_finish97'):
+            self.assertEqual(own[name],shared[name],name)
+        # Real retained949ns wire rounds up in PG; wire order is never rounded.
+        for wire_deadline,pg_deadline in NORMAL_FINISH_PG_DEADLINE_CASES+(
+                ('2026-11-10T23:05:37.871732949-03:00','2026-11-11T02:05:37.871733+00:00'),
+                ('2026-12-31T23:59:59.999999500Z','2027-01-01T00:00:00Z')):
+            with self.subTest(normal_deadline_precision=(wire_deadline,pg_deadline)):
+                self.assertTrue(G.normal_finish_pg_deadline_equal(wire_deadline,pg_deadline))
+        exact,exactcase=normal_finish_operand(wire_deadline='2026-11-11T02:05:37.871732949Z',
+            pg_deadline='2026-11-11T02:05:37.871733+00:00')
+        self.assertTrue(G.validate_normal_finish97(exact,exactcase))
+        offset,offsetcase=normal_finish_operand(wire_deadline='2026-11-10T23:05:37.871732949-03:00',
+            pg_deadline='2026-11-11T02:05:37.871733+00:00')
+        self.assertTrue(G.validate_normal_finish97(offset,offsetcase))
+        self.assertEqual(G.normal_finish_stamp_ns('2026-11-11T02:05:37.871732950Z')-
+            G.normal_finish_stamp_ns('2026-11-11T02:05:37.871732949Z'),1)
+        for precision_fault in ('wrong_PG_microsecond','neighbor_PG_microsecond','PG_submicrosecond',
+                'wire_deadline_shift','one_ns_late','exact_wire_deadline','one_ns_order_inversion'):
+            bad,bcase=copy.deepcopy(exact),copy.deepcopy(exactcase);r=bad['records']
+            caller=r['caller_returns'][0]['original_record'];request=r['retirement_requests'][0]
+            if precision_fault=='wrong_PG_microsecond':request['original_deadline']='2026-11-11T02:05:37.871732+00:00'
+            elif precision_fault=='neighbor_PG_microsecond':request['original_deadline']='2026-11-11T02:05:37.871734+00:00'
+            elif precision_fault=='PG_submicrosecond':request['original_deadline']='2026-11-11T02:05:37.871733001Z'
+            elif precision_fault=='wire_deadline_shift':caller['original_deadline']='2026-11-11T02:05:37.871732950Z'
+            elif precision_fault=='one_ns_late':caller['driver_returned_at']='2026-11-11T02:05:37.871732950Z'
+            elif precision_fault=='exact_wire_deadline':caller['driver_returned_at']=caller['original_deadline']
+            else:
+                caller['read_returned_at']='2026-11-11T02:05:08.200000500Z'
+                caller['close_returned_at']='2026-11-11T02:05:08.200000499Z'
+            reseal_normal_finish_caller(bad,bcase)
+            with self.subTest(normal_deadline_precision_fault=precision_fault),self.assertRaises(G.Hold):
+                G.validate_normal_finish97(bad,bcase)
         self.assertEqual(value,saved);self.assertEqual(case,saved_case)
         records=value['records']
         self.assertEqual(len(records),18);self.assertEqual(len(records['original_returns']),5)

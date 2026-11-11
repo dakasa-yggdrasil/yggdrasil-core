@@ -273,7 +273,21 @@ def seal_normal_finish_fixture(value,case,update_expected=True):
     if update_expected:case['expected_records_sha256']=value['records_sha256']
 
 
-def normal_finish_operand():
+# Declared expectations match actual PostgreSQL160013 timestamp-cast outputs.
+# The fixtures remain synthetic; these are not Native admission receipts.
+NORMAL_FINISH_PG_DEADLINE_CASES = (('2026-11-11T02:05:37.000000499Z', '2026-11-11T02:05:37+00:00'), ('2026-11-11T02:05:37.000000500Z', '2026-11-11T02:05:37+00:00'), ('2026-11-11T02:05:37.000000501Z', '2026-11-11T02:05:37.000001+00:00'), ('2026-11-11T02:05:37.000001499Z', '2026-11-11T02:05:37.000001+00:00'), ('2026-11-11T02:05:37.000001500Z', '2026-11-11T02:05:37.000002+00:00'), ('2026-11-11T02:05:37.000001501Z', '2026-11-11T02:05:37.000002+00:00'), ('2026-11-11T02:05:37.871732499Z', '2026-11-11T02:05:37.871732+00:00'), ('2026-11-11T02:05:37.871732500Z', '2026-11-11T02:05:37.871732+00:00'), ('2026-11-11T02:05:37.871732501Z', '2026-11-11T02:05:37.871733+00:00'), ('2026-11-11T02:05:37.871732949Z', '2026-11-11T02:05:37.871733+00:00'), ('2026-11-11T02:05:37.999999499Z', '2026-11-11T02:05:37.999999+00:00'), ('2026-11-11T02:05:37.999999500Z', '2026-11-11T02:05:38+00:00'), ('2026-11-11T02:05:37.999999501Z', '2026-11-11T02:05:38+00:00'))
+
+
+def reseal_normal_finish_caller(value,case):
+    r=value['records'];prepared,returned=r['native_poweroff_reads']
+    challenge=prepared['original_record']
+    challenge['original_caller_sha256']=cas.sha(normal_finish_encoded(r['caller_returns'][0]['original_record']))
+    returned['original_record']['challenge']=copy.deepcopy(challenge)
+    returned['original_native_join_wire']='\\x'+normal_finish_encoded(challenge).hex()
+    seal_normal_finish_fixture(value,case)
+
+
+def normal_finish_operand(wire_deadline=None, pg_deadline=None):
     """Synthetic G37 normal200, failed OFF, zero DELETE; never Native evidence."""
     old,oldcase=live_image_operand();old=old['records'];t=cas.NORMAL_FINISH_TARGET
     policy=copy.deepcopy(old['active_policies'][0]);create=copy.deepcopy(old['create_grants'][0])
@@ -283,7 +297,8 @@ def normal_finish_operand():
     for record in (grant['settlement'],grant['settlement']['original_provider_create_return']):
         record.update(resource_id=tuple_['resource_id'],resource_created_at=tuple_['resource_created_at'])
     workflow='10000000-0000-4000-8000-000000000007';attempt='10000000-0000-4000-8000-000000000008'
-    deadline='2026-11-11T02:05:37Z'
+    deadline='2026-11-11T02:05:37Z'if wire_deadline is None else wire_deadline
+    stored_deadline=deadline if pg_deadline is None else pg_deadline
     preflight={'schema':'original_guest_production_retirement_intent_v2','request_id':t['retirement_request_id'],
         'attempt_id':attempt,'preregistration_id':t['preregistration_id'],'workflow_id':workflow,'policy_id':policy['id'],
         'generation':37,'fence':76,'lease_owner':t['lease_owner'],
@@ -292,7 +307,7 @@ def normal_finish_operand():
     finalized=copy.deepcopy(preflight);finalized['nonce_hash']='7'*64
     final_sha=cas.sha(normal_finish_encoded(finalized))
     request={'id':t['retirement_request_id'],'preregistration_id':t['preregistration_id'],
-        'attempt_id':attempt,'intent_record':preflight,'original_deadline':deadline}
+        'attempt_id':attempt,'intent_record':preflight,'original_deadline':stored_deadline}
     nonce={'schema':'original_core_guest_retirement_nonce_return_v2',
         'preflight_sha256':cas.sha(normal_finish_encoded(preflight)),
         'final_request':{'intent':finalized,'signature':'DECLARED finalized signature','nonce':''}}
@@ -343,7 +358,7 @@ def normal_finish_operand():
         'current_intent_pgtext':'','active_policies':[policy],'retirement_requests':[request],
         'preregistrations':[{'id':t['preregistration_id'],'create_grant_id':create['id']}],
         'create_grants':[create],'retirement_contexts':[{'intent_id':request['id'],'executor_id':t['executor_id'],
-            'core_actual_source_commit':cas.ROOT97_CURRENT_CORE_SOURCE,'original_context_deadline':deadline}],
+            'core_actual_source_commit':cas.ROOT97_CURRENT_CORE_SOURCE,'original_context_deadline':stored_deadline}],
         'caller_returns':[caller],'original_returns':returns,'native_poweroff_reads':[prepared,reply],
         'forward_rows':[],'forward_reads':[],'delete_bindings':[],'destroy_grants':[],
         'workflow_runs':[run],'owning_dispatch_jobs':[job]}
@@ -785,6 +800,36 @@ class G15CoreCASTests(unittest.TestCase):
         self.assertNotIn('retirement_forward',nr['current_intent']['intent'])
         self.assertEqual(nr['delete_bindings'],[])
         self.assertTrue(cas.validate_normal_finish97(normal,normalcase))
+        # Real retained949ns wire rounds up in PG; wire order is never rounded.
+        for wire_deadline,pg_deadline in NORMAL_FINISH_PG_DEADLINE_CASES+(
+                ('2026-11-10T23:05:37.871732949-03:00','2026-11-11T02:05:37.871733+00:00'),
+                ('2026-12-31T23:59:59.999999500Z','2027-01-01T00:00:00Z')):
+            with self.subTest(normal_deadline_precision=(wire_deadline,pg_deadline)):
+                self.assertTrue(cas.normal_finish_pg_deadline_equal(wire_deadline,pg_deadline))
+        exact,exactcase=normal_finish_operand(wire_deadline='2026-11-11T02:05:37.871732949Z',
+            pg_deadline='2026-11-11T02:05:37.871733+00:00')
+        self.assertTrue(cas.validate_normal_finish97(exact,exactcase))
+        offset,offsetcase=normal_finish_operand(wire_deadline='2026-11-10T23:05:37.871732949-03:00',
+            pg_deadline='2026-11-11T02:05:37.871733+00:00')
+        self.assertTrue(cas.validate_normal_finish97(offset,offsetcase))
+        self.assertEqual(cas.normal_finish_stamp_ns('2026-11-11T02:05:37.871732950Z')-
+            cas.normal_finish_stamp_ns('2026-11-11T02:05:37.871732949Z'),1)
+        for precision_fault in ('wrong_PG_microsecond','neighbor_PG_microsecond','PG_submicrosecond',
+                'wire_deadline_shift','one_ns_late','exact_wire_deadline','one_ns_order_inversion'):
+            bad,bcase=copy.deepcopy(exact),copy.deepcopy(exactcase);r=bad['records']
+            caller=r['caller_returns'][0]['original_record'];request=r['retirement_requests'][0]
+            if precision_fault=='wrong_PG_microsecond':request['original_deadline']='2026-11-11T02:05:37.871732+00:00'
+            elif precision_fault=='neighbor_PG_microsecond':request['original_deadline']='2026-11-11T02:05:37.871734+00:00'
+            elif precision_fault=='PG_submicrosecond':request['original_deadline']='2026-11-11T02:05:37.871733001Z'
+            elif precision_fault=='wire_deadline_shift':caller['original_deadline']='2026-11-11T02:05:37.871732950Z'
+            elif precision_fault=='one_ns_late':caller['driver_returned_at']='2026-11-11T02:05:37.871732950Z'
+            elif precision_fault=='exact_wire_deadline':caller['driver_returned_at']=caller['original_deadline']
+            else:
+                caller['read_returned_at']='2026-11-11T02:05:08.200000500Z'
+                caller['close_returned_at']='2026-11-11T02:05:08.200000499Z'
+            reseal_normal_finish_caller(bad,bcase)
+            with self.subTest(normal_deadline_precision_fault=precision_fault),self.assertRaises(cas.Hold):
+                cas.validate_normal_finish97(bad,bcase)
         nonce=nr['original_returns'][0]['original_return_record']
         preflight_raw=normal_finish_encoded(nr['retirement_requests'][0]['intent_record'])
         final_raw=normal_finish_encoded(nonce['final_request']['intent'])
