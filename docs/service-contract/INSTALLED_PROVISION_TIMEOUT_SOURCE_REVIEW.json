@@ -1,6 +1,7 @@
 {
   "independent_reviews": {
     "migration98": "1a8b7faefb4a78b270bdb6c5fadfaf6997f4d3f15561436f2127b4d2d011a73b",
+    "migration98_metadata_extraction_precedence": "c617dece1e908ac4256b7d8e6d2a529bbe19e22c91b19ef0d58090faf688615b",
     "production_source": "9116dadd37761f20bf26964b05cd890932e150437fb4eca717f5472f6f8ca377"
   },
   "production_or_native_qualification": false,
@@ -10,14 +11,15 @@
     "Recorded provider return, confirmed CREATE, witness, enrollment, installation and the entire current member roster must agree.",
     "Historical disposed SETTLED grants remain closed; undisposed mutation authority still refuses admission.",
     "The new owner receives its own finite fence and fresh inventory, coverage and canaries; it cannot replay provisioning or retirement.",
-    "Migration98 preserves the original dispatch guard outside its new terminal branch and refuses rollback once retained provenance depends on it."
+    "Migration98 preserves the original dispatch guard outside its new terminal branch and refuses rollback once retained provenance depends on it.",
+    "The successor metadata object is extracted before scheduled_for and capacity_dispatch_job_id are subtracted; the complete remaining metadata comparison stays mandatory."
   ],
   "schema": "installed_provision_timeout_source_review_v1",
   "scope": "A recorded successful original provision followed only by a source_assessment timeout may receive an immutable typed terminal and a separate installed-readiness owner. The original failed run, unknown provenance, NULL ACK and original deadlines remain unchanged.",
   "source_files": {
     "db/migrations/00098_installed_provision_timeout_dispositions.sql": {
-      "bytes": 51560,
-      "sha256": "aa091e01bddd41000395ae7d6bf392d7ec8892d58ea298120400035e0eb397cf"
+      "bytes": 51564,
+      "sha256": "a739323d44b526beeef229c9faa17d0e8d27a2460028835e6fe7650b60b1904f"
     },
     "model/capacity_guest_installed_reconcile.go": {
       "bytes": 2976,

@@ -417,7 +417,7 @@ BEGIN
  SELECT * INTO STRICT successor FROM public.capacity_dispatch_jobs s WHERE s.realm=j.realm AND s.environment=j.environment AND s.domain=j.domain AND s.dimension=j.dimension AND s.state='queued';
  IF successor.id=j.id OR successor.run_id=j.run_id OR successor.source_tick=j.source_tick
  OR (successor.envelope::jsonb-ARRAY['job_id','run_id','source_tick','metadata','metadata_sha256']) IS DISTINCT FROM(j.envelope::jsonb-ARRAY['job_id','run_id','source_tick','metadata','metadata_sha256'])
- OR (successor.envelope::jsonb->'metadata'-ARRAY['scheduled_for','capacity_dispatch_job_id']) IS DISTINCT FROM(j.envelope::jsonb->'metadata'-ARRAY['scheduled_for','capacity_dispatch_job_id'])
+ OR ((successor.envelope::jsonb->'metadata')-ARRAY['scheduled_for','capacity_dispatch_job_id']) IS DISTINCT FROM((j.envelope::jsonb->'metadata')-ARRAY['scheduled_for','capacity_dispatch_job_id'])
  OR successor.envelope::jsonb#>>'{metadata,capacity_dispatch_job_id}'<>successor.id::text
  THEN RAISE EXCEPTION 'installed timeout requires distinct queued readiness successor'; END IF;
  RETURN NULL;
