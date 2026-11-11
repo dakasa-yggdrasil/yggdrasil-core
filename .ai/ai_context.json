@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-10T23:20:42+00:00",
+  "generated_at": "2026-11-10T21:58:50-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1518,
-    ".json": 241,
+    ".json": 240,
     ".py": 186,
     ".sql": 99,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "4fe7df39ceed3c85b121377e3b76ff39b88f79cc",
+    "commit": "962936a7e0669365dd61dda74719ba55e7e2c265",
     "dirty": true,
     "files": [
       {
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 388,
-      "kb": 5463
+      "files": 378,
+      "kb": 5092
     },
     {
       "path": "controllers/httpapi",
@@ -75,13 +75,13 @@
     },
     {
       "path": "controllers/message",
-      "files": 202,
-      "kb": 1871
+      "files": 201,
+      "kb": 1758
     },
     {
       "path": "internal/capacity",
-      "files": 147,
-      "kb": 1596
+      "files": 126,
+      "kb": 1376
     },
     {
       "path": "db/migrations",
@@ -97,6 +97,11 @@
       "path": "manifest",
       "files": 65,
       "kb": 397
+    },
+    {
+      "path": "ops/network-guardian/tests",
+      "files": 52,
+      "kb": 876
     },
     {
       "path": "addons",
@@ -115,13 +120,8 @@
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
-      "files": 29,
-      "kb": 101
-    },
-    {
-      "path": "ops/network-guardian/tests",
-      "files": 80,
-      "kb": 1072
+      "files": 28,
+      "kb": 98
     }
   ],
   "top_files_by_size": [
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 59,
+    "config_files": 76,
     "k8s_manifests": 25
   }
 }

@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 4fe7df39ceed3c85b121377e3b76ff39b88f79cc
-verified_diff_sha256: 8c13cb471cfabaeee0f8e399e4af74b15d201eb50e0a5fe46979d7dec1572678
-reconciler_schema: 2
+verified_at_commit: 962936a7e0669365dd61dda74719ba55e7e2c265
+verified_diff_sha256: 7d642755c936abb5ce70b6adadb18c59381f5efaac7a7ad1229d0e5af21e5e0a
+reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
 source_recovery_historical_review: Qualification-only historical preregistration read verifies immutable bindings after lease expiry without granting current authority. Independent review and two original Source scenarios passed in a separately instrumented CI pair; exact integrated CI remains required.
@@ -452,3 +452,5 @@ C16_original_CI_overlap_and_fixture_review: Retained original283-case CI errors 
 main_current_Core6_overlap_reconciliation: Integrated the exact current Core6 digest guard and complete strict reader test-double interface from the corrected operational source. All changed operational files match that source; previously reviewed compiler runtime, main Tartaro route/authentication union and full814-source census remain unchanged. Retained original failure evidence and both Source review records. No local product execution; the complete exact integrated remote CI remains required.
 
 current_live_image_maintenance_review: Reviewed the separate current LIVE retirement and immutable historical S8 terminal scenario. The original pre-read case, eight-operation image CAS, compiler image, network package and historical Root96 axes remain unchanged. All current read outcomes, including the closed failed absence read, retain their own original scope and clocks. New positive and negative checks use the existing six CAS roots; exact owning CI and later native image acceptance remain required. The released CLI generated this source context and repository summary without running local product tests or a build.
+
+current_live_main_union_review: Reconciled the integrated Main tree after the standalone current retirement CAS scenario. Its four affected operator, test, checksum and README paths remain byte exact to the independently reviewed operational source. Existing Tartaro HTTP union, compiler210 and independently qualified C16 network code remain intact. The released CLI regenerated the real integrated context and summary; current integrated CI and native acceptance retain their distinct scope.
