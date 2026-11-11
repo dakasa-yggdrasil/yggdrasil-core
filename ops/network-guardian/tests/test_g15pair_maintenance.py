@@ -184,17 +184,70 @@ class G15MaintenanceTests(unittest.TestCase):
         source_path = NEW / 'source/network_guardian.py'
         source_raw = source_path.read_bytes()
         self.assertLessEqual(len(source_raw), G.read.__defaults__[0])
-        # Predict every final fixed-width Source binding without running it.
-        bound_raw = source_raw
-        for old, new in ((b'PROPOSAL_BOUND=False', b'PROPOSAL_BOUND=True'),
-                         (b'HEAD_CORE_SOURCE=None', b"HEAD_CORE_SOURCE='" + b'c' * 40 + b"'"),
-                         (b'HEAD_NEW_CORE_DIGEST=None', b"HEAD_NEW_CORE_DIGEST='sha256:" + b'd' * 64 + b"'"),
-                         (b'G17_CONTROLLER_CONFIG_SHA=None', b"G17_CONTROLLER_CONFIG_SHA='" + b'e' * 64 + b"'")):
-            self.assertEqual(bound_raw.count(old), 1)
-            bound_raw = bound_raw.replace(old, new, 1)
-        ast.parse(bound_raw)
-        self.assertLessEqual(len(bound_raw), G.read.__defaults__[0])
-
+        self.assertEqual(G.read.__defaults__, (131072, None))
+        current_package = json.loads((NEW / 'PACKAGE.json').read_bytes())
+        self.assertEqual(current_package['files']['source/network_guardian.py'], digest(source_raw))
+        binding_names = {'PROPOSAL_BOUND', 'HEAD_CORE_SOURCE', 'HEAD_NEW_CORE_DIGEST',
+                         'G17_CONTROLLER_CONFIG_SHA'}
+        literals = {}
+        for node in ast.parse(source_raw).body:
+            if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and
+                    target.id in binding_names for target in node.targets):
+                self.assertEqual(len(node.targets), 1)
+                self.assertIsInstance(node.targets[0], ast.Name)
+                name = node.targets[0].id
+                self.assertNotIn(name, literals)
+                self.assertIsInstance(node.value, ast.Constant)
+                literals[name] = node.value.value
+        self.assertEqual(set(literals), binding_names)
+        self.assertIs(type(literals['PROPOSAL_BOUND']), bool)
+        for name, value in literals.items():
+            self.assertIs(type(getattr(G, name)), type(value))
+            self.assertEqual(getattr(G, name), value)
+        self.assertIs(current_package['source_bound'], literals['PROPOSAL_BOUND'])
+        self.assertIs(current_package['proposal_bound'], literals['PROPOSAL_BOUND'])
+        if literals['PROPOSAL_BOUND'] is False:
+            self.assertEqual(literals, {'PROPOSAL_BOUND': False, 'HEAD_CORE_SOURCE': None,
+                'HEAD_NEW_CORE_DIGEST': None, 'G17_CONTROLLER_CONFIG_SHA': None})
+            self.assertIs(type(current_package['prepared_Guardian_bytes']), int)
+            self.assertEqual(current_package['prepared_Guardian_bytes'], len(source_raw))
+            self.assertIsNone(current_package['bound_Guardian_bytes'])
+            # Predict every final fixed-width Source binding without running it.
+            bound_raw = source_raw
+            for old, new in ((b'PROPOSAL_BOUND=False', b'PROPOSAL_BOUND=True'),
+                             (b'HEAD_CORE_SOURCE=None', b"HEAD_CORE_SOURCE='" + b'c' * 40 + b"'"),
+                             (b'HEAD_NEW_CORE_DIGEST=None', b"HEAD_NEW_CORE_DIGEST='sha256:" + b'd' * 64 + b"'"),
+                             (b'G17_CONTROLLER_CONFIG_SHA=None', b"G17_CONTROLLER_CONFIG_SHA='" + b'e' * 64 + b"'")):
+                self.assertEqual(bound_raw.count(old), 1)
+                bound_raw = bound_raw.replace(old, new, 1)
+            ast.parse(bound_raw)
+            self.assertLessEqual(len(bound_raw), G.read.__defaults__[0])
+        else:
+            core_source = literals['HEAD_CORE_SOURCE']
+            core_digest = literals['HEAD_NEW_CORE_DIGEST']
+            config_sha = literals['G17_CONTROLLER_CONFIG_SHA']
+            for value, pattern, placeholder in (
+                    (core_source, r'\A[a-f0-9]{40}\Z', '0' * 40),
+                    (core_digest, r'\Asha256:[a-f0-9]{64}\Z', 'sha256:' + '0' * 64),
+                    (config_sha, r'\A[a-f0-9]{64}\Z', '0' * 64)):
+                self.assertIs(type(value), str)
+                self.assertRegex(value, pattern)
+                self.assertNotEqual(value, placeholder)
+            self.assertIs(C.PROPOSAL_BOUND, True)
+            self.assertIs(D.PROPOSAL_BOUND, True)
+            self.assertEqual(core_source, C.SOURCE_R)
+            self.assertEqual(core_digest, 'sha256:' + C.NEW_DIGEST)
+            self.assertEqual(core_digest, D.HEAD_NEW_CORE_DIGEST)
+            self.assertEqual(config_sha, C.G17_CONFIG_SHA)
+            self.assertEqual(config_sha, C.HEAD_CONFIG_SHA)
+            self.assertEqual(config_sha, D.G17_CONFIG_SHA)
+            self.assertEqual(G.CORE_G17, G.CORE_IMAGE_REF + core_digest)
+            self.assertEqual(D.CORE_G17, G.CORE_G17)
+            self.assertEqual(current_package['base_Core_source'], core_source)
+            self.assertEqual(current_package['amd64_Core_manifest_digest'], core_digest)
+            self.assertEqual(current_package['controller_config_sha256'], config_sha)
+            self.assertIs(type(current_package['bound_Guardian_bytes']), int)
+            self.assertEqual(current_package['bound_Guardian_bytes'], len(source_raw))
         program = r"""
 import hashlib,json,os,tempfile,types
 from pathlib import Path

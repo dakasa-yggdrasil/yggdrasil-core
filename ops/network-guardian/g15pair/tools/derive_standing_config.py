@@ -11,7 +11,7 @@ import sys
 import types
 
 
-PROPOSAL_BOUND = False
+PROPOSAL_BOUND = True
 
 def _contract():
     if PROPOSAL_BOUND is not True:
