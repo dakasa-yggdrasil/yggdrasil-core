@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """INERT G15/Core6-to-Core7 image maintenance with a distinct read-only AWS inventory observer.
 
-No direct business/provider/Guest operation. Core7 may resume the already-admitted
-read-only retirement after rollout. Actual release, Root data/config and normal
+No direct business/provider/Guest operation. The distinct current-LIVE scenario
+authenticates closed failures for image maintenance only; it grants no business resume. Actual release, Root data/config and normal
 G15 acceptance remain independent unbound prerequisites. No action on import.
 """
 import argparse
@@ -645,14 +645,14 @@ def inventory_reader(api, C, run, label, receipt):
 def maintenance_inputs(C):
     require_bound();raw=input_ref(C,CONFIG_REF);c=loads(raw)
     closed(c,'schema source_R amd64_D core_preimage pre_read_case schema_pins policy_state pre_read_preimage_ref schema94_catalog_ref schema95_catalog_ref prior93_history_ref prior94_history_ref legacy_catalog_sql_ref acceptance_refs schema96_catalog_ref prior95_history_ref','CLOSED16_PRE_READ96_MAINTENANCE')
-    need(c['schema']=='g15_pre_read_continuation_image_maintenance_v1'and c['source_R']==CORE_R==C.SOURCE_R and c['amd64_D']==NEW_DIGEST==C.NEW_DIGEST and C.OLD_CORE_UID==UID and C.OLD_CORE_GENERATION==GENERATION and C.OLD_CORE_POD_UID==OLD_POD,'QUALIFIED_R7_AND_CURRENT_R6_PREIMAGE')
+    need(c['schema']in('g15_pre_read_continuation_image_maintenance_v1',LIVE_SCHEMA)and c['source_R']==CORE_R==C.SOURCE_R and c['amd64_D']==NEW_DIGEST==C.NEW_DIGEST and C.OLD_CORE_UID==UID and C.OLD_CORE_GENERATION==GENERATION and C.OLD_CORE_POD_UID==OLD_POD,'QUALIFIED_R7_AND_CURRENT_R6_PREIMAGE')
     p=c['core_preimage'];closed(p,'deployment_uid generation pod_uid container_id image_config_digest spec_sha256 annotations_sha256','CLOSED_CURRENT6_LIFETIME')
     need(p['deployment_uid']==UID and p['generation']==GENERATION and p['pod_uid']==OLD_POD and p['container_id']==OLD_CONTAINER_ID and p['image_config_digest']==OLD_IMAGE_CONFIG_DIGEST and all(digest_value(p[k])for k in ('spec_sha256','annotations_sha256')),'EXACT_ROOT_CURRENT6_WHOLE_SPEC_AND_ANNOTATIONS')
     closed(c['acceptance_refs'],'qualified_business_release business_Source_CI Root_Goose94_acceptance Root_Goose95_acceptance Root_Goose96_acceptance Root_separate_rollout_review current_Core6_operational_acceptance inventory_readonly_operational_acceptance','DISTINCT_CURRENT_CORE6_READER_TARGET_RELEASE_CI_AND_HISTORICAL_ROOTS')
     for r in c['acceptance_refs'].values():need(len(input_ref(C,r))>1,'ACTUAL_COMPLETE_PINNED_ACCEPTANCE_ORIGINAL')
     need(type(c['policy_state'])is dict and set(c['policy_state'])=={'aws','hetzner'}and all(type(v)is dict and set(v)=={'intent_identity','owned_slots','active_policies','policy_catalog_wire'}for v in c['policy_state'].values()),'BOTH_WHOLE_POLICY_ROSTERS_UNCHANGED')
     deployment_ready_inputs(C,c)
-    validate_pre_read96(loads(input_ref(C,c['pre_read_preimage_ref'])),c['pre_read_case'])
+    validate_maintenance_scenario(c,C)
     sql=loads(input_ref(C,SQL_DATA_REF));need(sql['schema']=='fixed_policy_publication_schema92_SQL_data_v1'and set(sql['queries'])=={'original_notify_aws_vm_members','original_notify_hetzner_vm_members'},'EXACT_SOURCE_E70_QUERIES_WITHOUT_RECONSTRUCTION');return c,raw,sql
 
 
@@ -686,7 +686,12 @@ def database_pre_read96(cut,run,c,sql,label):
         lanes={k:value[k]for k in ('jobs_busy','runs_busy','forward_unreturned_reads','live_unreturned_canaries','intent_count','intent_busy','pending_authority','forward_markers')}
         need(lanes==c['pre_read_case']['provider_lanes'][provider]and lanes['intent_count']==1 and all(type(lanes[k])is int and lanes[k]==0 for k in ('jobs_busy','runs_busy','forward_unreturned_reads','live_unreturned_canaries')),'EXACT_CURRENT_SOURCE_LANES_NO_GUESSED_QUIET')
         result[provider]=lanes
-    actual=query(cut,run,label+'-S8-PRE-READ',PRE_READ_SQL);validate_pre_read96(actual,c['pre_read_case'])
+    scenario=c.get('schema','g15_pre_read_continuation_image_maintenance_v1')
+    need(scenario in ('g15_pre_read_continuation_image_maintenance_v1',LIVE_SCHEMA),'EXPLICIT_CURRENT_DATABASE_SCENARIO')
+    actual=query(cut,run,label+'-S8-PRE-READ',PRE_READ_SQL if scenario!=LIVE_SCHEMA else CURRENT_LIVE_SQL)
+    if scenario==LIVE_SCHEMA:
+        validate_current_live(actual,c['pre_read_case']);validate_terminal_s8(loads(input_ref(cut.C,c['pre_read_case']['historical_s8_ref'])))
+    else:validate_pre_read96(actual,c['pre_read_case'])
     need(actual['records_wire']==loads(input_ref(cut.C,c['pre_read_preimage_ref']))['records_wire'],'WHOLE_S8_ORIGINAL_PREIMAGE_UNCHANGED')
     # Existing exact schema/history/index observations remain part of pre-PATCH admission.
     current=query(cut,run,label+'-SCHEMA96',catalog94_select(input_ref(cut.C,c['legacy_catalog_sql_ref']).decode()))
@@ -970,5 +975,122 @@ def root96_overlay(receipt_raw, prior95_raw, pins, read_ref):
     need(type(r['original_refs'])is dict and set(r['original_refs'])=={'migration_result','before_catalog','after_catalog','source_ci','qualified_image'},'ROOT96_EXACT_FIVE_ORIGINAL_ROLES')
     for ref in r['original_refs'].values():need(len(read_ref(ref))>1,'ROOT96_COMPLETE_PINNED_ORIGINAL')
     return r
+
+
+
+# Separate image-only state class: old pre-read96 predicates remain unchanged.
+LIVE_SCHEMA = 'g15_terminal_s8_current_live_image_maintenance_v1'
+LIVE_CASE_SCHEMA = 'terminal_s8_and_current_live_failed_owner_v1'
+LIVE_TARGET = {'retirement_request_id': 'f6b2cc3e-7405-49ed-b46a-b7e3351a8ba0', 'admission_id': '998b93f5-2417-4524-8e05-731d63a302fc', 'preregistration_id': '5b76f9f4-79ee-49c5-8c5b-adb3c4be90e2', 'generation': 34, 'fence': 70, 'lease_owner': 'eaaec656-e5f5-4adc-b0b1-ff83f677d73d', 'executor_id': '77933b83-30df-4890-9fd8-6c3bbcc72c34', 'run_id': '05b185b8-d2be-4b01-a050-ac6eb7dc4508', 'dispatch_id': 'ae1a8697-e064-4ee7-a503-aa4886db59bb', 'slot': 5, 'resource_id': 'i-01d34a436a473d281', 'resource_created_at': '2026-11-10T15:29:12Z', 'destroy_grant_id': '5633594c-dc3a-4276-a314-fed77192dc0a'}
+S8_TERMINAL_REF = {'path': '/var/lib/dakasa-core-rollout/s8-pre-read96-52a992b8-52eb-4108-a057-faf31eee7304/S8-STDOUT.original', 'sha256': '88a4e9b7cfc1a9c01c9c03ce060559e2176c9373279cab806abf021a08885ff9'}
+S8_TERMINAL_TARGET = {'admission_id': '1528555b-fa58-46f3-910d-7c0684e82df6', 'record_sha256': '8ac7f6874518328bdc12d3d16ed657ca1f4e8ab718ecb479cb4caf6bb72e4993', 'native_absence_sha256': '4f20eb22d8a476cce41967a81c3919aebbbabfb9b2a0d8ab6887e2d6071cc8b8', 'terminal_intent_sha256': '487de10928b86b4fd73f656df2a1a88a16371eb235646d2cb7404225fe509523', 'run_id': '874d35c4-59e4-456b-bacc-a654a577ef45', 'read_id': 'f3c6eee8-02e0-4f06-bf76-4b7377d7cf21', 'generation': 31, 'fence': 65}
+CURRENT_LIVE_SQL = "-- Exact S8 pre-read continuation case; read-only snapshot, no authority or mutation.\n-- All reads/owners for this retirement are retained without success filtering.\nWITH f AS MATERIALIZED (\n SELECT * FROM public.capacity_guest_retirement_forwards\n WHERE retirement_request_id='f6b2cc3e-7405-49ed-b46a-b7e3351a8ba0'::uuid\n), r AS MATERIALIZED (\n SELECT * FROM public.capacity_guest_retirement_forward_reads\n WHERE retirement_request_id='f6b2cc3e-7405-49ed-b46a-b7e3351a8ba0'::uuid\n), recent_reads AS (\n SELECT * FROM r ORDER BY recorded_at DESC,id DESC,stage DESC LIMIT 6\n), bindings AS MATERIALIZED (\n SELECT * FROM public.capacity_vm_retirement_delete_bindings\n WHERE intent_id='f6b2cc3e-7405-49ed-b46a-b7e3351a8ba0'::uuid\n), last_scope_jobs AS MATERIALIZED (\n SELECT * FROM public.capacity_dispatch_jobs j\n WHERE j.realm='dakasa-production' AND j.environment='production'\n AND j.domain='notify' AND j.dimension='original_notify_aws_vm_members'\n ORDER BY j.created_at DESC,j.id DESC LIMIT 6\n), run_ids AS (\n SELECT DISTINCT CASE WHEN original_record->>'run_id' ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'\n   THEN (original_record->>'run_id')::uuid ELSE NULL::uuid END id FROM f\n), runs AS MATERIALIZED (\n SELECT w.* FROM public.workflow_runs w JOIN run_ids x ON w.id=x.id\n), owner_jobs AS (\n SELECT j.* FROM public.capacity_dispatch_jobs j JOIN runs w ON w.id=j.run_id\n), snapshot(v) AS (SELECT jsonb_build_object(\n 'observed_at_pg',clock_timestamp(),\n 'selected_runtime_source','045176d16947555ccbc33a8b51635b08d2d9270e',\n 'target',jsonb_build_object('parent_forward_id','998b93f5-2417-4524-8e05-731d63a302fc',\n   'retirement_request_id','f6b2cc3e-7405-49ed-b46a-b7e3351a8ba0',\n   'preregistration_id','5b76f9f4-79ee-49c5-8c5b-adb3c4be90e2','resource_id','i-01d34a436a473d281'),\n 'current_intent',(SELECT to_jsonb(i) FROM public.capacity_intents i WHERE i.namespace='dakasa-production'\n   AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'current_intent_pgtext',(SELECT i.intent::text FROM public.capacity_intents i WHERE i.namespace='dakasa-production'\n   AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members'),\n 'active_policies',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',p.id,'version',p.version,'checksum',p.checksum,'spec',p.spec) ORDER BY p.version),'[]'::jsonb)\n   FROM public.manifests p WHERE p.kind='capacity_policy' AND p.namespace='dakasa-production'\n   AND p.name='notify-aws-elastic-capacity' AND p.active),\n 'forward_rows',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM f x),\n 'create_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb) FROM public.capacity_mutation_grants g WHERE g.id::text IN (SELECT x.original_record#>>'{original,Preregistration,original_create_grant_id}' FROM f x WHERE x.id='998b93f5-2417-4524-8e05-731d63a302fc'::uuid AND x.stage='admitted')),\n 'retirement_contexts',(SELECT COALESCE(jsonb_agg(to_jsonb(x)),'[]'::jsonb)\n   FROM public.capacity_guest_original_retirement_contexts x WHERE x.intent_id='f6b2cc3e-7405-49ed-b46a-b7e3351a8ba0'::uuid),\n 'delete_bindings',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex'))),'[]'::jsonb) FROM bindings x),\n 'destroy_grants',(SELECT COALESCE(jsonb_agg(to_jsonb(g)||jsonb_build_object('grant_pgtext',g.grant_record::text) ORDER BY g.id),'[]'::jsonb)\n   FROM public.capacity_mutation_grants g JOIN bindings b ON b.destroy_grant_id=g.id),\n 'read_counts',(SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.kind,x.stage),'[]'::jsonb)\n   FROM(SELECT kind,stage,count(*) rows,min(recorded_at) first_at,max(recorded_at) last_at FROM r GROUP BY kind,stage)x),\n 'own_read_count',(SELECT count(*) FROM r WHERE admission_id=(SELECT CASE WHEN i.intent#>>'{retirement_forward,id}' ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' THEN (i.intent#>>'{retirement_forward,id}')::uuid ELSE NULL::uuid END FROM public.capacity_intents i WHERE i.namespace='dakasa-production' AND i.environment='production' AND i.domain='notify' AND i.dimension='original_notify_aws_vm_members')),\n 'all_read_rows',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM r x),\n 'unreturned_prepared',(SELECT COALESCE(jsonb_agg(to_jsonb(p)||jsonb_build_object('wire_hex',encode(p.original_wire,'hex')) ORDER BY p.recorded_at,p.id),'[]'::jsonb)\n   FROM r p WHERE p.stage='prepared' AND NOT EXISTS(SELECT 1 FROM r v WHERE v.id=p.id AND v.stage='returned')),\n 'latest_reads_all_outcomes',(SELECT COALESCE(jsonb_agg(to_jsonb(x)||jsonb_build_object('wire_hex',encode(x.original_wire,'hex')) ORDER BY x.recorded_at,x.id,x.stage),'[]'::jsonb) FROM recent_reads x),\n 'workflow_runs',(SELECT COALESCE(jsonb_agg(to_jsonb(w)||jsonb_build_object('run_wire',row_to_json(w)::text) ORDER BY w.id),'[]'::jsonb) FROM runs w),\n 'workflow_run_steps',(SELECT COALESCE(jsonb_agg(jsonb_build_object('run_id',w.id,'status',w.status,'finished_at',w.finished_at,'steps',w.result->'steps') ORDER BY w.id),'[]'::jsonb) FROM runs w),\n 'owning_dispatch_jobs',(SELECT COALESCE(jsonb_agg(to_jsonb(j)||jsonb_build_object('dispatch_wire',to_jsonb(j)::text) ORDER BY j.created_at,j.id),'[]'::jsonb) FROM owner_jobs j))) SELECT jsonb_build_object('observed_at_pg',clock_timestamp(),'records',(v-'observed_at_pg'),'records_wire',(v-'observed_at_pg')::text,'records_sha256',encode(sha256(convert_to((v-'observed_at_pg')::text,'UTF8')),'hex')) FROM snapshot"
+
+
+def forward_marker_data(p):
+    return {k:p[k] for k in ('schema','id','retirement_request_id','preregistration_id','mode','stage','original_intent_sha256','original_generation','original_fence')}
+
+def image_snapshot(value, expected):
+    closed(value,'observed_at_pg records records_wire records_sha256','CLOSED_IMAGE_ONLY_CURRENT_SNAPSHOT')
+    need(type(value['records_wire'])is str and loads(value['records_wire'])==value['records'] and sha(value['records_wire'].encode())==value['records_sha256']==expected,'WHOLE_IMAGE_ONLY_PG_WIRE_NOT_REENCODED')
+    return value['records']
+
+def one_frame(rows, ident, stage):
+    found=[x for x in rows if x['id']==ident and x['stage']==stage]
+    need(len(found)==1,'ONE_IMAGE_ONLY_IMMUTABLE_FORWARD_STAGE')
+    row=found[0];pre_read_wire(row);p=row['original_record']
+    need(p['id']==row['id'] and p['stage']==row['stage'] and utc(p['recorded_at'])==utc(row['recorded_at']),'EXACT_IMAGE_ONLY_FORWARD_RAW_COLUMNS')
+    return row
+
+def completed_owner(records, run_id, admission, succeeded=False):
+    runs=[w for w in records['workflow_runs']if w['id']==run_id]
+    jobs=[j for j in records['owning_dispatch_jobs']if j['run_id']==run_id]
+    need(len(runs)==len(jobs)==1,'ONE_IMAGE_ONLY_ORIGINAL_OWNER_AND_ACK')
+    w,j=runs[0],jobs[0];status='succeeded'if succeeded else'failed'
+    need(loads(w['run_wire'])=={k:v for k,v in w.items()if k!='run_wire'} and loads(j['dispatch_wire'])=={k:v for k,v in j.items()if k!='dispatch_wire'} and w['status']==w['result']['status']==j['return_status']==status and j['state']=='returned' and utc(w['finished_at'])==utc(j['returned_at'])<=utc(j['finalization_ack_at']),'EXACT_IMAGE_ONLY_CLOSED_OWNER_RAW_AND_FINAL_ACK')
+    need(w['metadata']['capacity_dispatch_job_id']==j['id'] and w['metadata']['triggered_by']=='workflow_scheduler' and loads(j['envelope'])['workflow']['id']==admission['original']['Request']['intent']['workflow_id'],'EXACT_IMAGE_ONLY_SCHEDULED_WORKFLOW_ENVELOPE')
+    steps=w['result']['steps'];need(len(steps)==7 and len({x['id']for x in steps})==7,'EXACT_IMAGE_ONLY_SEVEN_STEPS')
+    steps={x['id']:x for x in steps};plan=steps['plan-original-guest']
+    need(plan['status']=='succeeded' and all(plan['metadata'][k]==admission[a]for k,a in (('generation','generation'),('fencing_token','fence'),('lease_owner','lease_owner'))) and steps['retire-original-guest']['status']=='succeeded' and steps['retire-original-guest']['metadata']['retirement_forward_id']==admission['id'] and steps['retire-original-guest']['metadata']['request_id']==admission['retirement_request_id'],'EXACT_IMAGE_ONLY_ORIGINAL_PLAN_AND_RETIRE')
+    need(all(steps[k]['status']=='skipped'for k in ('provision-original-notify','complete-original-provision','refresh-original-membership')) and steps['finish-original-retirement']['status']==status and steps['complete-original-retirement']['status']==('succeeded'if succeeded else'skipped'),'NO_INVENTED_IMAGE_ONLY_BUSINESS_SUCCESS')
+    return w,j
+
+def paid_original_sdk(stored, tuple_, destroy):
+    record=stored['grant_record'];g=record['grant'];s=record['settlement'];b=record['binding']
+    key='original_provider_destroy_return'if destroy else'original_provider_create_return';sdk=s.get(key)
+    need(loads(stored['grant_pgtext'])==record and stored['id']==g['grant_id'] and stored['state']==g['state'] and g['state']in(('settled','confirmed')if destroy else('confirmed',)) and g.get('compensation_of','')=='' and s['outcome']=='accepted' and s['transport_completed']is True and g['capability']==b['destroy_capability'if destroy else'ensure_capability'] and all(g[k]==b[a]for k,a in (('binding_name','name'),('integration_instance_id','integration_instance_id'),('scope_checksum','scope_checksum'),('profile_name','profile_name'))),'EXACT_IMAGE_ONLY_KNOWN_ORIGINAL_GRANT_BINDING')
+    need(type(sdk)is dict and sdk['schema']==('aws_original_terminate_instances_return_v1'if destroy else'aws_original_run_instances_return_v1') and sdk['provider']=='aws' and sdk['adapter_source_commit']==b['original_provider_source_commit']==A3_CREATOR and type(sdk['response_status'])is int and sdk['response_status']==200 and digest_value(sdk['response_body_sha256']) and type(sdk['response_bytes'])is int and 2<=sdk['response_bytes']<=2<<20 and sdk['grant_id']==g['grant_id'] and sdk['attempt_id']==record['attempt_id'] and sdk['request_sha256']==g['request_sha256']==s['request_sha256'] and sdk['action_id']==s['action_id'] and sdk.get('next_action_ids')==s.get('next_action_ids',[])==[],'EXACT_IMAGE_ONLY_PAID_C34_SDK200')
+    need(sdk['resource_id']==s['resource_id']==tuple_['resource_id'] and sdk['resource_created_at']==s['resource_created_at']==tuple_['resource_created_at'] and g['slot']==tuple_['slot'] and g['profile_name']==tuple_['profile'] and g['integration_instance_id']==tuple_['integration_instance_id'] and g['scope_checksum']==tuple_['scope_checksum'] and utc(sdk['called_at'])<=utc(sdk['returned_at'])<utc(sdk['context_deadline'])<=utc(g['expires_at']),'EXACT_IMAGE_ONLY_SDK_TARGET_AND_ORIGINAL_CLOCK')
+    if destroy:
+        need(g['expected_resource_id']==tuple_['resource_id'] and g['expected_resource_created_at']==tuple_['resource_created_at'] and s['auxiliary_inventory_complete']is True and len(s['auxiliary_resources'])==2 and {x['kind']for x in s['auxiliary_resources']}=={'aws_ebs_volume','aws_network_interface'},'EXACT_IMAGE_ONLY_PAID_DESTROY_AUX2')
+    return record
+
+def image_read_pair(records, read_id, admission):
+    rows=records['all_read_rows'];prepared=[x for x in rows if x['id']==read_id and x['stage']=='prepared'];returned=[x for x in rows if x['id']==read_id and x['stage']=='returned']
+    need(len(prepared)==len(returned)==1,'IMAGE_ONLY_ALL_READS_HAVE_REAL_CLOSED_PAIRS')
+    p,r=prepared[0],returned[0];pre_read_wire(p);pre_read_wire(r);challenge=p['original_record'];reply=r['original_record']
+    need(p['admission_id']==r['admission_id']==admission['id'] and p['kind']==r['kind']==challenge['kind'] and challenge==reply['read'] and challenge['read_id']==read_id and challenge['retirement_request_id']==admission['retirement_request_id'] and challenge['prefix_sha256']==admission['prefix_sha256'] and challenge['original_caller_sha256']==admission['original_caller_sha256'] and challenge['tuple']==admission['original']['Request']['intent']['tuple'] and challenge['adapter_source_commit']==A3_CREATOR,'IMAGE_ONLY_READ_CHALLENGE_FULL_SCOPE')
+    need(utc(challenge['issued_at_core'])<=utc(reply['started_at_core'])<=utc(reply['original_returned_at_core']) and 0<(utc(challenge['original_deadline_core'])-utc(challenge['issued_at_core'])).total_seconds()<=5 and utc(p['recorded_at'])<=utc(r['recorded_at']) and type(reply['call_failed'])is bool and type(reply['original_context_failed'])is bool,'IMAGE_ONLY_ORIGINAL_READ_CLOCK_AND_CLOSED_RETURN')
+    need((reply['status']=='observed' and reply['call_failed']is False and reply['original_context_failed']is False and utc(reply['original_returned_at_core'])<utc(challenge['original_deadline_core']))or(reply['status']=='' and reply['call_failed']is True),'IMAGE_ONLY_CLOSED_FAILURE_RETAINED_NEVER_QUALIFIED')
+    return p,r
+
+def validate_terminal_s8(value):
+    r=image_snapshot(value,value['records_sha256']);target=S8_TERMINAL_TARGET
+    terminal=one_frame(r['forward_rows'],target['admission_id'],'terminal');p=terminal['original_record']
+    admitted=one_frame(r['forward_rows'],p['id'],'admitted');a=admitted['original_record']
+    need(terminal['record_sha256']==target['record_sha256'] and p['actual_core_source']==OLD_SOURCE and p['generation']==target['generation'] and p['fence']==target['fence'] and p['root_admission_id']==PRE_READ_TARGET['root_admission_id'] and p['retirement_request_id']==PRE_READ_TARGET['retirement_request_id'] and p['destroy_grant_id']==PRE_READ_TARGET['destroy_grant_id'] and p['native_absence_sha256']==target['native_absence_sha256'] and p['terminal_intent_sha256']==target['terminal_intent_sha256'] and p['run_id']==target['run_id'] and p['admission_sha256']==admitted['record_sha256'],'PINNED_HISTORICAL_S8_TERMINAL_NOT_CURRENT_AUTHORITY')
+    mask={'stage','recorded_at','admission_sha256','destroy_grant_id','native_absence_sha256','terminal_intent_sha256','terminal_intent_wire'}
+    need({k:v for k,v in p.items()if k not in mask}=={k:v for k,v in a.items()if k not in mask},'EXACT_GO_TERMINAL_COPY_OF_SAME_ADMITTED_OWNER')
+    raw=base64.b64decode(p['terminal_intent_wire'],validate=True);intent=loads(raw)
+    need(sha(raw)==p['terminal_intent_sha256'] and intent['generation']==p['generation'] and intent['fencing_token']==p['fence'] and intent['phase']=='promoted' and not intent.get('lease_owner') and intent.get('lease_expires_at')is None and intent['retirement_forward']==forward_marker_data(p),'EXACT_HISTORICAL_TERMINAL_INTENT_UNLEASED_NO_CURRENT_EPOCH_ALIAS')
+    prepared,returned=image_read_pair(r,target['read_id'],a);reply=returned['original_record'];obs=reply['observation']
+    need(returned['kind']=='absence' and returned['record_sha256']==p['native_absence_sha256'] and reply['status']=='observed' and reply['call_failed']is False and reply['original_context_failed']is False and obs['server_absent']is True and obs['server_absence_complete']is True and obs['billable_resources_absent']is True and obs['retirement_complete']is True and obs['auxiliary_inventory_complete']is True and obs['hold_reasons']==[] and len(obs['auxiliary_resources'])==2 and all(x['absent']is True for x in obs['auxiliary_resources']),'GENUINE_S8_OWN_COMPLETE_ABSENCE_NOT_PENDING_OR_FAILED')
+    grants=[g for g in r['destroy_grants']if g['id']==p['destroy_grant_id']];need(len(grants)==1,'ONE_HISTORICAL_S8_PAID_DELETE')
+    record=paid_original_sdk(grants[0],p['original']['Request']['intent']['tuple'],True)
+    need(record['grant']['state']=='confirmed' and record['proof']['resource_absent']is True and len(record['proof']['auxiliary_absent'])==2 and obs['destroy_grant_id']==record['grant']['grant_id'] and obs['id']==record['settlement']['resource_id'],'HISTORICAL_S8_CONFIRMED_GRANT_AND_AUX2_PROOF')
+    w,j=completed_owner(r,target['run_id'],p,True)
+    need(utc(returned['recorded_at'])<=utc(p['recorded_at'])<=utc(w['finished_at'])<=utc(j['finalization_ack_at']),'HISTORICAL_S8_TERMINAL_BEFORE_ITS_COMPLETED_ACK')
+    return True
+
+def validate_current_live(value, case):
+    closed(case,'schema retirement_request_id admission_id preregistration_id current_runtime_source current_generation current_fencing_token current_lease_owner current_executor_id current_failed_run_id expected_records_sha256 provider_lanes historical_s8_ref','CLOSED_TERMINAL_S8_CURRENT_LIVE_CASE13')
+    need(case['schema']==LIVE_CASE_SCHEMA and case['historical_s8_ref']==S8_TERMINAL_REF and case['retirement_request_id']==LIVE_TARGET['retirement_request_id'] and case['admission_id']==LIVE_TARGET['admission_id'] and case['preregistration_id']==LIVE_TARGET['preregistration_id'] and case['current_runtime_source']==OLD_SOURCE and type(case['current_generation'])is int and case['current_generation']==LIVE_TARGET['generation'] and type(case['current_fencing_token'])is int and case['current_fencing_token']==LIVE_TARGET['fence'] and case['current_lease_owner']==LIVE_TARGET['lease_owner'] and case['current_executor_id']==LIVE_TARGET['executor_id'] and case['current_failed_run_id']==LIVE_TARGET['run_id'],'EXACT_DISTINCT_ROOT_CURRENT_LIVE_OWNER_NOT_S8')
+    r=image_snapshot(value,case['expected_records_sha256'])
+    closed(r,'selected_runtime_source target current_intent current_intent_pgtext active_policies forward_rows create_grants retirement_contexts delete_bindings destroy_grants read_counts own_read_count all_read_rows unreturned_prepared latest_reads_all_outcomes workflow_runs workflow_run_steps owning_dispatch_jobs','CLOSED_FULL_CURRENT_LIVE_RECORD_SET')
+    need(r['selected_runtime_source']==OLD_SOURCE and r['target']=={'parent_forward_id':LIVE_TARGET['admission_id'],'retirement_request_id':LIVE_TARGET['retirement_request_id'],'preregistration_id':LIVE_TARGET['preregistration_id'],'resource_id':LIVE_TARGET['resource_id']},'FIXED_CURRENT_LIVE_TARGET_SOURCE_SCOPE')
+    arow=one_frame(r['forward_rows'],LIVE_TARGET['admission_id'],'admitted');qrow=one_frame(r['forward_rows'],LIVE_TARGET['admission_id'],'off_qualified');a,q=arow['original_record'],qrow['original_record']
+    need(len(r['forward_rows'])==2 and a['mode']=='live' and a['issuer']=='source:ordinary-retirement' and a['root_admission_id']==a['id']==LIVE_TARGET['admission_id'] and not a.get('parent_admission_id') and not a.get('continuation') and a['actual_core_source']==OLD_SOURCE and a['preregistration_id']==LIVE_TARGET['preregistration_id'] and a['retirement_request_id']==LIVE_TARGET['retirement_request_id'],'ONE_ORDINARY_LIVE_ROOT_ADMISSION_NO_CONTINUATION_ALIAS')
+    mask={'stage','recorded_at','admission_sha256','native_off_read_id','native_off_sha256'}
+    need(q['admission_sha256']==arow['record_sha256'] and {k:v for k,v in q.items()if k not in mask}=={k:v for k,v in a.items()if k not in mask},'EXACT_GO_OWN_OFF_QUALIFICATION_COPY')
+    current=r['current_intent']['intent'];need(loads(r['current_intent_pgtext'])==current and current['retirement_forward']==forward_marker_data(q) and current['generation']==a['generation']==case['current_generation'] and current['fencing_token']==a['fence']==case['current_fencing_token'] and current['lease_owner']==a['lease_owner']==case['current_lease_owner'] and current['lease_executor_id']==a['executor_id']==case['current_executor_id'] and a['run_id']==case['current_failed_run_id'] and current['phase']=='drained' and utc(current['lease_expires_at'])<=utc(value['observed_at_pg']),'CURRENT_LIVE_FAILED_EXPIRED_OWNER_EXACT_NO_COUNTER_OR_TIMER_RESET')
+    original=base64.b64decode(a['original_intent_wire'],validate=True);need(sha(original)==a['original_intent_sha256'],'CURRENT_LIVE_ORIGINAL_INTENT_WIRE_PRESERVED')
+    need(len(r['active_policies'])==1 and r['active_policies'][0]['id']==current['policy_id'] and r['active_policies'][0]['checksum']==current['policy_checksum'],'CURRENT_LIVE_SINGLE_EXACT_POLICY')
+    tuple_=a['original']['Request']['intent']['tuple'];need(tuple_['slot']==LIVE_TARGET['slot'] and tuple_['resource_id']==LIVE_TARGET['resource_id'] and tuple_['resource_created_at']==LIVE_TARGET['resource_created_at'],'EXACT_CURRENT_LIVE_PAID_NATIVE_TUPLE')
+    creates=r['create_grants'];need(len(creates)==1 and creates[0]['id']==a['original']['Preregistration']['original_create_grant_id'],'ONE_CURRENT_LIVE_ORIGINAL_CREATE')
+    create=paid_original_sdk(creates[0],tuple_,False);need(create['grant']['request_sha256']==a['original']['Preregistration']['original_create_request_sha256'],'CURRENT_LIVE_CREATE_REQUEST_PROVENANCE')
+    need(r['unreturned_prepared']==[] and type(r['own_read_count'])is int and r['own_read_count']==len(r['all_read_rows']) and len(r['all_read_rows'])>=2,'ALL_CURRENT_READS_RETAINED_NO_OPEN_OR_ZERO_OWN_REINTERPRETATION')
+    ids={row['id']for row in r['all_read_rows']}
+    for ident in ids:
+        prepared,returned=image_read_pair(r,ident,a)
+        need(prepared['original_record']['admission_sha256']==arow['record_sha256'],'CURRENT_READS_BIND_EXACT_ADMITTED_SHA')
+    prepared,off=image_read_pair(r,q['native_off_read_id'],a);reply=off['original_record'];server=reply['plan']['server']
+    need(off['kind']=='off' and off['record_sha256']==q['native_off_sha256'] and utc(off['recorded_at'])==utc(q['recorded_at']) and reply['status']=='observed' and reply['call_failed']is False and reply['original_context_failed']is False and server['id']==tuple_['resource_id'] and server['created_at']==tuple_['resource_created_at'] and server['status']=='stopped','GENUINE_CURRENT_OWN_STOPPED_OFF_PAIR_NOT_FAILED_READ_AUTHORITY')
+    need(len(r['delete_bindings'])==len(r['destroy_grants'])==1,'ONE_KNOWN_CURRENT_LIVE_DELETE_NOT_ADMISSION_FIELD_GUESS')
+    binding=r['delete_bindings'][0];wire=bytes.fromhex(binding['wire_hex']);eligibility=binding['original_eligibility_record']
+    closed(eligibility,'schema admission_id admission_sha256 native_off_read_id native_off_sha256','CLOSED_OWNING_CURRENT_DELETE_ELIGIBILITY')
+    need(loads(wire)==eligibility and sha(wire)==binding['eligibility_sha256'] and binding['intent_id']==a['retirement_request_id'] and binding['destroy_grant_id']==LIVE_TARGET['destroy_grant_id'] and eligibility=={'schema':'original_guest_partial_poweroff_delete_eligibility_v1','admission_id':a['id'],'admission_sha256':arow['record_sha256'],'native_off_read_id':q['native_off_read_id'],'native_off_sha256':q['native_off_sha256']},'CURRENT_DELETE_BINDS_OWN_REAL_OFF_NOT_S8_TERMINAL')
+    stored=r['destroy_grants'][0];need(stored['id']==LIVE_TARGET['destroy_grant_id'],'CURRENT_DELETE_NOT_HISTORICAL_S8_PAID_GRANT')
+    paid=paid_original_sdk(stored,tuple_,True);need(paid['generation']==a['generation'] and paid['fencing_token']==a['fence'] and paid['lease_owner']==a['lease_owner'] and paid['executor_id']==a['executor_id'],'CURRENT_KNOWN_DELETE_EXACT_ORIGINAL_OWNER')
+    w,j=completed_owner(r,a['run_id'],a)
+    need(j['id']==LIVE_TARGET['dispatch_id'] and all(utc(x['recorded_at'])<=utc(j['returned_at'])for x in r['all_read_rows']) and utc(j['finalization_ack_at'])<=utc(value['observed_at_pg']),'CURRENT_ALL_CLOSED_READS_BEFORE_ITS_FAILED_FINAL_ACK')
+    return True
+
+def validate_maintenance_scenario(c, C):
+    if c['schema']=='g15_pre_read_continuation_image_maintenance_v1':
+        return validate_pre_read96(loads(input_ref(C,c['pre_read_preimage_ref'])),c['pre_read_case'])
+    need(c['schema']==LIVE_SCHEMA,'ONLY_EXPLICIT_IMAGE_MAINTENANCE_SCENARIOS')
+    case=c['pre_read_case'];validate_current_live(loads(input_ref(C,c['pre_read_preimage_ref'])),case)
+    need(case['historical_s8_ref']==S8_TERMINAL_REF,'EXACT_RETAINED_HISTORICAL_S8_SOURCE')
+    return validate_terminal_s8(loads(input_ref(C,case['historical_s8_ref'])))
 
 if __name__=="__main__":main()

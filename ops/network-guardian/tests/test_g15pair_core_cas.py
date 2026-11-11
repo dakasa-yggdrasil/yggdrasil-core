@@ -147,6 +147,103 @@ def reseal_current_pre_read(value,case,update_expected=True):
     raw=encoded(r);value['records_wire']=raw;value['records_sha256']=cas.sha(raw.encode())
     if update_expected:case['expected_records_sha256']=value['records_sha256']
 
+
+
+def seal_image_fixture(value, case=None):
+    encoded=lambda x:json.dumps(x,sort_keys=True,separators=(',',':'))
+    r=value['records']
+    for row in r['forward_rows']+r['all_read_rows']:
+        raw=encoded(row['original_record']).encode();row['wire_hex']=raw.hex();row['record_sha256']=cas.sha(raw)
+    for g in r.get('create_grants',[])+r['destroy_grants']:g['grant_pgtext']=encoded(g['grant_record'])
+    for w in r['workflow_runs']:w['run_wire']=encoded({k:v for k,v in w.items()if k!='run_wire'})
+    for j in r['owning_dispatch_jobs']:j['dispatch_wire']=encoded({k:v for k,v in j.items()if k!='dispatch_wire'})
+    r['current_intent_pgtext']=encoded(r['current_intent']['intent'])
+    raw=encoded(r);value['records_wire']=raw;value['records_sha256']=cas.sha(raw.encode())
+    if case is not None:case['expected_records_sha256']=value['records_sha256']
+
+def live_image_operand():
+    """Declared real-shaped LIVE and terminal classes; no original production bytes."""
+    value,oldcase=pre_read_operand();r=value['records'];t=cas.LIVE_TARGET
+    encoded=lambda x:json.dumps(x,sort_keys=True,separators=(',',':'))
+    tuple_={'provider':'aws','integration_instance_id':'10000000-0000-4000-8000-000000000010','instance_checksum':'1'*64,'integration_type_id':'20000000-0000-4000-8000-000000000010','type_checksum':'2'*64,'scope_checksum':'a'*64,'profile_checksum':'3'*64,'profile':'declared','slot':t['slot'],'resource_id':t['resource_id'],'resource_created_at':t['resource_created_at']}
+    original_intent={'generation':34,'fencing_token':70,'phase':'draining'}
+    a=copy.deepcopy(r['forward_rows'][0]['original_record'])
+    a.update(schema='original_guest_partial_poweroff_forward_v1',id=t['admission_id'],root_admission_id=t['admission_id'],stage='admitted',mode='live',issuer='source:ordinary-retirement',actual_core_source=cas.OLD_SOURCE,preregistration_id=t['preregistration_id'],retirement_request_id=t['retirement_request_id'],generation=34,fence=70,lease_owner=t['lease_owner'],executor_id=t['executor_id'],run_id=t['run_id'],recorded_at='2026-11-10T16:00:00Z',original_generation=34,original_fence=70,original_intent_wire=base64.b64encode(encoded(original_intent).encode()).decode(),original_intent_sha256=cas.sha(encoded(original_intent).encode()))
+    a.pop('destroy_grant_id',None);a['original']['Request']['intent']['tuple']=tuple_
+    create_id='20000000-0000-4000-8000-000000000001'
+    a['original']['Preregistration']={'original_create_grant_id':create_id,'original_create_request_sha256':'d'*64}
+    def frame(record):
+        raw=encoded(record).encode();return dict(id=record['id'],stage=record['stage'],admission_id=record['id'],recorded_at=record['recorded_at'],original_record=record,wire_hex=raw.hex(),record_sha256=cas.sha(raw))
+    admitted=frame(a)
+    binding={'name':'declared','integration_instance_id':tuple_['integration_instance_id'],'scope_checksum':tuple_['scope_checksum'],'profile_name':tuple_['profile'],'original_provider_source_commit':cas.A3_CREATOR,'ensure_capability':'ensure_ec2_instance','destroy_capability':'terminate_ec2_instance'}
+    paid=copy.deepcopy(r['destroy_grants'][0]);record=paid['grant_record'];g=record['grant'];settle=record['settlement'];sdk=settle['original_provider_destroy_return']
+    paid['id']=g['grant_id']=sdk['grant_id']=t['destroy_grant_id'];paid['generation']=record['generation']=34;record.update(fencing_token=70,lease_owner=t['lease_owner'],executor_id=t['executor_id'],binding=binding)
+    g.update(binding_name='declared',capability='terminate_ec2_instance',integration_instance_id=tuple_['integration_instance_id'],scope_checksum=tuple_['scope_checksum'],profile_name=tuple_['profile'],slot=5,expected_resource_id=tuple_['resource_id'],expected_resource_created_at=tuple_['resource_created_at'])
+    settle.update(resource_id=tuple_['resource_id'],resource_created_at=tuple_['resource_created_at']);sdk.update(resource_id=tuple_['resource_id'],resource_created_at=tuple_['resource_created_at'],response_body_sha256='9'*64,response_bytes=512)
+    create=copy.deepcopy(paid);create['id']=create_id;cr=create['grant_record'];cr['grant'].update(grant_id=create_id,state='confirmed',capability='ensure_ec2_instance');create['state']='confirmed'
+    cs=cr['settlement'];cs['original_provider_create_return']=cs.pop('original_provider_destroy_return');cs['original_provider_create_return'].update(schema='aws_original_run_instances_return_v1',grant_id=create_id)
+    receipt={'grant':g,'attempt_id':record['attempt_id'],**{k:settle[k]for k in ('outcome','transport_completed','action_id','resource_id','resource_created_at','auxiliary_resources','auxiliary_inventory_complete')}}
+    rows=[]
+    def pair(ident,kind,second,failed=False):
+        read={'schema':'original_core_guest_retirement_forward_read_v1','read_id':ident,'admission_id':a['id'],'admission_sha256':admitted['record_sha256'],'retirement_request_id':a['retirement_request_id'],'kind':kind,'prefix_sha256':a['prefix_sha256'],'original_caller_sha256':a['original_caller_sha256'],'adapter_source_commit':cas.A3_CREATOR,'tuple':tuple_,'destroy_grant_id':''if kind=='off'else t['destroy_grant_id'],'issued_at_core':f'2026-11-10T16:00:{second:02d}Z','original_deadline_core':f'2026-11-10T16:00:{second+5:02d}Z'}
+        reply={'schema':'original_core_guest_retirement_forward_read_return_v1','read':read,'status':''if failed else'observed','call_failed':failed,'original_context_failed':failed,'started_at_core':read['issued_at_core'],'original_returned_at_core':f'2026-11-10T16:00:{second+1:02d}Z'}
+        if kind=='off':reply['plan']={'server':{'id':tuple_['resource_id'],'created_at':tuple_['resource_created_at'],'status':'stopped'}}
+        else:reply['original_destroy_receipt']=receipt
+        for stage,body,at in (('prepared',read,read['issued_at_core']),('returned',reply,reply['original_returned_at_core'])):
+            raw=encoded(body).encode();rows.append(dict(id=ident,stage=stage,admission_id=a['id'],kind=kind,recorded_at=at,original_record=body,wire_hex=raw.hex(),record_sha256=cas.sha(raw)))
+    pair('c274c871-8861-4124-8d6c-85e0ba6896ff','off',4)
+    off=copy.deepcopy(a);off.update(stage='off_qualified',recorded_at=rows[1]['recorded_at'],admission_sha256=admitted['record_sha256'],native_off_read_id=rows[1]['id'],native_off_sha256=rows[1]['record_sha256'])
+    q=frame(off)
+    pair('20000000-0000-4000-8000-000000000020','absence',8)
+    pair('7dd59209-0c2c-4d13-8198-878fcec0aa74','absence',12,True)
+    eligibility={'schema':'original_guest_partial_poweroff_delete_eligibility_v1','admission_id':a['id'],'admission_sha256':admitted['record_sha256'],'native_off_read_id':off['native_off_read_id'],'native_off_sha256':off['native_off_sha256']}
+    ew=encoded(eligibility).encode();delete={'intent_id':a['retirement_request_id'],'destroy_grant_id':t['destroy_grant_id'],'original_eligibility_record':eligibility,'wire_hex':ew.hex(),'eligibility_sha256':cas.sha(ew)}
+    run=copy.deepcopy(r['workflow_runs'][-1]);run.update(id=t['run_id'],finished_at='2026-11-10T16:00:20Z');run['metadata']['capacity_dispatch_job_id']=t['dispatch_id']
+    st={x['id']:x for x in run['result']['steps']};st['plan-original-guest']['metadata'].update(generation=34,fencing_token=70,lease_owner=t['lease_owner']);st['retire-original-guest']['metadata'].update(retirement_forward_id=a['id'],request_id=a['retirement_request_id'])
+    job=copy.deepcopy(r['owning_dispatch_jobs'][-1]);job.update(id=t['dispatch_id'],run_id=run['id'],returned_at=run['finished_at'],finalization_ack_at='2026-11-10T16:00:21Z')
+    intent={'policy_id':r['active_policies'][0]['id'],'policy_checksum':r['active_policies'][0]['checksum'],'generation':34,'fencing_token':70,'phase':'drained','lease_owner':a['lease_owner'],'lease_executor_id':a['executor_id'],'lease_expires_at':'2026-11-10T16:00:43Z','retirement_forward':cas.forward_marker_data(off)}
+    r.update(selected_runtime_source=cas.OLD_SOURCE,target={'parent_forward_id':a['id'],'retirement_request_id':a['retirement_request_id'],'preregistration_id':a['preregistration_id'],'resource_id':tuple_['resource_id']},current_intent={'intent':intent},forward_rows=[admitted,q],create_grants=[create],delete_bindings=[delete],destroy_grants=[paid],all_read_rows=rows,own_read_count=len(rows),unreturned_prepared=[],latest_reads_all_outcomes=rows[-6:],workflow_runs=[run],owning_dispatch_jobs=[job])
+    value['observed_at_pg']='2026-11-10T16:01:00Z'
+    case={'schema':cas.LIVE_CASE_SCHEMA,'retirement_request_id':a['retirement_request_id'],'admission_id':a['id'],'preregistration_id':a['preregistration_id'],'current_runtime_source':cas.OLD_SOURCE,'current_generation':34,'current_fencing_token':70,'current_lease_owner':a['lease_owner'],'current_executor_id':a['executor_id'],'current_failed_run_id':a['run_id'],'expected_records_sha256':'0'*64,'provider_lanes':oldcase['provider_lanes'],'historical_s8_ref':cas.S8_TERMINAL_REF}
+    seal_image_fixture(value,case)
+    # PG column timestamps use +00:00; original Go wire retains Z.
+    for row in r['forward_rows']+r['all_read_rows']:row['recorded_at']=row['recorded_at'].replace('Z','+00:00')
+    seal_image_fixture(value,case)
+    return value,case
+
+def terminal_image_operand():
+    value,case=current_pre_read_operand();r=value['records'];a=r['forward_rows'][-1]['original_record']
+    # A synthetic terminal of the historical31 epoch, independently of LIVE34.
+    a.update(schema='original_guest_partial_poweroff_forward_v1',actual_core_source=cas.OLD_SOURCE,original_intent_sha256='e'*64,original_generation=31,original_fence=54,preregistration_id=cas.PRE_READ_TARGET['preregistration_id'])
+    tuple_=a['original']['Request']['intent']['tuple'];tuple_['profile']=tuple_.pop('profile_name');tuple_.update(slot=8,instance_checksum='1'*64,integration_type_id='20000000-0000-4000-8000-000000000010',type_checksum='2'*64,profile_checksum='3'*64)
+    # Preserve actual admitted bytes and append an independent own absence pair.
+    seal_image_fixture(value);admitted=r['forward_rows'][-1]
+    own=copy.deepcopy(r['all_read_rows'][0]);read=own['original_record'];ident='f3c6eee8-02e0-4f06-bf76-4b7377d7cf21'
+    read.update(read_id=ident,kind='absence',admission_id=a['id'],admission_sha256=admitted['record_sha256'],tuple=tuple_,issued_at_core='2026-11-10T16:03:00Z',original_deadline_core='2026-11-10T16:03:05Z')
+    own.update(id=ident,admission_id=a['id'],recorded_at=read['issued_at_core'])
+    returned=copy.deepcopy(r['all_read_rows'][1]);reply=returned['original_record'];reply.update(read=read,started_at_core='2026-11-10T16:03:00Z',original_returned_at_core='2026-11-10T16:03:01Z')
+    obs=reply['observation'];obs.update(server_absent=True,server_absence_complete=True,server_status='',billable_resources_absent=True,retirement_complete=True,hold_reasons=[])
+    for aux in obs['auxiliary_resources']:aux['absent']=True
+    returned.update(id=ident,admission_id=a['id'],recorded_at=reply['original_returned_at_core'])
+    r['all_read_rows'].extend((own,returned));seal_image_fixture(value)
+    terminal=copy.deepcopy(a);terminal.update(stage='terminal',recorded_at='2026-11-10T16:03:02Z',admission_sha256=admitted['record_sha256'],native_absence_sha256=returned['record_sha256'])
+    ti={'generation':a['generation'],'fencing_token':a['fence'],'phase':'promoted','lease_expires_at':None,'retirement_forward':cas.forward_marker_data(terminal)}
+    raw=cas.canonical(ti);terminal.update(terminal_intent_wire=base64.b64encode(raw).decode(),terminal_intent_sha256=cas.sha(raw))
+    encoded=lambda x:json.dumps(x,sort_keys=True,separators=(',',':'));raw=encoded(terminal).encode()
+    tr=dict(id=a['id'],stage='terminal',admission_id=a['id'],recorded_at=terminal['recorded_at'],original_record=terminal,wire_hex=raw.hex(),record_sha256=cas.sha(raw));r['forward_rows'].append(tr)
+    g=r['destroy_grants'][0];g['state']=g['grant_record']['grant']['state']='confirmed';g['grant_record']['proof']={'resource_absent':True,'auxiliary_absent':[{'kind':'aws_ebs_volume'},{'kind':'aws_network_interface'}]}
+    gr=g['grant_record'];gr['binding']={'name':'declared','integration_instance_id':tuple_['integration_instance_id'],'scope_checksum':tuple_['scope_checksum'],'profile_name':tuple_['profile'],'ensure_capability':'ensure_ec2_instance','destroy_capability':'terminate_ec2_instance','original_provider_source_commit':cas.A3_CREATOR}
+    gr['grant'].update(binding_name='declared',capability='terminate_ec2_instance',integration_instance_id=tuple_['integration_instance_id'],scope_checksum=tuple_['scope_checksum'],profile_name=tuple_['profile'],slot=8)
+    gr['settlement']['original_provider_destroy_return'].update(response_body_sha256='9'*64,response_bytes=512)
+    run=r['workflow_runs'][-1];run['status']=run['result']['status']='succeeded';run['finished_at']='2026-11-10T16:03:03Z'
+    steps={x['id']:x for x in run['result']['steps']};steps['finish-original-retirement']['status']=steps['complete-original-retirement']['status']='succeeded'
+    job=r['owning_dispatch_jobs'][-1];job.update(return_status='succeeded',returned_at=run['finished_at'],finalization_ack_at='2026-11-10T16:03:04Z')
+    # Current intent belongs elsewhere; it is never terminal31's authority.
+    r['current_intent']['intent'].update(generation=34,fencing_token=70)
+    seal_image_fixture(value)
+    target={'admission_id':a['id'],'record_sha256':tr['record_sha256'],'native_absence_sha256':returned['record_sha256'],'terminal_intent_sha256':terminal['terminal_intent_sha256'],'run_id':a['run_id'],'read_id':ident,'generation':a['generation'],'fence':a['fence']}
+    return value,target
+
 DECLARED_CHECK96='CHECK (declared_old_proof OR declared_pre_read_proof)'
 DECLARED_INVENTORY_MANIFEST={'schemaVersion':2,'mediaType':'application/vnd.oci.image.manifest.v1+json','config':{'mediaType':'application/vnd.oci.image.config.v1+json','size':12,'digest':'sha256:'+'4'*64},'layers':[{'mediaType':'application/vnd.oci.image.layer.v1.tar+gzip','size':12,'digest':'sha256:'+'5'*64}]}
 
@@ -487,6 +584,74 @@ class G15CoreCASTests(unittest.TestCase):
         self.assertIn("'all_read_rows'",cas.PRE_READ_SQL)
         self.assertNotIn("WHERE admission_id='756a0af2",cas.PRE_READ_SQL)
         self.assertNotIn("kind='absence'",cas.PRE_READ_SQL)
+
+
+        # Separate ordinary LIVE34 scenario. The terminal31 snapshot is
+        # historical custody, never the current owner or read-zero authority.
+        live,livecase=live_image_operand()
+        terminal,target=terminal_image_operand()
+        terminal_raw=cas.canonical(terminal)
+        history_ref={'path':cas.S8_TERMINAL_REF['path'],'sha256':cas.sha(terminal_raw)}
+        livecase['historical_s8_ref']=history_ref
+        current_raw=cas.canonical(live)
+        C=types.SimpleNamespace(digest=cas.digest_value,read=lambda path,*args:{history_ref['path']:terminal_raw,'/declared/current-live':current_raw}[str(path)])
+        config={'schema':cas.LIVE_SCHEMA,'pre_read_case':livecase,'pre_read_preimage_ref':{'path':'/declared/current-live','sha256':cas.sha(current_raw)}}
+        with patch.object(cas,'S8_TERMINAL_REF',history_ref),patch.object(cas,'S8_TERMINAL_TARGET',target):
+            self.assertTrue(cas.validate_current_live(live,livecase))
+            self.assertTrue(cas.validate_terminal_s8(terminal))
+            self.assertTrue(cas.validate_maintenance_scenario(config,C))
+            self.assertEqual(live['records']['own_read_count'],6)
+            self.assertTrue(live['records']['all_read_rows'][-1]['original_record']['call_failed'])
+            self.assertEqual(live['records']['all_read_rows'][-1]['original_record']['status'],'')
+            self.assertNotEqual(livecase['current_generation'],target['generation'])
+            for fault in ('old_epoch','unknown_mode','foreign_marker','off_copy','missing_ack','unknown_job','live_lease','open_read','missing_pair','unknown_return','sdk_status','sdk_next','unknown_destroy','foreign_binding','sdk_target','foreign_policy','zero_own_count','cross_root','return_after_ack','wire_hash'):
+                v,c=copy.deepcopy(live),copy.deepcopy(livecase);r=v['records']
+                if fault=='old_epoch':r['current_intent']['intent']['generation']=31
+                elif fault=='unknown_mode':r['forward_rows'][0]['original_record']['mode']='settled_absence_continuation'
+                elif fault=='foreign_marker':r['current_intent']['intent']['retirement_forward']['id']=target['admission_id']
+                elif fault=='off_copy':r['forward_rows'][1]['original_record']['evidence']={'foreign':True}
+                elif fault=='missing_ack':r['owning_dispatch_jobs'][0]['finalization_ack_at']=None
+                elif fault=='unknown_job':r['owning_dispatch_jobs'][0]['state']='unknown'
+                elif fault=='live_lease':r['current_intent']['intent']['lease_expires_at']='2026-11-10T16:02:00Z'
+                elif fault=='open_read':r['unreturned_prepared']=[r['all_read_rows'][-2]]
+                elif fault=='missing_pair':r['all_read_rows'].pop();r['own_read_count']-=1
+                elif fault=='unknown_return':r['all_read_rows'][-1]['original_record']['status']='unsupported'
+                elif fault=='sdk_status':r['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['response_status']=True
+                elif fault=='sdk_next':r['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['next_action_ids']=['foreign']
+                elif fault=='unknown_destroy':r['destroy_grants'][0]['state']=r['destroy_grants'][0]['grant_record']['grant']['state']='redeemed'
+                elif fault=='foreign_binding':r['delete_bindings'][0]['intent_id']=cas.PRE_READ_TARGET['retirement_request_id']
+                elif fault=='sdk_target':r['create_grants'][0]['grant_record']['settlement']['original_provider_create_return']['resource_id']='i-fffffffffffffffff'
+                elif fault=='foreign_policy':r['active_policies'].append({'id':'foreign','checksum':'f'*64})
+                elif fault=='zero_own_count':r['own_read_count']=0
+                elif fault=='cross_root':c['retirement_request_id']=cas.PRE_READ_TARGET['retirement_request_id']
+                elif fault=='return_after_ack':r['all_read_rows'][-1]['recorded_at']='2026-11-10T16:00:22Z'
+                seal_image_fixture(v,c)
+                if fault=='wire_hash':r['all_read_rows'][-1]['record_sha256']='f'*64;raw=json.dumps(r,sort_keys=True,separators=(',',':'));v['records_wire']=raw;v['records_sha256']=c['expected_records_sha256']=cas.sha(raw.encode())
+                with self.subTest(current_live=fault),self.assertRaises(cas.Hold):cas.validate_current_live(v,c)
+            for fault in ('paid_not_confirmed','sdk_unknown','proof_absence_false','missing_terminal_ack','pending_absence','foreign_terminal_ref'):
+                v=copy.deepcopy(terminal);r=v['records']
+                if fault=='paid_not_confirmed':r['destroy_grants'][0]['state']=r['destroy_grants'][0]['grant_record']['grant']['state']='settled'
+                elif fault=='sdk_unknown':r['destroy_grants'][0]['grant_record']['settlement']['original_provider_destroy_return']['response_status']=500
+                elif fault=='proof_absence_false':r['destroy_grants'][0]['grant_record']['proof']['resource_absent']=False
+                elif fault=='missing_terminal_ack':r['owning_dispatch_jobs'][-1]['state']='unknown'
+                elif fault=='pending_absence':r['all_read_rows'][-1]['original_record']['observation']['retirement_complete']=False
+                else:
+                    bad=copy.deepcopy(livecase);bad['historical_s8_ref']={'path':'/declared/foreign-S8','sha256':history_ref['sha256']}
+                    with self.assertRaises(cas.Hold):cas.validate_current_live(live,bad)
+                    continue
+                seal_image_fixture(v)
+                with self.subTest(historical_terminal=fault),self.assertRaises(cas.Hold):cas.validate_terminal_s8(v)
+        # Metadata remains one exact8-op image CAS. Standalone Source need not
+        # equal the independently-qualified network package, or reroll it.
+        module=ast.parse(PATH.read_bytes())
+        guard=[n for n in module.body if isinstance(n,ast.If)and isinstance(n.test,ast.Compare)and isinstance(n.test.left,ast.Name)and n.test.left.id=='__name__']
+        self.assertEqual(len(guard),1);self.assertIs(module.body[-1],guard[0])
+        self.assertEqual(cas.CAP,16<<20)
+        self.assertIn("'create_grants'",cas.CURRENT_LIVE_SQL)
+        self.assertIn("'all_read_rows'",cas.CURRENT_LIVE_SQL)
+        self.assertNotIn("kind='absence'",cas.CURRENT_LIVE_SQL)
+        with binding():
+            self.assertEqual(cas.global_marker(types.SimpleNamespace(NEW_DIGEST='d'*64)).name,'CORE-IMAGE-R6-045-D85BE-TO-'+cas.CORE_R+'-'+'d'*64+'-POSSIBLE.json')
 
     def test_normal_g15_full120_own15_fresh15_and_once_markers(self):
         with binding():
