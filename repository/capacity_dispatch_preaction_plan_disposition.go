@@ -36,7 +36,7 @@ type preActionPlanEffectScan struct {
 func preActionPlanEffectScanTolerable(raw []byte) bool {
 	var fields map[string]json.RawMessage
 	var scan preActionPlanEffectScan
-	if json.Unmarshal(raw, &fields) != nil || len(fields) != 11 || capacity.DecodeNativeCapacity(raw, &scan) != nil {
+	if json.Unmarshal(raw, &fields) != nil || len(fields) != 11 || capacity.DecodeNativeCapacity(json.RawMessage(raw), &scan) != nil {
 		return false
 	}
 	for _, name := range []string{"schema", "base", "current_intent_matches_anchor", "current_members_match_anchor", "other_busy_dispatches", "other_busy_runs", "authority_issues_since_start", "disposal_rows_since_start", "retirement_forwards_since_start", "retirement_forward_reads_since_start", "undisposed_grants"} {
