@@ -271,6 +271,10 @@ def readonly_refresh(operand):
             'started_at': '2026-11-11T13:00:12Z',
             'finished_at': '2026-11-11T13:00:12Z', 'metadata': {},
         })
+    for number in (1, 2, 4, 5, 6):
+        condition = '{{ steps.plan-original-guest.metadata.mode }} == ' + (
+            'provision' if number in (1, 4) else 'retire')
+        steps[number]['metadata'] = {'condition': condition, 'skip_reason': 'condition'}
     steps[0]['metadata'] = {
         'mode': 'refresh', 'reason': intent['decision']['reason'], 'slot': 0,
         'generation': 44, 'fencing_token': 86, 'lease_owner': '',
@@ -462,6 +466,29 @@ class Restore98SameEpochLineageTests(unittest.TestCase):
                     steps[3]['capability'] = 'destroy_vm'
                 set_lineage(operand, jobs, runs)
                 self.refused(operand)
+        for index in (1, 2, 4, 5, 6):
+            for mutation in ('missing_metadata', 'empty_metadata', 'wrong_condition',
+                             'wrong_skip_reason', 'extra_field', 'wrong_type'):
+                with self.subTest(skipped_step=index, metadata_mutation=mutation):
+                    operand = readonly_refresh(declared_restoration())
+                    line = operand['value']['same_epoch_lineage']
+                    jobs = json.loads(line['jobs_wire'])
+                    runs = json.loads(line['runs_wire'])
+                    step = runs[0]['result']['steps'][index]
+                    if mutation == 'missing_metadata':
+                        del step['metadata']
+                    elif mutation == 'empty_metadata':
+                        step['metadata'] = {}
+                    elif mutation == 'wrong_condition':
+                        step['metadata']['condition'] = '{{ steps.plan-original-guest.metadata.mode }} == foreign'
+                    elif mutation == 'wrong_skip_reason':
+                        step['metadata']['skip_reason'] = 'workflow_aborted'
+                    elif mutation == 'extra_field':
+                        step['metadata']['extra'] = False
+                    else:
+                        step['metadata'] = []
+                    set_lineage(operand, jobs, runs)
+                    self.refused(operand)
         for mutation in ('missing_frame', 'missing_jobs', 'missing_run', 'extra_run',
                          'duplicate_job', 'wrong_count', 'extra_vm_grant'):
             with self.subTest(lineage_mutation=mutation):
