@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: b50f73ba1c3e2b36cac3ac35b6fa4225fe509598
-verified_diff_sha256: a0c76eca61becbce4c24fb19e7b26981a5c8495d1fbd664c6a80518377131b86
+verified_at_commit: 3cf7621269010477b81b34a43242eebb591cc188
+verified_diff_sha256: 9a4aa9910114133df495cfd9e9fa70a649c98fc168f1cc2a0f0d12b8ea6e0bfa
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -472,3 +472,7 @@ normal_finish_snapshot_materialization_review: Reviewed the exact scoped job/run
 normal_finish_duplicate_catalog_view_review: Reviewed the real schema97 post-Job catalog difference and retained its original HOLD, single Job201 acknowledgment, successful Job and Pod, logs and GET-only reconciliation. The forward guard occurs in both the legacy catalog90 and functions93 views; the verifier now requires exactly one closed legacy row, authenticates its old definition, and checks the same qualified new definition in both views before the unchanged whole-catalog comparison. Existing criteria model the actual four-row legacy projection and refuse missing, duplicate, conflicting, expanded or unrelated modified rows. Every other operator definition, migration, qualified image, network package and once-only claim remains unchanged. Independent Source review and exact successor remote CI remain required; no local product tests, builds or imports ran.
 
 normal_finish_catalog_relation_order_review: Reviewed the complete actual catalog arrays and the original query ordering by relation OID and constraint name. The expected schema97 delta now retains authenticated prior relation-group order and sorts names only within those groups; original raw catalogs and the final complete equality remain unchanged. Existing criteria include all thirty original public constraint rows across both relations, preserve the unrelated ten rows, and refuse changed definitions, row reordering and relation-group reordering. Only the shared catalog-delta predictor changed in the two operators; migration, image, network, once-only claims and GET-only reconciliation remain unchanged. Independent Source review passed. Exact successor remote CI remains required; no local product tests, builds or imports ran.
+
+## Distinct successor fixture wakes
+
+The recoveryfixture dispatch helper now retains the actual UTC instant at nanosecond precision and rejects a coalesced enqueue or a different returned job/run before claiming. This closes a reachable same-second fixture collision with an acknowledged predecessor. The original PG17 failure remains retained; its exact runtime collision is inferred from Source, not established by a captured database wake. Production deduplication, deadlines, claims and the independently accepted compiler image are unchanged. Current full remote CI remains required.
