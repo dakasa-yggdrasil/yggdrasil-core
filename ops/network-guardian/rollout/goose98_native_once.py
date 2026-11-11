@@ -1247,7 +1247,7 @@ def normal_pg_bytea(value):
 
 
 
-M98 = 'a739323d44b526beeef229c9faa17d0e8d27a2460028835e6fe7650b60b1904f'
+M98 = 'b1ef412772f6d50fbd6a3becfd68965748951e94010d5e845f1a9af5563fdde6'
 INSTALLED_TIMEOUT_PREIMAGE_SHA256 = None
 """Lazy authenticated, non-main pure-helper namespace. No effect entry point."""
 
@@ -1276,7 +1276,7 @@ def catalog98_module():
         module.__file__ = ref['path']
         exec(compile(raw,ref['path'],'exec'),module.__dict__)
         need(module.SOURCE_BOUND is False and module.QUALIFIED_SOURCE is None
-             and module.M98 == 'a739323d44b526beeef229c9faa17d0e8d27a2460028835e6fe7650b60b1904f',
+             and module.M98 == 'b1ef412772f6d50fbd6a3becfd68965748951e94010d5e845f1a9af5563fdde6',
              'PURE98_DEFINITIONS_NOT_AN_ACTIVATED_OPERATOR')
         module.catalog97_select = catalog97_select
         CATALOG98_MODULE_CACHE = module
@@ -1587,7 +1587,10 @@ def validate_installed_timeout98(value, case):
              and installed_timeout_pg_ns(step['finished_at']) <= ns(w['finished_at'])
              and step.get('attempts',0) == (0 if status == 'skipped' else 1)
              and type(step.get('attempts',0)) is int
-             and (status != 'skipped' or step.get('metadata',{}) == {}), 'EXACT98_SEVEN_ORDERED_ORIGINAL_STEPS')
+             and (status != 'skipped' or step.get('metadata',{}) == {
+                 'retire-original-guest':{'condition':'{{ steps.plan-original-guest.metadata.mode }} == retire','skip_reason':'condition'},
+                 'refresh-original-membership':{'condition':'{{ steps.plan-original-guest.metadata.mode }} == refresh','skip_reason':'condition'}
+             }.get(identity,{})), 'EXACT98_SEVEN_ORDERED_ORIGINAL_STEPS')
     plan, provision, complete = result['steps'][0], result['steps'][1], result['steps'][4]
     need(plan['metadata']['mode'] == 'provision' and plan['metadata']['slot'] == case['member_count']
          and plan['metadata']['generation'] == i['generation'] and plan['metadata']['fencing_token'] == i['fencing_token']

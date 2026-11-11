@@ -182,7 +182,12 @@ BEGIN
   IF ordinal IN(1,2,5) THEN
    IF step->'attempts' IS DISTINCT FROM '1'::jsonb THEN RETURN false; END IF;
   ELSE
-   IF coalesce(step->'attempts','0'::jsonb) IS DISTINCT FROM '0'::jsonb OR coalesce(step->'metadata','{}'::jsonb)<>'{}'::jsonb THEN RETURN false; END IF;
+   IF coalesce(step->'attempts','0'::jsonb) IS DISTINCT FROM '0'::jsonb THEN RETURN false; END IF;
+   IF ordinal IN(3,4) THEN
+    IF step->'metadata' IS DISTINCT FROM jsonb_build_object(
+     'condition',CASE ordinal WHEN 3 THEN '{{ steps.plan-original-guest.metadata.mode }} == retire' ELSE '{{ steps.plan-original-guest.metadata.mode }} == refresh' END,
+     'skip_reason','condition') THEN RETURN false; END IF;
+   ELSIF coalesce(step->'metadata','{}'::jsonb)<>'{}'::jsonb THEN RETURN false; END IF;
   END IF;
  END LOOP;
  IF (result#>>'{steps,0,metadata,mode}'='provision' AND result#>'{steps,0,metadata,slot}'=to_jsonb(n)

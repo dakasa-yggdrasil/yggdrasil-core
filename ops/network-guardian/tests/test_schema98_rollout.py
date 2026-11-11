@@ -126,6 +126,8 @@ def installed_operand98():
     for identity,operation,status in zip(ids,ops,statuses):
         steps.append(dict(id=identity,kind='yggdrasil',operation=operation,capability=operation,status=status,attempts=0 if status=='skipped'else 1,
                           started_at='2026-11-11T10:08:35.646Z',finished_at='2026-11-11T10:08:35.647Z',metadata={}))
+    steps[2]['metadata']={'condition':'{{ steps.plan-original-guest.metadata.mode }} == retire','skip_reason':'condition'}
+    steps[3]['metadata']={'condition':'{{ steps.plan-original-guest.metadata.mode }} == refresh','skip_reason':'condition'}
     steps[0].update(started_at='2026-11-11T10:04:15Z',finished_at='2026-11-11T10:04:15.1Z',metadata={'mode':'provision','slot':8,'generation':44,'fencing_token':85,'lease_owner':case['current_lease_owner']})
     steps[1].update(started_at='2026-11-11T10:04:15.1Z',finished_at='2026-11-11T10:08:35.646Z',metadata={'preregistration':selected})
     steps[4].update(started_at='2026-11-11T10:08:35.646Z',finished_at=returned,metadata={'original_guest_reconcile_refusal_stage':'source_assessment'},error='original Guest reconciliation held')
@@ -201,6 +203,12 @@ class Schema98RolloutTests(unittest.TestCase):
             elif label=='wrong_operation':r['run']['result']['steps'][2]['operation']='capacity.provision_original_guest'
             elif label=='wrong_capability':r['run']['result']['steps'][2]['capability']='capacity.provision_original_guest'
             elif label=='wrong_kind':r['run']['result']['steps'][2]['kind']='http'
+            elif label.startswith('skip_'):
+                _,ordinal,fault=label.split('_');step=r['run']['result']['steps'][int(ordinal)]
+                if fault=='condition':step['metadata']['condition']='{{ steps.plan-original-guest.metadata.mode }} == provision'
+                elif fault=='reason':step['metadata']['skip_reason']='other'
+                elif fault=='extra':step['metadata']['extra']=True
+                elif fault=='empty':step['metadata']={}
             elif label=='bool_attempt':r['run']['result']['steps'][0]['attempts']=True
             elif label=='reordered':r['run']['result']['steps'][2:4]=reversed(r['run']['result']['steps'][2:4])
             elif label=='late_provision':r['run']['result']['steps'][1]['finished_at']=r['proofs'][-1]['preregistration']['preregistration_record']['original_deadline']
@@ -219,7 +227,9 @@ class Schema98RolloutTests(unittest.TestCase):
         for label in ('false_ACK','returned','late_original_live','missing_member','missing_installation','hidden_DELETE','unresolved',
                       'notify','retirement','foreign_authority','other_job','new_epoch','wrong_floor','wrong_stage','wrong_operation',
                       'wrong_capability','wrong_kind','bool_attempt','reordered','late_provision','inverted_wire','wrong_S1','unconfirmed','foreign_tuple',
-                      'installation_v1','clock_schema','clock_digest','clock_order','clock_type'):
+                      'installation_v1','clock_schema','clock_digest','clock_order','clock_type',
+                      'skip_2_condition','skip_3_condition','skip_2_reason','skip_3_reason',
+                      'skip_2_extra','skip_3_extra','skip_2_empty','skip_3_empty','skip_5_extra','skip_6_extra'):
             value,case,records=installed_operand98();change_record(label,records);reseal_installed98(value,case,records)
             for module in (C,G):
                 with self.subTest(label=label,module=module.__name__),self.assertRaises((module.Hold,KeyError,TypeError,ValueError)):

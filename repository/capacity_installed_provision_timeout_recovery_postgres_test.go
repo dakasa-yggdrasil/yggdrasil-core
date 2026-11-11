@@ -571,6 +571,8 @@ func (f *installedTimeoutFixture) response(t *testing.T, stage string, returnedA
 			step.StartedAt = selected.ReservedAt
 			step.FinishedAt = f.receipts[len(f.pre)-1].RecordedAt.Add(time.Second)
 			step.Metadata = map[string]any{"preregistration": selected}
+		case "retire-original-guest", "refresh-original-membership":
+			step.Metadata = map[string]any{"condition": spec.Condition, "skip_reason": "condition"}
 		case "complete-original-provision":
 			completed = true
 			step.Status, step.Attempts, step.Error = "failed", 1, "original Guest reconciliation held"
@@ -682,6 +684,51 @@ func (f *installedTimeoutFixture) sqlProofVectors(t *testing.T) {
 		}
 	}
 	check("whole original", clone(recordRaw), dispatchRaw, runRaw, intentRaw, membersRaw, true)
+
+	var workflowSpec model.WorkflowManifestSpec
+	if err := json.Unmarshal(f.workflow.Spec, &workflowSpec); err != nil {
+		t.Fatal(err)
+	}
+	checkResult := func(label string, run map[string]any, want bool) {
+		got := installedProvisionTimeoutResult(installedTimeoutWire(t, run["result"]), f.pre[len(f.pre)-1], f.intent, f.original.Workflow, workflowSpec)
+		if got != want {
+			t.Fatalf("original conditional-skip result %s: got=%v want=%v", label, got, want)
+		}
+	}
+	checkResult("authentic conditional skips", clone(runRaw), true)
+	for _, vector := range []struct {
+		step  int
+		fault string
+	}{
+		{2, "condition"}, {3, "condition"}, {2, "reason"}, {3, "reason"},
+		{2, "extra"}, {3, "extra"}, {2, "empty"}, {3, "empty"},
+		{5, "extra"}, {6, "extra"},
+	} {
+		modified := clone(runRaw)
+		result := modified["result"].(map[string]any)
+		step := result["steps"].([]any)[vector.step].(map[string]any)
+		metadata, _ := step["metadata"].(map[string]any)
+		if metadata == nil {
+			metadata = map[string]any{}
+		}
+		step["metadata"] = metadata
+		switch vector.fault {
+		case "condition":
+			metadata["condition"] = "{{ steps.plan-original-guest.metadata.mode }} == provision"
+		case "reason":
+			metadata["skip_reason"] = "other"
+		case "extra":
+			metadata["extra"] = true
+		case "empty":
+			step["metadata"] = map[string]any{}
+		}
+		label := step["id"].(string) + " " + vector.fault
+		checkResult(label, modified, false)
+		changed := installedTimeoutWire(t, modified)
+		record := clone(recordRaw)
+		record["original_run_sha256"] = capacity.BusinessCreationSHA256(changed)
+		check("resealed conditional skip "+label, record, dispatchRaw, changed, intentRaw, membersRaw, false)
+	}
 	for _, field := range []string{"schema", "original_dispatch_sha256", "original_run_sha256", "original_intent_sha256", "members_sha256", "policy_checksum"} {
 		r := clone(recordRaw)
 		r[field] = "foreign"
