@@ -157,7 +157,23 @@ class G15MaintenanceTests(unittest.TestCase):
                 with self.subTest(entrypoint=repr(call)), self.assertRaises(CUT.C.Hold): call()
             native.assert_not_called(); custody.assert_not_called()
         for path in (NEW / 'tools/derive_standing_config.py', NEW / 'tools/g15cut.py'):
-            raw = path.read_bytes().replace(b'PROPOSAL_BOUND = True\n', b'PROPOSAL_BOUND = False\n', 1)
+            raw = path.read_bytes()
+            tree = ast.parse(raw)
+            bindings = [(index, node) for index, node in enumerate(tree.body)
+                        if isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)
+                        and node.targets[0].id == 'PROPOSAL_BOUND']
+            self.assertEqual(len(bindings), 1)
+            index, binding = bindings[0]
+            self.assertEqual(binding.lineno, binding.end_lineno)
+            self.assertIsInstance(binding.value, ast.Constant)
+            self.assertIs(binding.value.value, True)
+            lines = raw.splitlines(keepends=True)
+            lines[binding.lineno - 1] = b'PROPOSAL_BOUND = False\n'
+            raw = b''.join(lines)
+            forced = ast.parse(raw).body[index]
+            self.assertIsInstance(forced, ast.Assign)
+            self.assertIs(forced.value.value, False)
             with self.subTest(import_guard=path.name), patch.object(Path, 'read_bytes') as read:
                 with self.assertRaisesRegex(RuntimeError, 'UNBOUND_BEFORE_SOURCE_IO'):
                     exec(compile(raw, str(path), 'exec'), {'__file__': str(path), '__name__': 'inert_G15_CI'})
