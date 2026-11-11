@@ -1095,6 +1095,8 @@ class G15CoreCASTests(unittest.TestCase):
             function_row('retirement_forward_continuation_valid','DECLARED retained96 continuation','r jsonb, retirement uuid','boolean','s',['TimeZone=UTC']),
             function_row('retirement_forward_continuation_quiet','DECLARED retained96 quiet','r jsonb, retirement uuid','boolean','s',['TimeZone=UTC'])]
         before96=copy.deepcopy(prior);before96['functions93']=retained
+        before96['catalog90']['functions']=[{'name':name,'definition':retained[0]['definition']if name=='guard_retirement_forward'else'DECLARED retained legacy '+name}
+            for name in ('guard_retirement_forward','guard_retirement_forward_delete_binding','guard_retirement_forward_read','guard_retirement_forward_terminal')]
         before96['catalog90']['constraints']=[{'table':'capacity_guest_retirement_forwards','name':'retirement_forward_continuation96','validated':True,'definition':DECLARED_CHECK96},
             {'table':'capacity_guest_retirement_forwards','name':'retirement_forward_mode93','validated':True,'definition':'CHECK (declared_modes93)'}]
         after97=copy.deepcopy(before96)
@@ -1103,6 +1105,7 @@ class G15CoreCASTests(unittest.TestCase):
             if name=='guard_retirement_forward':after97['functions93'][0]=row
             else:after97['functions93'].append(row)
         after97['functions93'].sort(key=lambda x:x['name'])
+        after97['catalog90']['functions'][0]['definition']=next(x for x in after97['functions93']if x['name']=='guard_retirement_forward')['definition']
         after97['catalog90']['constraints'][1].update(name='retirement_forward_mode97',definition='CHECK (declared_modes97)')
         after97['catalog90']['constraints'].append({'table':'capacity_guest_retirement_forwards','name':'retirement_forward_normal_finish97','validated':True,'definition':'CHECK (declared_normal_finish97)'})
         after97['catalog90']['constraints'].sort(key=lambda x:(x['table'],x['name']))
@@ -1130,6 +1133,15 @@ class G15CoreCASTests(unittest.TestCase):
             carrier,reader=carrier_for(before,after,major)
             definitions=cas.constraint97_definitions(before96,carrier,reader,'a'*40)
             self.assertEqual(cas.catalog97_delta(before96,after97,functions,definitions),after97)
+        self.assertEqual(len(before96['catalog90']['functions']),4)
+        self.assertEqual(before96['catalog90']['functions'][1:],after97['catalog90']['functions'][1:])
+        for fault in ('missing_legacy_guard','duplicate_legacy_guard','conflicting_legacy_guard','extra_legacy_guard_field'):
+            bad=copy.deepcopy(before96);rows=bad['catalog90']['functions']
+            if fault=='missing_legacy_guard':rows.pop(0)
+            elif fault=='duplicate_legacy_guard':rows.append(copy.deepcopy(rows[0]))
+            elif fault=='conflicting_legacy_guard':rows[0]['definition']+=' foreign'
+            else:rows[0]['invented_authority']=True
+            with self.subTest(prior97_duplicate_projection=fault),self.assertRaises(cas.Hold):cas.catalog97_delta(bad,after97,functions,definitions)
         for fault in ('prior_function_changed','retained_function_changed','extra_function','old_mode_retained','missing_check','unvalidated','foreign_constraint','server_changed','artifact_native','artifact_false','artifact_wrong_source','artifact_wrong_migration','artifact_wrong_size'):
             before,after=pg_view(before96,16),pg_view(after97,16);alter=None
             if fault=='prior_function_changed':before['functions']['guard_retirement_forward']+=' foreign'
@@ -1147,7 +1159,8 @@ class G15CoreCASTests(unittest.TestCase):
             else:alter=lambda a:a['after97_ref'].update(bytes=a['after97_ref']['bytes']+1)
             carrier,reader=carrier_for(before,after,artifact_fault=alter)
             with self.subTest(catalog97_originals=fault),self.assertRaises(cas.Hold):cas.constraint97_definitions(before96,carrier,reader,'a'*40)
-        for fault in ('other_column','old_function','new_body','signature','other_constraint','index','extra_function'):
+        for fault in ('other_column','old_function','new_body','signature','other_constraint','index','extra_function',
+                'legacy_guard_definition','missing_legacy_guard','duplicate_legacy_guard','extra_legacy_guard_field','other_legacy_function'):
             bad=copy.deepcopy(after97)
             if fault=='other_column':bad['columns90_91'].append({'unreviewed':True})
             elif fault=='old_function':next(x for x in bad['functions93']if x['name']=='retirement_forward_continuation_valid')['body']+=' foreign'
@@ -1155,6 +1168,11 @@ class G15CoreCASTests(unittest.TestCase):
             elif fault=='signature':next(x for x in bad['functions93']if x['name']=='guard_retirement_forward')['arguments']='foreign'
             elif fault=='other_constraint':bad['catalog90']['constraints'][0]['definition']='CHECK (true)'
             elif fault=='index':bad['index92_definition']='foreign'
+            elif fault=='legacy_guard_definition':bad['catalog90']['functions'][0]['definition']+=' foreign'
+            elif fault=='missing_legacy_guard':bad['catalog90']['functions'].pop(0)
+            elif fault=='duplicate_legacy_guard':bad['catalog90']['functions'].append(copy.deepcopy(bad['catalog90']['functions'][0]))
+            elif fault=='extra_legacy_guard_field':bad['catalog90']['functions'][0]['invented_authority']=True
+            elif fault=='other_legacy_function':bad['catalog90']['functions'][1]['definition']+=' foreign'
             else:bad['functions93'].append(function_row('foreign','extra function'))
             with self.subTest(catalog97_delta=fault),self.assertRaises(cas.Hold):cas.catalog97_delta(before96,bad,functions,definitions)
         # A new Root97 cannot relabel historical96 or accept missing originals.

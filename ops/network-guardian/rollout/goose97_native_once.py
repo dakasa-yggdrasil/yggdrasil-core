@@ -945,6 +945,14 @@ def catalog97_delta(prior96, actual97, functions, definitions):
     expected = copy.deepcopy(prior96)
     old = [row for row in expected['functions93'] if row['name'] == 'guard_retirement_forward']
     need(len(old) == 1, 'ONE_PRIOR96_FORWARD_GUARD')
+    old_legacy = [row for row in expected['catalog90']['functions']
+                  if row['name'] == 'guard_retirement_forward']
+    new_legacy = [row for row in actual97['catalog90']['functions']
+                  if row['name'] == 'guard_retirement_forward']
+    need(len(old_legacy) == len(new_legacy) == 1
+         and set(old_legacy[0]) == set(new_legacy[0]) == {'name', 'definition'}
+         and old_legacy[0]['definition'] == old[0]['definition'],
+         'ONE_PRIOR96_LEGACY_FORWARD_GUARD_MATCHES_FUNCTION93')
     for name in M97_FUNCTIONS:
         rows = [row for row in actual97['functions93'] if row['name'] == name]
         need(len(rows) == 1 and rows[0]['body'] == functions[name]['body']
@@ -958,7 +966,10 @@ def catalog97_delta(prior96, actual97, functions, definitions):
                  and all(rows[0][key] == old[0][key] for key in (
                      'name', 'arguments', 'result', 'language', 'volatility', 'config')),
                  'UNCHANGED97_FORWARD_GUARD_SIGNATURE')
+            need(new_legacy[0]['definition'] == rows[0]['definition'],
+                 'SAME97_FORWARD_GUARD_IN_BOTH_CATALOG_VIEWS')
             old[0].update(body=rows[0]['body'], definition=rows[0]['definition'])
+            old_legacy[0]['definition'] = rows[0]['definition']
         else:
             need(not any(row['name'] == name for row in expected['functions93']),
                  'NEW97_NORMAL_FINISH_FUNCTION_NOT_PRIOR_AUTHORITY')

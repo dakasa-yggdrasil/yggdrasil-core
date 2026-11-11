@@ -51,6 +51,9 @@ def catalog96_operand():
             'language':'plpgsql','volatility':volatility,'config':config,'body':body,
             'definition':'DECLARED prior PostgreSQL header\n'+body+'\nDECLARED end'})
     value['supplement']['functions93'].sort(key=lambda row:row['name'])
+    prior_guard=next(row for row in value['supplement']['functions93']if row['name']=='guard_retirement_forward')
+    value['legacy']['catalog90']['functions']=[{'name':name,'definition':prior_guard['definition']if name=='guard_retirement_forward'else'DECLARED retained legacy '+name}
+        for name in ('guard_retirement_forward','guard_retirement_forward_delete_binding','guard_retirement_forward_read','guard_retirement_forward_terminal')]
     value['legacy']['catalog90']['constraints'].sort(key=lambda row:(row['table'],row['name']))
     return value
 
@@ -68,6 +71,7 @@ def catalog97_operand(before):
         if name=='guard_retirement_forward':old.update(row)
         else:after['supplement']['functions93'].append(row)
     after['supplement']['functions93'].sort(key=lambda row:row['name'])
+    next(row for row in after['legacy']['catalog90']['functions']if row['name']=='guard_retirement_forward')['definition']=old['definition']
     mode=next(row for row in after['legacy']['catalog90']['constraints']if row['name']=='retirement_forward_mode93')
     normal=copy.deepcopy(mode)
     mode.update(name='retirement_forward_mode97',definition="CHECK ((original_record ->> 'mode'::text) = ANY (ARRAY['live'::text, 'historical'::text, 'settled_absence_continuation'::text, 'normal_finish_recovery'::text]))")
@@ -279,10 +283,22 @@ with tempfile.TemporaryDirectory(prefix='goose97-baseline-')as name:
         with mock.patch.object(G,'COMPANION_SOURCE_Q','c'*40),mock.patch.object(G,'reference',side_effect=read_ref):
             G.check_catalog(before,accepted,functions,migration=carrier)
             G.check_catalog(after,accepted,functions,old=before,migration=carrier)
+            self.assertEqual(len(before['legacy']['catalog90']['functions']),4)
+            self.assertEqual(before['legacy']['catalog90']['functions'][1:],after['legacy']['catalog90']['functions'][1:])
+            definitions=G.constraint97_definitions(G.catalog94_projection(before),carrier,read_ref,'c'*40)
+            for fault in ('missing_legacy_guard','duplicate_legacy_guard','conflicting_legacy_guard','extra_legacy_guard_field'):
+                prior=G.catalog94_projection(copy.deepcopy(before));rows=prior['catalog90']['functions']
+                if fault=='missing_legacy_guard':rows.pop(0)
+                elif fault=='duplicate_legacy_guard':rows.append(copy.deepcopy(rows[0]))
+                elif fault=='conflicting_legacy_guard':rows[0]['definition']+=' foreign'
+                else:rows[0]['invented_authority']=True
+                with self.subTest(prior97_duplicate_projection=fault),self.assertRaises(G.Hold):
+                    G.catalog97_delta(prior,G.catalog94_projection(after),functions,definitions)
             for fault in ('old_history','missing97','duplicate97','false97','function_body','function_header',
                     'function_definition','extra_function','old_quiet_function','check_definition','check_name',
                     'check_not_validated','extra_constraint','old_table','old_column','old_trigger',
-                    'old_index','old94_function','old_SDK','ledger'):
+                    'old_index','old94_function','old_SDK','ledger','legacy_guard_definition',
+                    'missing_legacy_guard','duplicate_legacy_guard','extra_legacy_guard_field','other_legacy_function'):
                 bad=copy.deepcopy(after)
                 f=next(row for row in bad['supplement']['functions93']if row['name']=='retirement_forward_normal_finish_recovery_valid')
                 check=next(row for row in bad['legacy']['catalog90']['constraints']if row['name']=='retirement_forward_normal_finish97')
@@ -309,6 +325,11 @@ with tempfile.TemporaryDirectory(prefix='goose97-baseline-')as name:
                 elif fault=='old_index':bad['schema94']['indexes'][0]['definition']='foreign'
                 elif fault=='old94_function':bad['schema94']['functions'][0]['body']+=' '
                 elif fault=='old_SDK':bad['old_grants']['sha256']='f'*64
+                elif fault=='legacy_guard_definition':bad['legacy']['catalog90']['functions'][0]['definition']+=' foreign'
+                elif fault=='missing_legacy_guard':bad['legacy']['catalog90']['functions'].pop(0)
+                elif fault=='duplicate_legacy_guard':bad['legacy']['catalog90']['functions'].append(copy.deepcopy(bad['legacy']['catalog90']['functions'][0]))
+                elif fault=='extra_legacy_guard_field':bad['legacy']['catalog90']['functions'][0]['invented_authority']=True
+                elif fault=='other_legacy_function':bad['legacy']['catalog90']['functions'][1]['definition']+=' foreign'
                 else:bad['ledgers94'][0]['rows']+=1
                 with self.subTest(catalog97_fault=fault),self.assertRaises(G.Hold):
                     G.check_catalog(bad,accepted,functions,old=before,migration=carrier)
