@@ -20,7 +20,7 @@ func (s CapacityStore) recordGuestAuthorityIssueTx(ctx context.Context, tx *sql.
 	if binding.EvidenceClass != "owned_provisioner_original" {
 		return nil
 	}
-	actual := capacity.CurrentGuestCoreSource()
+	actual := guestAuthorityIssueSource(s, policy, kind)
 	identifier, err := uuid.Parse(id)
 	if err != nil || identifier == uuid.Nil || identifier.String() != id || !guestIssueKind.MatchString(kind) || !capacity.ValidDigest(wireSHA) || !capacity.GuestBindingAuthorityCurrent(p, binding) || !validCapacityExecutor(s.ExecutorID) || s.WorkflowID == uuid.Nil {
 		return ErrCapacityConflict
