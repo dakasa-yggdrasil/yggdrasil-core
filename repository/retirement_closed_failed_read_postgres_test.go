@@ -27,7 +27,9 @@ import (
 // fixture mutex. These are declared PG operands, never provider execution.
 func retirementForwardClosedFailedRead102Regression(t *testing.T) {
 	t.Helper()
-	f := NewGuestRetirementForwardRecoveryFixture(t, "aws", 2, 4)
+	// Declare the complete43-read workload's lease before the first policy,
+	// intent or original frame. Both successors must await real60s expiry.
+	f := newGuestRetirementForwardRecoveryFixture(t, "aws", 2, 4, 60, false, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	oldValidator := closedRead102Migration(t, f, ctx)
