@@ -505,4 +505,5 @@ func TestGuestRetirementForwardNormalFinishRecoveryPostgres(t *testing.T) {
 		}
 		normalFinishNoDelete(t, f)
 	})
+	retirementForwardClosedFailedRead102Regression(t)
 }
