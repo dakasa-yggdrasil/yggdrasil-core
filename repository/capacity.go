@@ -578,10 +578,24 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if s.guestReconcile != nil && !guestReconcileLive(ctx) {
 		return model.CapacityIntent{}, ErrCapacityLease
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_intents (namespace, environment, domain, dimension, intent, updated_at)
-		VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT (namespace,environment,domain,dimension)
-		DO UPDATE SET intent=EXCLUDED.intent, updated_at=EXCLUDED.updated_at`, next.Namespace, next.Environment, next.Domain, next.Dimension, data, next.UpdatedAt); err != nil {
-		return model.CapacityIntent{}, err
+	if previous == nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_intents (namespace, environment, domain, dimension, intent, updated_at)
+			VALUES ($1,$2,$3,$4,$5::jsonb,$6)`, next.Namespace, next.Environment, next.Domain, next.Dimension, data, next.UpdatedAt); err != nil {
+			return model.CapacityIntent{}, err
+		}
+	} else {
+		// Existing intents must reach UPDATE triggers with their retained OLD row.
+		changed, err := tx.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=$5::jsonb, updated_at=$6 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, next.Namespace, next.Environment, next.Domain, next.Dimension, data, next.UpdatedAt)
+		if err != nil {
+			return model.CapacityIntent{}, err
+		}
+		rows, err := changed.RowsAffected()
+		if err != nil {
+			return model.CapacityIntent{}, err
+		}
+		if rows != 1 {
+			return model.CapacityIntent{}, ErrCapacityConflict
+		}
 	}
 	if previous == nil || next.Generation != previous.Generation || next.FencingToken != previous.FencingToken || next.Phase != previous.Phase {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_intent_events (namespace,environment,domain,dimension,generation,fencing_token,phase,receipt_ref) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, next.Namespace, next.Environment, next.Domain, next.Dimension, next.Generation, next.FencingToken, next.Phase, receipt); err != nil {
