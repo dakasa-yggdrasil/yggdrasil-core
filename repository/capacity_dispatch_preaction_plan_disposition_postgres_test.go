@@ -1054,6 +1054,9 @@ func TestCapacityDispatchPreActionFailedPlanDispositionPostgres(t *testing.T) {
 			}
 			before := preActionPlanOriginals(t, f, failed)
 			started := preActionPlanStart(t, f, next)
+			if name == "closed_failed_plan_after_M98_anchor" {
+				retirementContinuationTypedHistoryRegression(t, f, started, anchor, receipt)
+			}
 			f.resume(t, started, true)
 			historical, err := ReadCapacityDispatchPreActionPlanDisposition(ctx, f.db, failed.JobID)
 			if err != nil || historical.ID != receipt.ID || historical.RootAnchorID != anchor.ID {

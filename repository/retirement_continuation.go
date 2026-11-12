@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"reflect"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -262,13 +263,61 @@ func continuationEligibilityError(err error) error {
 func retirementForwardContinuationQuietTx(ctx context.Context, tx *sql.Tx, x retirementForwardSnapshot, destroy, ownRun string) error {
 	// Retained disposition terminals stay terminal; UNKNOWN and an unacknowledged
 	// returned job never become quiet just because their workflow ended.
-	var busy int
-	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_dispatch_jobs j WHERE j.run_id::text IS DISTINCT FROM $3 AND ((j.envelope::jsonb#>>'{workflow,namespace}'=$1 AND j.envelope::jsonb#>>'{workflow,name}'=$2) OR j.envelope::jsonb#>>'{workflow,id}' IN(SELECT id::text FROM public.manifests WHERE kind='workflow' AND namespace=$1 AND name=$2)) AND ((j.state IS NULL OR j.state NOT IN('returned','prestart_rejected','failed_disposed','native_denied_disposed','enrolled_failed_disposed','abandoned_disposed','finalization_lost_disposed','unknown_maintenance_disposed','http_maintenance_disposed')) OR j.state='returned' AND (j.returned_at IS NULL OR j.finalization_ack_at IS NULL))`, x.spec.Workflow.Namespace, x.spec.Workflow.Name, ownRun).Scan(&busy)
+	rows, err := tx.QueryContext(ctx, `SELECT j.id,j.state,j.updated_at FROM public.capacity_dispatch_jobs j WHERE j.run_id::text IS DISTINCT FROM $3 AND ((j.envelope::jsonb#>>'{workflow,namespace}'=$1 AND j.envelope::jsonb#>>'{workflow,name}'=$2) OR j.envelope::jsonb#>>'{workflow,id}' IN(SELECT id::text FROM public.manifests WHERE kind='workflow' AND namespace=$1 AND name=$2)) AND ((j.state IS NULL OR j.state NOT IN('returned','prestart_rejected','failed_disposed','native_denied_disposed','enrolled_failed_disposed','abandoned_disposed','finalization_lost_disposed','unknown_maintenance_disposed','http_maintenance_disposed')) OR j.state='returned' AND (j.returned_at IS NULL OR j.finalization_ack_at IS NULL))`, x.spec.Workflow.Namespace, x.spec.Workflow.Name, ownRun)
 	if err != nil {
 		return err
 	}
-	if busy != 0 {
-		return ErrCapacityConflict
+	type candidate struct {
+		id        uuid.UUID
+		state     sql.NullString
+		updatedAt time.Time
+	}
+	var candidates []candidate
+	for rows.Next() {
+		var job candidate
+		if err = rows.Scan(&job.id, &job.state, &job.updatedAt); err != nil {
+			rows.Close()
+			return err
+		}
+		candidates = append(candidates, job)
+	}
+	readErr, closeErr := rows.Err(), rows.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	// Read complete immutable receipts only for the two new terminal states.
+	// Older schemas never query ledgers that do not exist in their prefix.
+	for _, job := range candidates {
+		if err = retirementContinuationTerminalReceiptTx(ctx, tx, job.id, job.state.String, job.updatedAt); err != nil {
+			return err
+		}
 	}
 	return retirementForwardQuietTx(ctx, tx, x, ownRun, destroy)
+}
+
+func retirementContinuationTerminalReceiptTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, state string, updatedAt time.Time) error {
+	var recordedAt time.Time
+	switch state {
+	case CapacityDispatchInstalledProvisionTimeoutState:
+		receipt, err := readInstalledProvisionTimeoutDisposition(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		recordedAt = receipt.RecordedAt
+	case CapacityDispatchPreActionPlanState:
+		receipt, err := readPreActionPlanDisposition(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		recordedAt = receipt.RecordedAt
+	default:
+		return ErrCapacityConflict
+	}
+	if !updatedAt.Equal(recordedAt) {
+		return ErrCapacityConflict
+	}
+	return nil
 }
