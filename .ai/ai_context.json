@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-11T20:47:40-03:00",
+  "generated_at": "2026-11-11T22:27:52-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1530,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "22c3fc8e0d477714a0ac977d4b37d0c9a2e72f38",
+    "commit": "3bb71d87727a6c8b0fc001268644718231187594",
     "dirty": true,
     "files": [
       {
@@ -96,7 +96,7 @@
     {
       "path": "ops/network-guardian/tests",
       "files": 66,
-      "kb": 1303
+      "kb": 1307
     },
     {
       "path": "manifest",
@@ -116,7 +116,7 @@
     {
       "path": "ops/network-guardian/rollout",
       "files": 31,
-      "kb": 2452
+      "kb": 2456
     },
     {
       "path": "cmd/native-guest-lifecycle-fixture",
