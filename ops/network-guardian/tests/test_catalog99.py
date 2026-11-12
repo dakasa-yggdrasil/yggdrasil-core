@@ -248,6 +248,105 @@ class Catalog99Tests(unittest.TestCase):
         self.assertIn('capacity_dispatch_jobs_state_v11_check',sql);self.assertIn("'ledger98'",sql)
         with self.assertRaises(RuntimeError):H.catalog99_select('declared',base_select=lambda _:'SELECT true')
 
+
+        # Exercise the real selector on a non-C default collation. This minimum
+        # catalog is a disposable sorting fixture, never migration qualification.
+        import os
+        import subprocess
+        import uuid
+        container=os.environ.get('GUARDIAN_CI_POSTGRES_CONTAINER','')
+        self.assertEqual(os.environ.get('GITHUB_ACTIONS'),'true')
+        self.assertRegex(container,r'^[a-f0-9]{64}$')
+        self.assertIn(os.environ.get('DOCKER_HOST'),(None,'','unix:///var/run/docker.sock'))
+        image=subprocess.run(['docker','inspect','--format','{{.Config.Image}}',container],
+                             capture_output=True,timeout=8)
+        self.assertEqual(image.returncode,0,image.stderr.decode(errors='replace'))
+        self.assertEqual(image.stdout.strip(),b'postgres:16')
+        evidence=Path(os.environ['GUARDIAN_CI_EVIDENCE'])/'catalog99-c-order-pg16'
+        evidence.mkdir(parents=True,exist_ok=False)
+        database='catalog99_c_order_'+uuid.uuid4().hex
+        originals=[]
+        def psql(db,statement):
+            prefix=evidence/('%02d'%(len(originals)+1))
+            raw=statement.encode()
+            argv=['docker','exec','-i',container,'psql','-X','-q','-v','ON_ERROR_STOP=1',
+                  '-A','-t','-U','guardian_ci','-d',db]
+            prefix.with_suffix('.SQL').write_bytes(raw)
+            result=subprocess.run(argv,input=raw,capture_output=True,timeout=8)
+            prefix.with_suffix('.stdout').write_bytes(result.stdout)
+            prefix.with_suffix('.stderr').write_bytes(result.stderr)
+            prefix.with_suffix('.exit').write_text(str(result.returncode)+'\n')
+            originals.append({'SQL':{'name':prefix.with_suffix('.SQL').name,'bytes':len(raw),'sha256':digest(raw)},
+                              'stdout':{'name':prefix.with_suffix('.stdout').name,'bytes':len(result.stdout),'sha256':digest(result.stdout)},
+                              'stderr':{'name':prefix.with_suffix('.stderr').name,'bytes':len(result.stderr),'sha256':digest(result.stderr)},
+                              'exit':result.returncode})
+            self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))
+            self.assertLessEqual(len(result.stdout),16*1024*1024)
+            return result.stdout.decode()
+        limits="SET statement_timeout='3s'; SET lock_timeout='500ms';\n"
+        psql('yggdrasil',limits+'CREATE DATABASE '+database+" TEMPLATE template0 LOCALE_PROVIDER icu ICU_LOCALE 'en-US-u-ka-shifted-ks-level3';")
+        try:
+            setup="""CREATE EXTENSION pgcrypto;
+CREATE TABLE public.goose_db_version(id bigint PRIMARY KEY,version_id bigint,is_applied boolean);
+CREATE TABLE public.capacity_dispatch_installed_provision_timeout_dispositions(id uuid PRIMARY KEY);
+CREATE TABLE public.capacity_dispatch_preaction_plan_dispositions(
+ id uuid PRIMARY KEY,job_id uuid NOT NULL UNIQUE,run_id uuid NOT NULL UNIQUE,
+ successor_job_id uuid NOT NULL UNIQUE,successor_run_id uuid NOT NULL UNIQUE);
+"""
+            psql(database,limits+setup)
+            locale=json.loads(psql(database,limits+"""SELECT jsonb_build_object(
+ 'server_version_num',current_setting('server_version_num')::int,
+ 'database',current_database(),'provider',d.datlocprovider::text,'icu_locale',d.daticulocale)
+ FROM pg_database d WHERE d.datname=current_database();"""))
+            self.assertEqual(locale['server_version_num']//10000,16)
+            self.assertEqual(locale['database'],database)
+            self.assertEqual(locale['provider'],'i');self.assertEqual(locale['icu_locale'],'en-US-u-ka-shifted-ks-level3')
+            # Only the inherited-selector token is stubbed. All new complete99,
+            # supplement99 and structure99 queries execute exactly as shipped.
+            base_select=lambda _: "SELECT jsonb_build_object('declared_selector',"+selector+") FROM (VALUES ('fixture')) c(conname)"
+            fixed=H.catalog99_select('declared-minimum-catalog',base_select=base_select)
+            self.assertEqual(fixed.count(' COLLATE "C"'),19)
+            uncollated=fixed.replace(' COLLATE "C"','')
+            self.assertNotIn('COLLATE',uncollated)
+            old=json.loads(psql(database,limits+uncollated+';'))
+            actual=json.loads(psql(database,limits+fixed+';'))
+            names=[row['name'] for row in actual['schema99']['indexes']]
+            self.assertEqual(len(names),5)
+            self.assertEqual(sum(name.startswith(H.TABLE99+'_') for name in names),3)
+            self.assertEqual(len(actual['schema99']['constraints']),5)
+            # PostgreSQL-generated truncated successor names reproduce the
+            # production failure without inventing a locale-sorted JSON array.
+            for kind in ('constraints','indexes'):
+                ordering=lambda row:(row['table'],row['name'])
+                self.assertNotEqual(old['schema99'][kind],sorted(old['schema99'][kind],key=ordering))
+                with self.assertRaisesRegex(RuntimeError,'DECLARED99_QUERY_ORDER_'+kind):
+                    H.rows99(old['schema99'][kind],kind)
+            for kind in ('functions','constraints','triggers','columns','indexes'):
+                H.rows99(actual['schema99'][kind],kind)
+                self.assertEqual(sorted(canonical(row) for row in actual['schema99'][kind]),
+                                 sorted(canonical(row) for row in old['schema99'][kind]))
+            self.assertEqual(actual['schema99']['columns'],old['schema99']['columns'])
+            H.rows99(actual['structural99']['indexes'],'indexes')
+            self.assertEqual(sorted(canonical(row) for row in actual['structural99']['indexes']),
+                             sorted(canonical(row) for row in old['structural99']['indexes']))
+            self.assertEqual({k:v for k,v in actual['structural99'].items() if k!='indexes'},
+                             {k:v for k,v in old['structural99'].items() if k!='indexes'})
+            self.assertEqual({k:v for k,v in actual.items() if k not in ('schema99','structural99')},
+                             {k:v for k,v in old.items() if k not in ('schema99','structural99')})
+            source=os.environ['SOURCE_COMMIT'];self.assertRegex(source,r'^[a-f0-9]{40}$')
+            facts={'schema':'catalog99_real_PG16_nonC_default_sort_regression_v1','source_commit':source,
+                   'locale':locale,'fixed_SQL_sha256':digest(fixed.encode()),
+                   'uncollated_control_SQL_sha256':digest(uncollated.encode()),
+                   'explicit_C_text_operands':19,'generated_index_names':names,
+                   'uncollated_actual_constraints_and_indexes_refused':True,
+                   'fixed_actual_all_five_arrays_pass_unchanged_rows99':True,
+                   'whole_member_rows_and_all_other_fields_identical':True,
+                   'scope':'disposable minimum catalog sorting fixture only; no application migration',
+                   'Native_Job_or_production_qualification':False,'originals':originals}
+        finally:
+            psql('yggdrasil',limits+'DROP DATABASE '+database+';')
+        (evidence/'RESULT.PUBLIC.json').write_text(json.dumps(facts,indent=2,sort_keys=True)+'\n')
+
     def test_structure_history_and_distinct_root99_roles(self):
         f=fixture99();defs=self.definitions(f);H.structural99(f['before']['structural99'],defs,True)
         H.structural99(f['after']['structural99'],defs)
