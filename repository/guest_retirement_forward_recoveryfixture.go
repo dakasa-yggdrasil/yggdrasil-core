@@ -759,8 +759,14 @@ func (f *GuestRetirementForwardRecoveryFixture) FinishFailedRun(failedStep strin
 // this wait if they require the handler's actual current-process barrier.
 func (f *GuestRetirementForwardRecoveryFixture) WaitHistoricalBarrier() CapacityDispatchExecutorBarrier {
 	f.t.Helper()
+	maxDelay := 31.0
+	if f.Spec.LeaseSeconds == 60 {
+		// The M102 scene declares this lease before its first signed rows.
+		// All pre-existing30s/300s scenes retain their original31s bound.
+		maxDelay = 61
+	}
 	var delay float64
-	if err := f.DB.QueryRow(`SELECT GREATEST(0,EXTRACT(EPOCH FROM(GREATEST((c.intent->>'lease_expires_at')::timestamptz,r.original_deadline,x.original_context_deadline)-clock_timestamp()))) FROM public.capacity_vm_retirement_intents r JOIN public.capacity_guest_original_retirement_contexts x ON x.intent_id=r.id CROSS JOIN public.capacity_intents c WHERE r.id=$1 AND c.namespace=$2`, f.Request.Intent.RequestID, f.Policy.Metadata.Namespace).Scan(&delay); err != nil || delay > 31 {
+	if err := f.DB.QueryRow(`SELECT GREATEST(0,EXTRACT(EPOCH FROM(GREATEST((c.intent->>'lease_expires_at')::timestamptz,r.original_deadline,x.original_context_deadline)-clock_timestamp()))) FROM public.capacity_vm_retirement_intents r JOIN public.capacity_guest_original_retirement_contexts x ON x.intent_id=r.id CROSS JOIN public.capacity_intents c WHERE r.id=$1 AND c.namespace=$2`, f.Request.Intent.RequestID, f.Policy.Metadata.Namespace).Scan(&delay); err != nil || delay > maxDelay {
 		f.t.Fatal("bounded actual original expiry", delay, err)
 	}
 	if delay > 0 {

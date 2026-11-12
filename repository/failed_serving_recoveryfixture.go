@@ -206,7 +206,7 @@ func newFailedServingFixtureHistory(t *testing.T, provider string, historical bo
 // This is fixture construction, never a rewrite of an admitted original.
 func newFailedServingFixtureLease(t *testing.T, provider string, historical bool, leaseSeconds int) *failedServingFixture {
 	t.Helper()
-	if leaseSeconds != 30 && leaseSeconds != 300 {
+	if leaseSeconds != 30 && leaseSeconds != 60 && leaseSeconds != 300 {
 		t.Fatal("closed declared fixture lease")
 	}
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
