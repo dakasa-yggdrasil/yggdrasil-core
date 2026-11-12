@@ -595,13 +595,21 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
             with patch.object(CUT, 'native', side_effect=[replies[0], SimpleNamespace(returncode=0, stdout=C.wire({'items': [wrong_pod]}))]):
                 with self.assertRaises(CUT.C.Hold): CUT.core_overlap()
 
-            for previous_digest in ('311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce',
+            for previous_digest in ('ed5ee3a2a5e90e54acc3cc2492fcc302a85e1b7adb6f545c605c5bfe2a730b42',
+                                    '311e5c19868a67f900b318e059a806e45e5dd217d0c411a03bcd598f6f10d5ce',
                                     '85be238c7f5b15760f7eb903646cc48f6b4b86a6995d0a4727a1ba0d86d06876',
                                     '35195e4ddff2a69f2ae7fca8f24b43177c61c49f12117a4fe4925a43e9cd6fde',
                                     '8e6d44d86bbae4463652d4bf9b3583241483a0813a4d34c7254b9c2e56dccafc',
                                     '9b6e2a5d06eed90b7b44d059d3f78a405a21430a7b104f17498c904f499bdd97'):
-                with self.subTest(previous_digest=previous_digest), patch.object(CUT.C, 'OLD_DIGEST', previous_digest), patch.object(CUT, 'native', side_effect=replies):
-                    with self.assertRaises(CUT.C.Hold): CUT.core_overlap()
+                previous_image = CUT.C.IMAGE_PREFIX + previous_digest
+                previous_dep, previous_pod = copy.deepcopy(dep), copy.deepcopy(pod)
+                previous_dep['spec']['template']['spec']['containers'][0]['image'] = previous_image
+                previous_pod['spec']['containers'][0]['image'] = previous_image
+                previous_pod['status']['containerStatuses'][0]['imageID'] = previous_image
+                previous_replies = [SimpleNamespace(returncode=0, stdout=C.wire(previous_dep)),
+                                    SimpleNamespace(returncode=0, stdout=C.wire({'items': [previous_pod]}))]
+                with self.subTest(previous_digest=previous_digest), patch.object(CUT.C, 'OLD_DIGEST', previous_digest), patch.object(CUT, 'native', side_effect=previous_replies):
+                    with self.assertRaisesRegex(CUT.C.Hold, 'EXACT_CURRENT_R10_OVERLAP_DIGEST'): CUT.core_overlap()
 
         class OnceBackend:
             def __init__(self, fail=None):self.claimed=False;self.records={};self.calls=[];self.fail=fail
