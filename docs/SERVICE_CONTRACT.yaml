@@ -86,6 +86,11 @@
       "evidence": "docs/service-contract/PREACTION_FAILED_PLAN_SOURCE_REVIEW.json",
       "id": "preaction_failed_plan_source_review",
       "sha256": "de846c2bf17f6a0fda9687eeced9df5e0102d9dd50287792126da81c5838bfe0"
+    },
+    {
+      "evidence": "docs/service-contract/INSTALLED_READINESS_HANDOFF_SOURCE_REVIEW.json",
+      "id": "installed_readiness_exhausted_handoff_source_review",
+      "sha256": "b9a2b3697288e01d7dca6fc4cf703003b1c56b1c7549490b5f741972d9a725ec"
     }
   ],
   "coverage": "complete",

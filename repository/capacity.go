@@ -42,6 +42,7 @@ type CapacityStore struct {
 	guestReconcile                   *guestReconcileSource
 	failedExpansionOwner             *failedExpansionOwner
 	failedExpansionTerminalReconcile *model.CapacityFailedExpansionTerminalReconcile
+	installedReadinessHandoff        *model.CapacityInstalledReadinessHandoff
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation
@@ -166,7 +167,7 @@ func (s CapacityStore) Renew(ctx context.Context, policy model.Manifest, generat
 		if err := s.checkLease(p, policy, old, generation, fence, owner, now); err != nil {
 			return model.CapacityIntent{}, "", err
 		}
-		if old.FailedUnwitnessedExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil {
+		if old.FailedUnwitnessedExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil || old.InstalledReadinessHandoff != nil {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
 		next := *old
@@ -217,6 +218,9 @@ func (s CapacityStore) Advance(ctx context.Context, policy model.Manifest, gener
 }
 
 func (s CapacityStore) checkLease(p model.CapacityPolicySpec, policy model.Manifest, old *model.CapacityIntent, generation, fence int64, owner string, now time.Time) error {
+	if old != nil && old.InstalledReadinessHandoff != nil && (s.installedReadinessHandoff == nil || *old.InstalledReadinessHandoff != *s.installedReadinessHandoff || old.InstalledReadinessHandoff.RunID != s.OriginalRunID.String() || old.InstalledReadinessHandoff.ExecutorID != s.ExecutorID || old.InstalledReadinessHandoff.CoreSource != capacity.CurrentGuestCoreSource()) {
+		return ErrCapacityConflict
+	}
 	if old != nil && old.FailedExpansionTerminalReconcile != nil && (s.failedExpansionTerminalReconcile == nil || *old.FailedExpansionTerminalReconcile != *s.failedExpansionTerminalReconcile || old.FailedExpansionTerminalReconcile.RunID != s.OriginalRunID.String() || old.FailedExpansionTerminalReconcile.ExecutorID != s.ExecutorID) {
 		return ErrCapacityConflict
 	}
@@ -255,6 +259,9 @@ func (s CapacityStore) Observe(ctx context.Context, policy model.Manifest) (mode
 // elapsed lease time. The exact original revision may now be inactive.
 func (s CapacityStore) Recover(ctx context.Context, policy model.Manifest, generation int64, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
 	return s.recoveryTransaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+		if old != nil && old.InstalledReadinessHandoff != nil {
+			return model.CapacityIntent{}, "", ErrCapacityConflict
+		}
 		if old != nil && (old.FailedUnwitnessedExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
@@ -570,6 +577,9 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 				return model.CapacityIntent{}, fmt.Errorf("%w: a confirmed provider mutation cannot be certified as no mutation", ErrCapacityConflict)
 			}
 		}
+	}
+	if err = s.guardInstalledReadinessHandoffTransitionTx(ctx, tx, policy, p, previous, &next, now.UTC()); err != nil {
+		return model.CapacityIntent{}, err
 	}
 	data, err := json.Marshal(next)
 	if err != nil {

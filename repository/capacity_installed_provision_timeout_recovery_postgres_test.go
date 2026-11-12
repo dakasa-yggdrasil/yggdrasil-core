@@ -1182,6 +1182,10 @@ func TestInstalledProvisionTimeoutRecoveryPostgres(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var releaseOldIssuer func()
+			if name == "eight_members" {
+				releaseOldIssuer = installedReadinessFixtureOldIssuer(t, f)
+			}
 			resumed := f.resume(t, started, name != "old_ACK_origin")
 			if !reflect.DeepEqual(before, f.preserved(t)) {
 				t.Fatal("readiness recovery changed original/provider/Guest evidence")
@@ -1194,8 +1198,10 @@ func TestInstalledProvisionTimeoutRecoveryPostgres(t *testing.T) {
 			if err = f.db.QueryRow("SELECT count(*) FROM public.capacity_dispatch_installed_provision_timeout_dispositions").Scan(&receipts); err != nil || receipts != wantReceipts {
 				t.Fatal("terminal receipt was not unique", receipts, err)
 			}
-			if name == "two_members" || name == "eight_members" {
+			if name == "two_members" {
 				f.completeResume(t, started, resumed)
+			} else if name == "eight_members" {
+				f.exhaustedReadinessHandoff(t, started, resumed, releaseOldIssuer)
 			}
 		})
 	}
