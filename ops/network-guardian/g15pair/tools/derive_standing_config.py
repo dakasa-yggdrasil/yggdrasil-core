@@ -31,7 +31,7 @@ C = _contract()
 def build(G, m, old, controller_raw, hub_raw, review, units):
     C.require_bound()
     """Use the real Source builder and preserve every inherited authority fact."""
-    C.need(old['guardian_source_sha256'] == C.ACTUAL_PREDECESSOR_SOURCE_SHA and old['new_controller_config_sha256'] == C.G20_CONFIG_SHA
+    C.need(old['guardian_source_sha256'] == C.ACTUAL_PREDECESSOR_SOURCE_SHA and old['new_controller_config_sha256'] == C.G21_CONFIG_SHA
            and old['g6_predecessor_guardian_source_sha256'] == C.G6_SOURCE_SHA
            and old['g6_predecessor_standing_config_sha256'] == C.G6_STANDING_SHA, 'ACTUAL_G14_WITH_CANONICAL_G6_AND_BOOT_V2_ANCESTRY')
     C.need(C.sha(controller_raw) == C.HEAD_CONFIG_SHA, 'EXACT_ROOT_G15_CONTROLLER')
@@ -42,7 +42,7 @@ def build(G, m, old, controller_raw, hub_raw, review, units):
                               r13_predecessor_standing_sha=old['r13_predecessor_standing_config_sha256'])
     added = set(value) - set(old)
     changed = {k for k in old if value[k] != old[k]}
-    C.need(added == {'g20_predecessor_guardian_source_sha256', 'g20_predecessor_standing_config_sha256'} and
+    C.need(added == {'g21_predecessor_guardian_source_sha256', 'g21_predecessor_standing_config_sha256'} and
            changed == {'guardian_source_sha256', 'controller_unit_sha256', 'cold_unit_sha256', 'guardian_unit_sha256', 'new_controller_config_sha256', 'Root_review'}, 'CLOSED_G15_STANDING_SUCCESSOR_DELTA')
     C.need(all(value[k] == v for k, v in C.ANCESTORS.items()), 'SEVEN_DISTINCT_HISTORICAL_AUTHORITIES')
     G.validate(value)
@@ -73,12 +73,12 @@ def derive(folder, m, units_dir, output):
         pin = C.ACTUAL_PREDECESSOR_SOURCE_SHA if name == 'network_guardian.py' else C.HELPERS[name]
         C.need(C.sha(C.read(C.OLD_SOURCE / name)) == pin, 'EXACT_ACTUAL_G14_PREDECESSOR_SOURCE')
     G = C.load_guardian(C.NEW_SOURCE, source_pin)
-    C.need(G.HERE == C.NEW_SOURCE and G.CONFIG == C.NEW_STANDING and G.NEW_CONFIG == C.NEW_CONFIG and G.G21_CONTROLLER_CONFIG_SHA == C.HEAD_CONFIG_SHA, 'EXACT_G15_SOURCE_PATHS_AND_HEAD')
+    C.need(G.HERE == C.NEW_SOURCE and G.CONFIG == C.NEW_STANDING and G.NEW_CONFIG == C.NEW_CONFIG and G.G22_CONTROLLER_CONFIG_SHA == C.HEAD_CONFIG_SHA, 'EXACT_G15_SOURCE_PATHS_AND_HEAD')
     old_raw = C.read(C.OLD_STANDING, 32768, 0o600)
     C.need(C.sha(old_raw) == C.ACTUAL_PREDECESSOR_STANDING_SHA, 'EXACT_ACTUAL_PREDECESSOR_STANDING')
     old = G.loads(old_raw)
     C.need(old['schema'] == G.SCHEMA, 'EXACT_G12_STANDING_SCHEMA')
-    for path, pin in [(C.OLD_CONFIG, C.G20_CONFIG_SHA), (C.NEW_CONFIG, C.HEAD_CONFIG_SHA), (C.DROPIN, C.DROPIN_SHA)]:
+    for path, pin in [(C.OLD_CONFIG, C.G21_CONFIG_SHA), (C.NEW_CONFIG, C.HEAD_CONFIG_SHA), (C.DROPIN, C.DROPIN_SHA)]:
         C.need(C.sha(C.read(path, 32768)) == pin, 'UNCHANGED_HISTORICAL_AND_EXACT_NEW_CONFIG')
     C.need({p.name for p in G.RUNTIME.iterdir()} == set(G.RUNTIME_HASHES) and all(C.sha(C.read(G.RUNTIME / n)) == h for n, h in G.RUNTIME_HASHES.items()), 'UNCHANGED_RUNTIME14')
     old_controller = G.read(G.OLD_CONFIG, 32768, 0o600)
@@ -97,11 +97,12 @@ def derive(folder, m, units_dir, output):
     C.need(C.sha(hub_raw) == old['hub_boot_config_sha256'] and C.sha(G.read(G.HUB13_SOURCE)) == old['hub_source_sha256'], 'UNCHANGED_HUB_SOURCE_AND_SEAL')
     review = C.read(folder / 'ROOT-STANDING-REVIEW.txt', 8192, 0o600).decode().removesuffix('\n')
     reviews = [old['Root_review']]
-    for path in [G.G19_PREDECESSOR_CONFIG, G.G18_PREDECESSOR_CONFIG, G.G17_PREDECESSOR_CONFIG, G.G16_PREDECESSOR_CONFIG, G.G6_PREDECESSOR_CONFIG, G.G6_BOOT_V2_PREDECESSOR_CONFIG, G.G7_PREDECESSOR_CONFIG, G.G8_PREDECESSOR_CONFIG, G.G9_PREDECESSOR_CONFIG, G.G10_PREDECESSOR_CONFIG, G.G11_PREDECESSOR_CONFIG, G.R13_PREDECESSOR_CONFIG, *[v[2] for v in G.PAIR_STANDING_CHAIN]]:
+    for path in [G.G20_PREDECESSOR_CONFIG, G.G19_PREDECESSOR_CONFIG, G.G18_PREDECESSOR_CONFIG, G.G17_PREDECESSOR_CONFIG, G.G16_PREDECESSOR_CONFIG, G.G6_PREDECESSOR_CONFIG, G.G6_BOOT_V2_PREDECESSOR_CONFIG, G.G7_PREDECESSOR_CONFIG, G.G8_PREDECESSOR_CONFIG, G.G9_PREDECESSOR_CONFIG, G.G10_PREDECESSOR_CONFIG, G.G11_PREDECESSOR_CONFIG, G.R13_PREDECESSOR_CONFIG, *[v[2] for v in G.PAIR_STANDING_CHAIN]]:
         reviews.append(G.loads(G.read(path, 32768, 0o600))['Root_review'])
     C.need(120 <= len(review) <= 4096 and review not in reviews, 'NEW_ROOT_STANDING_REVIEW')
     value = build(G, m, old, controller_raw, hub_raw, review, unit_pins)
-    g20_predecessor = G.g20_predecessor_config(value)
+    g21_predecessor = G.g21_predecessor_config(value)
+    g20_predecessor = G.g20_predecessor_config(g21_predecessor)
     immediate_predecessor = G.g19_predecessor_config(g20_predecessor)
     current_predecessor = G.g18_predecessor_config(immediate_predecessor)
     head_predecessor = G.g17_predecessor_config(current_predecessor)
@@ -125,10 +126,10 @@ def derive(folder, m, units_dir, output):
     C.need(not str(output).startswith(('/etc/', '/run/', '/proc/', '/sys/')) and not output.exists() and not output.is_symlink(), 'NEW_PRIVATE_STAGING_OUTPUT_ONLY')
     C.once(output, raw)
     expected = expected_inputs(G, m, value, unit_pins)
-    inputs = {'successor_guardian_source_sha256': source_pin, 'head_generation': 'g21pair', 'head_core_digest': 'sha256:' + C.NEW_DIGEST,
+    inputs = {'successor_guardian_source_sha256': source_pin, 'head_generation': 'g22pair', 'head_core_digest': 'sha256:' + C.NEW_DIGEST,
               'head_controller_config_sha256': C.HEAD_CONFIG_SHA, 'historical_g6_controller_config_sha256': C.G6_CONFIG_SHA,
               'pair_predecessor_standing_config_sha256': dict(C.PREFIX_STANDINGS), **C.ANCESTORS,
-              'pair_chain_controller_config_sha256': {**expected['controller_prefix_sha256'], 'g21pair': C.HEAD_CONFIG_SHA},
+              'pair_chain_controller_config_sha256': {**expected['controller_prefix_sha256'], 'g22pair': C.HEAD_CONFIG_SHA},
               **unit_pins, **expected['ancestry_input_sha256']}
     result = {'schema': C.DERIVATION_SCHEMA, 'hub_profile': 'r13', 'units_source': 'live' if units_dir == C.UNIT_DIR else 'staged',
               'standing_config_sha256': C.sha(raw), 'standing_config_written': True, 'input_sha256': inputs,
