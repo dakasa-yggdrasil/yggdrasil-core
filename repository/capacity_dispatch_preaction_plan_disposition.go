@@ -334,9 +334,18 @@ func ReadCapacityDispatchPreActionPlanDisposition(ctx context.Context, db *sql.D
 	if _, err = tx.ExecContext(ctx, "SET LOCAL TIME ZONE 'UTC'"); err != nil {
 		return empty, err
 	}
+	r, err := readPreActionPlanDisposition(ctx, tx, jobID)
+	if err != nil {
+		return empty, err
+	}
+	return r, tx.Commit()
+}
+
+func readPreActionPlanDisposition(ctx context.Context, db capacityDispatchQueryer, jobID uuid.UUID) (model.CapacityDispatchPreActionPlanDisposition, error) {
+	var empty model.CapacityDispatchPreActionPlanDisposition
 	var raw []byte
 	var valid bool
-	err = tx.QueryRowContext(ctx, "SELECT d.original_wire,public.preaction_failed_plan_valid(d.original_record,d.original_dispatch_wire,d.original_run_wire,d.original_intent_wire,d.members_wire,d.evidence_wire) AND d.original_record=convert_from(d.original_wire,'UTF8')::jsonb AND j.state='preaction_plan_disposed' AND j.finalization_ack_at IS NULL AND (to_jsonb(j)-ARRAY['state','updated_at'])=(convert_from(d.original_dispatch_wire,'UTF8')::jsonb-ARRAY['state','updated_at']) AND convert_from(d.original_run_wire,'UTF8')::jsonb=to_jsonb(w) FROM public.capacity_dispatch_preaction_plan_dispositions d JOIN public.capacity_dispatch_jobs j ON j.id=d.job_id AND j.run_id=d.run_id JOIN public.workflow_runs w ON w.id=d.run_id WHERE d.job_id=$1", jobID).Scan(&raw, &valid)
+	err := db.QueryRowContext(ctx, "SELECT d.original_wire,public.preaction_failed_plan_valid(d.original_record,d.original_dispatch_wire,d.original_run_wire,d.original_intent_wire,d.members_wire,d.evidence_wire) AND d.original_record=convert_from(d.original_wire,'UTF8')::jsonb AND j.state='preaction_plan_disposed' AND j.finalization_ack_at IS NULL AND (to_jsonb(j)-ARRAY['state','updated_at'])=(convert_from(d.original_dispatch_wire,'UTF8')::jsonb-ARRAY['state','updated_at']) AND convert_from(d.original_run_wire,'UTF8')::jsonb=to_jsonb(w) FROM public.capacity_dispatch_preaction_plan_dispositions d JOIN public.capacity_dispatch_jobs j ON j.id=d.job_id AND j.run_id=d.run_id JOIN public.workflow_runs w ON w.id=d.run_id WHERE d.job_id=$1", jobID).Scan(&raw, &valid)
 	if err != nil {
 		return empty, err
 	}
@@ -348,5 +357,5 @@ func ReadCapacityDispatchPreActionPlanDisposition(ctx context.Context, db *sql.D
 	if err != nil || !bytes.Equal(raw, canonical) {
 		return empty, ErrCapacityConflict
 	}
-	return r, tx.Commit()
+	return r, nil
 }

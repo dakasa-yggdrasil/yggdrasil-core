@@ -751,6 +751,12 @@ introduced. Migration90 retains append-only admission/read lineage and checks
 the complete terminal intent. Declared recovery fixtures and CI cannot qualify
 a production Guest, provider effect or operational A/B.
 
+The continuation dispatch barrier accepts retained `installed_timeout_disposed`
+and `preaction_plan_disposed` history only after authenticating its complete
+typed receipt, original job and failed workflow run. Their original NULL ACK
+remains unchanged; missing or forged receipts, UNKNOWN jobs and ordinary
+returned jobs without an ACK keep the continuation on HOLD.
+
 ## Failed settled continuation before its first read (ADR-0108)
 
 A separate ten-field `original_settled_absence_pre_read_continuation_v1`
