@@ -41,6 +41,9 @@ func retirementForwardClosedFailedRead102Regression(t *testing.T) {
 		t.Fatal("LIVE/off-qualified owner and one accepted settled DELETE", current, receipt, err)
 	}
 	parent = current
+	if requested, e := f.PlanStore().TryRequestGuestRetirementForwardContinuation(ctx, f.Policy); e != nil || requested {
+		t.Fatal("still-running LIVE owner became a failed continuation", requested, e)
+	}
 	pendingIDs := make([]string, 0, 43)
 	for i := 0; i < 43; i++ {
 		read, e := f.FinishStore().PrepareGuestRetirementForwardRead(ctx, f.Request.Intent.RequestID, "absence", receipt.Grant.GrantID)
@@ -53,10 +56,6 @@ func retirementForwardClosedFailedRead102Regression(t *testing.T) {
 		pendingIDs = append(pendingIDs, read.ReadID)
 	}
 	prepared, returned := closedRead102ExpiredRead(t, f, ctx, receipt.Grant.GrantID)
-	closedRead102PairVectors(t, f, prepared, returned)
-	if requested, e := f.PlanStore().TryRequestGuestRetirementForwardContinuation(ctx, f.Policy); e != nil || requested {
-		t.Fatal("still-running LIVE owner became a failed continuation", requested, e)
-	}
 	// The real return is committed first. Missing ACK cannot create a runnable
 	// replacement; the ordinary finalization API then records its actual ACK.
 	result := preReadWorkflowResult(f, f.Intent, parent.ID, "failed", "finish-original-retirement")
@@ -71,12 +70,6 @@ func retirementForwardClosedFailedRead102Regression(t *testing.T) {
 	before := f.PreservedOriginals()
 	custody := closedRead102Custody(t, f, []string{parent.ID})
 	closedRead102Put(t, "M102-PARENT-FAILURE-INPUTS.original.json", failedServingWire(t, map[string]any{"fixture_only": true, "native_authority": false, "parent": parent, "pending_read_ids": pendingIDs, "prepared": closedRead102RowJSON(t, prepared), "returned": closedRead102RowJSON(t, returned), "custody": custody}))
-	if f.Intent.LeaseExpiresAt == nil || !f.Intent.LeaseExpiresAt.After(time.Now()) {
-		t.Fatal("fixture must still expose the real live-parent lease refusal")
-	}
-	if requested, e := f.PlanStore().TryRequestGuestRetirementForwardContinuation(ctx, f.Policy); e != nil || requested {
-		t.Fatal("ACK did not replace the parent's unexpired lease", requested, e)
-	}
 	f.WaitHistoricalBarrier()
 	f.StartSuccessorDispatch()
 	first := continuationTestRequest(t, f, ctx)
@@ -90,6 +83,16 @@ func retirementForwardClosedFailedRead102Regression(t *testing.T) {
 		t.Fatal("first new fence must retain zero own reads before its declared failure")
 	}
 	f.FinishFailedRun("finish-original-retirement")
+	// This newly claimed child has no own read and has just recorded its real
+	// failed ACK. Prove that ACK cannot replace its still-live lease before
+	// spending time on unrelated pure pair operands; never renew any clock.
+	if f.Intent.LeaseExpiresAt == nil || !f.Intent.LeaseExpiresAt.After(time.Now()) {
+		t.Fatal("fresh failed child's lease must still be live after its real ACK")
+	}
+	if requested, e := f.PlanStore().TryRequestGuestRetirementForwardContinuation(ctx, f.Policy); e != nil || requested {
+		t.Fatal("ACK did not replace the failed child's unexpired lease", requested, e)
+	}
+	closedRead102PairVectors(t, f, prepared, returned)
 	if !reflect.DeepEqual(before, f.PreservedOriginals()) || !reflect.DeepEqual(custody, closedRead102Custody(t, f, []string{parent.ID})) {
 		t.Fatal("first read-only child rewrote its LIVE parent or original SDK custody")
 	}
