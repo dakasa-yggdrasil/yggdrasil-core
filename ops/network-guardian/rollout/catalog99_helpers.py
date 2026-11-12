@@ -478,6 +478,62 @@ def preaction_scan99(value):
     return value
 
 
+# Reuse the qualified restore98 typed witness; the original E70 remains separate.
+G44_TERMINAL_UNION = r"""
+ UNION
+ SELECT j.id FROM dispatch_candidates j JOIN dispatch_original_identity ji ON ji.id=j.id
+ JOIN public.capacity_dispatch_installed_provision_timeout_dispositions d ON (d.job_id,d.run_id)=(j.id,j.run_id)
+ JOIN public.workflow_runs w ON w.id=d.run_id
+ WHERE j.id='37edd909-fd96-46cc-bdc7-710a2573f5bf'::uuid
+ AND j.run_id='ef7dfb2d-c681-4574-a463-4d4a1c30e126'::uuid
+ AND j.state='installed_timeout_disposed' AND j.finalization_ack_at IS NULL
+ AND w.status='failed' AND w.finished_at IS NOT NULL
+ AND d.original_record=convert_from(d.original_wire,'UTF8')::jsonb
+ AND d.original_record->>'schema'='unknown_installed_provision_timeout_disposition_v1'
+ AND d.original_record->'generation'='44'::jsonb AND d.original_record->'fencing_token'='85'::jsonb
+ AND d.original_record->>'preregistration_id'='096c3054-fe8d-4a8d-afc8-fdff2bc9f241'
+ AND d.original_record->>'create_grant_id'='8062bc1c-888f-46cf-ace7-11c7027aed1f'
+ AND (to_jsonb(j)-'state'-'updated_at')=(convert_from(d.original_dispatch_wire,'UTF8')::jsonb-'state'-'updated_at')
+ AND to_jsonb(w)=convert_from(d.original_run_wire,'UTF8')::jsonb
+ AND public.installed_provision_timeout_valid(d.original_record,d.original_dispatch_wire,d.original_run_wire,d.original_intent_wire,d.members_wire) IS TRUE
+"""
+
+def e70_sql(original):
+    """Add exactly one typed G44 terminal witness; preserve the old eight paths."""
+    boundary='\n),\npolicies AS MATERIALIZED('
+    need99(type(original) is str and original.count(boundary) == 1
+         and original.count('dispatch_terminal_witnesses AS MATERIALIZED (') == 1,
+         'ONE_QUALIFIED_E70_TERMINAL_CTE_BOUNDARY')
+    old="c.conname IN('capacity_dispatch_jobs_state_v8_check','capacity_dispatch_jobs_lifecycle_v8_check','capacity_dispatch_jobs_state_v9_check','capacity_dispatch_jobs_lifecycle_v9_check')"
+    need99(original.count(old) == 1, 'ONE_CURRENT_E70_DISPATCH_CHECK_SELECTOR')
+    result=original.replace(boundary,G44_TERMINAL_UNION+boundary,1)
+    result=result.replace(old,old[:-1]+",'capacity_dispatch_jobs_state_v10_check','capacity_dispatch_jobs_lifecycle_v10_check')",1)
+    need99(result.replace(G44_TERMINAL_UNION,'',1).replace(old[:-1]+",'capacity_dispatch_jobs_state_v10_check','capacity_dispatch_jobs_lifecycle_v10_check')",old,1)==original,
+         'WHOLE_OLD_E70_INVERSE_NO_GENERIC_FAILED_FILTER')
+    return result
+
+def aws_preaction99_query(original):
+    """Retain whole raw E70 and the existing typed M98 projection in one RR read."""
+    projected=e70_sql(original)
+    return ("WITH raw_e70(value) AS MATERIALIZED (\n"+original+
+            "\n), m98_typed_e70(value) AS MATERIALIZED (\n"+projected+
+            "\n)\nSELECT jsonb_build_object('raw_e70',(SELECT value FROM raw_e70),"
+            "'m98_typed_e70',(SELECT value FROM m98_typed_e70))")
+
+
+def aws_preaction99_projection(value):
+    """Validate distinct whole responses; never overwrite or subtract from raw lanes."""
+    closed99(value,'raw_e70 m98_typed_e70','CLOSED99_RAW_E70_AND_TYPED_M98_RESPONSES')
+    raw,projected=value['raw_e70'],value['m98_typed_e70']
+    keys='jobs_busy runs_busy forward_unreturned_reads live_unreturned_canaries intent_count intent_busy pending_authority forward_markers'.split()
+    need99(type(raw) is dict and type(projected) is dict and set(raw)==set(projected)
+           and set(keys)<=set(raw),'WHOLE99_RAW_E70_AND_TYPED_M98_DICTIONARIES')
+    need99(all(type(row[k]) is int for row in (raw,projected) for k in keys)
+           and raw['jobs_busy']==projected['jobs_busy']+1
+           and all(raw[k]==projected[k] for k in keys if k!='jobs_busy'),
+           'EXACT99_ONE_TYPED_M98_ANCESTOR_ALL_OTHER_RAW_LANES_PRESERVED')
+    return projected
+
 def preaction99_lanes(value,case,provider):
     keys='jobs_busy runs_busy forward_unreturned_reads live_unreturned_canaries intent_count intent_busy pending_authority forward_markers'.split()
     providers=closed99(case.get('provider_lanes'),'aws hetzner known_hz_preservation','CLOSED99_PROVIDER_LANES3')

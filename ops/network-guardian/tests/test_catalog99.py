@@ -1,4 +1,5 @@
 """CI-only declared schema99 operands; this file grants no CI/Native acceptance."""
+import ast
 import copy
 import hashlib
 import importlib.util
@@ -302,6 +303,65 @@ class Catalog99Tests(unittest.TestCase):
             else:bad['scan']['other_busy_runs']=False
             seal_preaction99(v,c,bad)
             with self.subTest(fault=fault),self.assertRaises(RuntimeError):H.validate_preaction99(v,c)
+        # Existing M98 witness semantics stay byteexact; this is a declared
+        # selector operand, not a fabricated PG catalog/deparse original.
+        rollout=Path(__file__).resolve().parent.parent/'rollout'
+        old_source=(rollout/'restore98_recovered_g44.py').read_text()
+        old_tree=ast.parse(old_source)
+        old_bridge=next(n for n in old_tree.body if isinstance(n,ast.Assign)
+                        and any(isinstance(x,ast.Name) and x.id=='G44_TERMINAL_UNION' for x in n.targets))
+        self.assertEqual(H.G44_TERMINAL_UNION,ast.literal_eval(old_bridge.value))
+        old_function=next(n for n in old_tree.body if isinstance(n,ast.FunctionDef) and n.name=='e70_sql')
+        new_source=(rollout/'catalog99_helpers.py').read_text()
+        new_function=next(n for n in ast.parse(new_source).body
+                          if isinstance(n,ast.FunctionDef) and n.name=='e70_sql')
+        self.assertEqual(ast.get_source_segment(new_source,new_function),
+                         ast.get_source_segment(old_source,old_function).replace('need(','need99('))
+        selector="c.conname IN('capacity_dispatch_jobs_state_v8_check','capacity_dispatch_jobs_lifecycle_v8_check','capacity_dispatch_jobs_state_v9_check','capacity_dispatch_jobs_lifecycle_v9_check')"
+        legacy=("WITH dispatch_terminal_witnesses AS MATERIALIZED (\n SELECT NULL::uuid AS job_id WHERE false"
+                "\n),\npolicies AS MATERIALIZED(SELECT 1 AS version)\n"
+                "SELECT count(*) FROM pg_constraint c WHERE "+selector)
+        typed_sql=H.e70_sql(legacy)
+        expanded=selector[:-1]+",'capacity_dispatch_jobs_state_v10_check','capacity_dispatch_jobs_lifecycle_v10_check')"
+        self.assertEqual(typed_sql.replace(H.G44_TERMINAL_UNION,'',1).replace(expanded,selector,1),legacy)
+        paired_sql=H.aws_preaction99_query(legacy)
+        self.assertIn('raw_e70(value) AS MATERIALIZED (\n'+legacy+'\n)',paired_sql)
+        self.assertIn('m98_typed_e70(value) AS MATERIALIZED (\n'+typed_sql+'\n)',paired_sql)
+        for invalid_factory in (legacy.replace(selector,'false'),legacy.replace('\n),\npolicies AS MATERIALIZED(','\n),\nwrong_boundary AS MATERIALIZED(')):
+            with self.assertRaises(RuntimeError):H.aws_preaction99_query(invalid_factory)
+        projected={**case['provider_lanes']['aws'],'policy_catalog_wire':'declared whole policy',
+                   'owned_slots':[{'slot':1,'resource_id':'declared'}]}
+        raw=copy.deepcopy(projected);raw['jobs_busy']=2
+        responses={'raw_e70':raw,'m98_typed_e70':projected}
+        untouched=canonical(responses)
+        self.assertIs(H.aws_preaction99_projection(responses),projected)
+        self.assertEqual(canonical(responses),untouched)
+        self.assertEqual(raw['jobs_busy'],2)
+        self.assertEqual(H.preaction99_lanes(projected,case,'aws'),case['provider_lanes']['aws'])
+        # A nonM98 extra failure remains busy after the single authenticated
+        # ancestor projection, so the unchanged jobs1 guard must still refuse.
+        extra=copy.deepcopy(responses)
+        extra['raw_e70']['jobs_busy']=3;extra['m98_typed_e70']['jobs_busy']=2
+        extra_case=copy.deepcopy(case);extra_case['provider_lanes']['aws']['jobs_busy']=2
+        with self.assertRaises(RuntimeError):
+            H.preaction99_lanes(H.aws_preaction99_projection(extra),extra_case,'aws')
+        for fault in ('extra_wrapper','missing_raw','raw_not_dict','typed_not_dict','extra_field',
+                      'missing_lane','raw_bool','typed_bool','unproved_ancestor','two_removed','other_lane'):
+            bad=copy.deepcopy(responses)
+            if fault=='extra_wrapper':bad['ignored']=raw
+            elif fault=='missing_raw':bad.pop('raw_e70')
+            elif fault=='raw_not_dict':bad['raw_e70']=[]
+            elif fault=='typed_not_dict':bad['m98_typed_e70']=[]
+            elif fault=='extra_field':bad['raw_e70']['ignored']=0
+            elif fault=='missing_lane':
+                for row in bad.values():row.pop('runs_busy')
+            elif fault=='raw_bool':bad['raw_e70']['runs_busy']=False
+            elif fault=='typed_bool':bad['m98_typed_e70']['intent_count']=True
+            elif fault=='unproved_ancestor':bad['m98_typed_e70']['jobs_busy']=2
+            elif fault=='two_removed':bad['raw_e70']['jobs_busy']=3
+            else:bad['raw_e70']['pending_authority']=1
+            with self.subTest(e70_projection_fault=fault),self.assertRaises(RuntimeError):
+                H.aws_preaction99_projection(bad)
         bad=copy.deepcopy(case);bad['provider_lanes']['aws']['jobs_busy']=0
         with self.assertRaises(RuntimeError):H.preaction99_lanes(bad['provider_lanes']['aws'],bad,'aws')
         for fault in ('missing_context','extra_provider','extra_counter','missing_ref','extra_ref',

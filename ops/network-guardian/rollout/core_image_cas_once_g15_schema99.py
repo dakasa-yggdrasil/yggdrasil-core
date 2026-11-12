@@ -2536,7 +2536,8 @@ def database_preaction99(cut, run, c, sql, label):
     fields = ('intent_identity','owned_slots','active_policies','policy_catalog_wire')
     for provider,key in (('aws','original_notify_aws_vm_members'),('hetzner','original_notify_hetzner_vm_members')):
         if provider == 'aws':
-            value = query(cut,run,label+'-'+provider.upper(),sql['queries'][key])
+            observed = query(cut,run,label+'-'+provider.upper(),module.aws_preaction99_query(sql['queries'][key]))
+            value = module.aws_preaction99_projection(observed)
             need(canonical({k:value[k] for k in fields}) == canonical(c['policy_state'][provider]),
                  'WHOLE99_AWS_POLICY_AND_ROSTER_PREIMAGE')
         else:

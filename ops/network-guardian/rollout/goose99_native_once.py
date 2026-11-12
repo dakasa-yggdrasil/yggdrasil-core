@@ -1829,7 +1829,10 @@ def database_preaction99(V,cut,run,e70,baseline,case,label,after=False):
     result={}
     for provider,key in (('aws','original_notify_aws_vm_members'),('hetzner','original_notify_hetzner_vm_members')):
         sql=e70['queries'][key]
-        value=V.query(cut,run,label+'-'+provider.upper(),helper.query(sql) if provider=='hetzner' else sql)
+        # The complete SQL stdout retains distinct raw and typed AWS responses.
+        observed=V.query(cut,run,label+'-'+provider.upper(),
+                         helper.query(sql) if provider=='hetzner' else catalog99_module().aws_preaction99_query(sql))
+        value=catalog99_module().aws_preaction99_projection(observed) if provider=='aws' else observed
         current=None
         if provider=='hetzner':
             closed(value,'ordinary current','CLOSED99_SAME_RR_HZ_E70_AND_WHOLE_CURRENT_ORIGINALS')
