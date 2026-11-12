@@ -777,6 +777,34 @@ old deadline renewal, OFF permission or provider mutation is introduced.
 After typed96 custody is retained, downgrade refuses instead of erasing evidence.
 Declared PostgreSQL fixtures confer no production or cycle acceptance.
 
+## Closed deadline-failed absence continuation (ADR-0114)
+
+The existing read/confirm-only settled-absence mode has a separate
+`original_settled_absence_closed_failed_read_continuation_v1` proof. Its optional
+`closed_failed_read` object has exactly `read_id`, `prepared_sha256` and
+`returned_sha256`; Pending ID/hash stay empty. Old ten-field proofs remain exact,
+while this distinct proof has eleven fields.
+
+Authenticate the absolute latest returned absence read together with its exact
+prepared record and complete immutable wires. Require the same request,
+admission, root, tuple, creator binding and existing accepted SETTLED DELETE.
+Only an empty-status, call-failed, context-failed return without a plan,
+observation or receipt can enter this branch. Actual deadline/clock ordering,
+the precise failed workflow and whole dispatch ACK, natural lease expiry,
+current policy/source and quiet remain mandatory. An open challenge, changed
+wire, foreign identity, unknown transport or unfinished ACK refuses admission.
+
+This failed return is provenance, never Pending or fresh absence. A new fenced
+owner must perform fresh inventory, the existing survivor floor/canaries and a
+new bounded absence read before ordinary confirmation of the same DELETE.
+Zero-own-read failures may repeat only through one uniquely authenticated
+direct-origin typed anchor and one bounded revalidation. No old read is selected
+over a newer failure, original record or clock is rewritten, or provider mutation
+is replayed. Migration102 changes only the continuation proof constraint and
+necessary validators; migration101 quiet and all old branches remain intact.
+Downgrade refuses retained new proofs instead of deleting evidence. The owning
+CI root retains its existing IDs, workflow, deadlines and concurrency limits.
+
 ## Recorded context-refused HTTP maintenance disposition (ADR-0103)
 
 `POST /api/v1/ops/capacity/http-maintenance-dispatch-dispositions` and
