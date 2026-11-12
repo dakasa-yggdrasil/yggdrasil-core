@@ -90,7 +90,7 @@
     {
       "evidence": "docs/service-contract/INSTALLED_READINESS_HANDOFF_SOURCE_REVIEW.json",
       "id": "installed_readiness_exhausted_handoff_source_review",
-      "sha256": "b9a2b3697288e01d7dca6fc4cf703003b1c56b1c7549490b5f741972d9a725ec"
+      "sha256": "e9868acd7060623c536c2ac22d650b3d35b3908ea232d81f19dfb602d9298766"
     }
   ],
   "coverage": "complete",

@@ -223,7 +223,7 @@ BEGIN
   IF k=2 AND m IS DISTINCT FROM old_m THEN RETURN false; END IF;
   fs=array_append(fs,(m->>'new_fence')::bigint); prev=m;
  END LOOP;
- IF EXISTS(SELECT 1 FROM jsonb_array_elements(canaries->'challenges')x WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(canaries->'authority_markers')a WHERE x->>'fence'=(convert_from(decode(a#>>'{original_record,installed_reconcile_marker_base64}','base64'),'UTF8')::jsonb->>'new_fence') AND x->>'executor_id'=a->>'executor_id')) THEN RETURN false; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(canaries->'challenges')x WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(canaries->'authority_markers')am WHERE x->>'fence'=(convert_from(decode(am#>>'{original_record,installed_reconcile_marker_base64}','base64'),'UTF8')::jsonb->>'new_fence') AND x->>'executor_id'=am->>'executor_id')) THEN RETURN false; END IF;
  IF public.installed_readiness_closed_canaries_valid(canaries,policy.id,workflow.id,(r->>'exhausted_generation')::bigint,fs,h.recorded_at) IS DISTINCT FROM true THEN RETURN false; END IF;
  IF mark IS DISTINCT FROM jsonb_build_object('schema','installed_readiness_exhausted_handoff_v1','handoff_id',h.id,'handoff_sha256',h.record_sha256,'original_disposition_id',h.original_disposition_id,
   'exhausted_generation',r->'exhausted_generation','exhausted_fence',r->'exhausted_fence','claim_generation',r->'successor_generation','claim_fence',r->'successor_fence',

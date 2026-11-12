@@ -1,7 +1,9 @@
 {
   "independent_source_reviews": {
+    "fixture_diagnostic_delta": "88c3337d5e3e4ec43287f56c9ef142c936e2051ba9bdfea8b2b0a51f816fe65b",
     "repository_and_model": "402da5be4f880c3e436731cfe523bc852b2b2637f483aa95978f9bbbb8350d3c",
     "root_integration_and_issuer": "fcda9b55214f2cc1d1a4c83b6fd0f0db82cba0de993b41475aa2115cad95f7fb",
+    "sql_alias_only_correction": "d4c17da93604b6ddc07103c2fc65153e84ae6a84ad67e46e7ccb5e3024de2b51",
     "sql_v3": "b6b876f37621cdac9883cf99a1b88a09945197fadcf68adb31a52787439f2f0e",
     "sql_v4_two_operand_hardening_sha256_prefix": "55f8031a",
     "whole_fixture_and_catalog": "c04e9705a71047da9ad1bacf684989704caa5a3a27d49b54118ea00e2e7bcc4a"
@@ -14,7 +16,8 @@
     "Only a genuinely promoted unleased successor may release its marker into a same-generation stable HOLD or the next ordinary proposal. The immutable origin and child-generation exclusions remain permanent across policy restoration.",
     "Migration100 preserves the complete M98 origin-guard body outside its exact archive-qualified exception, retains historical M98/M99 meanings, validates SQL proof independently, enforces deferred atomic links and refuses used-proof rollback.",
     "CurrentGuestCoreSource remains native clean build metadata. A build-tag-excluded fixture backend declares old issuer operands before immutable INSERTs in one exact test DB/policy/workflow/kind scope; default and native builds always use the actual source.",
-    "The qualification decoder declares the complete exact model omitempty set; unknown, duplicate and null members remain refused. No REST, broker, Guest or provider operation is added."
+    "The qualification decoder declares the complete exact model omitempty set; unknown, duplicate and null members remain refused. No REST, broker, Guest or provider operation is added.",
+    "The authority-marker SQL alias is distinct from the local PL/pgSQL variable. The single-line alpha rename preserves every predicate and the default ambiguity refusal. CI checks the original 42702 control and fixed query, retains complete read-only preclaim fixture rows, and enables full failed-parameter logging only on the owned test session; no production observer or identity override is added."
   ],
   "schema": "installed_readiness_exhausted_handoff_source_review_v1",
   "scope": "One immutable exhausted installed-readiness origin and one distinct readiness-only successor generation; existing-row UPDATE preserves strict INSERT guards.",
@@ -32,8 +35,8 @@
       "sha256": "e868a10b206ce0e3d478d9abe96497bade571299c80279e31721429453236113"
     },
     "db/migrations/00100_installed_readiness_exhausted_handoff.sql": {
-      "bytes": 66209,
-      "sha256": "8b987ffa92c355c55ce7f52b8ffd7db1f3b77af683be8e06b26cf2be9e3d0fd4"
+      "bytes": 66212,
+      "sha256": "d46a2088ec02a488bf3f31cb83643db60e8124742839dc6f4256af9087a05522"
     },
     "model/capacity.go": {
       "bytes": 33762,
@@ -72,8 +75,8 @@
       "sha256": "c84c6f6ddde2d59e936ac2f0a5921911871acbca47fd62f2271ec23c526818f1"
     },
     "repository/capacity_installed_readiness_handoff_postgres_test.go": {
-      "bytes": 47926,
-      "sha256": "53d8870b109391f92850c866534686f4c4ff7b51c14ae370f6cb4889e67f9f59"
+      "bytes": 53958,
+      "sha256": "ae288a2d71305504cee9ee579f8d02c0d6d198f16c91b3e1df55e65e8678d21f"
     },
     "repository/capacity_mutations.go": {
       "bytes": 49222,

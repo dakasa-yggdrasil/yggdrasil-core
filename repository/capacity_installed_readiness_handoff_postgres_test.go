@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -533,6 +534,107 @@ func installedReadinessRefusesProviderGrant(t *testing.T, f *installedTimeoutFix
 	}
 }
 
+// CI-only custody for the actual positive claim: an error must retain the
+// whole committed fixture inputs and its actual failed INSERT parameters.
+func installedReadinessClaimDiagnostics(t *testing.T, f *installedTimeoutFixture, ctx context.Context) {
+	t.Helper()
+	if f.db.Stats().MaxOpenConnections != 1 {
+		t.Fatal("handoff diagnostics require the fixture's one owned session")
+	}
+	var conflict, priorParameters, parameters string
+	if err := f.db.QueryRowContext(ctx, "SHOW plpgsql.variable_conflict").Scan(&conflict); err != nil || conflict != "error" {
+		t.Fatal("actual default PL/pgSQL ambiguity refusal required", conflict, err)
+	}
+	if err := f.db.QueryRowContext(ctx, "SHOW log_parameter_max_length_on_error").Scan(&priorParameters); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.ExecContext(ctx, "SET log_parameter_max_length_on_error = -1"); err != nil {
+		t.Fatal("retain actual failed INSERT parameters in the existing fixture PG log", err)
+	}
+	if err := f.db.QueryRowContext(ctx, "SHOW log_parameter_max_length_on_error").Scan(&parameters); err != nil || parameters != "-1" {
+		t.Fatal("fixture session parameter custody was not applied", parameters, err)
+	}
+	const oldAlias = `DO $control$
+DECLARE a jsonb; canaries jsonb := '{"challenges":[{"fence":1,"executor_id":"fixture-owner"}],"authority_markers":[{"original_record":{"installed_reconcile_marker_base64":"eyJuZXdfZmVuY2UiOjF9"},"executor_id":"fixture-owner"}]}';
+BEGIN
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(canaries->'challenges')x WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(canaries->'authority_markers')a WHERE x->>'fence'=(convert_from(decode(a#>>'{original_record,installed_reconcile_marker_base64}','base64'),'UTF8')::jsonb->>'new_fence') AND x->>'executor_id'=a->>'executor_id')) THEN RAISE EXCEPTION 'matching fixture authority was refused'; END IF;
+END $control$;`
+	fixedAlias := strings.NewReplacer(
+		"'authority_markers')a WHERE", "'authority_markers')am WHERE",
+		"decode(a#>>", "decode(am#>>",
+		"=a->>'executor_id'", "=am->>'executor_id'",
+	).Replace(oldAlias)
+	_, oldErr := f.db.ExecContext(ctx, oldAlias)
+	_, fixedErr := f.db.ExecContext(ctx, fixedAlias)
+	var pg *pq.Error
+	oldCode := ""
+	if errors.As(oldErr, &pg) {
+		oldCode = string(pg.Code)
+	}
+	put := func(name string, raw []byte) map[string]any {
+		t.Helper()
+		if len(raw) > 16<<20 {
+			t.Fatal("whole handoff diagnostic exceeds the unchanged 16MiB custody cap", name, len(raw))
+		}
+		dir := os.Getenv("INSTALLED_TIMEOUT_LOGS")
+		if dir == "" {
+			return nil
+		}
+		path := filepath.Join(dir, name)
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n, err := file.Write(raw); err != nil || n != len(raw) {
+			file.Close()
+			t.Fatal("whole diagnostic original", name, n, err)
+		}
+		if err = file.Sync(); err != nil {
+			file.Close()
+			t.Fatal(err)
+		}
+		if err = file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return map[string]any{"path": path, "sha256": capacity.BusinessCreationSHA256(raw), "bytes": len(raw)}
+	}
+	control := map[string]any{"schema": "installed_readiness_handoff_alias_control_source_fixture_v1", "source_commit": capacity.CurrentGuestCoreSource(), "fixture_only": true, "native_authority": false, "qualification": false, "variable_conflict": conflict, "old_alias_sql": oldAlias, "old_alias_sqlstate": oldCode, "old_alias_error": fmt.Sprint(oldErr), "fixed_alias_sql": fixedAlias, "fixed_alias_error": fmt.Sprint(fixedErr), "prior_log_parameter_max_length_on_error": priorParameters, "session_log_parameter_max_length_on_error": parameters}
+	put("M100-PG-AMBIGUITY-CONTROL.SOURCE.original.json", append(installedTimeoutWire(t, control), '\n'))
+	if oldCode != "42702" || fixedErr != nil {
+		t.Fatal("actual old alias must be ambiguous and qualified alias must pass", oldCode, oldErr, fixedErr)
+	}
+	tx, err := f.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	var database string
+	var captured time.Time
+	if err = tx.QueryRowContext(ctx, "SELECT current_database(),clock_timestamp()").Scan(&database, &captured); err != nil {
+		t.Fatal(err)
+	}
+	tables := map[string]string{}
+	total := 0
+	for _, table := range []string{"capacity_intents", "capacity_dispatch_installed_provision_timeout_dispositions", "manifests", "capacity_mutation_grants", "capacity_resource_slots", "capacity_dispatch_jobs", "workflow_runs", "capacity_guest_authority_issues", "capacity_guest_notify_canary_challenges", "capacity_guest_notify_canary_returns", "capacity_guest_notify_canary_sends", "capacity_guest_notify_canary_nonces", "capacity_vm_retirement_intents", "capacity_installed_readiness_exhausted_handoffs"} {
+		var raw string
+		query := `SELECT coalesce(json_agg(row_to_json(x) ORDER BY to_jsonb(x)::text COLLATE "C")::text,'[]') FROM public.` + table + ` x`
+		if err = tx.QueryRowContext(ctx, query).Scan(&raw); err != nil {
+			t.Fatal("whole readonly preclaim fixture input", table, err)
+		}
+		total += len(raw)
+		if total > 16<<20 {
+			t.Fatal("whole preclaim fixture inputs exceed the unchanged 16MiB custody cap", total)
+		}
+		tables[table] = raw
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal("readonly fixture input snapshot", err)
+	}
+	snapshot := map[string]any{"schema": "installed_readiness_handoff_preclaim_inputs_source_fixture_v1", "source_commit": capacity.CurrentGuestCoreSource(), "fixture_only": true, "native_authority": false, "qualification": false, "candidate_status": "UNCOMMITTED", "claim_commit_observed": false, "snapshot_kind": "readonly_committed_fixture_inputs_before_positive_claim", "database": database, "captured_at": captured.UTC(), "whole_table_wires": tables, "session_log_parameter_max_length_on_error": parameters}
+	ref := put("M100-HANDOFF-PRECLAIM-INPUTS.UNCOMMITTED.SOURCE.original.json", append(installedTimeoutWire(t, snapshot), '\n'))
+	t.Log("whole readonly preclaim fixture inputs retained", ref)
+}
+
 // This remains inside the existing eight_members owner process: original300s
 // plus three real90s intent leases leaves150s of its unchanged12minute cap.
 func (f *installedTimeoutFixture) exhaustedReadinessHandoff(t *testing.T, firstJob CapacityDispatchJob, first model.CapacityIntent, releaseIssuer func()) {
@@ -647,6 +749,7 @@ func (f *installedTimeoutFixture) exhaustedReadinessHandoff(t *testing.T, firstJ
 		t.Fatal("unresolved provider authority admitted a handoff", pendingAdmitted, pendingErr, rollbackErr)
 	}
 	unchanged()
+	installedReadinessClaimDiagnostics(t, f, ctx)
 	claimedStore, claimed, eligible, err := s.TryClaimInstalledReadinessHandoff(ctx, f.policy, a)
 	if err != nil || !eligible || claimed.Generation != current.Generation+1 || claimed.FencingToken != current.FencingToken+1 || claimed.Phase != "preparing" || claimed.InstalledReadinessHandoff == nil || claimed.InstalledGuestReconcile != nil || claimed.LeaseOwner == current.LeaseOwner || claimed.LeaseExecutorID != s.ExecutorID || claimed.LeaseExpiresAt == nil {
 		t.Fatal("genuine new readiness-only generation unavailable", eligible, err)
