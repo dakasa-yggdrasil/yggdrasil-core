@@ -480,7 +480,9 @@ jobs:
 
   installed-provision-timeout:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Three sequential 12-minute test waves need setup, compilation and evidence time.
+    # Keep child deadlines and real lease waits unchanged within this runner budget.
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
