@@ -25,7 +25,7 @@ import (
 func retirementContinuationTypedHistoryRegression(t *testing.T, f *installedTimeoutFixture, own CapacityDispatchJob, anchor model.CapacityInstalledProvisionTimeoutDisposition, plan model.CapacityDispatchPreActionPlanDisposition) {
 	t.Helper()
 	ctx := context.Background()
-	beforeOriginals := preActionPlanOriginals(t, f, CapacityDispatchJob{JobID: uuid.MustParse(plan.JobID)})
+	beforeOriginals := preActionPlanOriginals(t, f, CapacityDispatchJob{CapacityDispatchEnvelope: CapacityDispatchEnvelope{JobID: uuid.MustParse(plan.JobID)}})
 	migrations := filepath.Join(failedServingRepositoryRoot(t), "db", "migrations")
 	if err := goose.UpToContext(ctx, f.db, migrations, 100); err != nil {
 		t.Fatal("actual schema100 predecessor", err)
@@ -174,7 +174,7 @@ func retirementContinuationTypedHistoryRegression(t *testing.T, f *installedTime
 	if err = tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(beforeOriginals, preActionPlanOriginals(t, f, CapacityDispatchJob{JobID: uuid.MustParse(plan.JobID)})) {
+	if !reflect.DeepEqual(beforeOriginals, preActionPlanOriginals(t, f, CapacityDispatchJob{CapacityDispatchEnvelope: CapacityDispatchEnvelope{JobID: uuid.MustParse(plan.JobID)}})) {
 		t.Fatal("typed quiet regression rewrote immutable history")
 	}
 	dir := os.Getenv("PREACTION_PLAN_LOGS")
