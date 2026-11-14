@@ -23,24 +23,25 @@ import (
 var ErrCapacityMutationAuthorization = errors.New("capacity mutation authorization denied")
 
 type capacityMutationRecord struct {
-	FailedUnwitnessedExpansionCleanupID string                               `json:"failed_unwitnessed_expansion_cleanup_id,omitempty"`
-	Grant                               model.CapacityMutationGrant          `json:"grant"`
-	Binding                             model.CapacityMutationBinding        `json:"binding"`
-	PolicyID                            uuid.UUID                            `json:"policy_id"`
-	PolicyChecksum                      string                               `json:"policy_checksum"`
-	WorkflowID                          uuid.UUID                            `json:"workflow_id"`
-	Generation                          int64                                `json:"generation"`
-	FencingToken                        int64                                `json:"fencing_token"`
-	LeaseOwner                          string                               `json:"lease_owner"`
-	ExecutorID                          string                               `json:"executor_id"`
-	CreatedAt                           time.Time                            `json:"created_at"`
-	AttemptID                           string                               `json:"attempt_id,omitempty"`
-	SettlementTokenSHA256               string                               `json:"settlement_token_sha256,omitempty"`
-	Settlement                          *model.CapacityMutationSettleRequest `json:"settlement,omitempty"`
-	Proof                               *model.CapacityMutationProof         `json:"proof,omitempty"`
-	EventProvider                       string                               `json:"event_provider"`
-	EventResource                       string                               `json:"event_resource"`
-	CompensationDrainProof              *model.CapacityTransitionProof       `json:"compensation_drain_proof,omitempty"`
+	WitnessedUnenrolledExpansionCleanupID string                               `json:"witnessed_unenrolled_expansion_cleanup_id,omitempty"`
+	FailedUnwitnessedExpansionCleanupID   string                               `json:"failed_unwitnessed_expansion_cleanup_id,omitempty"`
+	Grant                                 model.CapacityMutationGrant          `json:"grant"`
+	Binding                               model.CapacityMutationBinding        `json:"binding"`
+	PolicyID                              uuid.UUID                            `json:"policy_id"`
+	PolicyChecksum                        string                               `json:"policy_checksum"`
+	WorkflowID                            uuid.UUID                            `json:"workflow_id"`
+	Generation                            int64                                `json:"generation"`
+	FencingToken                          int64                                `json:"fencing_token"`
+	LeaseOwner                            string                               `json:"lease_owner"`
+	ExecutorID                            string                               `json:"executor_id"`
+	CreatedAt                             time.Time                            `json:"created_at"`
+	AttemptID                             string                               `json:"attempt_id,omitempty"`
+	SettlementTokenSHA256                 string                               `json:"settlement_token_sha256,omitempty"`
+	Settlement                            *model.CapacityMutationSettleRequest `json:"settlement,omitempty"`
+	Proof                                 *model.CapacityMutationProof         `json:"proof,omitempty"`
+	EventProvider                         string                               `json:"event_provider"`
+	EventResource                         string                               `json:"event_resource"`
+	CompensationDrainProof                *model.CapacityTransitionProof       `json:"compensation_drain_proof,omitempty"`
 }
 
 type capacityResourceSlot struct {
@@ -201,6 +202,9 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		return result, err
 	}
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, intent model.CapacityIntent, now time.Time) error {
+		if intent.WitnessedUnenrolledExpansionCleanupID != "" || intent.WitnessedExpansionTerminalReconcile != nil {
+			return ErrCapacityConflict
+		}
 		if intent.FailedUnwitnessedExpansionCleanupID != "" || intent.FailedExpansionTerminalReconcile != nil || intent.InstalledReadinessHandoff != nil {
 			return ErrCapacityConflict
 		}
@@ -519,6 +523,12 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		if err := guardExecutorPowerAdoption(ctx, tx, g.ExpectedResourceID); err != nil {
 			return err
 		}
+		if record.WitnessedUnenrolledExpansionCleanupID != "" {
+			if _, err := tx.ExecContext(ctx, `SET LOCAL TIME ZONE 'UTC'`); err != nil {
+				return err
+			}
+			return s.redeemWitnessedExpansionCleanupTx(ctx, tx, record, p, now, r, &response)
+		}
 		if record.FailedUnwitnessedExpansionCleanupID != "" {
 			return s.redeemFailedExpansionCleanupTx(ctx, tx, record, p, now, r, &response)
 		}
@@ -528,6 +538,9 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		intent, err := loadCapacityIntent(ctx, tx, ns, scope, true)
 		if err != nil {
 			return err
+		}
+		if intent.WitnessedUnenrolledExpansionCleanupID != "" || intent.WitnessedExpansionTerminalReconcile != nil {
+			return ErrCapacityConflict
 		}
 		if intent.FailedUnwitnessedExpansionCleanupID != "" || intent.FailedExpansionTerminalReconcile != nil || intent.InstalledReadinessHandoff != nil {
 			return ErrCapacityConflict

@@ -58,6 +58,16 @@ func (s CapacityStore) guardGuestNotifyPhaseTx(ctx context.Context, tx *sql.Tx, 
 }
 
 func (s CapacityStore) guestNotifyRetirementFloorTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, slot int, now time.Time, usage, afterAckID string) error {
+	if s.witnessedExpansionOwner != nil {
+		a, claim, active, err := s.witnessedExpansionActiveClaimTx(ctx, tx, policy, current, now)
+		if err != nil {
+			return err
+		}
+		if !active || slot != a.Slot || afterAckID != "" {
+			return ErrCapacityConflict
+		}
+		return s.witnessedExpansionSurvivorFloorTx(ctx, tx, policy, p, current, a, claim, now, usage)
+	}
 	cleanup, claim, cleanupActive, err := s.failedExpansionActiveClaimTx(ctx, tx, policy, current, now)
 	if err != nil {
 		return err

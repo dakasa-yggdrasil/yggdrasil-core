@@ -179,7 +179,7 @@ func (s CapacityStore) requestNormalFinishRecoveryTx(ctx context.Context, tx *sq
 	if req != nil && (req.PreregistrationID != x.original.Preregistration.PreregistrationID || req.PolicyID != x.policy.ID.String() || req.PolicyChecksum != x.policy.Checksum || req.Generation != x.current.Generation || req.FencingToken != x.current.FencingToken || req.IntentSHA256 != capacity.BusinessCreationSHA256(x.intentWire)) {
 		return zero, ErrCapacityConflict
 	}
-	if x.current.LeaseExpiresAt == nil || x.current.LeaseExpiresAt.After(x.now) || x.current.FailedUnwitnessedExpansionCleanupID != "" || x.current.FailedExpansionTerminalReconcile != nil {
+	if x.current.LeaseExpiresAt == nil || x.current.LeaseExpiresAt.After(x.now) || x.current.WitnessedUnenrolledExpansionCleanupID != "" || x.current.WitnessedExpansionTerminalReconcile != nil || x.current.FailedUnwitnessedExpansionCleanupID != "" || x.current.FailedExpansionTerminalReconcile != nil {
 		return zero, ErrCapacityConflict
 	}
 	r := forwardRecord(x, s, GuestRetirementForwardNormalFinishRecoveryMode, "requested", issuer)

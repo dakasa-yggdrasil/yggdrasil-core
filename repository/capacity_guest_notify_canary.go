@@ -118,6 +118,15 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		if err != nil {
 			return err
 		}
+		if s.witnessedExpansionOwner != nil {
+			a, _, active, e := s.witnessedExpansionActiveClaimTx(ctx, tx, policy, current, now)
+			if e != nil {
+				return e
+			}
+			if !active || maintenance || current.FloorDegraded || a.Slot != 2 || a.SurvivorCount != 1 || p.Floor != 1 || stored.pre.Slot >= a.Slot || preID == a.PreregistrationID || usage != "before_retirement_floor" && usage != "after_retirement_floor" {
+				return ErrCapacityConflict
+			}
+		}
 		cleanup, _, cleanupActive, err := s.failedExpansionActiveClaimTx(ctx, tx, policy, current, now)
 		if err != nil {
 			return err

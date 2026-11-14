@@ -759,6 +759,7 @@ func TestCapacityDispatchPreActionFailedPlanDispositionPostgres(t *testing.T) {
 	for _, name := range []string{"closed_failed_plan_after_M98_anchor", "second_failed_plan_phase_a", "second_failed_plan_phase_b", "concurrent_wakes_single_successor", "committed_resume_cannot_be_relabelled", "wire_shape_and_effect_guards", "deferred_links_and_immutability", "catalog_index_and_old_schema", "unanchored_plan_refused"} {
 		t.Run(name, func(t *testing.T) {
 			if name == "catalog_index_and_old_schema" {
+				t.Cleanup(func() { witnessedCleanup106PostgresRegression(t) })
 				t.Cleanup(func() { nonceAcquireMaintenance105PostgresRegression(t) })
 				// Registered before f: LIFO closes the unchanged old-schema fixture
 				// first. The new typed-terminal witness owns separate databases and

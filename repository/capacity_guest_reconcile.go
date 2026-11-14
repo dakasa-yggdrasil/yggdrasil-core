@@ -208,6 +208,9 @@ func (s CapacityStore) AssessOriginalGuest(ctx context.Context, policy model.Man
 		if s.guestReconcile == nil || s.guestReconcile.step.Use.Operation != capacity.PlanOriginalGuestOperation {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
+		if old != nil && old.WitnessedUnenrolledExpansionCleanupID != "" {
+			return *old, "", nil
+		}
 		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" {
 			return *old, "", nil
 		}
@@ -301,7 +304,7 @@ func (s CapacityStore) AdvanceOriginalGuest(ctx context.Context, policy model.Ma
 		if err := s.checkLease(p, policy, old, generation, fence, owner, now); err != nil {
 			return model.CapacityIntent{}, "", err
 		}
-		terminalReconcile = old.FailedExpansionTerminalReconcile != nil && s.failedExpansionTerminalReconcile != nil
+		terminalReconcile = old.WitnessedExpansionTerminalReconcile != nil && s.witnessedExpansionTerminalReconcile != nil || old.FailedExpansionTerminalReconcile != nil && s.failedExpansionTerminalReconcile != nil
 		if !capacityTransitionAllowed(old.Phase, phase) || !sameCapacityResourceIdentity(old.Assessment.Snapshot, assessment.Snapshot) || assessment.Snapshot.Units != old.Decision.Units || assessment.Snapshot.Profile != old.Decision.Profile || !capacityProfileCurrent(p, old.Decision, now) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
@@ -316,6 +319,7 @@ func (s CapacityStore) AdvanceOriginalGuest(ctx context.Context, policy model.Ma
 		next := *old
 		next.Phase, next.Assessment, next.UpdatedAt = phase, assessment, now
 		if phase == "promoted" {
+			next.WitnessedExpansionTerminalReconcile = nil
 			next.FailedExpansionTerminalReconcile = nil
 			next.LeaseOwner, next.LeaseExecutorID, next.LeaseExpiresAt = "", "", nil
 			next.Decision.Clock.LastActionAt = now

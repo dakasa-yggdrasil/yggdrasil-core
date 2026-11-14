@@ -38,25 +38,26 @@ type CapacityDispatchManifestPin struct {
 // reconstructs authorization from the operator-owned principal binding; Auth
 // and user/caller payloads have no field in this durable protocol.
 type CapacityDispatchEnvelope struct {
-	Protocol            string                       `json:"protocol"`
-	JobID               uuid.UUID                    `json:"job_id"`
-	RunID               uuid.UUID                    `json:"run_id"`
-	Realm               string                       `json:"realm"`
-	Environment         string                       `json:"environment"`
-	Domain              string                       `json:"domain"`
-	Dimension           string                       `json:"dimension"`
-	SourceTick          string                       `json:"source_tick"`
-	Policy              CapacityDispatchManifestPin  `json:"policy"`
-	Workflow            CapacityDispatchManifestPin  `json:"workflow"`
-	RBAC                CapacityDispatchManifestPin  `json:"rbac"`
-	AuthorizationPolicy *CapacityDispatchManifestPin `json:"authorization_policy,omitempty"`
-	MachinePrincipalID  string                       `json:"machine_principal_id"`
-	PrincipalSHA256     string                       `json:"principal_sha256"`
-	BindingSHA256       string                       `json:"binding_sha256"`
-	Inputs              map[string]any               `json:"inputs"`
-	Metadata            map[string]any               `json:"metadata"`
-	InputsSHA256        string                       `json:"inputs_sha256"`
-	MetadataSHA256      string                       `json:"metadata_sha256"`
+	WitnessedUnenrolledExpansionCleanupID string                       `json:"witnessed_unenrolled_expansion_cleanup_id,omitempty"`
+	Protocol                              string                       `json:"protocol"`
+	JobID                                 uuid.UUID                    `json:"job_id"`
+	RunID                                 uuid.UUID                    `json:"run_id"`
+	Realm                                 string                       `json:"realm"`
+	Environment                           string                       `json:"environment"`
+	Domain                                string                       `json:"domain"`
+	Dimension                             string                       `json:"dimension"`
+	SourceTick                            string                       `json:"source_tick"`
+	Policy                                CapacityDispatchManifestPin  `json:"policy"`
+	Workflow                              CapacityDispatchManifestPin  `json:"workflow"`
+	RBAC                                  CapacityDispatchManifestPin  `json:"rbac"`
+	AuthorizationPolicy                   *CapacityDispatchManifestPin `json:"authorization_policy,omitempty"`
+	MachinePrincipalID                    string                       `json:"machine_principal_id"`
+	PrincipalSHA256                       string                       `json:"principal_sha256"`
+	BindingSHA256                         string                       `json:"binding_sha256"`
+	Inputs                                map[string]any               `json:"inputs"`
+	Metadata                              map[string]any               `json:"metadata"`
+	InputsSHA256                          string                       `json:"inputs_sha256"`
+	MetadataSHA256                        string                       `json:"metadata_sha256"`
 }
 
 // LeaseExpiresAt is the fixed original invocation deadline for this claim.
@@ -92,7 +93,7 @@ func CapacityDispatchEnvelopeHashes(e CapacityDispatchEnvelope) (string, string,
 // caller must rollback on any error; this method never commits a partial tick.
 // Duplicate/new wakes return the immutable active job without inserting a run.
 func EnqueueCapacityDispatch(ctx context.Context, tx *sql.Tx, e CapacityDispatchEnvelope) (CapacityDispatchJob, bool, error) {
-	if tx == nil || capacityDispatchContextFailure(ctx) != nil {
+	if tx == nil || capacityDispatchContextFailure(ctx) != nil || e.WitnessedUnenrolledExpansionCleanupID != "" {
 		return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope
 	}
 	raw, err := encodeCapacityDispatchEnvelope(e)
@@ -114,8 +115,19 @@ func EnqueueCapacityDispatch(ctx context.Context, tx *sql.Tx, e CapacityDispatch
 	if !errors.Is(err, sql.ErrNoRows) {
 		return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope
 	}
+	cleanupID, frozenParent, err := witnessedExpansionDispatchParentTx(ctx, tx, e)
+	if err != nil {
+		return CapacityDispatchJob{}, false, err
+	}
+	if cleanupID != "" {
+		e.WitnessedUnenrolledExpansionCleanupID = cleanupID
+		raw, err = encodeCapacityDispatchEnvelope(e)
+		if err != nil {
+			return CapacityDispatchJob{}, false, err
+		}
+	}
 	var activeID uuid.UUID
-	err = tx.QueryRowContext(ctx, `SELECT id FROM public.capacity_dispatch_jobs WHERE realm=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND (state IN ('queued','started','unknown') OR (state='returned' AND finalization_ack_at IS NULL)) FOR UPDATE`, e.Realm, e.Environment, e.Domain, e.Dimension).Scan(&activeID)
+	err = tx.QueryRowContext(ctx, `SELECT id FROM public.capacity_dispatch_jobs WHERE realm=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND id<>$5 AND (state IN ('queued','started','unknown') OR (state='returned' AND finalization_ack_at IS NULL)) FOR UPDATE`, e.Realm, e.Environment, e.Domain, e.Dimension, frozenParent).Scan(&activeID)
 	if err == nil {
 		job, readErr := readCapacityDispatchJob(ctx, tx, activeID, false)
 		if readErr != nil || job.Protocol != CapacityDispatchProtocol {
@@ -784,6 +796,9 @@ func checkCapacityDispatchOriginal(ctx context.Context, db capacityDispatchQuery
 }
 
 func encodeCapacityDispatchEnvelope(e CapacityDispatchEnvelope) ([]byte, error) {
+	if e.WitnessedUnenrolledExpansionCleanupID != "" && !canonicalDemandUUID(e.WitnessedUnenrolledExpansionCleanupID) {
+		return nil, ErrCapacityDispatchEnvelope
+	}
 	if e.Protocol != CapacityDispatchProtocol || e.JobID == uuid.Nil || e.RunID == uuid.Nil || !capacityDispatchText(e.Realm, 64) || e.Policy.Namespace != e.Realm || !capacityDispatchText(e.Environment, 128) || !capacityDispatchText(e.Domain, 128) || !capacityDispatchText(e.Dimension, 128) || !capacityDispatchText(e.SourceTick, 256) || !capacityDispatchText(e.MachinePrincipalID, 128) || !capacityDispatchPin(e.Policy) || !capacityDispatchPin(e.Workflow) || !capacityDispatchPin(e.RBAC) || (e.AuthorizationPolicy != nil && !capacityDispatchPin(*e.AuthorizationPolicy)) || !capacityDispatchDigest(e.PrincipalSHA256) || !capacityDispatchDigest(e.BindingSHA256) {
 		return nil, ErrCapacityDispatchEnvelope
 	}

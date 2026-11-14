@@ -17,6 +17,9 @@ type GuestNotifyFloorMember struct {
 // This only discovers actual surviving native/enrolled members. Each subsequent
 // original publication/read independently rechecks current epoch and authority.
 func (s CapacityStore) GuestNotifyFloorMembers(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, excludedSlot int) ([]GuestNotifyFloorMember, error) {
+	if s.witnessedExpansionOwner != nil {
+		return s.witnessedExpansionFloorMembers(ctx, policy, generation, fence, owner, excludedSlot)
+	}
 	var out []GuestNotifyFloorMember
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
 		cleanup, _, cleanupActive, err := s.failedExpansionActiveClaimTx(ctx, tx, policy, current, now)

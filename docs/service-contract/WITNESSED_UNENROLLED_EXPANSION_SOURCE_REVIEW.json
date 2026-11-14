@@ -1,0 +1,124 @@
+{
+  "ABI": {
+    "admission_closed_keys": 44,
+    "admission_table_columns": 16,
+    "dispatch_ownership_columns": 4,
+    "event_fields_max": 13,
+    "event_table_columns": 9,
+    "legacy_grant_job_columns_added": 0
+  },
+  "adr": "docs/adr/0118-close-a-witnessed-unenrolled-expansion-with-a-separate-cleanup.md",
+  "current_source_census_sha256": "c507ad65752fed3655d1a6ae907e14eb8f1effaa1e325d866da666d221199d9c",
+  "pending": [
+    "independent Source reviews",
+    "both current owning PostgreSQL CI lanes/races",
+    "Root current full CI qualification",
+    "native whole proof acceptance"
+  ],
+  "production_or_native_qualification": false,
+  "runtime_source_count": 838,
+  "runtime_sources": {
+    "controllers/httpapi/ops_witnessed_unenrolled_expansion_cleanup.go": {
+      "bytes": 2902,
+      "sha256": "1a8182da7319dc4bf706d10dbff36684abc3fd6364c5ec145623a3a720cdc26b"
+    },
+    "controllers/httpapi/server.go": {
+      "bytes": 190458,
+      "sha256": "5cb9140af6da83a64e333c574ceba1316a3949b7fd34ad466513caf8b7fb21f0"
+    },
+    "controllers/message/workflows_capacity_guest.go": {
+      "bytes": 27229,
+      "sha256": "bfd60a162c561dbf89637d541670f5525af3e6f4d2e52b04c1cb04bd64bfc45e"
+    },
+    "controllers/message/workflows_capacity_guest_reconcile.go": {
+      "bytes": 28121,
+      "sha256": "12fbe10a0ce3b81e7260ffc36d930c5173f680c06a0ceb125d259d006e1bf49d"
+    },
+    "controllers/message/workflows_witnessed_expansion_cleanup.go": {
+      "bytes": 11454,
+      "sha256": "bba300fbb655c0af72905007c981aeb8d73e6918c5e3e6c6d7e9af744a1922be"
+    },
+    "controllers/message/workflows_witnessed_expansion_cleanup_nativequalification.go": {
+      "bytes": 893,
+      "sha256": "4a92a5b848ebc4eb292078e95a7830aea4b9f8f7d5d75cdcaa8e217850e71432"
+    },
+    "model/capacity.go": {
+      "bytes": 34194,
+      "sha256": "6691af988f70597b705bd750ea005297a67eba20dae6f6c06e72ed95b8e91b87"
+    },
+    "model/capacity_witnessed_expansion_terminal_reconcile.go": {
+      "bytes": 944,
+      "sha256": "7071dba99b62a116e9dd316ebebf3dae481196ef7d3674eb6d0e005b8c5b741d"
+    },
+    "repository/capacity.go": {
+      "bytes": 37659,
+      "sha256": "0158766d6c332024fd4874aeff55c122b5a1c9c5d641a89ed7323a93c23d235a"
+    },
+    "repository/capacity_dispatch.go": {
+      "bytes": 45735,
+      "sha256": "c924068612985cae1cf7fd4085d2a54d625f953f328a1adbff2b16a0503c55cd"
+    },
+    "repository/capacity_dispatch_installed_provision_timeout.go": {
+      "bytes": 24390,
+      "sha256": "5df0d3713d7f90e4c896bd8548c23e789aebab336b2d1cc66a993c8b7c05a3f3"
+    },
+    "repository/capacity_guest_installed_reconcile.go": {
+      "bytes": 25131,
+      "sha256": "f56f5dc5b0c1389127e425a35340993a56b60b7909001298ad25d49f4bee9ba7"
+    },
+    "repository/capacity_guest_notify_canary.go": {
+      "bytes": 20721,
+      "sha256": "38ea491f9a5b59de3f1c979f72392ef8dfadb2ec9ae8cc15c5fd9ad4d325ccc4"
+    },
+    "repository/capacity_guest_notify_floor_members.go": {
+      "bytes": 3929,
+      "sha256": "5b43392aa64ddaec09a3d15ae231bbd21a5737efdc709a220dfd8e96dbe86999"
+    },
+    "repository/capacity_guest_notify_phase.go": {
+      "bytes": 6446,
+      "sha256": "fd6cfcb2cfefff7b5e248fe75bd870436191f3bb72fb93619b809c254b272ffd"
+    },
+    "repository/capacity_guest_reconcile.go": {
+      "bytes": 18795,
+      "sha256": "1f5e414e040da9c4d27a2fa023f6bfebed8f7eafc3a71dcc89e0efe45a63b5ec"
+    },
+    "repository/capacity_guest_retirement_normal_finish_recovery.go": {
+      "bytes": 19091,
+      "sha256": "9c5b32c9fe351a6f569456065d5087e4f34927755d8e14fb125f1ee3b10245ca"
+    },
+    "repository/capacity_installed_readiness_handoff.go": {
+      "bytes": 31052,
+      "sha256": "ef9dac236f0d4f5828ba4dc43636d235aad595ad8ffa85c550b108c78c64bffa"
+    },
+    "repository/capacity_mutations.go": {
+      "bytes": 49931,
+      "sha256": "acd0c1d09cbd4fba9716309721faf4bf406f1ea32d9ea6c77bc2baf4ce11d997"
+    },
+    "repository/witnessed_expansion_dispatch.go": {
+      "bytes": 3674,
+      "sha256": "5ca0a74c0d420b8b3e3abd9101e824fbc24824687064f0f3be3b9c25980d2476"
+    },
+    "repository/witnessed_expansion_native.go": {
+      "bytes": 26452,
+      "sha256": "14ed759e3a94473a2d82e5bdcc7c3501a6ad7a7d6b50b9517ebb3c873258c4ce"
+    },
+    "repository/witnessed_expansion_owner.go": {
+      "bytes": 33692,
+      "sha256": "e7bc8b3b8b7c4fcb736f6e03cb688361aefe69357dd6e21560ac9c44343b54aa"
+    },
+    "repository/witnessed_expansion_terminal_reconcile.go": {
+      "bytes": 18054,
+      "sha256": "fbbdd938384dc430745f8b197130903191450adf1c492bdc68f27842ccff6418"
+    },
+    "repository/witnessed_unenrolled_expansion_cleanup.go": {
+      "bytes": 26850,
+      "sha256": "30168ce017c7bf1921e83d63ee8eeb9ea4b697c0e35492d8b214d54e3c8f1a97"
+    }
+  },
+  "schema": "witnessed_unenrolled_expansion_source_review_v1",
+  "source_only": true,
+  "sql106_bytes": 123220,
+  "sql106_sha256": "989fdb79cf239d5db0f98b6f4dae4876922e81b3db67ec4235b88f493e13c2ef",
+  "status": "source_only_ci_pending",
+  "validation_owner": "Go producer and historical consumer validate native HZN content; SQL authenticates stored joins/transitions/immutability; no full SQL content-parity claim"
+}

@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "0aa19f9d12b3849d4669e302e518b68f6e70747ecdfe74750f28d9a6d01f4486"
+      "sha256": "3e800a737e4262f5ebf450cc6dfe7bad843880e52558cb536b70e6339f66a605"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "0aa19f9d12b3849d4669e302e518b68f6e70747ecdfe74750f28d9a6d01f4486"
+      "sha256": "3e800a737e4262f5ebf450cc6dfe7bad843880e52558cb536b70e6339f66a605"
     },
     {
       "evidence": "go.mod",
@@ -96,6 +96,11 @@
       "evidence": "docs/service-contract/SUPERSEDED_HTTP_MAINTENANCE_SOURCE_REVIEW.json",
       "id": "superseded_equivalent_policy_http_maintenance_source_review",
       "sha256": "fb962c543629bcf999c33c0b2080730ef11329e2de0fb033987cf207788317aa"
+    },
+    {
+      "evidence": "docs/service-contract/WITNESSED_UNENROLLED_EXPANSION_SOURCE_REVIEW.json",
+      "id": "witnessed_unenrolled_expansion_cleanup_source_review",
+      "sha256": "dfb4ccd54cc43fb5be961bcfb07ad0c518c03423b041b787f9b223068cfc6806"
     }
   ],
   "coverage": "complete",
@@ -103,7 +108,7 @@
     {
       "evidence": "docs/service-contract/source/http-routes.json",
       "id": "http_mux_registrations",
-      "sha256": "47b09570f1aba9f4f873e8522ea23c61d434916bbed3043fb2fc2ed405a4107a"
+      "sha256": "7d20f39ce8aa4cdde63c6d5c7c8acf5336379647d5ceee4843821ee0f7e700da"
     },
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
@@ -113,14 +118,14 @@
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "14de51370264471f326ca979eccabd346046b3b453f43a1d40655cef0b781f55"
+      "sha256": "03becc15b446f4c4c61d8aad472d3141b58dde52836f69dea51c66a55a62a76b"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "7771ce4f202f3bab7d50b774eaec1952f2167e37f4cd881795d417976e7c12b7"
+      "sha256": "22a90621ca28970a782485722c9b6576fe7b0dd8efd9671e7cf16112342ddd11"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -144,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "810f106ee131d6d5c1e9195c961c90937d9444b5a1276c42060169ab97807142"
+    "sha256": "c507ad65752fed3655d1a6ae907e14eb8f1effaa1e325d866da666d221199d9c"
   },
   "unresolved": []
 }

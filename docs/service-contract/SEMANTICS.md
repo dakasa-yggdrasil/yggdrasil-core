@@ -962,3 +962,14 @@ contracts and refusal cases remain unchanged. Capacity policy publication and
 deactivation now serialize logical names, then the same physical scope locks as
 dispatch admission, refusing publication while an unfinalized dispatch owns an
 affected scope. Existing dispatch clocks and unrelated scopes remain independent.
+
+
+## Witnessed, unenrolled expansion cleanup
+
+ADR-0118 adds a separate HZN slot-two cleanup with a protected floor-one survivor. Its administrative POST accepts only the original grant and job identifiers behind the current human workflow-management boundary. Admission retains the exact settled CREATE, SDK return, signed create witness, expired preregistration, failed UNKNOWN dispatch/run, original intent and survivor roster. Enrollment or installation committed first prevents admission; the admitted preregistration thereafter refuses late callbacks under the same scope lock.
+
+The existing scheduled retire/finish/complete graph selects a private typed cleanup owner. Only a newly derived canonical dispatch envelope carries `witnessed_unenrolled_expansion_cleanup_id`; the original UNKNOWN envelope, lease and ACK remain unchanged. The legacy active UNIQUE index continues covering all unmarked states, including UNKNOWN. A second active UNIQUE index covers marked jobs. Presence includes null/empty markers, which the BEFORE guard rejects. Admission, intent-row locks and separate ownership writes close stale repeatable-read snapshots; other UNKNOWN/unacknowledged work remains blocking.
+
+Fresh survivor canaries/inventory, a native dry-run plan and a separately authenticated ordinary destroy child precede the sole possible-send/native DELETE. Complete HZN action and original paid-auxiliary absence plus a fresh survivor floor precede confirmation. The new parent terminals are `witnessed_unenrolled_cleanup_closed` and `witnessed_unenrolled_expansion_disposed`; their original SETTLED/UNKNOWN preimages reconstruct exactly. No nullable field is added to legacy grant/job rows. The old unwitnessed AWS cleanup remains separate and unchanged.
+
+Terminal cleanup leaves HOLD without a lease. A later compatible policy requires fresh read-only membership admission. The new lane does not extend the original deadline, replay bootstrap or a provider call, synthesize an ACK, assert remote quiescence or grant useful-Guest/cycle/savings credit. Its Source schema, test fixture evidence and actual native acceptance remain distinct.

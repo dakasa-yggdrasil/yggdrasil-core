@@ -127,6 +127,8 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 		"POST /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions":        `mux.HandleFunc("POST /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsSupersededHTTPMaintenanceDispatchDisposition))`,
 		"GET /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions/{jobId}": `mux.HandleFunc("GET /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsSupersededHTTPMaintenanceDispatchDispositionRead))`,
 	}
+	exactSuperseded["POST /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups"] = `mux.HandleFunc("POST /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWitnessedUnenrolledExpansionCleanup))`
+	exactSuperseded["GET /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups/{grantId}"] = `mux.HandleFunc("GET /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWitnessedUnenrolledExpansionCleanupRead))`
 	seenSuperseded := map[string]int{}
 
 	scanner := bufio.NewScanner(f)
@@ -189,7 +191,7 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 		}
 	}
 
-	// The exact reviewed inventory has 66 ops routes, including dispatch
+	// The exact reviewed inventory has 68 ops routes, including dispatch
 	// dispositions, retirement recovery, failed-installed replacement/native OFF,
 	// and the four distinct failed-serving quarantine/read/native-OFF/complete
 	// routes, the historical retirement-forward admission/read pair and the
@@ -198,9 +200,10 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 	// superseded equivalent-policy maintenance disposition/read registrations.
 	// Count drift requires review; every route still needs the permission
 	// wrapper asserted above, independently of this complete census.
-	if routeCount != 66 {
-		t.Errorf("ops route count = %d, expected exactly 66 — investigate before merging", routeCount)
+	if routeCount != 68 {
+		t.Errorf("ops route count = %d, expected exactly 68 — investigate before merging", routeCount)
 	}
+	witnessedUnenrolledCleanupHTTPBoundaries(t)
 }
 
 // TestOpsRoutesUseCanonicalPermissions is the Phase 5B mirror for the

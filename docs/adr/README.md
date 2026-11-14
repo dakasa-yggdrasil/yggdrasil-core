@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**112 decisions.**
+**113 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -157,3 +157,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0115](0115-recover-a-closed-forward-before-any-delete-authority.md) | Recover a closed forward before any DELETE authority | Proposed | 2026-11-12 | Core / exact closed pre-DELETE failure and new fenced first-delete owner |
 | [0116](0116-dispose-a-superseded-equivalent-policy-readonly-maintenance-failure.md) | Dispose a superseded equivalent-policy readonly maintenance failure | Proposed | 2026-11-14 | Core / serialized policy publication and immutable superseded-policy HTTP maintenance disposition |
 | [0117](0117-dispose-an-expired-prepared-only-maintenance-nonce-failure.md) | Dispose an expired prepared-only maintenance nonce failure | Proposed | 2026-11-14 | Core / strict SQL-only unknown-maintenance subtype and immutable prepared PUB provenance |
+| [0118](0118-close-a-witnessed-unenrolled-expansion-with-a-separate-cleanup.md) | Close a witnessed unenrolled expansion with a separate cleanup | Proposed | 2026-11-14 | Core / typed HZN witnessed-unenrolled cleanup, immutable original failure and one owned destroy child |
