@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 1ed61d98c87c02e7ddc98759a16272444b232643
-verified_diff_sha256: 10f9012319f5bf77666f56dcbc55838887ba57937b8bd81116d81808b8c77317
+verified_at_commit: cc6279dff57899e84baa7d7dc46e22db5133cc09
+verified_diff_sha256: f144f80d21cfb3d7594332b63a6f82025051a0099c42a3befdc654da7035c7fc
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -502,3 +502,5 @@ retained_live_c19_network_transition_review: Reviewed the strict g19 retained-li
 c19_unbound_fixture_spacing_review: Reviewed the actual owning CI import-refusal errors and the fixture-only repair. The original test literal did not force the module binding to False when its assignment had no spaces. The same existing case now verifies the one top-level actual boolean True assignment, replaces its AST line span with False and asserts that replacement before executing the unchanged refusal and zero-read expectations. All other test methods, the305 declared IDs, runtime Source, controller proposal, package/checksums, image, business Go/SQL, limits and criteria remain unchanged. Existing contracts, source census and ADRs remain accurate. The released CLI regenerated context and summary. The original failed CI remains retained and full exact successor remote CI is required; no local functional execution or Native effects occurred.
 
 prepared_nonce_SQL_companion_review: Reviewed the closed Goose105 prepared-only nonce-acquire subtype through the unchanged M87 operator, full archived birth and physical incarnation proof, exact old87 fallback and Down restoration, scope serialization and immutable receipt. Earlier migrations and every production Go/API/host source remain unchanged. The existing PostgreSQL lane adds current producer, declared mature history, CAS, three-backend races, whole catalogs and exact old-directory Goose no-op coverage; the workflow changes only its current-head schema105 expectation. Source peer and Root review preserve earlier required checks. A separately qualified migration-only image and standard Goose Job will deliver105 without replacing the independently accepted running Core15 image or M17 network. Exact new-head CI and actual operational eligibility remain pending; no local product tests or SQL ran.
+
+prepared_nonce_ADR_status_review: Corrected the new Proposed ADR status label to the exact structural convention identified by current CI. Its complete Decision body, SQL105, regression helper and every runtime source remain unchanged. Earlier failed CI is retained for diagnosis; exact successor CI remains required. No local tests ran.
