@@ -650,6 +650,32 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                 self.assertEqual(G.g18_predecessor_config(prior19),prior18)
                 self.assertEqual(G.g17_predecessor_config(prior18),prior17)
                 self.assertEqual(G.g16_predecessor_config(prior17),prior16)
+                # Execute the contiguous predecessor walk from the actual deriver,
+                # with these whole declared originals and every real prefix guard.
+                # The formerly missing first peel refuses with G22_C23_PREFIX.
+                deriver_path = NEW / 'tools/derive_standing_config.py'
+                deriver = ast.parse(deriver_path.read_text())
+                derive = next(n for n in deriver.body if isinstance(n, ast.FunctionDef) and n.name == 'derive')
+                built = next(i for i, n in enumerate(derive.body) if isinstance(n, ast.Assign)
+                             and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Name)
+                             and n.value.func.id == 'build')
+                archival = next(i for i, n in enumerate(derive.body) if isinstance(n, ast.Expr)
+                                and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Attribute)
+                                and n.value.func.attr == 'r13_predecessor_standing')
+                walk = derive.body[built + 1:archival]
+                operands = {'G': G, 'value': copy.deepcopy(value24)}
+                exec(compile(ast.Module(body=copy.deepcopy(walk), type_ignores=[]),
+                             str(deriver_path) + ':actual-predecessor-walk', 'exec'), operands)
+                self.assertEqual(walk[0].value.func.attr, 'g23_predecessor_config')
+                self.assertEqual(walk[1].value.func.attr, 'g22_predecessor_config')
+                self.assertEqual(operands['value']['new_controller_config_sha256'], G.G24_CONTROLLER_CONFIG_SHA)
+                self.assertEqual(operands['g23_predecessor'], prior23)
+                self.assertEqual(operands['g23_predecessor']['new_controller_config_sha256'], G.G23_CONTROLLER_CONFIG_SHA)
+                self.assertEqual(operands['g22_predecessor'], prior22)
+                self.assertEqual(operands['predecessor'], prior16)
+                self.assertEqual(operands['predecessor']['new_controller_config_sha256'], G.G16_CONTROLLER_CONFIG_SHA)
+                with self.assertRaisesRegex(RuntimeError, 'G22_C23_PREFIX'):
+                    G.g22_predecessor_config(value24)
                 with self.assertRaisesRegex(RuntimeError,'G18_C19_PREFIX'):G.g18_predecessor_config(value)
                 with self.assertRaisesRegex(RuntimeError,'G17_C18_PREFIX'):G.g17_predecessor_config(value)
                 with self.assertRaisesRegex(RuntimeError,'G16_C17_PREFIX'):G.g16_predecessor_config(value)
