@@ -160,12 +160,17 @@ func (f *fixture) retainSourceCallerFailure(ctx context.Context, runErr *error) 
 }
 
 func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
+	var retirementDiagnosticRun uuid.UUID
+	var retirementDiagnosticPre string
 	defer func() {
 		if runErr != nil {
 			diagnostic, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
 			_, writeErr := q.Publish(diagnostic, filepath.Join(f.private, "core-original-public-caller-failure-returns.json"), f.publicReturns)
 			runErr = errors.Join(runErr, writeErr)
+			// Reuse only already retained original facts. Failure to export is
+			// diagnostic uncertainty, never a replacement for the original error.
+			f.exportFailedOriginalRetirement(diagnostic, retirementDiagnosticRun, retirementDiagnosticPre)
 		}
 	}()
 
@@ -246,6 +251,7 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 		return err
 	}
 	retirement, originals, err := f.originalWorkflow(ctx, "retire", 2, q.QualificationDemandWindow(p, 2, 0.1, at, lowDemandStartedAt, lowDemandReturnedAt), pre.PreregistrationID)
+	retirementDiagnosticRun, retirementDiagnosticPre = retirement.ID, pre.PreregistrationID
 	returns = append(returns, originals...)
 	if err != nil {
 		return err
@@ -259,6 +265,67 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 	}
 	runIDs = append(runIDs, retirement.ID.String())
 	return f.finishActualOriginalCorpus(ctx, p, runIDs, returns)
+}
+
+// This runs only from the original caller's failure defer, before its DB closes.
+// Every selector comes from that same returned workflow and sealed S2 request.
+// Zero or multiple matches publish nothing; no favorable/latest row is selected.
+func (f *fixture) exportFailedOriginalRetirement(ctx context.Context, run uuid.UUID, preID string) {
+	pre, err := uuid.Parse(preID)
+	if f == nil || f.db == nil || ctx == nil || ctx.Err() != nil || run == uuid.Nil || err != nil || pre == uuid.Nil || pre.String() != preID || len(f.request.Slots) != 2 || f.policy.ID == uuid.Nil || f.workflow.ID == uuid.Nil {
+		return
+	}
+	rows, err := f.db.QueryContext(ctx, `SELECT i.id::text
+FROM public.capacity_vm_retirement_intents i
+JOIN public.capacity_vm_provisioning_preregistrations p ON p.id=i.preregistration_id
+JOIN public.capacity_vm_original_enrollments e ON e.preregistration_id=p.id
+JOIN public.workflow_runs w ON w.id=$1 AND w.workflow_id=$2
+WHERE i.preregistration_id=$3 AND w.workflow_namespace=$8 AND w.workflow_name=$9
+ AND w.inputs->>'mode'='retire' AND w.inputs->'slot'='2'::jsonb
+ AND w.inputs->>'preregistration_id'=$3::text
+ AND p.preregistration_record->'slot'='2'::jsonb
+ AND p.preregistration_record->>'policy_id'=$4::text AND p.preregistration_record->>'policy_checksum'=$5
+ AND p.preregistration_record->>'workflow_id'=$2::text AND p.preregistration_record->>'workflow_checksum'=$6
+ AND i.intent_record->'slot'='2'::jsonb
+ AND i.intent_record->>'policy_id'=$4::text AND i.intent_record->>'policy_checksum'=$5
+ AND i.intent_record->>'workflow_id'=$2::text AND i.intent_record->>'workflow_checksum'=$6
+ AND i.intent_record->'tuple'=e.enrollment_record#>'{statement,tuple}'
+ AND i.intent_record#>>'{tuple,resource_id}'=$7
+ AND w.started_at IS NOT NULL AND i.created_at>=w.started_at
+ AND (w.finished_at IS NULL OR i.created_at<=w.finished_at)`, run, f.workflow.ID, pre, f.policy.ID, f.policy.Checksum, f.workflow.Checksum, f.request.Slots[1].ResourceID, f.namespace, f.workflow.Metadata.Name)
+	if err != nil {
+		return
+	}
+	var candidates []string
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
+		candidates = append(candidates, id)
+		if len(candidates) > 1 {
+			break
+		}
+	}
+	rowsErr, closeErr := rows.Err(), rows.Close()
+	id, unique := uniqueOriginalRetirementDiagnosticIntent(candidates)
+	if err != nil || rowsErr != nil || closeErr != nil || !unique {
+		return
+	}
+	// The helper first retains the closed caller facts, then 0..N existing
+	// journal/snapshot/authority rows. It creates no completed/corpus marker.
+	_ = f.exportOriginalRetirementProjections(ctx, id)
+}
+
+func uniqueOriginalRetirementDiagnosticIntent(candidates []string) (string, bool) {
+	if len(candidates) != 1 {
+		return "", false
+	}
+	id, err := uuid.Parse(candidates[0])
+	if err != nil || id == uuid.Nil || id.String() != candidates[0] {
+		return "", false
+	}
+	return candidates[0], true
 }
 
 func (f *fixture) actualLastUsefulProbeTime(ctx context.Context, slot int) (time.Time, error) {

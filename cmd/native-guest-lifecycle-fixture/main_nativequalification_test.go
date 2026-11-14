@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
+	"github.com/google/uuid"
 )
 
 // These real HTTP lifetime checks do not create VM/capacity evidence.
@@ -125,6 +126,7 @@ func TestOriginalNativeHTTPReturnedOwners(t *testing.T) {
 		}
 	})
 	originalNativeHTTPDiagnosticContracts(t)
+	originalNativeFailureExportSelectionContracts(t)
 }
 
 // Runs within the existing owner-lifetime root; no native capacity evidence is
@@ -211,3 +213,20 @@ type originalNativeUnreadBody struct{ reads, closes int }
 
 func (b *originalNativeUnreadBody) Read([]byte) (int, error) { b.reads++; return 0, io.EOF }
 func (b *originalNativeUnreadBody) Close() error             { b.closes++; return nil }
+
+// Same existing owner/custody root: ambiguity never chooses an arbitrary intent.
+func originalNativeFailureExportSelectionContracts(t *testing.T) {
+	const original = "ab12891f-db5a-4bef-a4c3-7d8dd10686b3"
+	for _, candidate := range [][]string{nil, {}, {""}, {"00000000-0000-0000-0000-000000000000"}, {"private-token"}, {strings.ToUpper(original)}, {original, original}, {original, "11111111-2222-4333-8444-555555555555"}} {
+		if id, ok := uniqueOriginalRetirementDiagnosticIntent(candidate); ok || id != "" {
+			t.Fatal("unbound or ambiguous diagnostic identity selected")
+		}
+	}
+	if got, ok := uniqueOriginalRetirementDiagnosticIntent([]string{original}); !ok || got != original {
+		t.Fatal("same single original diagnostic identity lost")
+	}
+	// No DB/returned-run authority means no invented record or panic.
+	var missing *fixture
+	missing.exportFailedOriginalRetirement(context.Background(), uuid.Nil, original)
+	(&fixture{}).exportFailedOriginalRetirement(context.Background(), uuid.Nil, original)
+}
