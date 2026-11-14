@@ -285,7 +285,7 @@ def derive(r42_raw, chain_prefix_raws, attestation):
     require(len(raw) <= 32768 and strict_loads(raw) == new, 'BOUNDED_CANONICAL_HEAD_CONFIG')
     require(sorted(k for k in FIELDS if new[k] != previous[k]) == ['core_container_images', 'root_review_attestation'],
             'HEAD_DELTA_EXACTLY_PAIR_AND_REVIEW')
-    require(sha(raw) == G23_CONFIG_SHA, 'EXACT_ROOT_REVIEWED_G15_CONFIG')
+    require(sha(raw) == G24_CONFIG_SHA, 'EXACT_ROOT_REVIEWED_G15_CONFIG')
     return raw
 
 
