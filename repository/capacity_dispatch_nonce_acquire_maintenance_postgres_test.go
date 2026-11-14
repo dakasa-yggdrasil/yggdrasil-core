@@ -78,6 +78,9 @@ func nonceAcquireMaintenance105PostgresRegression(t *testing.T) {
 	if err != nil || publication.GuestNonce != (model.CapacityGuestNotifyCanaryNonce{}) {
 		t.Fatal("M105 actual prepared PUB", err)
 	}
+	// Prepare only a local signed refusal operand while the publication is valid.
+	// It is never persisted and is used after the unchanged natural expiry.
+	late := capacity.RecoveryFixtureCanaryNonce(t, publication, f.receipt.Enrollment)
 	originals := f.preserved(t)
 	// Expire this original context naturally. Acquire's real early deadline
 	// refusal precedes any transport access; no network client is constructed.
@@ -86,7 +89,6 @@ func nonceAcquireMaintenance105PostgresRegression(t *testing.T) {
 	if !errors.Is(ctx.Err(), context.DeadlineExceeded) || acquireErr == nil || returned.Status != 0 || !reflect.DeepEqual(final, publication) {
 		t.Fatal("M105 real expired nonce acquisition must preserve preflight", acquireErr, returned)
 	}
-	late := capacity.RecoveryFixtureCanaryNonce(t, publication, f.receipt.Enrollment)
 	refusalCtx, refusalCancel := context.WithTimeout(context.Background(), time.Second)
 	defer refusalCancel()
 	if err = store.FinalizeGuestNotifyCanaryNonce(refusalCtx, f.policy, generation, fence, owner, late, failedServingHTTP(t, late.GuestNonce, time.Now().UTC())); err == nil {
@@ -140,6 +142,7 @@ type nonceAcquire105Historical struct {
 	request     CapacityDispatchUnknownMaintenanceDispositionRequest
 	barrier     CapacityDispatchExecutorBarrier
 	publication model.CapacityGuestNotifyCanaryChallenge
+	lateNonce   model.CapacityGuestNotifyCanaryChallenge
 	lease       time.Time
 	policy      model.Manifest
 }
@@ -275,10 +278,28 @@ func nonceAcquire105HistoricalFixture(t *testing.T, f *failedServingFixture, bas
 	publication.PolicyID, publication.PolicyChecksum = policy.ID.String(), policy.Checksum
 	publication.Generation, publication.Fence = uint64(generation), uint64(fence)
 	publication.UsageClass = "steady_useful_membership"
+	declaredNonce := publication.GuestNonce
 	publication.GuestNonce, publication.Signature = model.CapacityGuestNotifyCanaryNonce{}, ""
 	publication.Signature, err = capacity.GuestLifecycleSignature(failedServingKey('c'), publication)
 	if err != nil || capacity.ValidateGuestNotifyCanaryPreflight(publication, f.receipt.Enrollment, publication.IssuedAt.Add(time.Millisecond)) != nil {
 		t.Fatal("M105 declared historical prepared Source challenge", err)
+	}
+	// This held late-write operand belongs only to the initial declared history.
+	// Rebind the causal fixture nonce to this exact prepared PUB before sealing;
+	// never mint a nonce by passing an expired challenge to a wall-clock factory.
+	lateNonce := publication
+	lateNonce.GuestNonce = declaredNonce
+	lateNonce.GuestNonce.PreflightSHA256 = capacity.GuestNotifyPreflightSHA(publication)
+	lateNonce.GuestNonce.Signature = ""
+	lateNonce.GuestNonce.Signature, err = capacity.GuestLifecycleSignature(failedServingKey('o'), lateNonce.GuestNonce)
+	if err != nil {
+		t.Fatal("M105 initial declared historical nonce signature", err)
+	}
+	lateNonce.Signature = ""
+	lateNonce.Signature, err = capacity.GuestLifecycleSignature(failedServingKey('c'), lateNonce)
+	declaredCheckAt := publication.IssuedAt.Add(time.Millisecond)
+	if err != nil || !declaredCheckAt.After(publication.IssuedAt) || !declaredCheckAt.Before(publication.OriginalDeadline) || capacity.ValidateGuestNotifyCanaryNonce(lateNonce, f.receipt.Enrollment) != nil || capacity.ValidateGuestNotifyCanaryChallenge(lateNonce, f.receipt.Enrollment, declaredCheckAt) != nil {
+		t.Fatal("M105 initial declared nonce must match its original challenge time", err)
 	}
 	pubWire := failedServingWire(t, publication)
 	if _, err = tx.Exec(`INSERT INTO capacity_guest_notify_canary_challenges(id,preregistration_id,record_challenge_id,phase,policy_id,workflow_id,generation,fence,executor_id,lease_owner,challenge_sha256,nonce_sha256,original_wire,original_record,original_deadline,recorded_at) VALUES($1,$2,$1,'publish',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14)`, publication.ChallengeID, f.pre.PreregistrationID, policy.ID, f.workflow.ID, generation, fence, f.store.ExecutorID, publication.LeaseOwner, capacity.BusinessCreationSHA256(pubWire), publication.NonceSHA256, pubWire, string(pubWire), publication.OriginalDeadline, publication.IssuedAt); err != nil {
@@ -292,7 +313,7 @@ func nonceAcquire105HistoricalFixture(t *testing.T, f *failedServingFixture, bas
 	if err = tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	h := nonceAcquire105Historical{db: db, publication: publication, lease: lease, policy: policy, request: CapacityDispatchUnknownMaintenanceDispositionRequest{CapacityDispatchAbandonedDispositionRequest: CapacityDispatchAbandonedDispositionRequest{JobID: job.JobID, ExpectedRunID: job.RunID, ExpectedEnvelopeSHA256: capacityDispatchSHA(wire), ExpectedFencingToken: 1, ExpectedLeaseOwner: owner, ExpectedPendingWakeCount: 1, Issuer: "collaborator:" + uuid.NewString()}, ExpectedReturnedAt: returned}, barrier: CapacityDispatchExecutorBarrier{ProcessStartedAt: lease.Add(time.Minute), Hostname: "declared-historical-M105-fixture", PID: 4242, SourceCommit: capacity.CurrentGuestCoreSource()}}
+	h := nonceAcquire105Historical{db: db, publication: publication, lateNonce: lateNonce, lease: lease, policy: policy, request: CapacityDispatchUnknownMaintenanceDispositionRequest{CapacityDispatchAbandonedDispositionRequest: CapacityDispatchAbandonedDispositionRequest{JobID: job.JobID, ExpectedRunID: job.RunID, ExpectedEnvelopeSHA256: capacityDispatchSHA(wire), ExpectedFencingToken: 1, ExpectedLeaseOwner: owner, ExpectedPendingWakeCount: 1, Issuer: "collaborator:" + uuid.NewString()}, ExpectedReturnedAt: returned}, barrier: CapacityDispatchExecutorBarrier{ProcessStartedAt: lease.Add(time.Minute), Hostname: "declared-historical-M105-fixture", PID: 4242, SourceCommit: capacity.CurrentGuestCoreSource()}}
 	if err = db.QueryRow(`SELECT encode(sha256(convert_to(to_jsonb(w)::text,'UTF8')),'hex'),public.unknown_maintenance_dispatch_effect_scan($1)->>'current_members_sha256' FROM workflow_runs w WHERE id=$2`, job.JobID, job.RunID).Scan(&h.request.ExpectedRunSHA256, &h.request.ExpectedMembersSHA256); err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +759,7 @@ func nonceAcquire105LateInsert(t *testing.T, h nonceAcquire105Historical, f *fai
 	t.Helper()
 	switch kind {
 	case "nonce":
-		final := capacity.RecoveryFixtureCanaryNonce(t, h.publication, f.receipt.Enrollment)
+		final := h.lateNonce
 		transport := failedServingHTTP(t, final.GuestNonce, h.publication.IssuedAt.Add(time.Millisecond))
 		transport.Body = nil
 		return `INSERT INTO capacity_guest_notify_canary_nonces(challenge_id,guest_nonce_sha256,nonce_wire,final_challenge_wire,final_challenge_sha256,original_transport,recorded_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)`, []any{h.publication.ChallengeID, final.GuestNonce.NonceSHA256, failedServingWire(t, final.GuestNonce), failedServingWire(t, final), capacity.GuestRetirementSHA(final), string(failedServingWire(t, transport)), h.publication.IssuedAt.Add(6 * time.Millisecond)}
