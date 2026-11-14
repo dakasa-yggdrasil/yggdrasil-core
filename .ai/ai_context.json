@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-12T10:41:59-03:00",
+  "generated_at": "2026-11-13T22:21:03-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1537,
-    ".json": 251,
-    ".py": 209,
-    ".sql": 105,
+    ".go": 1539,
+    ".json": 248,
+    ".py": 197,
+    ".sql": 106,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "e254b89b7f0123cf4bf3fef3742dde618277cc18",
+    "commit": "c2e0880d6e121f632ba1c89b24ce6a2f64a6deb5",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "8861dd865ca563d6e6312e4eb89f033357f279add4f183732cbe4d0bf06b2f1e"
+        "sha256": "3fed0b059e6c1fcc48f1413b367efdd14e55905b05c7a9c62c8bfb4594038ef9"
       },
       {
         "path": "AGENTS.md",
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 392,
-      "kb": 5473
+      "files": 394,
+      "kb": 5529
     },
     {
       "path": "controllers/httpapi",
@@ -85,8 +85,8 @@
     },
     {
       "path": "db/migrations",
-      "files": 101,
-      "kb": 1140
+      "files": 102,
+      "kb": 1202
     },
     {
       "path": "model",
@@ -94,14 +94,14 @@
       "kb": 485
     },
     {
-      "path": "ops/network-guardian/tests",
-      "files": 67,
-      "kb": 1334
-    },
-    {
       "path": "manifest",
       "files": 65,
       "kb": 397
+    },
+    {
+      "path": "ops/network-guardian/tests",
+      "files": 60,
+      "kb": 1180
     },
     {
       "path": "addons",
@@ -114,14 +114,14 @@
       "kb": 298
     },
     {
-      "path": "ops/network-guardian/rollout",
-      "files": 32,
-      "kb": 2476
-    },
-    {
       "path": "cmd/native-guest-lifecycle-fixture",
       "files": 28,
       "kb": 249
+    },
+    {
+      "path": "docs/bootstrap/manifests/integrations",
+      "files": 28,
+      "kb": 98
     }
   ],
   "top_files_by_size": [
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 101,
+    "migrations": 102,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 84,
+    "config_files": 81,
     "k8s_manifests": 25
   }
 }
