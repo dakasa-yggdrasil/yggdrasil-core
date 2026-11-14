@@ -318,7 +318,7 @@ func (s CapacityStore) witnessedExpansionSnapshotTx(ctx context.Context, tx *sql
 	}
 	// Admit only this CREATE authority. Unrelated active scope work or any
 	// second authority naming the same physical incarnation remains a barrier.
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_mutation_grants g WHERE g.id<>$1::uuid AND ((g.namespace=$2 AND g.environment=$3 AND g.domain=$4 AND g.dimension=$5 AND g.state IN('issued','redeemed','settled','compensating')) OR (g.grant_record#>>'{grant,expected_resource_id}'=$6 AND g.grant_record#>>'{grant,expected_resource_created_at}'=$7) OR (g.grant_record#>>'{settlement,resource_id}'=$6 AND g.grant_record#>>'{settlement,resource_created_at}'=$7)))`, grantID, ns, env, domain, dimension, settlement.ResourceID, settlement.ResourceCreatedAt).Scan(&blocked); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_mutation_grants g WHERE g.id<>$1::uuid AND ((g.namespace=$2 AND g.environment=$3 AND g.domain=$4 AND g.dimension=$5 AND `+capacityGrantUndisposedSQL+` AND g.state IN('issued','redeemed','settled','compensating')) OR (g.grant_record#>>'{grant,expected_resource_id}'=$6 AND g.grant_record#>>'{grant,expected_resource_created_at}'=$7) OR (g.grant_record#>>'{settlement,resource_id}'=$6 AND g.grant_record#>>'{settlement,resource_created_at}'=$7)))`, grantID, ns, env, domain, dimension, settlement.ResourceID, settlement.ResourceCreatedAt).Scan(&blocked); err != nil {
 		return x, err
 	}
 	if blocked {

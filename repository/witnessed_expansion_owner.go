@@ -686,7 +686,7 @@ func (s CapacityStore) witnessedExpansionFloorMembers(ctx context.Context, polic
 				continue
 			}
 			var pending int
-			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT(grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND slot=$5 AND state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability'=$6`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, member.Slot, b.DestroyCapability).Scan(&pending); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE `+capacityGrantUndisposedSQL+` AND NOT(grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND slot=$5 AND state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability'=$6`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, member.Slot, b.DestroyCapability).Scan(&pending); err != nil {
 				return err
 			}
 			if pending != 0 {
