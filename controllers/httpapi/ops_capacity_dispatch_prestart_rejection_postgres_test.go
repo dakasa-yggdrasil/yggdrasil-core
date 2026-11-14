@@ -69,7 +69,7 @@ func TestCapacityDispatchPrestartRejectionHTTPPostgres(t *testing.T) {
 		}
 		changed := f.spec
 		changed.DownHoldSeconds++
-		next := f.create("capacity_policy", "pods", changed)
+		next := declaredStaleCapacityPolicyVersion(t, f, old, changed)
 		tick, err := time.Parse(time.RFC3339Nano, old.SourceTick)
 		if err != nil {
 			t.Fatal(err)
@@ -146,7 +146,7 @@ func TestCapacityDispatchPrestartRejectionHTTPPostgres(t *testing.T) {
 			if mode == "current_policy_execution_disabled" {
 				changed.ExecutionEnabled = false
 			}
-			next := f.create("capacity_policy", "pods", changed)
+			next := declaredStaleCapacityPolicyVersion(t, f, old, changed)
 			if mode == "current_machine_RBAC_revoked" {
 				deny := f.allow
 				deny.Roles = []model.RBACRole{{Name: "controller", Rules: []model.RBACRule{{Effect: "deny", Resources: []string{"workflow:" + f.workflow.Metadata.Namespace + ":pressure"}, Actions: []string{"run"}}}}}

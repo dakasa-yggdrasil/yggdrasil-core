@@ -650,7 +650,7 @@ func capacityPolicyPublicationHTTPInterleavings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request := httptest.NewRequest(http.MethodPost, "/api/v1/manifests?kind=capacity_policy", bytes.NewReader(body)).WithContext(ctx)
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/manifests?kind=capacity_policy", bytes.NewReader(body)).WithContext(contextWithClaims(ctx, map[string]any{"sub": "declared-policy-publication-console-fixture"}))
 			response := httptest.NewRecorder()
 			f.server.handleManifestCreate(response, request, "capacity_policy")
 			var problem struct {

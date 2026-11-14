@@ -8,13 +8,51 @@ import unittest
 import subprocess
 import sys
 from unittest.mock import patch
-from types import SimpleNamespace
+from types import SimpleNamespace, ModuleType
 
 import test_g14pair_maintenance as historical
 
 ROOT = historical.ROOT
 NEW = ROOT / 'g15pair'
-load, digest = historical.load, historical.digest
+digest = historical.digest
+
+
+def load(path, allow_definition_read=False):
+    if not allow_definition_read:
+        return historical.load(path)
+    # Bind only this isolated CI module's definition-loader flag in RAM.
+    # Sibling contracts remain inert; runtime validators are not bypassed.
+    raw = path.read_bytes()
+    tree = ast.parse(raw)
+    bindings = [node for node in tree.body if isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Name) and target.id == 'PROPOSAL_BOUND'
+                        for target in node.targets)]
+    if len(bindings) != 1:
+        raise AssertionError('G15_CI_ONE_PROPOSAL_BOUND_ASSIGNMENT')
+    binding = bindings[0]
+    if not (len(binding.targets) == 1 and isinstance(binding.targets[0], ast.Name)
+            and isinstance(binding.value, ast.Constant) and type(binding.value.value) is bool
+            and binding.lineno == binding.end_lineno == binding.value.lineno
+            == binding.value.end_lineno):
+        raise AssertionError('G15_CI_CLOSED_SINGLE_LINE_LITERAL_PROPOSAL_BOUND')
+    lines = raw.splitlines(keepends=True)
+    index, lo, hi = binding.value.lineno - 1, binding.value.col_offset, binding.value.end_col_offset
+    original_value = lines[index][lo:hi]
+    lines[index] = lines[index][:lo] + b'True' + lines[index][hi:]
+    declared = b''.join(lines)
+    rebound = ast.parse(declared).body[tree.body.index(binding)]
+    if not (isinstance(rebound, ast.Assign) and isinstance(rebound.value, ast.Constant)
+            and rebound.value.value is True):
+        raise AssertionError('G15_CI_LITERAL_TRUE_REPARSE')
+    inverse = declared.splitlines(keepends=True)
+    inverse[index] = inverse[index][:lo] + original_value + inverse[index][lo + len(b'True'):]
+    if b''.join(inverse) != raw:
+        raise AssertionError('G15_CI_ONLY_LITERAL_VALUE_INVERSE')
+    module = ModuleType('declared_g15_definition_CI_' + path.stem)
+    module.__file__ = str(path)
+    exec(compile(declared, str(path), 'exec'), module.__dict__)
+    return module
+
 G = load(NEW / 'source/network_guardian.py')
 C = load(NEW / 'tools/pair_change_contract.py')
 D = load(NEW / 'tools/derive_g15pair_controller_config.py')
