@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 65154028690a5b50d24920ebd9ea455ee6092bad
-verified_diff_sha256: 0d540e5997fcf26be8b5a305b83068073d134ed95a483a1d11d0c83a4c429fac
+verified_at_commit: 3a6b88973510ca26e37261554e5167db2a7484fc
+verified_diff_sha256: b22855229251c7408c23bcbd4d638ca63e8de0b68d8c622041808824314f20f2
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -523,3 +523,8 @@ m106_exact_missing_claim_guard_source_review: Root read the whole one-file repai
 ## 2026-11-14 Native original return clock
 
 Reviewed source 65154028690a5b50d24920ebd9ea455ee6092bad preserves the original context, deadline, bounded response bytes and first transport timestamps. A private authenticated frame compiled only for the Native qualification realm waits on actual Core time before the one real Close. Ordinary production returns the same client and keeps existing behavior. V2 fixes three new test time comparisons to semantic Equal. Source peer 451f5011eb68b4971f938c772a5e0101a320a3e499e237dcb0ec3fb95176f2ff passed without open findings. The complete 841-fact source census and five contract companions match the reviewed source; caps, SQL and downstream validators are unchanged. No local product tests/builds were run; current-source CI and Native execution remain required.
+
+
+## 2026-11-14 Native failed caller retirement diagnostics
+
+Reviewed source 3a6b88973510ca26e37261554e5167db2a7484fc reuses the existing failure-only five-second diagnostic context to export already retained retirement facts for the same exact original scoped S2 workflow and enrollment. Ambiguous, absent or invalid selection exports nothing; the original error, transport, deadlines and completion gates remain unchanged. Independent Code peerb97cb8bd9d0abd1c7affbb3e48f19e4683993cfa2dd06226fc35c085fcdefe6b and document peerd808fb8a5a7e5c9cd2c08df34e3a0199227919b1f3941469af0c84500c4efd0d passed. The complete841-fact census remains123517 bytes under131072, with one Native fixture fact and three digest-only document companions. The existing owner test root covers strict canonical unique selection; live SQL selection and actual Native failure facts require owning CI. No local product test/build/SQL/import was run, and no current Native or production qualification is claimed.
