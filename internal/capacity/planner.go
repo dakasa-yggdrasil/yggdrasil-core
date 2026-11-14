@@ -16,6 +16,9 @@ import (
 
 // ValidatePolicy rejects ambiguous scope, invalid budgets and unsafe numeric inputs.
 func ValidatePolicy(p model.CapacityPolicySpec) error {
+	if err := ValidateGuestContractSuccessor(p); err != nil {
+		return err
+	}
 	if b := p.ExecutorPowerBinding; b != nil {
 		if executorpower.ValidateBinding(*b) != nil || len(p.MutationBindings) > 0 || p.ExecutorActivityBinding == nil || (b.AdoptionWorkflow.Namespace == p.Workflow.Namespace && b.AdoptionWorkflow.Name == p.Workflow.Name) {
 			return fmt.Errorf("invalid executor power binding or adoption workflow")

@@ -212,6 +212,32 @@ func originalAWSForwardNativeOffLifecycleJoin(plan model.CapacityVMFleetPlan, li
 func refreshGuestRetirementForwardInventory(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput) error {
 	read, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	if p.GuestContractSuccessor != nil {
+		contracts, err := store.OriginalGuestContractSpecs(read, policy)
+		if err != nil {
+			return err
+		}
+		var originals []capacity.GuestContractInventory
+		for _, view := range contracts {
+			b := view.MutationBindings[0]
+			supplier, e := productionRetirementSupplierV2(read, store, policy, view, b, input)
+			if e != nil || !capacityBoundCatalogOperation(supplier.resolved.typeSpec, capacity.VMObserveInventory) {
+				return errOriginalGuestStep
+			}
+			var inv model.CapacityVMFleetInventory
+			status := "observed"
+			if supplier.provider == "aws" && b.OriginalProviderSourceCommit == enrolledFailedAWSCreator {
+				inv, e = callForwardInventoryReadonly(read, supplier)
+			} else {
+				status, e = supplier.call(read, capacity.VMObserveInventory, map[string]any{"profile": b.ProfileName}, &inv)
+			}
+			if e != nil || status != "observed" || read.Err() != nil {
+				return errOriginalGuestStep
+			}
+			originals = append(originals, capacity.GuestContractInventory{ContractSHA256: capacity.GuestProductionProfileContractSHA256(view, *view.GuestRetirementBinding, view.Profiles[0].Provider), Inventory: inv})
+		}
+		return store.RefreshGuestRetirementForwardContractInventories(read, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID, originals)
+	}
 	b, err := capacity.VMObservationBinding(p, input.BindingName)
 	if err != nil {
 		return err

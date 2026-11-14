@@ -89,6 +89,10 @@ func (s CapacityStore) guestNotifyRetirementFloorTx(ctx context.Context, tx *sql
 		if err != nil {
 			return err
 		}
+		p, err = guestContractForPreTx(ctx, tx, policy, p, stored.Preregistration.PreregistrationID)
+		if err != nil {
+			return err
+		}
 		b, err := capacity.VMObservationBinding(p, stored.Binding.MutationBindingName)
 		if err != nil || slot != stored.Request.Intent.Slot {
 			return ErrCapacityConflict

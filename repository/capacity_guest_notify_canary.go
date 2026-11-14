@@ -32,6 +32,13 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 	if err != nil {
 		return stored, empty, err
 	}
+	p, err = guestStoredContractSpecTx(ctx, tx, policy, p, stored)
+	if err != nil {
+		return stored, empty, err
+	}
+	if p.GuestContractSuccessor != nil {
+		stored.contractSpec = &p
+	}
 	origin := s.guestNotifyOrigin
 	reconcile := origin != nil && origin.step.Use.Operation == capacity.CompleteOriginalGuestOperation && s.guestReconcile != nil && reflect.DeepEqual(origin.step, s.guestReconcile.step) && s.guestReconcileSourceTx(ctx, tx, policy, p) == nil
 	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || (!reconcile && origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
@@ -117,6 +124,9 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		stored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, preID)
 		if err != nil {
 			return err
+		}
+		if stored.contractSpec != nil {
+			p = *stored.contractSpec
 		}
 		if s.witnessedExpansionOwner != nil {
 			a, _, active, e := s.witnessedExpansionActiveClaimTx(ctx, tx, policy, current, now)
@@ -306,6 +316,9 @@ func (s CapacityStore) ReserveGuestNotifyCanarySend(ctx context.Context, policy 
 		stored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, c.PreregistrationID)
 		if err != nil {
 			return err
+		}
+		if stored.contractSpec != nil {
+			p = *stored.contractSpec
 		}
 		_ = stored
 		original, err := loadGuestNotifyChallengeTx(ctx, tx, c.ChallengeID)

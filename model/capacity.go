@@ -10,6 +10,7 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
+	GuestContractSuccessor      *CapacityGuestContractSuccessor      `json:"guest_contract_successor,omitempty"`
 	GuestNotifyCanaryBinding    *CapacityGuestNotifyCanaryBinding    `json:"guest_notify_canary_binding,omitempty"`
 	ExecutorPowerBinding        *executorpower.Binding               `json:"executor_power_binding,omitempty"`
 	Environment                 string                               `json:"environment"`
@@ -43,6 +44,19 @@ type CapacityPolicySpec struct {
 	ExecutorActivityBinding     *CapacityExecutorActivityBinding     `json:"executor_activity_binding,omitempty"`
 	NativeNotifyWindowBinding   *CapacityNativeNotifyWindowBinding   `json:"native_notify_window_binding,omitempty"`
 	GuestNotifyReconcileBinding *CapacityGuestNotifyReconcileBinding `json:"guest_notify_reconcile_binding,omitempty"`
+}
+
+// References retain complete immutable birth contracts. They are not caller
+// selectable mutation bindings and never authorize creation under a predecessor.
+type CapacityGuestContractSuccessor struct {
+	Schema                  string                                `json:"schema"`
+	RetainedPolicyContracts []CapacityGuestRetainedPolicyContract `json:"retained_policy_contracts"`
+}
+
+type CapacityGuestRetainedPolicyContract struct {
+	PolicyID       string `json:"policy_id"`
+	PolicyChecksum string `json:"policy_checksum"`
+	ContractSHA256 string `json:"contract_sha256"`
 }
 
 // This optional source-owned VM collector is separate from the HPA snapshot

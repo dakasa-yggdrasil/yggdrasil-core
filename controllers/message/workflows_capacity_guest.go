@@ -147,6 +147,12 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	if !matched {
 		return fail("original-guest-step-09")
 	}
+	if p.GuestContractSuccessor != nil && result.Operation != capacity.ProvisionOriginalGuestOperation {
+		p, err = (repository.CapacityStore{DB: db}).OriginalGuestMemberContract(ctx, policy, parsed.PreregistrationID, parsed.Slot)
+		if err != nil {
+			return fail("original-guest-member-contract")
+		}
+	}
 	b, err := capacity.VMObservationBinding(p, parsed.BindingName)
 	if err != nil {
 		return fail("original-guest-step-10")

@@ -248,6 +248,10 @@ func (s CapacityStore) retirementForwardSnapshotForNormalFinishTx(ctx context.Co
 	if err != nil {
 		return x, err
 	}
+	x.spec, err = guestContractForPreTx(ctx, tx, x.policy, x.spec, x.original.Preregistration.PreregistrationID)
+	if err != nil {
+		return x, err
+	}
 	forwardInspectionStage(ctx, "binding_authority_profile")
 	if ns != x.policy.Metadata.Namespace || env != x.spec.Environment || domain != x.spec.Domain || dim != x.spec.Dimension || x.spec.GuestRetirementBinding == nil || !reflect.DeepEqual(*x.spec.GuestRetirementBinding, x.original.Binding) || !capacity.GuestBindingAuthorityCurrent(x.spec, x.original.Binding) || !capacity.GuestOriginalProfileEnabled(x.spec, x.original.Binding, i.Tuple.Provider) {
 		return x, ErrCapacityConflict
@@ -264,7 +268,7 @@ func (s CapacityStore) retirementForwardSnapshotForNormalFinishTx(ctx context.Co
 		return x, ErrCapacityConflict
 	}
 	forwardInspectionStage(ctx, "profile_locks")
-	if err = lockRetirementForwardBindingsTx(ctx, tx, x.spec.MutationBindings); err != nil {
+	if err = guestContractLockBindingsTx(ctx, tx, x.policy, x.spec); err != nil {
 		return x, err
 	}
 	forwardInspectionStage(ctx, "current_intent_decode")

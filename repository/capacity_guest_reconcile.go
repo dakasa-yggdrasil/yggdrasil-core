@@ -16,6 +16,7 @@ type guestReconcileSource struct {
 	step                    model.WorkflowStepSpec
 	workflow                model.Manifest
 	source, mode, requestID string
+	inventories             []capacity.GuestContractInventory
 	inventory               model.CapacityVMFleetInventory
 	reporting               model.CapacityMetricRangeObservation
 }
@@ -24,6 +25,11 @@ type guestReconcileSource struct {
 // not a callback registration, API input, configurable URL or proof factory.
 func (s CapacityStore) WithOriginalGuestReconcile(workflow model.Manifest, step model.WorkflowStepSpec, actualSource, mode, requestID string, inventory model.CapacityVMFleetInventory, reporting model.CapacityMetricRangeObservation) CapacityStore {
 	s.guestReconcile = &guestReconcileSource{step: step, workflow: workflow, source: actualSource, mode: mode, requestID: requestID, inventory: inventory, reporting: reporting}
+	return s
+}
+
+func (s CapacityStore) WithOriginalGuestContractReconcile(workflow model.Manifest, step model.WorkflowStepSpec, actualSource, mode, requestID string, inventories []capacity.GuestContractInventory, reporting model.CapacityMetricRangeObservation) CapacityStore {
+	s.guestReconcile = &guestReconcileSource{step: step, workflow: workflow, source: actualSource, mode: mode, requestID: requestID, inventories: append([]capacity.GuestContractInventory(nil), inventories...), reporting: reporting}
 	return s
 }
 
@@ -87,6 +93,18 @@ func (s CapacityStore) guestReconcileSourceTx(ctx context.Context, tx *sql.Tx, p
 	if !found || o.step.Use.Kind != "yggdrasil" || o.step.Use.Operation != capacity.PlanOriginalGuestOperation && o.step.Use.Operation != capacity.CompleteOriginalGuestOperation {
 		return ErrCapacityConflict
 	}
+	if p.GuestContractSuccessor != nil {
+		cs, err := guestContractSetTx(ctx, tx, policy, p)
+		if err != nil {
+			return err
+		}
+		for _, c := range cs {
+			if err = checkMutationIntegration(ctx, tx, c.spec.MutationBindings[0]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	return checkMutationIntegration(ctx, tx, p.MutationBindings[0])
 }
 
@@ -94,8 +112,14 @@ func (s CapacityStore) guestReconcileMembersTx(ctx context.Context, tx *sql.Tx, 
 	if err := s.guestReconcileSourceTx(ctx, tx, policy, p); err != nil {
 		return nil, err
 	}
+	if p.GuestContractSuccessor != nil {
+		return s.guestReconcileContractMembersTx(ctx, tx, policy, p, now, refresh)
+	}
+	return s.guestReconcileSingleContractMembersTx(ctx, tx, policy, p, s.guestReconcile.inventory, now, refresh)
+}
+
+func (s CapacityStore) guestReconcileSingleContractMembersTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, inv model.CapacityVMFleetInventory, now time.Time, refresh bool) ([]GuestNotifyFloorMember, error) {
 	b := p.MutationBindings[0]
-	inv := s.guestReconcile.inventory
 	proofs, err := capacity.VMInventoryProofs(p, b, inv, "", 0, now, "original-guest-reconcile:"+policy.ID.String())
 	if err != nil {
 		return nil, err
@@ -344,7 +368,7 @@ func (s CapacityStore) guestReconcilePhaseTx(ctx context.Context, tx *sql.Tx, po
 	if err != nil || len(members) != next.Decision.Units {
 		return ErrCapacityConflict
 	}
-	snapshot, err := capacity.GuestReconcileSnapshot(policy, p, s.guestReconcile.inventory, now)
+	snapshot, err := s.guestContractSnapshotTx(ctx, tx, policy, p, now)
 	if err != nil || !reflect.DeepEqual(snapshot, next.Assessment.Snapshot) {
 		return ErrCapacityConflict
 	}
@@ -387,6 +411,10 @@ func (s CapacityStore) guestReconcilePhaseTx(ctx context.Context, tx *sql.Tx, po
 		// Re-derive the SAME proof, including its original PG custody stamp,
 		// using the immutable receipt observed before confirmation. The actual
 		// record remains confirmed; this cannot issue or resend DELETE.
+		p, err = guestGrantContractTx(ctx, tx, policy, p, original)
+		if err != nil {
+			return err
+		}
 		if err = guestConfirmedDestroyV2Tx(ctx, tx, p, original, *original.Proof, now); err != nil {
 			return err
 		}

@@ -43,7 +43,7 @@ func (s CapacityStore) guestDestroyEligibilityV2Tx(ctx context.Context, tx *sql.
 	}
 	// Adapter callbacks carry only the policy ID/checksum. Retain the full
 	// revalidated policy so the survivor lookup uses its actual namespace.
-	if policy, _, _, err = s.guestRetirementV2CurrentTx(ctx, tx, stored, now, false); err != nil {
+	if policy, p, _, err = s.guestRetirementV2CurrentTx(ctx, tx, stored, now, false); err != nil {
 		return err
 	}
 	if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {

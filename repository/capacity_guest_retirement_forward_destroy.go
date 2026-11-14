@@ -233,6 +233,9 @@ func retirementForwardDestroyRecordTx(ctx context.Context, tx *sql.Tx, r GuestRe
 		return original, ErrCapacityConflict
 	}
 	p, err := parseCapacityPolicy(policy)
+	if err == nil {
+		p, err = guestGrantContractTx(ctx, tx, policy, p, original)
+	}
 	if err != nil || readSHA != eligibility.NativeOffSHA256 || read.Read.Kind != "off" || read.Read.AdmissionID != authority.ID || read.Read.AdmissionSHA256 != authoritySHA || read.Read.PrefixSHA256 != authority.PrefixSHA256 || read.Read.OriginalCallerSHA256 != authority.OriginalCallerSHA256 || read.Read.Tuple != authority.Original.Request.Intent.Tuple || read.Read.MutationBindingSHA256 != capacity.GuestRetirementSHA(original.Binding) || read.Read.AdapterSourceCommit != original.Binding.OriginalProviderSourceCommit || boundPG.Before(issuedPG) || boundPG.Sub(issuedPG)+5*time.Second > time.Duration(p.MaxEvidenceAgeSeconds)*time.Second || read.Plan == nil || read.Plan.Server == nil || read.Plan.Server.Labels["yggdrasil.io/owner"] != p.Owner {
 		return original, ErrCapacityConflict
 	}

@@ -103,7 +103,7 @@ func (s CapacityStore) mutationTransactionWithCommitReturn(ctx context.Context, 
 	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
 		return err
 	}
-	if err = lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings); err != nil {
+	if err = guestContractLockBindingsTx(ctx, tx, policy, p); err != nil {
 		return err
 	}
 	var checksum string
@@ -210,6 +210,11 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		}
 		if intent.RetirementForward != nil && intent.RetirementForward.Mode == GuestRetirementForwardContinuationMode {
 			return ErrCapacityConflict
+		}
+		var err error
+		p, err = guestMutationContractTx(ctx, tx, policy, p, issue)
+		if err != nil {
+			return err
 		}
 		plan, err := capacity.PrepareMutationPlan(p, issue)
 		if err != nil {
@@ -511,6 +516,19 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		if !active || checksum != record.PolicyChecksum || !p.ExecutionEnabled {
 			return ErrCapacityDisabled
 		}
+		if p.GuestContractSuccessor != nil {
+			var policy model.Manifest
+			policy.ID, policy.Kind, policy.Checksum = record.PolicyID, "capacity_policy", record.PolicyChecksum
+			if err := tx.QueryRowContext(ctx, `SELECT namespace,name FROM public.manifests WHERE id=$1`, record.PolicyID).Scan(&policy.Metadata.Namespace, &policy.Metadata.Name); err != nil {
+				return err
+			}
+			var err error
+			p, err = guestGrantContractTx(ctx, tx, policy, p, *record)
+			if err != nil {
+				return err
+			}
+		}
+
 		if err := checkMutationIntegration(ctx, tx, b); err != nil {
 			return err
 		}
@@ -825,6 +843,11 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 		var record capacityMutationRecord
 		if err := json.Unmarshal(raw, &record); err != nil {
 			return err
+		}
+		var contractErr error
+		p, contractErr = guestGrantContractTx(ctx, tx, policy, p, record)
+		if contractErr != nil {
+			return contractErr
 		}
 		g, b := record.Grant, record.Binding
 		var forwardErr error

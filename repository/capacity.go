@@ -471,7 +471,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(key)); err != nil {
 		return model.CapacityIntent{}, err
 	}
-	if err = lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings); err != nil {
+	if err = guestContractLockBindingsTx(ctx, tx, policy, p); err != nil {
 		return model.CapacityIntent{}, err
 	}
 	var checksum string
@@ -666,6 +666,9 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 	var p model.CapacityPolicySpec
 	if policy.Kind != "capacity_policy" || policy.ID == uuid.Nil || policy.Checksum == "" || policy.Metadata.Namespace == "" || policy.Metadata.Name == "" {
 		return p, fmt.Errorf("capacity requires a stored policy identity")
+	}
+	if err := capacity.ValidateGuestContractSuccessorJSON(policy.Spec); err != nil {
+		return p, err
 	}
 	if err := json.Unmarshal(policy.Spec, &p); err != nil {
 		return p, err

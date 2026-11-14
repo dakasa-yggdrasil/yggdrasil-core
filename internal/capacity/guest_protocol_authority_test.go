@@ -12,6 +12,7 @@ import (
 )
 
 func TestGuestProtocolAuthorityCompatibilityKeepsCompleteCanonicalApproval(t *testing.T) {
+	testGuestContractLegacySixMap(t)
 	t.Run("historical_map_contract_scope", testGuestHistoricalCompatibilityMapContracts)
 	t.Run("actual_a900_profile_approvals", testGuestActualA900ProfileApprovals)
 	for _, provider := range []string{"aws", "hetzner"} {

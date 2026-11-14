@@ -31,10 +31,11 @@ func (s CapacityStore) WithOriginalGuestProvisioning(step model.WorkflowStepSpec
 }
 
 type guestOriginalStored struct {
-	pre     model.CapacityGuestOriginalProvisioningPreregistration
-	binding model.CapacityGuestRetirementBinding
-	witness model.CapacityGuestOriginalCreateWitness
-	member  model.CapacityGuestRetirementMemberBinding
+	contractSpec *model.CapacityPolicySpec
+	pre          model.CapacityGuestOriginalProvisioningPreregistration
+	binding      model.CapacityGuestRetirementBinding
+	witness      model.CapacityGuestOriginalCreateWitness
+	member       model.CapacityGuestRetirementMemberBinding
 }
 
 // OriginalGuestCreateWitnessProviderEnabled describes implemented original

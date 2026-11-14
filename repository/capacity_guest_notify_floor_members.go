@@ -41,6 +41,13 @@ func (s CapacityStore) GuestNotifyFloorMembers(ctx context.Context, policy model
 				return nil
 			}
 		}
+		if p.GuestContractSuccessor != nil {
+			out, err = s.guestContractFloorMembersTx(ctx, tx, policy, p, excludedSlot)
+			if err == nil && (len(out) < p.Floor || len(out) < current.Decision.Units || cleanupActive && len(out) != cleanup.SurvivorCount) {
+				return ErrCapacityConflict
+			}
+			return err
+		}
 		r := *p.GuestRetirementBinding
 		b, err := capacity.VMObservationBinding(p, r.MutationBindingName)
 		if err != nil || checkMutationIntegration(ctx, tx, b) != nil {

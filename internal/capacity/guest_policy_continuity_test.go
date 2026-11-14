@@ -37,6 +37,7 @@ func guestPolicyContinuityClone(t *testing.T, p model.CapacityPolicySpec) model.
 }
 
 func TestGuestPolicyContinuityKeepsMembersAcrossSchedulingOnlyChanges(t *testing.T) {
+	testGuestContractDeclarationAndView(t)
 	prior := guestPolicyContinuityFixture(t)
 	if !ValidDigest(GuestPolicyContinuitySHA256(prior)) {
 		t.Fatal("complete synthetic production contract has no continuity digest")

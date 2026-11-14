@@ -8,7 +8,7 @@
     "legacy_grant_job_columns_added": 0
   },
   "adr": "docs/adr/0118-close-a-witnessed-unenrolled-expansion-with-a-separate-cleanup.md",
-  "current_source_census_sha256": "c507ad65752fed3655d1a6ae907e14eb8f1effaa1e325d866da666d221199d9c",
+  "current_source_census_sha256": "96bfee0f90ba7f27a4152ea3d316354ffcc32c9c7c7d137ddc0388e2c365eabb",
   "pending": [
     "independent Source reviews",
     "both current owning PostgreSQL CI lanes/races",
@@ -16,7 +16,7 @@
     "native whole proof acceptance"
   ],
   "production_or_native_qualification": false,
-  "runtime_source_count": 838,
+  "runtime_source_count": 841,
   "runtime_sources": {
     "controllers/httpapi/ops_witnessed_unenrolled_expansion_cleanup.go": {
       "bytes": 2902,
@@ -27,12 +27,12 @@
       "sha256": "5cb9140af6da83a64e333c574ceba1316a3949b7fd34ad466513caf8b7fb21f0"
     },
     "controllers/message/workflows_capacity_guest.go": {
-      "bytes": 27229,
-      "sha256": "bfd60a162c561dbf89637d541670f5525af3e6f4d2e52b04c1cb04bd64bfc45e"
+      "bytes": 27531,
+      "sha256": "6a7faf95e4e212bcb6deb787c3ce827d9554e047f4795482a16319e8712d5f92"
     },
     "controllers/message/workflows_capacity_guest_reconcile.go": {
-      "bytes": 28121,
-      "sha256": "12fbe10a0ce3b81e7260ffc36d930c5173f680c06a0ceb125d259d006e1bf49d"
+      "bytes": 32673,
+      "sha256": "1c43c48c2de7c319223bb8864c089df5a5103b216f747a8affda003ec5b48ab9"
     },
     "controllers/message/workflows_witnessed_expansion_cleanup.go": {
       "bytes": 11454,
@@ -43,16 +43,16 @@
       "sha256": "4a92a5b848ebc4eb292078e95a7830aea4b9f8f7d5d75cdcaa8e217850e71432"
     },
     "model/capacity.go": {
-      "bytes": 34194,
-      "sha256": "6691af988f70597b705bd750ea005297a67eba20dae6f6c06e72ed95b8e91b87"
+      "bytes": 34879,
+      "sha256": "0c0d9b84ec4b6857e43f754ff104c5cb3cebe264c11eb15a4a2d2a3c5ce02cd9"
     },
     "model/capacity_witnessed_expansion_terminal_reconcile.go": {
       "bytes": 944,
       "sha256": "7071dba99b62a116e9dd316ebebf3dae481196ef7d3674eb6d0e005b8c5b741d"
     },
     "repository/capacity.go": {
-      "bytes": 37659,
-      "sha256": "0158766d6c332024fd4874aeff55c122b5a1c9c5d641a89ed7323a93c23d235a"
+      "bytes": 37747,
+      "sha256": "6341b44b167824c005a85be103734d5bc61cc14782030ef10bd285ca780e44da"
     },
     "repository/capacity_dispatch.go": {
       "bytes": 45735,
@@ -67,20 +67,20 @@
       "sha256": "f56f5dc5b0c1389127e425a35340993a56b60b7909001298ad25d49f4bee9ba7"
     },
     "repository/capacity_guest_notify_canary.go": {
-      "bytes": 20721,
-      "sha256": "38ea491f9a5b59de3f1c979f72392ef8dfadb2ec9ae8cc15c5fd9ad4d325ccc4"
+      "bytes": 21033,
+      "sha256": "45f3e6c16ff04d2bce875c5e60cd7d982c39fac76ecde8eec306da5b08803fe1"
     },
     "repository/capacity_guest_notify_floor_members.go": {
-      "bytes": 3929,
-      "sha256": "5b43392aa64ddaec09a3d15ae231bbd21a5737efdc709a220dfd8e96dbe86999"
+      "bytes": 4234,
+      "sha256": "e3e8d1a9a67ea74e13dc1c410e993ef8a24616884bef07f35888a999313b997a"
     },
     "repository/capacity_guest_notify_phase.go": {
-      "bytes": 6446,
-      "sha256": "fd6cfcb2cfefff7b5e248fe75bd870436191f3bb72fb93619b809c254b272ffd"
+      "bytes": 6577,
+      "sha256": "63b172be3a39311ab2973fd049529a7f8a44c236fe3b863e178a76108c61e5c6"
     },
     "repository/capacity_guest_reconcile.go": {
-      "bytes": 18795,
-      "sha256": "1f5e414e040da9c4d27a2fa023f6bfebed8f7eafc3a71dcc89e0efe45a63b5ec"
+      "bytes": 20151,
+      "sha256": "b96e94900ed75a41f23d36551b60bd940328d83e780233b15071cf480e397427"
     },
     "repository/capacity_guest_retirement_normal_finish_recovery.go": {
       "bytes": 19091,
@@ -91,8 +91,8 @@
       "sha256": "ef9dac236f0d4f5828ba4dc43636d235aad595ad8ffa85c550b108c78c64bffa"
     },
     "repository/capacity_mutations.go": {
-      "bytes": 49931,
-      "sha256": "acd0c1d09cbd4fba9716309721faf4bf406f1ea32d9ea6c77bc2baf4ce11d997"
+      "bytes": 50673,
+      "sha256": "d38dbf488849d2027126cd28e2d838447485f1b862b34f6aef2d3f07b838fd75"
     },
     "repository/witnessed_expansion_dispatch.go": {
       "bytes": 3674,
@@ -103,16 +103,16 @@
       "sha256": "14ed759e3a94473a2d82e5bdcc7c3501a6ad7a7d6b50b9517ebb3c873258c4ce"
     },
     "repository/witnessed_expansion_owner.go": {
-      "bytes": 33692,
-      "sha256": "e7bc8b3b8b7c4fcb736f6e03cb688361aefe69357dd6e21560ac9c44343b54aa"
+      "bytes": 33727,
+      "sha256": "4160efbd4ec687078d4f7e159d8b4cf5ae3d8b73b95e2349be592c08cbc23ff0"
     },
     "repository/witnessed_expansion_terminal_reconcile.go": {
       "bytes": 18054,
       "sha256": "fbbdd938384dc430745f8b197130903191450adf1c492bdc68f27842ccff6418"
     },
     "repository/witnessed_unenrolled_expansion_cleanup.go": {
-      "bytes": 26850,
-      "sha256": "30168ce017c7bf1921e83d63ee8eeb9ea4b697c0e35492d8b214d54e3c8f1a97"
+      "bytes": 26885,
+      "sha256": "71fad7ab2ec9f716624578d66970741fbe1954f576aa9bd7ae3889667db1f917"
     }
   },
   "schema": "witnessed_unenrolled_expansion_source_review_v1",

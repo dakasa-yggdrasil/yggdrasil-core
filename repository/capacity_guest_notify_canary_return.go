@@ -79,9 +79,12 @@ func (s CapacityStore) RecordGuestNotifyCanaryReturn(ctx context.Context, policy
 	var business model.CapacityGuestNotifyBusinessObservation
 	accepted := false
 	err := s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		_, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, c.PreregistrationID)
+		memberStored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, c.PreregistrationID)
 		if err != nil {
 			return err
+		}
+		if memberStored.contractSpec != nil {
+			p = *memberStored.contractSpec
 		}
 		stored, err := loadGuestNotifyChallengeTx(ctx, tx, c.ChallengeID)
 		if err != nil || !reflect.DeepEqual(stored, c) || c.PolicyID != policy.ID.String() || c.PolicyChecksum != policy.Checksum || c.WorkflowID != s.WorkflowID.String() || c.Generation != uint64(generation) || c.Fence != uint64(fence) || c.LeaseOwner != owner || current.RecoveryOnly {

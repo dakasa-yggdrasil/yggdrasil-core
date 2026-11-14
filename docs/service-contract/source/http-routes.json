@@ -723,7 +723,7 @@
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
-      "function": "New",
+      "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWitnessedUnenrolledExpansionCleanup)",
       "line": 576,
       "pattern_expression": "\"POST /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups\"",
@@ -732,7 +732,7 @@
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
-      "function": "New",
+      "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWitnessedUnenrolledExpansionCleanupRead)",
       "line": 577,
       "pattern_expression": "\"GET /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups/{grantId}\"",

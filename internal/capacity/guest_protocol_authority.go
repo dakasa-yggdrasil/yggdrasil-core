@@ -24,11 +24,16 @@ var guestD15ProtocolProfileApprovals = append(
 	guestProductionProfileApproval{Provider: "hetzner", Profile: "notify-hetzner-elastic", ProductionCatalogSHA256: "6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", ContractSHA256: "3fcb7fc4634fc5102d2172cc1d7f66bd92a61b9d544525a3438e8cdf914803f9"},
 )
 
-var guestProductionProfileApprovals = append(
+const GuestB509ProtocolCompatibilityMapSHA256 = "d51495ae4e1a1e3cde3cf2713e0a2cf3e333bc5326d85c46dccb005d8de7af65"
+
+var guestB509ProtocolProfileApprovals = append(
 	append([]guestProductionProfileApproval(nil), guestD15ProtocolProfileApprovals...),
 	guestProductionProfileApproval{Provider: "aws", Profile: "notify-aws-elastic", ProductionCatalogSHA256: "8066c34878d2a476f926207e65c27cf3f5bc87743c8380549e360040b7499b48", ContractSHA256: "d81b2f6bfd4100f8e31a465efc49a1a0698f39a1df1372e2b4af2c12957c1602"},
 	guestProductionProfileApproval{Provider: "hetzner", Profile: "notify-hetzner-elastic", ProductionCatalogSHA256: "6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", ContractSHA256: "e9e6745ef3e0ef627bbe2080f196ed55b6037b42839ddf99bd0fbf353b386c9d"},
 )
+
+// Freeze all six original approvals before a future Source-qualified append.
+var guestProductionProfileApprovals = append([]guestProductionProfileApproval(nil), guestB509ProtocolProfileApprovals...)
 
 func guestProtocolAuthoritySupported(authority, actualBuild, provider, profile string) bool {
 	if !businessSource.MatchString(actualBuild) || !businessSource.MatchString(authority) {
@@ -73,6 +78,11 @@ func guestBindingApprovedByCompatibilityMap(p model.CapacityPolicySpec, binding 
 			return false
 		}
 		approvals = guestD15ProtocolProfileApprovals
+	} else if compatibilityMap == GuestB509ProtocolCompatibilityMapSHA256 {
+		if guestProtocolCompatibilityMapSHA256(guestB509ProtocolProfileApprovals) != GuestB509ProtocolCompatibilityMapSHA256 {
+			return false
+		}
+		approvals = guestB509ProtocolProfileApprovals
 	} else if compatibilityMap != guestProtocolCompatibilityMapSHA256(currentApprovals) {
 		return false
 	}
