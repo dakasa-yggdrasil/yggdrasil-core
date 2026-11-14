@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: cc6279dff57899e84baa7d7dc46e22db5133cc09
-verified_diff_sha256: f144f80d21cfb3d7594332b63a6f82025051a0099c42a3befdc654da7035c7fc
+verified_at_commit: 8f9d88790329034cc7cf76b3b92f63e37a9e54c7
+verified_diff_sha256: a349ef577a8551902c08f60c210b9beb32d5c3c863bed80981f43bd7f8b5819a
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -504,3 +504,5 @@ c19_unbound_fixture_spacing_review: Reviewed the actual owning CI import-refusal
 prepared_nonce_SQL_companion_review: Reviewed the closed Goose105 prepared-only nonce-acquire subtype through the unchanged M87 operator, full archived birth and physical incarnation proof, exact old87 fallback and Down restoration, scope serialization and immutable receipt. Earlier migrations and every production Go/API/host source remain unchanged. The existing PostgreSQL lane adds current producer, declared mature history, CAS, three-backend races, whole catalogs and exact old-directory Goose no-op coverage; the workflow changes only its current-head schema105 expectation. Source peer and Root review preserve earlier required checks. A separately qualified migration-only image and standard Goose Job will deliver105 without replacing the independently accepted running Core15 image or M17 network. Exact new-head CI and actual operational eligibility remain pending; no local product tests or SQL ran.
 
 prepared_nonce_ADR_status_review: Corrected the new Proposed ADR status label to the exact structural convention identified by current CI. Its complete Decision body, SQL105, regression helper and every runtime source remain unchanged. Earlier failed CI is retained for diagnosis; exact successor CI remains required. No local tests ran.
+
+elastic_host_and_SQL_companion_main_integration_review: Reconciled the normal merge of the published host tooling and prepared-nonce SQL companion histories. Every one of the43 changed nonmetadata paths remains byte-identical to its respective published parent; only the three generated companions conflicted and all prior freshness review lines were retained. The unchanged running Core15 source/image and physical M17 host pair remain separate facts. Source contracts and ADR index remain accurate; the released CLI regenerated the combined repository map and content-addressed this source. Current companion CI and actual schema105 delivery, fresh HZN cycle, remote Main integration and catalog/control-plane/final-E2E acceptance remain pending. No local product tests or SQL ran.
