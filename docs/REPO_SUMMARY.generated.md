@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-14T17:23:46-03:00_
+_Generated from HEAD at: 2026-11-14T18:19:00-03:00_
 
 ## Languages
 
@@ -24,7 +24,7 @@ _Generated from HEAD at: 2026-11-14T17:23:46-03:00_
 
 ## Top Directories by File Count
 
-- repository: 408 files (5933.3 KB)
+- repository: 408 files (5935.5 KB)
 - controllers/httpapi: 264 files (2670.6 KB)
 - controllers/message: 205 files (1792.9 KB)
 - internal/capacity: 130 files (1413.6 KB)
