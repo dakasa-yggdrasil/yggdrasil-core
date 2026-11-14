@@ -74,9 +74,10 @@ func testOriginalGuestContractCollection(t *testing.T) {
 					t.Fatal("foreign profile read")
 				}
 				var inv model.CapacityVMFleetInventory
-				if binding.IntegrationInstanceID == head.MutationBindings[0].IntegrationInstanceID {
+				switch binding.IntegrationInstanceID {
+				case head.MutationBindings[0].IntegrationInstanceID:
 					inv = currentInv
-				} else if binding.IntegrationInstanceID == view.MutationBindings[0].IntegrationInstanceID {
+				case view.MutationBindings[0].IntegrationInstanceID:
 					if fault == "missing_old_receipt" {
 						return errors.New("declared supplier missing")
 					}
@@ -84,7 +85,7 @@ func testOriginalGuestContractCollection(t *testing.T) {
 					if fault == "duplicate_logical_slot" {
 						inv = inventory(view, 2)
 					}
-				} else {
+				default:
 					t.Fatal("caller selected an undeclared inventory adapter")
 				}
 				if fault == "foreign_supplier" {

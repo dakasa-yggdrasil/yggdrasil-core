@@ -409,7 +409,7 @@ func (s CapacityStore) RefreshGuestRetirementForwardContractInventories(ctx cont
 		if e != nil {
 			return e
 		}
-		if logical.exists && !seen[slot] && !(r.DestroyGrantID != "" && slot == x.original.Request.Intent.Slot) {
+		if logical.exists && !seen[slot] && (r.DestroyGrantID == "" || slot != x.original.Request.Intent.Slot) {
 			return ErrCapacityConflict
 		}
 	}

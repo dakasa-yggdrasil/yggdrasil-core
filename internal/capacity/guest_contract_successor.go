@@ -74,13 +74,13 @@ func ValidateGuestContractSuccessor(p model.CapacityPolicySpec) error {
 // computational view, never a Manifest with an invented checksum.
 func GuestContractView(current, birth model.CapacityPolicySpec) (model.CapacityPolicySpec, error) {
 	if current.GuestRetirementBinding == nil || birth.GuestRetirementBinding == nil || len(current.Profiles) != 1 || len(birth.Profiles) != 1 || len(current.MutationBindings) != 1 || len(birth.MutationBindings) != 1 || current.Owner != birth.Owner || current.Environment != birth.Environment || current.Domain != birth.Domain || current.Dimension != birth.Dimension || current.TargetIdentity != birth.TargetIdentity || !reflect.DeepEqual(current.Workflow, birth.Workflow) || current.Profiles[0].Name != birth.Profiles[0].Name || current.Profiles[0].Provider != birth.Profiles[0].Provider || current.Profiles[0].Region != birth.Profiles[0].Region || current.MutationBindings[0].Name != birth.MutationBindings[0].Name || current.MutationBindings[0].MaxSlots != birth.MutationBindings[0].MaxSlots || current.MutationBindings[0].ProtectedSlots != birth.MutationBindings[0].ProtectedSlots {
-		return model.CapacityPolicySpec{}, fmt.Errorf("Guest contract logical scope differs")
+		return model.CapacityPolicySpec{}, fmt.Errorf("guest contract logical scope differs")
 	}
 	current.MutationBindings = append([]model.CapacityMutationBinding(nil), birth.MutationBindings...)
 	current.GuestRetirementBinding = birth.GuestRetirementBinding
 	current.GuestNotifyCanaryBinding = birth.GuestNotifyCanaryBinding
 	if ValidateGuestNotifyReconcileBinding(current) != nil {
-		return model.CapacityPolicySpec{}, fmt.Errorf("Guest contract view invalid")
+		return model.CapacityPolicySpec{}, fmt.Errorf("guest contract view invalid")
 	}
 	return current, nil
 }

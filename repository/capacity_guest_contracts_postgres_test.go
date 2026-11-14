@@ -33,6 +33,14 @@ func testGuestContractResolverPostgres(t *testing.T, ctx context.Context, db *sq
 		return p
 	}
 	old, headBase := read("original"), read("b509")
+	// This is a DECLARED catalog copy for current-build resolution, not an
+	// actual historical enrollment. Public JSON and complete approvals stay
+	// unchanged; the canonical contract digest excludes only Core authority.
+	originalContract := guestContractDigest(old)
+	old.GuestRetirementBinding.CoreAuthoritySourceCommit = capacity.GuestD11ProtocolAuthority
+	if !capacity.ValidDigest(originalContract) || guestContractDigest(old) != originalContract {
+		t.Fatal("declared D11 issuer copy changed the complete approved contract")
+	}
 	if !capacity.GuestBindingAuthorityCurrent(old, *old.GuestRetirementBinding) || !capacity.GuestBindingAuthorityCurrent(headBase, *headBase.GuestRetirementBinding) {
 		t.Fatal("owning CI binary needs actual clean -buildvcs=true identity and existing complete approvals")
 	}

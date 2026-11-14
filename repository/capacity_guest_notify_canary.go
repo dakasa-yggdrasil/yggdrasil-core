@@ -317,9 +317,6 @@ func (s CapacityStore) ReserveGuestNotifyCanarySend(ctx context.Context, policy 
 		if err != nil {
 			return err
 		}
-		if stored.contractSpec != nil {
-			p = *stored.contractSpec
-		}
 		_ = stored
 		original, err := loadGuestNotifyChallengeTx(ctx, tx, c.ChallengeID)
 		if err != nil || !reflect.DeepEqual(original, c) || c.Generation != uint64(generation) || c.Fence != uint64(fence) || c.LeaseOwner != owner || c.PolicyID != policy.ID.String() || c.PolicyChecksum != policy.Checksum || c.WorkflowID != s.WorkflowID.String() || current.RecoveryOnly || capacity.ValidateGuestNotifyCanaryChallenge(c, receipt.Enrollment, time.Now().UTC()) != nil {

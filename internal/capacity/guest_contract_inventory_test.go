@@ -209,11 +209,12 @@ func testGuestContractLegacySixMap(t *testing.T) {
 	old, head := guestCohortPublicPolicies(t)
 	for _, p := range []model.CapacityPolicySpec{old, head} {
 		b := *p.GuestRetirementBinding
-		if !GuestBindingApprovedByCompatibilityMap(p, b, strings.Repeat("a", 40), GuestB509ProtocolCompatibilityMapSHA256) {
+		issuer := b.CoreAuthoritySourceCommit // Declared historical issuer; public contract stays intact.
+		if !GuestBindingApprovedByCompatibilityMap(p, b, issuer, GuestB509ProtocolCompatibilityMapSHA256) {
 			t.Fatal("approved old contract lost historical issuer map")
 		}
 		b.GuestSourceCommit = strings.Repeat("f", 40)
-		if GuestBindingApprovedByCompatibilityMap(p, b, strings.Repeat("a", 40), GuestB509ProtocolCompatibilityMapSHA256) {
+		if GuestBindingApprovedByCompatibilityMap(p, b, issuer, GuestB509ProtocolCompatibilityMapSHA256) {
 			t.Fatal("old map admitted a new Guest")
 		}
 	}
