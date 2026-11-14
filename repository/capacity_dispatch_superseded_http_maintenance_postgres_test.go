@@ -628,7 +628,7 @@ func supersededHTTPHistoricalChecks(t *testing.T, h supersededHTTPHistorical, pu
 	}
 	for _, field := range []string{"original_policy_version", "replacement_policy_checksum", "original_run_sha256", "original_dispatch_updated_at", "canary_evidence_wire"} {
 		var ok bool
-		query := `SELECT public.superseded_http_maintenance_dispatch_receipt_valid(jsonb_populate_record(NULL::public.capacity_dispatch_superseded_http_maintenance_dispositions,to_jsonb(d)||jsonb_build_object($2,CASE $2 WHEN 'original_policy_version' THEN to_jsonb(d.original_policy_version+1) WHEN 'replacement_policy_checksum' THEN to_jsonb(repeat('a',64)) WHEN 'original_run_sha256' THEN to_jsonb(repeat('b',64)) WHEN 'original_dispatch_updated_at' THEN to_jsonb(d.original_dispatch_updated_at+interval '1 microsecond') ELSE to_jsonb(convert_to('{}','UTF8')) END))) FROM public.capacity_dispatch_superseded_http_maintenance_dispositions d WHERE d.job_id=$1`
+		query := `SELECT public.superseded_http_maintenance_dispatch_receipt_valid(jsonb_populate_record(NULL::public.capacity_dispatch_superseded_http_maintenance_dispositions,to_jsonb(d)||jsonb_build_object($2::text,CASE $2::text WHEN 'original_policy_version' THEN to_jsonb(d.original_policy_version+1) WHEN 'replacement_policy_checksum' THEN to_jsonb(repeat('a',64)) WHEN 'original_run_sha256' THEN to_jsonb(repeat('b',64)) WHEN 'original_dispatch_updated_at' THEN to_jsonb(d.original_dispatch_updated_at+interval '1 microsecond') ELSE to_jsonb(convert_to('{}','UTF8')) END))) FROM public.capacity_dispatch_superseded_http_maintenance_dispositions d WHERE d.job_id=$1`
 		if err = h.db.QueryRow(query, h.request.JobID, field).Scan(&ok); err != nil || ok {
 			t.Fatal("M104 pure archived field binding", field, err, ok)
 		}
