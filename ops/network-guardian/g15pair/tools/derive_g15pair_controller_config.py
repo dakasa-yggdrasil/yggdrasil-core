@@ -36,7 +36,7 @@ PROPOSAL_BOUND=False
 G8_CONFIG = ETC / 'controller.r13-netlink-g8pair.production.json'
 G12_CONFIG = ETC / 'controller.r13-netlink-g12pair.production.json'
 G6_CONFIG = ETC / 'controller.r13-netlink-g6pair.production.json'
-GUARDIAN_SOURCE=Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g23pair-source-v1/network_guardian.py')
+GUARDIAN_SOURCE=Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g24pair-source-v1/network_guardian.py')
 # The package supplies the exact reviewed successor Guardian source hash.
 FIELDS = {'schema', 'execute', 'source_files_sha256', 'eks_endpoint', 'eks_public_ca_base64', 'core_service_uid',
           'core_container_images', 'root_review_attestation'}
@@ -109,9 +109,12 @@ G21_CORE_IMAGE_PAIRS=[{'image':CORE_G20,'image_id':CORE_G20},{'image':CORE_G21,'
 CORE_G22=CORE_IMAGE_REF+'sha256:2eafea02c56c75dc607494e4c9c15a143abb782f3a317d37fe2f05ae83349869'
 G22_CONFIG_SHA='6f6693a7887b71c006fe6136fb7a8a4f2b76616e340bcdcd899de45bf1f757a2'
 G22_CORE_IMAGE_PAIRS=[{'image':CORE_G21,'image_id':CORE_G21},{'image':CORE_G22,'image_id':CORE_G22}]
-CORE_G23=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
-G23_CONFIG_SHA=None
+CORE_G23=CORE_IMAGE_REF+'sha256:346bdc09c343cabe15fdff724187c7d75551c597511139c3262e7b9da1a40e67'
+G23_CONFIG_SHA='fdf862baa6b1e2accc9d42810776c92ee579c6c6306818a6a787a8f467341979'
 G23_CORE_IMAGE_PAIRS=[{'image':CORE_G22,'image_id':CORE_G22},{'image':CORE_G23,'image_id':CORE_G23}]
+CORE_G24=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
+G24_CONFIG_SHA=None
+G24_CORE_IMAGE_PAIRS=[{'image':CORE_G23,'image_id':CORE_G23},{'image':CORE_G24,'image_id':CORE_G24}]
 G18_CONFIG_SHA = 'd8ed4b268c112fc396860b57f57b36090dcc8b63f768a3a47b291984aa6eab1a'
 G18_CONFIG = ETC / 'controller.r13-netlink-g18pair.production.json'
 G13_CONFIG = ETC / 'controller.r13-netlink-g13pair.production.json'
@@ -141,7 +144,8 @@ PAIR_CHAIN = (
     ('g20pair', G20_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g20pair.production.json'), G20_CONFIG_SHA),
     ('g21pair', G21_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g21pair.production.json'), G21_CONFIG_SHA),
     ('g22pair', G22_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g22pair.production.json'), G22_CONFIG_SHA),
-    ('g23pair', G23_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g23pair.production.json'), None),
+    ('g23pair', G23_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g23pair.production.json'), G23_CONFIG_SHA),
+    ('g24pair', G24_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g24pair.production.json'), None),
 )
 # kube_native.approved_core_images (runtime-r13-prod, 9fae13d7...), verbatim rules.
 KN_REPOSITORY = r'(?:ghcr\.io/dakasa-yggdrasil/yggdrasil-core|153828470928\.dkr\.ecr\.us-east-1\.amazonaws\.com/ghcr/dakasa-yggdrasil/yggdrasil-core)'
@@ -227,8 +231,8 @@ def require_bound():
     require(PROPOSAL_BOUND is True and type(HEAD_NEW_CORE_DIGEST) is str
             and re.fullmatch('sha256:[a-f0-9]{64}', HEAD_NEW_CORE_DIGEST) is not None
             and HEAD_NEW_CORE_DIGEST != HEAD_DIGEST_PLACEHOLDER
-            and type(G23_CONFIG_SHA) is str and re.fullmatch('[a-f0-9]{64}', G23_CONFIG_SHA) is not None
-            and G23_CONFIG_SHA != '0' * 64 and CORE_G23 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
+            and type(G24_CONFIG_SHA) is str and re.fullmatch('[a-f0-9]{64}', G24_CONFIG_SHA) is not None
+            and G24_CONFIG_SHA != '0' * 64 and CORE_G24 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
             'G15_RELEASE_AND_ROOT_CONFIG_NOT_BOUND')
 
 
@@ -341,7 +345,7 @@ def main():
     status = write_new(a.out, raw) if a.out else 'not_requested'
     print(json.dumps({'schema': 'r13_g15pair_controller_config_derivation_v1',
                       'head_core_digest': HEAD_NEW_CORE_DIGEST,
-                      'pair_chain_config_sha256': {**{g: sha(v) for (g, _, _, _), v in zip(PAIR_CHAIN[:-1], prefix)}, 'g23pair': sha(raw)},
+                      'pair_chain_config_sha256': {**{g: sha(v) for (g, _, _, _), v in zip(PAIR_CHAIN[:-1], prefix)}, 'g24pair': sha(raw)},
                       'guardian_cross_check': cross, 'write': status}, sort_keys=True), flush=True)
 
 

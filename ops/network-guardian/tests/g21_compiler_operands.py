@@ -26,9 +26,9 @@ def exercise_g21_compiler_binding(test, root):
                 any(isinstance(t, ast.Name) and t.id == 'keys' for t in n.targets))
     test.assertEqual(ast.literal_eval(keys), {'schema', 'source_worktree', 'out', 'ci_attestation_ref',
         'root_controller_review_ref', 'root_standing_review_ref', 'controller_unit_ref',
-        'predecessor_manifest_ref', 'actual_M14_swap_return_ref', 'continuity_peer_ipv4',
+        'predecessor_manifest_ref', 'actual_M15_swap_return_ref', 'continuity_peer_ipv4',
         'expected_controller_identity', 'expected_guardian_identity'})
-    test.assertEqual(module.OLD_MANIFEST_SHA, '2984c52bc1eac995f6a4eee2ee7c218a9ee5bd16abe483be2e70d3c5f18f74ae')
+    test.assertEqual(module.OLD_MANIFEST_SHA, '313f5db2177cc258f93f70be00c8928af59605a400232294ef3130292b1644b0')
     package_root = root / 'g15pair'
     package = json.loads((package_root / 'PACKAGE.json').read_bytes())
     raw = {name: (package_root / name).read_bytes() for name in package['files']}
@@ -39,8 +39,8 @@ def exercise_g21_compiler_binding(test, root):
     module.CONTROLLER_UNIT_SHA = 'f' * 64
     values = {'PROPOSAL_BOUND': True, 'HEAD_CORE_SOURCE': module.EXPECTED_R,
         'SOURCE_R': module.EXPECTED_R, 'HEAD_NEW_CORE_DIGEST': 'sha256:' + module.EXPECTED_D,
-        'NEW_DIGEST': module.EXPECTED_D, 'G23_CONTROLLER_CONFIG_SHA': 'e' * 64,
-        'G23_CONFIG_SHA': 'e' * 64, 'OLD_CORE_POD_UID': '11111111-1111-4111-8111-111111111111',
+        'NEW_DIGEST': module.EXPECTED_D, 'G24_CONTROLLER_CONFIG_SHA': 'e' * 64,
+        'G24_CONFIG_SHA': 'e' * 64, 'OLD_CORE_POD_UID': '11111111-1111-4111-8111-111111111111',
         'OLD_CORE_CONTAINER_ID': 'containerd://' + 'a' * 64}
     bound = {}
     for name, allowed in module.PYTHON_BINDINGS.items():
@@ -79,7 +79,7 @@ def exercise_g21_compiler_binding(test, root):
                 stream.write(data)
             path.chmod(0o600)
             return {'path': str(path), 'sha256': module.sha(data)}
-        binding = {'schema': 'g23_root_literal_source_bindings_v1',
+        binding = {'schema': 'g24_root_literal_source_bindings_v1',
             'source_commit': module.EXPECTED_HEAD, 'reviewed_by_root': True,
             'bound_source_refs': {name: write(name, data) for name, data in bound.items()}}
         module.BINDINGS_REF = {'path': str(folder / 'DECLARED-BINDING.json'), 'sha256': '1' * 64}
