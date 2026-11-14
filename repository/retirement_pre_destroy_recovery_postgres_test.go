@@ -54,6 +54,27 @@ func retirementForwardPreDestroy103Regression(t *testing.T) {
 	}
 	oldOwner, oldStore := f.Intent, f.FinishStore()
 	preDestroy103FailACK(t, f, ctx, parent.ID, true)
+	if parent.RunID != f.originalRunID.String() || f.job.RunID != f.originalRunID {
+		t.Fatal("first failed ACK must close the exact original parent job/run")
+	}
+	var originalFailedACK bool
+	if err = f.DB.QueryRowContext(ctx, `SELECT j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at IS NOT NULL AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.result->>'status'='failed' AND w.finished_at=j.returned_at FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.id=$1 AND j.run_id=$2`, f.job.JobID, f.originalRunID).Scan(&originalFailedACK); err != nil || !originalFailedACK {
+		t.Fatal("same original parent job/run must retain its real failed result and final ACK", originalFailedACK, err)
+	}
+	// The first real failed ACK intentionally closes the initial running row.
+	// Seal only that row after closure; every other pre-ACK original stays exact.
+	closedOriginals := f.PreservedOriginals()
+	beforeRun, beforePresent := originals["original_workflow_run"]
+	closedRun, closedPresent := closedOriginals["original_workflow_run"]
+	if !beforePresent || !closedPresent || beforeRun == "" || closedRun == "" || beforeRun == closedRun {
+		t.Fatal("actual first failed ACK must close the original running workflow row")
+	}
+	for _, key := range preDestroy103MismatchKeys(originals, closedOriginals) {
+		if key != "original_workflow_run" {
+			t.Fatal("first failed ACK changed an immutable pre-ACK original", key)
+		}
+	}
+	originals["original_workflow_run"] = closedRun
 	parent = preDestroy103Waiting(t, f, ctx)
 	if parent.Stage != "off_qualified" || parent.Mode != "live" || parent.NativeOffReadID != off.Read.ReadID {
 		t.Fatal("retained live OFF qualification", parent)
@@ -129,8 +150,11 @@ func retirementForwardPreDestroy103Regression(t *testing.T) {
 	if err = f.DB.QueryRowContext(ctx, `SELECT j.state='returned' AND j.return_status='succeeded' AND j.finalization_ack_at>=j.returned_at AND w.status='succeeded' AND w.finished_at=j.returned_at FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.id=$1`, f.job.JobID).Scan(&finalACK); err != nil || !finalACK {
 		t.Fatal("same actual successful run/job must retain its final ACK", finalACK, err)
 	}
-	if !reflect.DeepEqual(originals, f.PreservedOriginals()) || !reflect.DeepEqual(postDeleteCustody, closedRead102Custody(t, f, []string{parent.ID, first.ID, second.ID})) {
-		t.Fatal("new owner rewrote original Guest/failed ACK/read/settlement custody")
+	if finalOriginals := f.PreservedOriginals(); !reflect.DeepEqual(originals, finalOriginals) {
+		t.Fatal("new owner rewrote sealed original Guest/failed ACK custody", preDestroy103MismatchKeys(originals, finalOriginals))
+	}
+	if finalCustody := closedRead102Custody(t, f, []string{parent.ID, first.ID, second.ID}); !reflect.DeepEqual(postDeleteCustody, finalCustody) {
+		t.Fatal("new owner rewrote original forward/read/settlement custody", preDestroy103MismatchKeys(postDeleteCustody, finalCustody))
 	}
 	preDestroy103OneCurrentDelete(t, f, ctx, receipt.Grant.GrantID)
 	preDestroy103DownRefusal(t, f, ctx, "CARRIED-M102")
@@ -156,6 +180,26 @@ func retirementForwardPreDestroy103Regression(t *testing.T) {
 		"post_delete_read_child": continued.ID, "destroy_grant_id": receipt.Grant.GrantID,
 		"fixture_only": true, "native_cloud": false, "Root_acceptance": false,
 	}))
+}
+
+func preDestroy103MismatchKeys(before, after map[string]string) []string {
+	keys := map[string]struct{}{}
+	for key := range before {
+		keys[key] = struct{}{}
+	}
+	for key := range after {
+		keys[key] = struct{}{}
+	}
+	var changed []string
+	for key := range keys {
+		a, aok := before[key]
+		b, bok := after[key]
+		if !aok || !bok || a != b {
+			changed = append(changed, key)
+		}
+	}
+	sort.Strings(changed)
+	return changed
 }
 
 // Build only an unpersisted proposal from the actual failed owner/read/ACK and
