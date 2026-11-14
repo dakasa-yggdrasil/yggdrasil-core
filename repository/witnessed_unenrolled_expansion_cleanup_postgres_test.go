@@ -537,6 +537,33 @@ func witnessedCleanup106Immutable(t *testing.T, f *witnessedCleanup106Fixture, a
 			t.Fatal("immutable106 trigger required", err)
 		}
 	}
+	// Snapshot only this negative vector. Keep the existing reader and f.base
+	// unchanged for the subsequent Native/terminal comparisons.
+	snapshot := func() map[string][]json.RawMessage {
+		t.Helper()
+		rows := witnessedCleanup106Rows(t, f.DB)
+		for _, table := range []string{"capacity_witnessed_unenrolled_expansion_cleanups", "capacity_witnessed_unenrolled_expansion_cleanup_events", "capacity_witnessed_unenrolled_expansion_dispatch_ownership"} {
+			var raw []byte
+			if err := f.DB.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text FROM public.` + pq.QuoteIdentifier(table) + ` t`).Scan(&raw); err != nil {
+				t.Fatal("whole spoof-vector snapshot", table, err)
+			}
+			var values []json.RawMessage
+			if json.Unmarshal(raw, &values) != nil {
+				t.Fatal("whole spoof-vector rows", table)
+			}
+			rows[table] = values
+		}
+		for _, values := range rows {
+			sort.Slice(values, func(i, j int) bool { return bytes.Compare(values[i], values[j]) < 0 })
+		}
+		return rows
+	}
+	const counts = `SELECT (SELECT count(*) FROM public.capacity_witnessed_unenrolled_expansion_cleanup_events WHERE cleanup_id=$1 AND stage='claimed'),(SELECT count(*) FROM public.capacity_mutation_grants WHERE id=$2)`
+	var claimed, children int
+	if err := f.DB.QueryRow(counts, a.ID, a.ChildGrantID).Scan(&claimed, &children); err != nil || claimed != 0 || children != 0 {
+		t.Fatal("spoof vector requires no private claim or child", err, claimed, children)
+	}
+	before, originals := snapshot(), witnessedCleanup106Originals(t, f)
 	// A known admission UUID and reserved child ID in arbitrary JSON do not
 	// establish the private claim/read/floor chain or earn an index exemption.
 	bad := f.parent
@@ -548,8 +575,13 @@ func witnessedCleanup106Immutable(t *testing.T, f *witnessedCleanup106Fixture, a
 	bad.Grant = model.CapacityMutationGrant{GrantID: a.ChildGrantID, BindingName: bad.Binding.Name, IntegrationInstanceID: bad.Binding.IntegrationInstanceID, ScopeChecksum: bad.Binding.ScopeChecksum, ProfileName: bad.Binding.ProfileName, Slot: 2, Capability: bad.Binding.DestroyCapability, ExpectedResourceID: a.ResourceID, ExpectedResourceCreatedAt: a.ResourceCreatedAt, RequestSHA256: strings.Repeat("f", 64), State: "issued", ExpiresAt: bad.CreatedAt.Add(5 * time.Second)}
 	_, err := f.DB.Exec(`INSERT INTO capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,2,'issued',$10::jsonb,$11)`, a.ChildGrantID, a.Namespace, a.Environment, a.Domain, a.Dimension, a.OriginalGeneration, bad.Binding.IntegrationInstanceID, bad.Binding.ScopeChecksum, bad.Binding.ProfileName, string(failedServingWire(t, bad)), bad.Grant.ExpiresAt)
 	var pg *pq.Error
-	if !errors.As(err, &pg) || pg.Code != "P0001" {
-		t.Fatal("JSON marker spoof must reach independent M106 claim guard", err)
+	// No private claim exists: the exact guard's SELECT INTO STRICT must refuse
+	// before its later custom owner checks. No other SQL error is a substitute.
+	if !errors.As(err, &pg) || pg.Code != "P0002" || pg.Message != "query returned no rows" || pg.Where != "PL/pgSQL function guard_witnessed_unenrolled_expansion_cleanup_grant() line 51 at SQL statement" {
+		t.Fatal("JSON marker spoof must reach exact missing-claim M106 guard", err)
+	}
+	if err := f.DB.QueryRow(counts, a.ID, a.ChildGrantID).Scan(&claimed, &children); err != nil || claimed != 0 || children != 0 || !reflect.DeepEqual(before, snapshot()) || !bytes.Equal(originals, witnessedCleanup106Originals(t, f)) {
+		t.Fatal("refused marker spoof changed whole rows, originals, claim or child absence", err, claimed, children)
 	}
 }
 
