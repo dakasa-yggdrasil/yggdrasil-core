@@ -119,6 +119,15 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 	// Matches `mux.HandleFunc("<METHOD> /api/v1/ops/...`
 	routeRe := regexp.MustCompile(`mux\.HandleFunc\("[A-Z]+ /api/v1/ops/[^"]*"`)
 	wrapperRe := regexp.MustCompile(`server\.requireOpsPermissionFunc\(perm[A-Za-z]+,`)
+	patternRe := regexp.MustCompile(`mux\.HandleFunc\("([A-Z]+ /api/v1/ops/[^"]*)"`)
+	// These two new routes inherit the existing current administrative human
+	// boundary. Neither a canonical but weaker permission nor another handler
+	// is equivalent to the reviewed registration.
+	exactSuperseded := map[string]string{
+		"POST /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions":        `mux.HandleFunc("POST /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsSupersededHTTPMaintenanceDispatchDisposition))`,
+		"GET /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions/{jobId}": `mux.HandleFunc("GET /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsSupersededHTTPMaintenanceDispatchDispositionRead))`,
+	}
+	seenSuperseded := map[string]int{}
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -131,6 +140,14 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 			continue
 		}
 		routeCount++
+		if match := patternRe.FindStringSubmatch(line); len(match) == 2 {
+			if exact, ok := exactSuperseded[match[1]]; ok {
+				seenSuperseded[match[1]]++
+				if strings.TrimSpace(line) != exact {
+					t.Errorf("superseded maintenance route changed its exact management permission or handler: %s", match[1])
+				}
+			}
+		}
 		if !wrapperRe.MatchString(line) {
 			missing = append(missing, strings.TrimSpace(line))
 		}
@@ -146,17 +163,43 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 		t.Errorf("%d /api/v1/ops/* route(s) lack requireOpsPermissionFunc wrapping (audit §3.1 + INTEGRATION_CONTRACT §12 — Phase 5B):\n  %s",
 			len(missing), strings.Join(missing, "\n  "))
 	}
+	for pattern := range exactSuperseded {
+		if seenSuperseded[pattern] != 1 {
+			t.Errorf("superseded maintenance route must be registered exactly once: %s", pattern)
+		}
+	}
+	// The route wrapper is additive to the handler-owned human check. Keep
+	// that check before either repository call, including direct handler use.
+	handlerSource, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "ops_superseded_http_maintenance_dispatch_disposition.go"))
+	if err != nil {
+		t.Fatal("read superseded maintenance handler Source", err)
+	}
+	for _, item := range []struct{ handler, guard, repository string }{
+		{"handleOpsSupersededHTTPMaintenanceDispatchDisposition", "issuer, ok := s.originalDispositionIssuer(w, r)\n\tif !ok {\n\t\treturn\n\t}", "repository.DisposeSupersededHTTPMaintenanceDispatch("},
+		{"handleOpsSupersededHTTPMaintenanceDispatchDispositionRead", "if _, ok := s.originalDispositionIssuer(w, r); !ok {\n\t\treturn\n\t}", "repository.GetSupersededHTTPMaintenanceDispatchDisposition("},
+	} {
+		parts := strings.Split(string(handlerSource), "func (s *Server) "+item.handler+"(")
+		if len(parts) != 2 {
+			t.Fatal("exactly one superseded maintenance handler required", item.handler)
+		}
+		body := strings.SplitN(parts[1], "\nfunc ", 2)[0]
+		guardAt, repositoryAt := strings.Index(body, item.guard), strings.Index(body, item.repository)
+		if guardAt < 0 || repositoryAt <= guardAt {
+			t.Error("current administrative human refusal must precede repository access", item.handler)
+		}
+	}
 
-	// The exact reviewed inventory has 64 ops routes, including dispatch
+	// The exact reviewed inventory has 66 ops routes, including dispatch
 	// dispositions, retirement recovery, failed-installed replacement/native OFF,
 	// and the four distinct failed-serving quarantine/read/native-OFF/complete
 	// routes, the historical retirement-forward admission/read pair and the
 	// separate recorded HTTP-maintenance disposition/read pair and the
-	// failed-unwitnessed-expansion cleanup admission/read pair.
+	// failed-unwitnessed-expansion cleanup admission/read pair and the two
+	// superseded equivalent-policy maintenance disposition/read registrations.
 	// Count drift requires review; every route still needs the permission
 	// wrapper asserted above, independently of this complete census.
-	if routeCount != 64 {
-		t.Errorf("ops route count = %d, expected exactly 64 — investigate before merging", routeCount)
+	if routeCount != 66 {
+		t.Errorf("ops route count = %d, expected exactly 66 — investigate before merging", routeCount)
 	}
 }
 

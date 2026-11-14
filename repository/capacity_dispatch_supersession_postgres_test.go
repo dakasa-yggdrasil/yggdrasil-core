@@ -46,11 +46,78 @@ func dispatchSupersessionPolicy(t *testing.T, db *sql.DB, e CapacityDispatchEnve
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := CreateManifestVersion(context.Background(), db, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: e.Policy.Namespace, Name: e.Policy.Name}, Spec: raw}, capacityDispatchSHA(append(raw, []byte(uuid.NewString())...)))
+	m, err := dispatchSupersessionHistoricalPublication(t, db, e, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: e.Policy.Namespace, Name: e.Policy.Name}, Spec: raw}, capacityDispatchSHA(append(raw, []byte(uuid.NewString())...)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return CapacityDispatchManifestPin{ID: m.ID, Namespace: m.Metadata.Namespace, Name: m.Metadata.Name, Version: m.Version, Checksum: m.Checksum}
+}
+
+// dispatchSupersessionHistoricalPublication declares an isolated PRE-GUARD
+// stale-catalog fault for retained supersession tests, not a production path.
+// The ordinary API must first prove that it protects the genuine busy owner.
+// No dispatch/run/ACK/lease/clock row is written by this historical builder.
+func dispatchSupersessionHistoricalPublication(t *testing.T, db *sql.DB, e CapacityDispatchEnvelope, doc model.ManifestDocument, checksum string) (model.Manifest, error) {
+	t.Helper()
+	ctx := context.Background()
+	snapshot := func() string {
+		var raw string
+		if err := db.QueryRowContext(ctx, `SELECT COALESCE(jsonb_agg(to_jsonb(m) ORDER BY id),'[]'::jsonb)::text FROM public.manifests m WHERE kind='capacity_policy' AND namespace=$1 AND name=$2`, doc.Metadata.Namespace, doc.Metadata.Name).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	before := snapshot()
+	created, err := CreateManifestVersion(ctx, db, doc, checksum)
+	if !errors.Is(err, ErrCapacityPolicyPublicationConflict) {
+		// Initial idle publication and a genuinely ACK-closed owner retain
+		// the ordinary API path; no catalog fault is needed for either.
+		return created, err
+	}
+	if snapshot() != before {
+		t.Fatal("refused current API changed historical fixture catalog")
+	}
+	namespaceID, namespaceErr := uuid.Parse(strings.TrimPrefix(e.Realm, "dispatch-"))
+	if !strings.HasPrefix(e.Realm, "dispatch-") || namespaceErr != nil || namespaceID == uuid.Nil ||
+		doc.Kind != "capacity_policy" || doc.Metadata.Namespace != e.Realm || e.Policy.Namespace != e.Realm ||
+		doc.Metadata.Name != e.Policy.Name || len(checksum) != 64 || strings.Trim(checksum, "0123456789abcdef") != "" {
+		t.Fatal("historical catalog fault requires the isolated exact dispatch fixture")
+	}
+	var busy bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs WHERE id=$1 AND run_id=$2 AND realm=$3 AND environment=$4 AND domain=$5 AND dimension=$6 AND envelope::jsonb#>>'{policy,id}'=$7 AND (state IN ('queued','started','unknown') OR (state='returned' AND finalization_ack_at IS NULL)))`, e.JobID, e.RunID, e.Realm, e.Environment, e.Domain, e.Dimension, e.Policy.ID.String()).Scan(&busy); err != nil || !busy {
+		t.Fatal("historical catalog fault lacks the genuine exact busy original", busy, err)
+	}
+	labels, err := marshalLabels(doc.Metadata.Labels)
+	if err != nil {
+		return model.Manifest{}, err
+	}
+	spec := []byte(doc.Spec)
+	if len(spec) == 0 {
+		spec = []byte("{}")
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Manifest{}, err
+	}
+	defer tx.Rollback()
+	var version int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0)+1 FROM public.manifests WHERE kind=$1 AND namespace=$2 AND name=$3`, doc.Kind, doc.Metadata.Namespace, doc.Metadata.Name).Scan(&version); err != nil {
+		return model.Manifest{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE public.manifests SET active=FALSE WHERE kind=$1 AND namespace=$2 AND name=$3 AND active=TRUE`, doc.Kind, doc.Metadata.Namespace, doc.Metadata.Name); err != nil {
+		return model.Manifest{}, err
+	}
+	// Same first-insert fields/default-generated ID and timestamps as the
+	// old catalog writer; only this disposable stale-state setup is direct.
+	created, err = scanManifest(tx.QueryRowContext(ctx, `INSERT INTO public.manifests(api_version,kind,namespace,name,version,active,description,labels,spec,checksum) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10) RETURNING id,api_version,kind,namespace,name,version,active,description,labels,spec,checksum,created_at,updated_at`, doc.APIVersion, doc.Kind, doc.Metadata.Namespace, doc.Metadata.Name, version, documentActive(doc), strings.TrimSpace(doc.Metadata.Description), labels, spec, checksum))
+	if err != nil {
+		return model.Manifest{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.Manifest{}, err
+	}
+	t.Log("DECLARED historical pre-publication-guard catalog fault; current API refused busy publication and left original catalog intact")
+	return created, nil
 }
 
 func dispatchSupersessionRequest(job CapacityDispatchJob, next CapacityDispatchEnvelope) CapacityDispatchPrestartRejectionRequest {
@@ -308,7 +375,7 @@ func TestCapacityDispatchSupersessionPostgres(t *testing.T) {
 				}
 				if mode == "later_tombstone" {
 					inactive := false
-					if _, err := CreateManifestVersion(context.Background(), db, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: old.Realm, Name: old.Policy.Name, Active: &inactive}, Spec: []byte(`{}`)}, capacityDispatchSHA([]byte(uuid.NewString()))); err != nil {
+					if _, err := dispatchSupersessionHistoricalPublication(t, db, old, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: old.Realm, Name: old.Policy.Name, Active: &inactive}, Spec: []byte(`{}`)}, capacityDispatchSHA([]byte(uuid.NewString()))); err != nil {
 						t.Fatal(err)
 					}
 				}
