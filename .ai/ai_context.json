@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-14T06:24:33-03:00",
+  "generated_at": "2026-11-14T06:25:20-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1547,
-    ".json": 249,
-    ".py": 197,
+    ".json": 253,
+    ".py": 210,
     ".sql": 107,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "f86bf1bd70d61cedac26390c91f68d98228fae3c",
+    "commit": "989ca23e12c0d2839d6a00bdd40f47b2beaebca9",
     "dirty": true,
     "files": [
       {
@@ -94,14 +94,14 @@
       "kb": 485
     },
     {
+      "path": "ops/network-guardian/tests",
+      "files": 67,
+      "kb": 1351
+    },
+    {
       "path": "manifest",
       "files": 65,
       "kb": 397
-    },
-    {
-      "path": "ops/network-guardian/tests",
-      "files": 60,
-      "kb": 1180
     },
     {
       "path": "addons",
@@ -114,14 +114,14 @@
       "kb": 298
     },
     {
+      "path": "ops/network-guardian/rollout",
+      "files": 33,
+      "kb": 2496
+    },
+    {
       "path": "cmd/native-guest-lifecycle-fixture",
       "files": 28,
       "kb": 249
-    },
-    {
-      "path": "docs/bootstrap/manifests/integrations",
-      "files": 28,
-      "kb": 98
     }
   ],
   "top_files_by_size": [
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 81,
+    "config_files": 85,
     "k8s_manifests": 25
   }
 }

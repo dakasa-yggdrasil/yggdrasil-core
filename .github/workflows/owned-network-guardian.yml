@@ -11,6 +11,7 @@ on:
       - 'db/migrations/00096_guest_retirement_pre_read_continuation.sql'
       - 'db/migrations/00097_guest_retirement_normal_finish_recovery.sql'
       - 'db/migrations/00098_installed_provision_timeout_dispositions.sql'
+      - 'db/migrations/00099_preaction_failed_plan_dispositions.sql'
       - '.github/workflows/owned-network-guardian.yml'
   push:
     branches: [main]
@@ -23,6 +24,7 @@ on:
       - 'db/migrations/00096_guest_retirement_pre_read_continuation.sql'
       - 'db/migrations/00097_guest_retirement_normal_finish_recovery.sql'
       - 'db/migrations/00098_installed_provision_timeout_dispositions.sql'
+      - 'db/migrations/00099_preaction_failed_plan_dispositions.sql'
       - '.github/workflows/owned-network-guardian.yml'
   workflow_dispatch:
 
@@ -143,6 +145,10 @@ jobs:
         run: sha256sum --check ops/network-guardian/rollout/SHA256SUMS-GOOSE98
       - name: Verify additive schema98 recovery lineage Source
         run: sha256sum --check ops/network-guardian/rollout/SHA256SUMS-RESTORE98
+      - name: Verify additive Goose99 and catalog Source
+        run: sha256sum --check ops/network-guardian/rollout/SHA256SUMS-GOOSE99
+      - name: Verify additive schema99 continuation Source
+        run: sha256sum --check ops/network-guardian/rollout/SHA256SUMS-SCHEMA99-CONTINUATION
       - name: Run exact preserved census and additive schema98 checks
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}

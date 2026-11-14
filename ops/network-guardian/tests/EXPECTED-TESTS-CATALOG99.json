@@ -1,0 +1,7 @@
+[
+  "test_catalog99.Catalog99Tests.test_source_carrier_and_all_authorized_old8_overlaps",
+  "test_catalog99.Catalog99Tests.test_whole_ci_originals_source_and_unrelated_delta_fail_closed",
+  "test_catalog99.Catalog99Tests.test_structure_history_and_distinct_root99_roles",
+  "test_catalog99.Catalog99Tests.test_actual_failed_plan_anchor_and_raw_e70_owned_unknown",
+  "test_catalog99.Catalog99Tests.test_goose99_generation282_single_job_and_inert_entrypoint"
+]

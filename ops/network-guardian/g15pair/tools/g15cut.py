@@ -24,7 +24,7 @@ import threading
 import time
 
 
-PROPOSAL_BOUND=True
+PROPOSAL_BOUND=False
 
 def sibling(name):
     if PROPOSAL_BOUND is not True:
@@ -333,7 +333,7 @@ def core_overlap():
     pods = native(KUBE + ['-n', 'dakasa', 'get', 'pods', '-l', 'app=yggdrasil', '-o', 'json'], 12)
     C.need(dep.returncode == pods.returncode == 0, 'CORE_READONLY_CENSUS_ZERO')
     d, ps = C.loads(dep.stdout), C.loads(pods.stdout)['items']
-    C.need(C.OLD_DIGEST == '9b6e2a5d06eed90b7b44d059d3f78a405a21430a7b104f17498c904f499bdd97', 'EXACT_CURRENT_R8_OVERLAP_DIGEST')
+    C.need(C.OLD_DIGEST == '1cf53bc24b112d46e4a5dfda14e4639f474979be799996ec22249331a96bddd9', 'EXACT_CURRENT_R13_OVERLAP_DIGEST')
     image = C.IMAGE_PREFIX + C.OLD_DIGEST
     C.need(d['metadata']['uid'] == C.OLD_CORE_UID and d['metadata'].get('annotations', {}).get('dakasa.io/core-source-commit') == C.OLD_CORE_SOURCE
            and d['metadata']['generation'] == C.OLD_CORE_GENERATION and not d['metadata'].get('deletionTimestamp')

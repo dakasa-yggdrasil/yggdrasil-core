@@ -1,0 +1,26 @@
+[Unit]
+Description=Owned fixed capacity WireGuard endpoint and TTL map controller
+After=network-online.target k3s.service dakasa-capacity-network-hub.service dakasa-capacity-network-cold-transport.service
+Wants=network-online.target
+Requires=dakasa-capacity-network-hub.service dakasa-capacity-network-cold-transport.service
+
+[Service]
+Type=simple
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 -B /opt/dakasa/capacity-network/source-r13-netlink-v1/controller.py --config /etc/dakasa/capacity-network/controller.r13-netlink-g25pair.production.json --run
+Restart=no
+RestartSec=2
+TimeoutStopSec=5
+KillMode=control-group
+CPUQuota=50%
+CPUQuotaPeriodSec=100ms
+CPUWeight=1000
+MemoryMax=256M
+MemorySwapMax=0
+TasksMax=64
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

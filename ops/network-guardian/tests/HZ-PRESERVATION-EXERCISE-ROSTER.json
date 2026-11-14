@@ -1,0 +1,11 @@
+{
+  "new_test_IDs": 0,
+  "functions": [
+    "exercise_same_and_allowed_refresh_preserves_whole_originals",
+    "exercise_authority_epoch_policy_and_physical_mutations_refuse",
+    "exercise_immutable_origin_arrays_and_inactive_slot_refuse",
+    "exercise_e70_raw_hash_join_and_other_projection_changes_refuse",
+    "exercise_nanosecond_rollback_unknown_and_truncated_originals_refuse"
+  ],
+  "owning_cases": "The existing five schema99 continuation Source methods call these five exercises; no discoverable unittest class or test_ module is added."
+}
