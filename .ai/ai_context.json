@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-14T04:45:10-03:00",
+  "generated_at": "2026-11-14T05:10:19-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1546,
+    ".go": 1547,
     ".json": 253,
     ".py": 210,
     ".sql": 107,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "a48cd2871e79dad16bc9a14068b00846770fbb7b",
+    "commit": "f967c300c1bfd547f6a61a7d9b4e8dbbc012606b",
     "dirty": true,
     "files": [
       {
@@ -66,12 +66,12 @@
     {
       "path": "repository",
       "files": 399,
-      "kb": 5631
+      "kb": 5635
     },
     {
       "path": "controllers/httpapi",
-      "files": 261,
-      "kb": 2648
+      "files": 262,
+      "kb": 2658
     },
     {
       "path": "controllers/message",
@@ -96,7 +96,7 @@
     {
       "path": "ops/network-guardian/tests",
       "files": 67,
-      "kb": 1344
+      "kb": 1346
     },
     {
       "path": "manifest",
