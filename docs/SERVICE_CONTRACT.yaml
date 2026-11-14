@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "a45a59158b88e95971c6148ac3cff1bde5292dfe7bfde2548970c68b97dd1212"
+      "sha256": "0aa19f9d12b3849d4669e302e518b68f6e70747ecdfe74750f28d9a6d01f4486"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "a45a59158b88e95971c6148ac3cff1bde5292dfe7bfde2548970c68b97dd1212"
+      "sha256": "0aa19f9d12b3849d4669e302e518b68f6e70747ecdfe74750f28d9a6d01f4486"
     },
     {
       "evidence": "go.mod",
@@ -91,6 +91,11 @@
       "evidence": "docs/service-contract/INSTALLED_READINESS_HANDOFF_SOURCE_REVIEW.json",
       "id": "installed_readiness_exhausted_handoff_source_review",
       "sha256": "e9868acd7060623c536c2ac22d650b3d35b3908ea232d81f19dfb602d9298766"
+    },
+    {
+      "evidence": "docs/service-contract/SUPERSEDED_HTTP_MAINTENANCE_SOURCE_REVIEW.json",
+      "id": "superseded_equivalent_policy_http_maintenance_source_review",
+      "sha256": "fb962c543629bcf999c33c0b2080730ef11329e2de0fb033987cf207788317aa"
     }
   ],
   "coverage": "complete",
@@ -98,7 +103,7 @@
     {
       "evidence": "docs/service-contract/source/http-routes.json",
       "id": "http_mux_registrations",
-      "sha256": "de0b82b91509b652148dfc6196c70b974c0d214cc2301e70c61d5311d964a619"
+      "sha256": "47b09570f1aba9f4f873e8522ea23c61d434916bbed3043fb2fc2ed405a4107a"
     },
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
@@ -108,14 +113,14 @@
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "fadfc849753fece82e54adc50d54dfec454ade5bd0cc313e270f7bd8aa93af22"
+      "sha256": "14de51370264471f326ca979eccabd346046b3b453f43a1d40655cef0b781f55"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "d36b6afa8d1c85624d74d1683dc5248fca0e62bcd8fa3094676977541e21966b"
+      "sha256": "7771ce4f202f3bab7d50b774eaec1952f2167e37f4cd881795d417976e7c12b7"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -139,7 +144,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "383af0d3b1fb8a327a682416a97f61a52ddb5d8ab89f9f8a5124093f0c8db26c"
+    "sha256": "810f106ee131d6d5c1e9195c961c90937d9444b5a1276c42060169ab97807142"
   },
   "unresolved": []
 }

@@ -933,3 +933,32 @@ closed-failed-read semantics remain. Down refuses any used103 proof, including
 carried descendants. Same-process repository races and declared PostgreSQL
 fixtures are Source evidence only; current-head CI, image, Native migration,
 network/Core rollout and real elastic cycles require their own actual evidence.
+
+
+## Superseded equivalent-policy HTTP maintenance disposition
+
+ADR-0116 adds a distinct administrative terminal for a recorded failed readonly
+refresh whose original capacity policy is inactive and whose latest uniquely
+active newer replacement has the same whole Spec and checksum. The original
+failed UNKNOWN return, errors, no-ACK state, original publication/read pair and
+provider evidence remain unchanged. The new closed twelve-field CAS body cannot
+supply policy equivalence, effects, clocks, a canary return or an executor barrier.
+
+The server authenticates the stored one-member birth/enrollment/installation
+lineage, original and current catalog pins, stable epoch, accepted publication
+and expired missing read, complete nonce/send custody and a closed effect scan.
+Only the proved assessment and observation bookkeeping is tolerated; provider
+authority remains absent. The existing process-after-expiry and 900-second age
+barriers remain mandatory. The immutable receipt archives normalized PostgreSQL
+preimages separately from original signed canary wire identity. Later historical
+reads depend on retained snapshots, not later active policies or members.
+
+The POST and GET `/api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions`
+routes retain the existing current administrative human and workflow-management
+permission boundaries (GET addresses one canonical job UUID). No workflow, provider
+call, replay, successful original ACK, freshness or useful-capacity claim is made.
+The next ordinary tick requires independent current admission. Earlier M87/M91
+contracts and refusal cases remain unchanged. Capacity policy publication and
+deactivation now serialize logical names, then the same physical scope locks as
+dispatch admission, refusing publication while an unfinalized dispatch owns an
+affected scope. Existing dispatch clocks and unrelated scopes remain independent.
