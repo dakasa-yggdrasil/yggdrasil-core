@@ -547,6 +547,13 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		if err = guestQualificationBeforeRetirementPOST(original); err != nil {
 			return fail("original-guest-step-38")
 		}
+		if capacity.GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
+			stored, loadErr := store.GuestRetirementOriginal(original, member.ActorClientPrincipal, request.Intent.RequestID, capacity.GuestRetirementSHA(request.Intent))
+			if loadErr != nil {
+				return fail("original-guest-step-38")
+			}
+			client = client.WithNativeV1ReturnClock(stored.Binding, stored.Receipt.Enrollment, stored.Request.Intent)
+		}
 		returned, callErr := client.Original(original, http.MethodPost, "/v1/retirement", body)
 		floorJoinErr := joinOriginalFloor(original)
 		var observed model.CapacityGuestRetirementObservation
