@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**110 decisions.**
+**111 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -155,3 +155,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0113](0113-handoff-exhausted-installed-readiness-to-one-new-generation.md) | Hand off exhausted installed readiness to one new generation | Proposed | 2026-11-12 | Core / one immutable exhausted origin and one readiness-only successor |
 | [0114](0114-continue-after-a-closed-deadline-failed-absence-read.md) | Continue after a closed deadline-failed absence read | Proposed | 2026-11-12 | Core / typed read-only continuation after an authentic closed absence deadline failure |
 | [0115](0115-recover-a-closed-forward-before-any-delete-authority.md) | Recover a closed forward before any DELETE authority | Proposed | 2026-11-12 | Core / exact closed pre-DELETE failure and new fenced first-delete owner |
+| [0116](0116-dispose-a-superseded-equivalent-policy-readonly-maintenance-failure.md) | Dispose a superseded equivalent-policy readonly maintenance failure | Proposed | 2026-11-14 | Core / serialized policy publication and immutable superseded-policy HTTP maintenance disposition |

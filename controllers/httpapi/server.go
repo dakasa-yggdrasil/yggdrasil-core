@@ -611,6 +611,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/ops/capacity/unknown-maintenance-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsUnknownMaintenanceDispatchDispositionRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/http-maintenance-dispatch-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsHTTPMaintenanceDispatchDisposition))
 	mux.HandleFunc("GET /api/v1/ops/capacity/http-maintenance-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsHTTPMaintenanceDispatchDispositionRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsSupersededHTTPMaintenanceDispatchDisposition))
+	mux.HandleFunc("GET /api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsSupersededHTTPMaintenanceDispatchDispositionRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/finalization-lost-dispatch-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFinalizationLostDispatchDisposition))
 	mux.HandleFunc("GET /api/v1/ops/capacity/finalization-lost-dispatch-dispositions/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFinalizationLostDispatchDispositionRead))
 	mux.HandleFunc("GET /api/v1/ops/workflows", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowsList))
@@ -3841,6 +3843,8 @@ func httpStatusFromError(err error) int {
 	case errors.Is(err, repository.ErrLeadershipAssertionRequired):
 		return http.StatusUnprocessableEntity
 	case errors.Is(err, repository.ErrLeadershipVersionConflict):
+		return http.StatusConflict
+	case errors.Is(err, repository.ErrCapacityPolicyPublicationConflict):
 		return http.StatusConflict
 	case err == nil:
 		return http.StatusOK

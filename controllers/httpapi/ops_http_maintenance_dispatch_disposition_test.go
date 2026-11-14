@@ -16,6 +16,7 @@ import (
 )
 
 func TestHTTPMaintenanceDispatchDispositionClosedCASRequest(t *testing.T) {
+	supersededHTTPMaintenanceClosedCASTest(t)
 	encode := func(value any) string {
 		raw, err := json.Marshal(value)
 		if err != nil {

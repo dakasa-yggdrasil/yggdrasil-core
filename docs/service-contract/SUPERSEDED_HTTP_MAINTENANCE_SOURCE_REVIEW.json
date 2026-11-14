@@ -1,0 +1,55 @@
+{
+  "abi": {
+    "base_fields": 47,
+    "canary_evidence_fields": 5,
+    "http_CAS_fields": 12,
+    "receipt_columns": 31,
+    "scan_top_fields": 12
+  },
+  "adr": "docs/adr/0116-dispose-a-superseded-equivalent-policy-readonly-maintenance-failure.md",
+  "current_source_census_sha256": "810f106ee131d6d5c1e9195c961c90937d9444b5a1276c42060169ab97807142",
+  "independent_SQL_Source_peer": "f733ec534ec3914b30c1ed91993b1eca361575a8ebec769a749e164abae29862",
+  "independent_parent_Go_and_fixture_review": "required before normal publication",
+  "production_or_native_qualification": false,
+  "production_sources": {
+    "controllers/httpapi/ops_superseded_http_maintenance_dispatch_disposition.go": {
+      "bytes": 6453,
+      "sha256": "08e36841e82b2af6be934023495b557132ab9966121a855f4e4fea59159ffa26"
+    },
+    "controllers/httpapi/server.go": {
+      "bytes": 190061,
+      "sha256": "2878080618b12b38533566ff6aec4253ad87111335e7ec71fb062e5026c66ad1"
+    },
+    "repository/capacity_dispatch_superseded_http_maintenance_disposition.go": {
+      "bytes": 30597,
+      "sha256": "280eb42e3fb4289714bb97636ea08a94e3a43a3ef6fd89d98885953b84cd868a"
+    },
+    "repository/capacity_policy_publication_guard.go": {
+      "bytes": 5302,
+      "sha256": "4f3b861849b7ff67625ed31e0d54dbcb1e6c6b764ec4d6ab790770cf2caa0df0"
+    },
+    "repository/manifest.go": {
+      "bytes": 19283,
+      "sha256": "03208dd1996fe27995384d432de9fcf22f798ae782183c22b9ccf591b4afeca5"
+    },
+    "repository/retirement_continuation.go": {
+      "bytes": 33048,
+      "sha256": "1feb80dbe0da36b5626e94cabec7114518e4b04880c46ccc270f6aef3dfa2c12"
+    }
+  },
+  "schema": "superseded_equivalent_policy_http_maintenance_source_review_v1",
+  "scope": "ADR-0116: serialized capacity policy publication and distinct immutable superseded-equivalent-policy HTTP maintenance disposition; no replay, ACK rewrite or provider mutation",
+  "source_only": true,
+  "sql104_sha256": "5f525177e79fd0b2789c1809f26481eb168291bab80f965b06d34e37f6ba2d08",
+  "status": "source_only_ci_pending",
+  "validation": {
+    "canonical_generator_executed": false,
+    "current_Source_producer_and_declared_historical_operator_witnesses_separate": true,
+    "fresh_exact_head_CI": "pending",
+    "full_workflow_execution_claimed": false,
+    "live_900_second_fixture_itinerary_claimed": false,
+    "local_SQL_execution": false,
+    "local_product_or_Go_test_execution": false,
+    "stdio_only_companion_update": true
+  }
+}

@@ -29,6 +29,7 @@ func declaredHTTPMaintenanceScan() CapacityDispatchHTTPMaintenanceEffectScan {
 }
 
 func TestHTTPMaintenanceDispositionRetainedScanBoundary(t *testing.T) {
+	supersededHTTPMaintenanceScanTest(t)
 	// These are declared codec operands only; SQL separately recomputes the
 	// retained member digest and proves original rows, deadlines and lineage.
 	if !declaredHTTPMaintenanceScan().tolerable() {

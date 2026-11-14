@@ -758,6 +758,12 @@ func preActionPlanRefusedAdmission(t *testing.T, f *installedTimeoutFixture, job
 func TestCapacityDispatchPreActionFailedPlanDispositionPostgres(t *testing.T) {
 	for _, name := range []string{"closed_failed_plan_after_M98_anchor", "second_failed_plan_phase_a", "second_failed_plan_phase_b", "concurrent_wakes_single_successor", "committed_resume_cannot_be_relabelled", "wire_shape_and_effect_guards", "deferred_links_and_immutability", "catalog_index_and_old_schema", "unanchored_plan_refused"} {
 		t.Run(name, func(t *testing.T) {
+			if name == "catalog_index_and_old_schema" {
+				// Registered before f: LIFO closes the unchanged old-schema fixture
+				// first. The new typed-terminal witness owns separate databases and
+				// files; no historical M98/M99 catalog or original is rewritten.
+				t.Cleanup(func() { supersededHTTPMaintenancePostgresRegression(t) })
+			}
 			ctx := context.Background()
 			owner := &preActionPlanDBOwner{}
 			if name == "second_failed_plan_phase_b" {

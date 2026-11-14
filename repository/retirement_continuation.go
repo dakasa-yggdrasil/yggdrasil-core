@@ -308,7 +308,7 @@ func retirementForwardContinuationQuietTx(ctx context.Context, tx *sql.Tx, x ret
 	if closeErr != nil {
 		return closeErr
 	}
-	// Read complete immutable receipts only for the two new terminal states.
+	// Read complete immutable receipts only for recognized typed terminal states.
 	// Older schemas never query ledgers that do not exist in their prefix.
 	for _, job := range candidates {
 		if err = retirementContinuationTerminalReceiptTx(ctx, tx, job.id, job.state.String, job.updatedAt); err != nil {
@@ -329,6 +329,17 @@ func retirementContinuationTerminalReceiptTx(ctx context.Context, tx *sql.Tx, id
 		recordedAt = receipt.RecordedAt
 	case CapacityDispatchPreActionPlanState:
 		receipt, err := readPreActionPlanDisposition(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		recordedAt = receipt.RecordedAt
+	case CapacityDispatchSupersededHTTPMaintenanceState:
+		// The archive stores PostgreSQL whole-row timestamptz JSON in UTC,
+		// independently of the caller connection's previous local zone.
+		if _, err := tx.ExecContext(ctx, "SET LOCAL TIME ZONE 'UTC'"); err != nil {
+			return err
+		}
+		receipt, err := readSupersededHTTPMaintenanceDisposition(ctx, tx, id)
 		if err != nil {
 			return err
 		}
