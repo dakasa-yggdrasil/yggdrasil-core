@@ -109,6 +109,7 @@ func TestGuestRetirementForwardLivePostgres(t *testing.T) {
 			})
 		}
 	}
+	retirementForwardPreDestroy103Regression(t)
 }
 
 func forwardTestSettledDestroy(t *testing.T, f *GuestRetirementForwardRecoveryFixture, ctx context.Context, settle bool) model.CapacityMutationReceipt {

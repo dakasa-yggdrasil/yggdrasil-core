@@ -62,6 +62,7 @@ type GuestRetirementForward struct {
 	TerminalIntentWire    []byte                                           `json:"terminal_intent_wire,omitempty"`
 	Continuation          *GuestRetirementForwardContinuationProof         `json:"continuation,omitempty"`
 	NormalFinishRecovery  *GuestRetirementForwardNormalFinishRecoveryProof `json:"normal_finish_recovery,omitempty"`
+	PreDestroyRecovery    *GuestRetirementForwardPreDestroyRecoveryProof   `json:"pre_destroy_recovery,omitempty"`
 }
 
 type GuestRetirementForwardRead struct {

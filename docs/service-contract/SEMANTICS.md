@@ -894,3 +894,42 @@ keep their original encoding and historical validation. No migration or change t
 original grants, callback authentication, protected survivor floors or the four
 existing disposal consumers is introduced. SDK/XML interpretation remains owned
 by the adapter; declared Source fixtures do not prove a native provider outcome.
+
+
+## Closed pre-destroy forward recovery (ADR-0115)
+
+A distinct internal `pre_destroy_recovery` admission covers a failed live or
+previous pre-destroy owner which qualified its own exact OFF but never obtained
+DELETE authority. It does not reuse the historical process barrier, normal
+successful-caller recovery or settled read-only continuation as an alias.
+Under the existing scope and native-profile locks, Source retains the exact
+failed run and unique dispatch ACK, natural original request/context and parent
+lease expiry, canonical parent/root/caller evidence, absolute latest complete
+positive OFF and complete current typed quiet. Unknown or open reads hold.
+
+All current-tuple authority states, epochs, realms and slots in the locked
+integration/scope/profile are examined. Ordinary confirmed creation remains
+ownership, and completely identified different physical incarnations remain
+history. Unknown or matching destroy authority refuses. Existing native
+provenance and exact physical scope/spec/profile/slot/identity checks prevent
+another integration or profile from adopting that lifetime; no global physical
+resource lock or provider-side CAS is claimed.
+
+The requested child preserves the closed parent and obtains a new fence and
+ordinary lease through the existing claim. Shared grant-writer locks and fresh
+lease/fence checks prevent a delayed old owner from issuing. The child requires
+NEW read-only OFF, exact inventory and useful survivor publications before its
+FIRST once-only DELETE. A child which failed after its own positive OFF can
+repeat this guarded admission. Later failed/open OFF remains HOLD. Once a
+destroy authority exists, this admission closes. An accepted DELETE continues
+only through the existing read/Confirm lane, preserving the exact pre-destroy
+proof even in its settled-absence descendants. Missing, null or changed carried
+proof is refused by storage. No OFF effect, DELETE, nonce, timestamp or original
+record is replayed or rewritten.
+
+Migration103 adds closed proof/absence validators, a narrow mode/CHECK extension
+and explicit trigger branches. Prior historical, normal, M101 quiet and M102
+closed-failed-read semantics remain. Down refuses any used103 proof, including
+carried descendants. Same-process repository races and declared PostgreSQL
+fixtures are Source evidence only; current-head CI, image, Native migration,
+network/Core rollout and real elastic cycles require their own actual evidence.

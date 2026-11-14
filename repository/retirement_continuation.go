@@ -177,6 +177,7 @@ func (s CapacityStore) TryRequestGuestRetirementForwardContinuation(ctx context.
 	r.FailedRun = []byte(failed)
 	r.DestroyGrantID = destroy
 	r.Continuation = proof
+	r.PreDestroyRecovery = parent.PreDestroyRecovery
 	if _, err = insertRetirementForwardTx(ctx, tx, r); err != nil {
 		return false, err
 	}

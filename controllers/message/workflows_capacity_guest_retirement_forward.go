@@ -62,13 +62,19 @@ func planGuestRetirementForward(ctx context.Context, store repository.CapacitySt
 			return nil, true, requestErr
 		}
 		if !requested {
+			requested, requestErr = store.TryRequestGuestRetirementForwardPreDestroyRecovery(ctx, policy)
+			if requestErr != nil {
+				return nil, true, requestErr
+			}
+		}
+		if !requested {
 			return map[string]any{"mode": "hold", "reason": "partial_poweroff_forward_requires_historical_claim", "retirement_forward_id": r.ID, "native_write_sent": false, "original_failure_preserved": true}, true, nil
 		}
 		r, waiting, err = store.GuestRetirementForwardWaiting(ctx, policy)
 		if err != nil {
 			return nil, true, err
 		}
-		if !waiting || r.Stage != "requested" || r.Mode != repository.GuestRetirementForwardContinuationMode {
+		if !waiting || r.Stage != "requested" || (r.Mode != repository.GuestRetirementForwardContinuationMode && r.Mode != repository.GuestRetirementForwardPreDestroyRecoveryMode) {
 			return nil, true, errOriginalGuestStep
 		}
 	}
@@ -89,6 +95,8 @@ func planGuestRetirementForward(ctx context.Context, store repository.CapacitySt
 		reason = repository.GuestRetirementForwardNormalFinishRecoveryMode
 	case repository.GuestRetirementForwardContinuationMode:
 		reason = "settled_absence_continuation"
+	case repository.GuestRetirementForwardPreDestroyRecoveryMode:
+		reason = repository.GuestRetirementForwardPreDestroyRecoveryMode
 	}
 	return originalGuestReconcilePlan{Mode: "retire", Reason: reason, Slot: claimed.Decision.Units + 1, Generation: claimed.Generation, FencingToken: claimed.FencingToken, LeaseOwner: claimed.LeaseOwner, PreregistrationID: preID}, true, nil
 }
