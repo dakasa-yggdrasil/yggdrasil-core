@@ -422,11 +422,17 @@ func (s CapacityStore) RegisterOriginalGuest(ctx context.Context, principal stri
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_vm_original_enrollments(preregistration_id,resource_tuple_sha256,enrollment_sha256,original_provisioning_sha256,enrollment_record,recorded_at,registration_wire,receipt_wire) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`, stored.pre.PreregistrationID, capacity.GuestRetirementSHA(e.Statement.Tuple), capacity.GuestRetirementSHA(e), result.OriginalProvisioningSHA256, enrollmentWire, now, registrationWire, receiptWire)
+		if err != nil {
+			return guestRegistrationFailure("enrollment_insert", err)
+		}
 		if err == nil {
 			issuer := s
 			issuer.WorkflowID = uuid.MustParse(stored.pre.WorkflowID)
 			issuer.ExecutorID = stored.pre.ExecutorID
 			err = issuer.recordGuestAuthorityIssueTx(ctx, tx, model.Manifest{ID: uuid.MustParse(stored.pre.PolicyID)}, p, stored.binding, "enrollment", stored.pre.PreregistrationID, capacity.GuestRetirementSHA(result.Enrollment))
+			if err != nil {
+				return guestRegistrationFailure("authority_issue", err)
+			}
 		}
 		return err
 	})

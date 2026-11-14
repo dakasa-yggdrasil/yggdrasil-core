@@ -19,6 +19,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -282,15 +284,68 @@ func run() (runErr error) {
 	return f.runOriginalPublicCaller(ctx)
 }
 
+// This observer records only calls and status writes on the two original
+// registration routes. It never reads a request/response body or headers, and
+// returned means the same handler returned, not that the Guest received a reply.
+type originalNativeHTTPDiagnosticWriter struct {
+	http.ResponseWriter
+	status   int
+	observed bool
+}
+
+func (w *originalNativeHTTPDiagnosticWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func (w *originalNativeHTTPDiagnosticWriter) WriteHeader(status int) {
+	w.ResponseWriter.WriteHeader(status)
+	if !w.observed || w.status < 200 {
+		w.status, w.observed = status, true
+	}
+}
+func (w *originalNativeHTTPDiagnosticWriter) Write(body []byte) (int, error) {
+	if !w.observed || w.status < 200 {
+		w.status, w.observed = http.StatusOK, true
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func originalNativeRegistrationRoute(r *http.Request) string {
+	const base = "/internal/capacity/guest-provisioning"
+	if r.Method == http.MethodPost && r.URL.Path == base+"/registrations" {
+		return "registration_post"
+	}
+	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, base+"/preregistrations/") {
+		id := strings.TrimPrefix(r.URL.Path, base+"/preregistrations/")
+		if parsed, err := uuid.Parse(id); err == nil && parsed != uuid.Nil && parsed.String() == id {
+			return "receipt_get"
+		}
+	}
+	return ""
+}
+
 func originalNativeHTTPHandler(handler http.Handler, owners *httpapi.NativeOriginalWorkflowOwners) http.Handler {
+	var ordinal atomic.Uint64
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		returned := false
+		logEnd := func() {}
+		if route := originalNativeRegistrationRoute(r); route != "" {
+			n := ordinal.Add(1)
+			observer := &originalNativeHTTPDiagnosticWriter{ResponseWriter: w}
+			w = observer
+			log.Printf("original_guest_registration_http_diagnostic_v1 ordinal=%d route=%s phase=begin status=0 status_observed=false returned=false", n, route)
+			logEnd = func() {
+				log.Printf("original_guest_registration_http_diagnostic_v1 ordinal=%d route=%s phase=end status=%d status_observed=%t returned=%t", n, route, observer.status, observer.observed, returned)
+			}
+		}
 		_, finish, err := owners.Begin()
 		if err != nil {
+			defer logEnd()
 			http.Error(w, "original native HTTP owner closed", http.StatusServiceUnavailable)
+			returned = true
 			return
 		}
 		defer finish()
+		defer logEnd()
 		handler.ServeHTTP(w, r)
+		returned = true
 	})
 }
 

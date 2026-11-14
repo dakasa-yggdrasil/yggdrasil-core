@@ -3,10 +3,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"log"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -119,4 +124,90 @@ func TestOriginalNativeHTTPReturnedOwners(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+	originalNativeHTTPDiagnosticContracts(t)
 }
+
+// Runs within the existing owner-lifetime root; no native capacity evidence is
+// created by these observer/privacy assertions.
+func originalNativeHTTPDiagnosticContracts(t *testing.T) {
+	var output bytes.Buffer
+	priorWriter, priorFlags, priorPrefix := log.Writer(), log.Flags(), log.Prefix()
+	log.SetOutput(&output)
+	log.SetFlags(log.Ldate | log.Ltime)
+	log.SetPrefix("")
+	defer func() { log.SetOutput(priorWriter); log.SetFlags(priorFlags); log.SetPrefix(priorPrefix) }()
+	original, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	owners, err := httpapi.NewNativeOriginalWorkflowOwners(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const secret = "private-token-body-header-query-DO-NOT-LOG"
+	calls := 0
+	handler := originalNativeHTTPHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Header.Get("X-Test-Mode") == "panic" {
+			panic(secret)
+		}
+		if r.Method == http.MethodGet {
+			return
+		}
+		w.Header().Set("X-Private-Test", secret)
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(secret))
+	}), owners)
+	body := &originalNativeUnreadBody{}
+	request := httptest.NewRequest(http.MethodPost, "https://core.invalid/internal/capacity/guest-provisioning/registrations?private="+secret, body)
+	request.Header.Set("Authorization", secret)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusConflict || response.Body.String() != secret || response.Header().Get("X-Private-Test") != secret || body.reads != 0 || body.closes != 0 {
+		t.Fatal("diagnostic changed the original HTTP response or read the request")
+	}
+	id := "ab12891f-db5a-4bef-a4c3-7d8dd10686b3"
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "https://core.invalid/internal/capacity/guest-provisioning/preregistrations/"+id, nil))
+	before := output.Len()
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "https://core.invalid/internal/capacity/guest-provisioning/installations", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "https://core.invalid/internal/capacity/guest-provisioning/preregistrations/"+id+"/create-witness", nil))
+	if output.Len() != before {
+		t.Fatal("unrelated original routes were logged")
+	}
+	panicRequest := httptest.NewRequest(http.MethodPost, "https://core.invalid/internal/capacity/guest-provisioning/registrations", nil)
+	panicRequest.Header.Set("X-Test-Mode", "panic")
+	func() {
+		defer func() {
+			if recover() != secret {
+				t.Fatal("observer changed original panic")
+			}
+		}()
+		handler.ServeHTTP(httptest.NewRecorder(), panicRequest)
+	}()
+	if err := owners.Join(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	beforeCalls := calls
+	closed := httptest.NewRecorder()
+	handler.ServeHTTP(closed, httptest.NewRequest(http.MethodPost, "https://core.invalid/internal/capacity/guest-provisioning/registrations", nil))
+	if closed.Code != http.StatusServiceUnavailable || calls != beforeCalls {
+		t.Fatal("observer bypassed sealed owner refusal")
+	}
+	text := output.String()
+	for _, expected := range []string{
+		"ordinal=1 route=registration_post phase=end status=409 status_observed=true returned=true",
+		"ordinal=2 route=receipt_get phase=end status=0 status_observed=false returned=true",
+		"ordinal=3 route=registration_post phase=end status=0 status_observed=false returned=false",
+		"ordinal=4 route=registration_post phase=end status=503 status_observed=true returned=true",
+	} {
+		if !strings.Contains(text, expected) {
+			t.Fatal("actual status/handler return observation lost", expected)
+		}
+	}
+	if strings.Count(text, "phase=begin") != 4 || strings.Count(text, "phase=end") != 4 || strings.Contains(text, secret) || strings.Contains(text, id) || strings.Contains(text, "Authorization") || strings.Contains(text, "core.invalid") {
+		t.Fatal("diagnostic leaked private data or changed call multiplicity")
+	}
+}
+
+type originalNativeUnreadBody struct{ reads, closes int }
+
+func (b *originalNativeUnreadBody) Read([]byte) (int, error) { b.reads++; return 0, io.EOF }
+func (b *originalNativeUnreadBody) Close() error             { b.closes++; return nil }

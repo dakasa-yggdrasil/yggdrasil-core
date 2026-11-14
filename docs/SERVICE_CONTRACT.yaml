@@ -100,7 +100,7 @@
     {
       "evidence": "docs/service-contract/WITNESSED_UNENROLLED_EXPANSION_SOURCE_REVIEW.json",
       "id": "witnessed_unenrolled_expansion_cleanup_source_review",
-      "sha256": "efdc85178918fcdff3f71c87025ff3592a9de1c41d138de58e0ef4d7f4bc13fd"
+      "sha256": "975acdf01617761d0385a3425afc5f02654426c9ccfa92d9ce0000436e6c45e5"
     }
   ],
   "coverage": "complete",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "0dfd9604dcb0b8e3579e46f8d23568ab249130b4cb283a486b3ec741d5366f08"
+    "sha256": "63df68eca87b08457a72f9794ab0b968b11bebe1eac993242b4e7a652c44d2bc"
   },
   "unresolved": []
 }

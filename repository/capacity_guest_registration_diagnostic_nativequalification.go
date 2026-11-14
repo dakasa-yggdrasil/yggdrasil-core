@@ -19,7 +19,7 @@ func (e *guestRegistrationDiagnostic) Error() string { return "original Guest re
 func (e *guestRegistrationDiagnostic) Unwrap() error { return e.cause }
 func guestRegistrationFailure(stage string, err error) error {
 	switch stage {
-	case "principal", "current", "witness_load", "production_clock", "keys", "witness_validation", "registration_validation", "registration_clock", "registration_protected", "registration_census", "registration_placement", "registration_enrollment", "registration_signature", "enrollment_validation":
+	case "principal", "current", "witness_load", "production_clock", "keys", "witness_validation", "registration_validation", "registration_clock", "registration_protected", "registration_census", "registration_placement", "registration_enrollment", "registration_signature", "enrollment_validation", "enrollment_insert", "authority_issue":
 		return &guestRegistrationDiagnostic{stage: stage, cause: err}
 	default:
 		return err
