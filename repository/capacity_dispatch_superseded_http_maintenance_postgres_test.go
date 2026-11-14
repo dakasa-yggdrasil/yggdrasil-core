@@ -510,13 +510,20 @@ func supersededHTTPHistoricalChecks(t *testing.T, h supersededHTTPHistorical, pu
 			r.ExpectedReplacementPolicyVersion++
 		}},
 		{"replacement_checksum", func(r *CapacityDispatchSupersededHTTPMaintenanceDispositionRequest) {
-			r.ExpectedReplacementPolicyChecksum = strings.Repeat("c", 64)
+			first := byte('0')
+			if r.ExpectedReplacementPolicyChecksum[0] == first {
+				first = '1'
+			}
+			r.ExpectedReplacementPolicyChecksum = string(first) + r.ExpectedReplacementPolicyChecksum[1:]
 		}},
 		{"caller", func(r *CapacityDispatchSupersededHTTPMaintenanceDispositionRequest) { r.Issuer = "machine:fixture" }},
 	}
 	for _, test := range casCases {
 		r := h.request
 		test.change(&r)
+		if reflect.DeepEqual(r, h.request) {
+			t.Fatal("M104 negative CAS operand must differ from actual baseline", test.name)
+		}
 		if _, e := DisposeSupersededHTTPMaintenanceDispatch(ctx, h.db, r, h.barrier, abandonedAllow); e == nil {
 			t.Fatal("M104 stale/caller CAS accepted", test.name)
 		}
