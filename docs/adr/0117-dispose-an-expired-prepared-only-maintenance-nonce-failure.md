@@ -1,6 +1,6 @@
 # ADR-0117: Dispose an expired prepared-only maintenance nonce failure
 
-- Status: Proposed
+**Status:** Proposed
 - Date: 2026-11-14
 
 ## Context
