@@ -411,6 +411,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 				return fail(resumeErr)
 			}
 			if !disposalEligible && !eligible {
+				store, resumed, eligible, resumeErr = store.TryClaimInstalledReadinessHandoff(ctx, policy, assessment)
+				if resumeErr != nil {
+					return fail(resumeErr)
+				}
+			}
+			if !disposalEligible && !eligible {
 				store, resumed, eligible, resumeErr = store.TryClaimFailedExpansionTerminalReconcile(ctx, policy, assessment)
 				if resumeErr != nil {
 					return fail(resumeErr)
@@ -429,6 +435,9 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 					return fail(errOriginalGuestStep)
 				}
 				plan.Mode, plan.Reason = "refresh", "installed_original_readiness_reconcile"
+				if resumed.InstalledReadinessHandoff != nil {
+					plan.Reason = "installed_readiness_exhausted_handoff"
+				}
 				if resumed.FailedExpansionTerminalReconcile != nil {
 					plan.Reason = "failed_expansion_terminal_readonly_reconcile"
 				}
@@ -483,6 +492,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			store, epoch, resuming, err = store.OriginalGuestInstalledResumeEpoch(ctx, policy)
 			if err != nil {
 				return fail(err)
+			}
+			if !resuming {
+				store, epoch, resuming, err = store.OriginalGuestInstalledReadinessHandoffEpoch(ctx, policy)
+				if err != nil {
+					return fail(err)
+				}
 			}
 			if !resuming {
 				store, epoch, resuming, err = store.OriginalGuestFailedExpansionTerminalReconcileEpoch(ctx, policy)

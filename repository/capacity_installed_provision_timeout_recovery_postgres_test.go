@@ -663,6 +663,155 @@ func (f *installedTimeoutFixture) resume(t *testing.T, newJob CapacityDispatchJo
 	return got
 }
 
+// Exercise the same retained M98 marker through the common phase writer,
+// after real repository nonce/send/return joins in this disposable fixture.
+func (f *installedTimeoutFixture) completeResume(t *testing.T, newJob CapacityDispatchJob, resumed model.CapacityIntent) {
+	t.Helper()
+	if resumed.InstalledGuestReconcile == nil || resumed.InstalledGuestReconcile.InstalledProvisionTimeoutDispositionID == "" || resumed.InstalledGuestReconcile.NewRunID != newJob.RunID.String() || resumed.LeaseExpiresAt == nil || resumed.LeaseOwner == "" || !validCapacityExecutor(resumed.LeaseExecutorID) {
+		t.Fatal("typed resume with its genuine new run required")
+	}
+	// Pure admission-boundary operands: opening every other candidate gate
+	// must not admit a fourth attempt. No stored lease or marker is changed.
+	bounded := resumed
+	marker := *resumed.InstalledGuestReconcile
+	bounded.InstalledGuestReconcile = &marker
+	boundaryNow := resumed.LeaseExpiresAt.Add(time.Nanosecond)
+	marker.Attempt = 2
+	if !installedGuestResumeCandidate(&bounded, f.p, f.policy, boundaryNow) {
+		t.Fatal("declared third-attempt candidate lost its unchanged eligibility")
+	}
+	marker.Attempt = 3
+	if installedGuestResumeCandidate(&bounded, f.p, f.policy, boundaryNow) {
+		t.Fatal("ordinary fourth readiness attempt was admitted")
+	}
+	var step model.WorkflowStepSpec
+	for _, candidate := range f.steps {
+		if candidate.ID == "refresh-original-membership" {
+			step = candidate
+		}
+	}
+	if step.Use.Operation != capacity.CompleteOriginalGuestOperation || step.TimeoutSeconds != 90 {
+		t.Fatal("source refresh completion step required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(step.TimeoutSeconds)*time.Second)
+	defer cancel()
+	intentMatches := func(want model.CapacityIntent) {
+		t.Helper()
+		var same bool
+		if err := f.db.QueryRowContext(ctx, "SELECT intent=$5::jsonb FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4", f.policy.Metadata.Namespace, f.p.Environment, f.p.Domain, f.p.Dimension, string(installedTimeoutWire(t, want))).Scan(&same); err != nil || !same {
+			t.Fatal("durable retained intent changed unexpectedly", same, err)
+		}
+	}
+	// PostgreSQL runs BEFORE INSERT before resolving ON CONFLICT. Keep its
+	// strict retained-origin refusal, even when this exact row already exists.
+	proposed := resumed
+	proposed.Phase = "prepared"
+	tx, err := f.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_intents(namespace,environment,domain,dimension,intent,updated_at)
+		VALUES($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT(namespace,environment,domain,dimension)
+		DO UPDATE SET intent=EXCLUDED.intent,updated_at=EXCLUDED.updated_at`, f.policy.Metadata.Namespace, f.p.Environment, f.p.Domain, f.p.Dimension, string(installedTimeoutWire(t, proposed)), proposed.UpdatedAt)
+	rollbackErr := tx.Rollback()
+	var pg *pq.Error
+	if !errors.As(err, &pg) || string(pg.Code) != "P0001" || pg.Message != "installed timeout readiness requires retained prior intent" || rollbackErr != nil {
+		t.Fatal("old UPSERT did not retain exact M98 INSERT refusal", err, rollbackErr)
+	}
+	intentMatches(resumed)
+
+	now := time.Now().UTC()
+	inv := f.inventory(t, len(f.reg), now)
+	store := CapacityStore{DB: f.db, ExecutionEnabled: true, WorkflowID: f.workflow.ID, OriginalRunID: newJob.RunID, ExecutorID: resumed.LeaseExecutorID}
+	store = store.WithOriginalGuestReconcile(f.workflow, step, capacity.CurrentGuestCoreSource(), "provision", "", inv, model.CapacityMetricRangeObservation{}).WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
+	for i, receipt := range f.receipts {
+		probe := func(challenge model.CapacityGuestNotifyCanaryChallenge, publication *capacity.GuestNotifyPublicationReply) *capacity.GuestNotifyPublicationReply {
+			t.Helper()
+			challenge = capacity.RecoveryFixtureCanaryNonce(t, challenge, receipt.Enrollment)
+			if err := store.FinalizeGuestNotifyCanaryNonce(ctx, f.policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner, challenge, failedServingHTTP(t, challenge.GuestNonce, time.Now().UTC())); err != nil {
+				t.Fatal("resumed nonce", i+1, err)
+			}
+			if err := store.ReserveGuestNotifyCanarySend(ctx, f.policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner, challenge); err != nil {
+				t.Fatal("resumed original send", i+1, err)
+			}
+			response, facts := capacity.RecoveryFixtureCanaryResponse(t, f.p, challenge, receipt.Enrollment, publication)
+			returned := failedServingHTTP(t, response, response.OriginalReadStartedAt.Add(-time.Millisecond))
+			if delay := time.Until(returned.DriverReturnedAt) + time.Millisecond; delay > 0 {
+				time.Sleep(delay)
+			}
+			if _, err := store.RecordGuestNotifyCanaryReturn(ctx, f.policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner, challenge, returned); err != nil {
+				t.Fatal("resumed useful original", i+1, err)
+			}
+			return facts
+		}
+		publication, err := store.IssueGuestNotifyCanaryPublication(ctx, f.policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner, f.pre[i].PreregistrationID, "initial_useful_membership", failedServingKey('c'))
+		if err != nil {
+			t.Fatal("resumed publication", i+1, err)
+		}
+		facts := probe(publication, nil)
+		read, err := store.IssueGuestNotifyCanaryRead(ctx, f.policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner, f.pre[i].PreregistrationID, "initial_useful_membership", publication.ChallengeID, failedServingKey('c'))
+		if err != nil {
+			t.Fatal("resumed read", i+1, err)
+		}
+		probe(read, facts)
+	}
+	// Match the production completion's post-canary observation refresh. The
+	// metric operands remain declared test inputs, with no lease renewal.
+	now = time.Now().UTC()
+	inv = f.inventory(t, len(f.reg), now)
+	snapshot, err := capacity.GuestReconcileSnapshot(f.policy, f.p, inv, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assessment := model.CapacityAssessment{Snapshot: snapshot}
+	for _, signal := range f.p.Signals {
+		value := 0.1
+		assessment.Evidence = append(assessment.Evidence, model.CapacityEvidence{Name: signal.Name, SourceIdentity: signal.SourceIdentity, Unit: signal.Unit, RequireData: true, Matched: true, DataState: "present", Value: &value, RangeMin: &value, RangeMax: &value, SourceSampledAt: now, WindowStart: now.Add(-300 * time.Second), WindowEnd: now, Samples: f.p.MinSamples, CoverageComplete: true, MaxGapSeconds: 5})
+	}
+	if err := capacity.ValidateAssessment(f.p, assessment, now); err != nil {
+		t.Fatal("declared full resumed assessment", err)
+	}
+	store = store.WithOriginalGuestReconcile(f.workflow, step, capacity.CurrentGuestCoreSource(), "provision", "", inv, model.CapacityMetricRangeObservation{})
+	preserved := f.preserved(t)
+	readReceipt := func() string {
+		t.Helper()
+		var raw string
+		if err := f.db.QueryRowContext(ctx, "SELECT row_to_json(d)::text FROM public.capacity_dispatch_installed_provision_timeout_dispositions d WHERE id=$1", resumed.InstalledGuestReconcile.InstalledProvisionTimeoutDispositionID).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	readTuples := func() string {
+		t.Helper()
+		var raw string
+		if err := f.db.QueryRowContext(ctx, `SELECT COALESCE(jsonb_agg(jsonb_build_object('instance',integration_instance_id,'scope',scope_checksum,'profile',profile_name,'slot',slot,'resource_id',resource_id,'record',slot_record-'observed_at'-'receipt_ref') ORDER BY slot),'[]'::jsonb)::text FROM public.capacity_resource_slots WHERE NOT(slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.policy.Metadata.Namespace, f.p.Environment, f.p.Domain, f.p.Dimension).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	receiptBefore, tuplesBefore := readReceipt(), readTuples()
+	for _, phase := range []string{"prepared", "canary", "promoted"} {
+		got, err := store.AdvanceOriginalGuest(ctx, f.policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner, phase, assessment)
+		if err != nil {
+			t.Fatal("resumed actual phase", phase, err)
+		}
+		if got.Phase != phase || got.Generation != resumed.Generation || got.FencingToken != resumed.FencingToken || got.Decision.Units != len(f.reg) || !reflect.DeepEqual(got.InstalledGuestReconcile, resumed.InstalledGuestReconcile) {
+			t.Fatal("phase changed retained M98 origin or epoch", phase)
+		}
+		if phase == "promoted" {
+			if got.LeaseOwner != "" || got.LeaseExecutorID != "" || got.LeaseExpiresAt != nil {
+				t.Fatal("promotion did not release the original resume lease")
+			}
+		} else if got.LeaseOwner != resumed.LeaseOwner || got.LeaseExecutorID != resumed.LeaseExecutorID || !reflect.DeepEqual(got.LeaseExpiresAt, resumed.LeaseExpiresAt) {
+			t.Fatal("phase renewed or replaced the original resume lease", phase)
+		}
+		intentMatches(got)
+		if !reflect.DeepEqual(preserved, f.preserved(t)) || readReceipt() != receiptBefore || readTuples() != tuplesBefore {
+			t.Fatal("phase changed original M98 receipt, signed originals or member tuples", phase)
+		}
+	}
+}
+
 func (f *installedTimeoutFixture) sqlProofVectors(t *testing.T) {
 	t.Helper()
 	var recordRaw, dispatchRaw, runRaw, intentRaw, membersRaw []byte
@@ -1033,7 +1182,11 @@ func TestInstalledProvisionTimeoutRecoveryPostgres(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			f.resume(t, started, name != "old_ACK_origin")
+			var releaseOldIssuer func()
+			if name == "eight_members" {
+				releaseOldIssuer = installedReadinessFixtureOldIssuer(t, f)
+			}
+			resumed := f.resume(t, started, name != "old_ACK_origin")
 			if !reflect.DeepEqual(before, f.preserved(t)) {
 				t.Fatal("readiness recovery changed original/provider/Guest evidence")
 			}
@@ -1044,6 +1197,11 @@ func TestInstalledProvisionTimeoutRecoveryPostgres(t *testing.T) {
 			}
 			if err = f.db.QueryRow("SELECT count(*) FROM public.capacity_dispatch_installed_provision_timeout_dispositions").Scan(&receipts); err != nil || receipts != wantReceipts {
 				t.Fatal("terminal receipt was not unique", receipts, err)
+			}
+			if name == "two_members" {
+				f.completeResume(t, started, resumed)
+			} else if name == "eight_members" {
+				f.exhaustedReadinessHandoff(t, started, resumed, releaseOldIssuer)
 			}
 		})
 	}

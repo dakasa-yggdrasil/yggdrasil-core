@@ -524,6 +524,7 @@ func TestCapacityDispatchPostgres(t *testing.T) {
 		}
 	})
 	t.Run("new_binding_wake_preserves_original_pins", func(t *testing.T) {
+		testCapacityPolicyPublicationGuardPostgres(t)
 		db, e := capacityDispatchPostgresFixture(t)
 		original, _ := capacityDispatchEnqueueFixture(t, db, e)
 		newPolicy, err := CreateManifestVersion(context.Background(), db, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: e.Realm, Name: e.Policy.Name}, Spec: []byte(`{}`)}, capacityDispatchSHA([]byte("changed-operator-policy")))

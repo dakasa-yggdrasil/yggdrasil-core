@@ -178,7 +178,46 @@ func TestCapacityOriginalNotifyWindowPostgres(t *testing.T) {
 			case "policy":
 				p := f.spec
 				p.NativeNotifyWindowBinding = nil
-				f.create("capacity_policy", "pods", p)
+				snapshot := func() string {
+					var raw string
+					if err := f.db.QueryRowContext(f.owner, `SELECT COALESCE(jsonb_agg(to_jsonb(m) ORDER BY id),'[]'::jsonb)::text FROM public.manifests m WHERE kind='capacity_policy' AND namespace=$1 AND name=$2`, f.policy.Metadata.Namespace, f.policy.Metadata.Name).Scan(&raw); err != nil {
+						t.Fatal(err)
+					}
+					return raw
+				}
+				before := snapshot()
+				raw, err := json.Marshal(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body, err := json.Marshal(consoleCreateManifestRequest{Name: f.policy.Metadata.Name, Namespace: f.policy.Metadata.Namespace, Spec: raw})
+				if err != nil {
+					t.Fatal(err)
+				}
+				// DECLARED console claims reach the actual administrative handler;
+				// workflow credentials do not authorize policy publication.
+				request := httptest.NewRequest(http.MethodPost, "/api/v1/manifests?kind=capacity_policy", strings.NewReader(string(body))).WithContext(contextWithClaims(f.owner, map[string]any{"sub": "declared-policy-refusal-fixture"}))
+				response := httptest.NewRecorder()
+				f.server.handleManifestCreate(response, request, "capacity_policy")
+				var problem struct {
+					Code string `json:"code"`
+				}
+				if response.Code != http.StatusConflict || json.Unmarshal(response.Body.Bytes(), &problem) != nil || problem.Code != "manifest.conflict" || snapshot() != before {
+					t.Fatalf("started dispatch did not preserve its policy pin with HTTP 409: %d %s", response.Code, response.Body.String())
+				}
+				if _, _, err := f.service.authorizeEnvelope(f.owner, f.job.CapacityDispatchEnvelope); err != nil {
+					t.Fatal("refused publication invalidated the original catalog pin", err)
+				}
+				// DECLARED hostile-catalog fault in this isolated fixture only.
+				// The public writer now correctly prevents this transition, but
+				// registration must independently reject an inactive current pin.
+				changed, err := f.db.ExecContext(f.owner, `UPDATE public.manifests SET active=false WHERE id=$1 AND active`, f.policy.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if n, err := changed.RowsAffected(); err != nil || n != 1 {
+					t.Fatal("isolated catalog fault did not deactivate the exact original policy", n, err)
+				}
 			case "rbac":
 				deny := f.allow
 				deny.Roles = []model.RBACRole{{Name: "controller", Rules: []model.RBACRule{{Effect: "deny", Resources: []string{"workflow:" + f.workflow.Metadata.Namespace + ":pressure"}, Actions: []string{"run"}}}}}
@@ -231,7 +270,7 @@ func TestCapacityOriginalNotifyWindowPostgres(t *testing.T) {
 		}
 		p := f.spec
 		p.NativeNotifyWindowBinding = nil
-		policy := f.create("capacity_policy", "pods", p)
+		policy := declaredStaleCapacityPolicyVersion(t, f.dispatchHTTPFixture, f.job, p)
 		assessment := original.Assessment
 		now := time.Now().UTC()
 		assessment.Snapshot.ObservedAt = now

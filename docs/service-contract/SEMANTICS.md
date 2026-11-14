@@ -751,6 +751,12 @@ introduced. Migration90 retains append-only admission/read lineage and checks
 the complete terminal intent. Declared recovery fixtures and CI cannot qualify
 a production Guest, provider effect or operational A/B.
 
+The continuation dispatch barrier accepts retained `installed_timeout_disposed`
+and `preaction_plan_disposed` history only after authenticating its complete
+typed receipt, original job and failed workflow run. Their original NULL ACK
+remains unchanged; missing or forged receipts, UNKNOWN jobs and ordinary
+returned jobs without an ACK keep the continuation on HOLD.
+
 ## Failed settled continuation before its first read (ADR-0108)
 
 A separate ten-field `original_settled_absence_pre_read_continuation_v1`
@@ -770,6 +776,34 @@ read and normal confirmation/completion remain required. No process restart,
 old deadline renewal, OFF permission or provider mutation is introduced.
 After typed96 custody is retained, downgrade refuses instead of erasing evidence.
 Declared PostgreSQL fixtures confer no production or cycle acceptance.
+
+## Closed deadline-failed absence continuation (ADR-0114)
+
+The existing read/confirm-only settled-absence mode has a separate
+`original_settled_absence_closed_failed_read_continuation_v1` proof. Its optional
+`closed_failed_read` object has exactly `read_id`, `prepared_sha256` and
+`returned_sha256`; Pending ID/hash stay empty. Old ten-field proofs remain exact,
+while this distinct proof has eleven fields.
+
+Authenticate the absolute latest returned absence read together with its exact
+prepared record and complete immutable wires. Require the same request,
+admission, root, tuple, creator binding and existing accepted SETTLED DELETE.
+Only an empty-status, call-failed, context-failed return without a plan,
+observation or receipt can enter this branch. Actual deadline/clock ordering,
+the precise failed workflow and whole dispatch ACK, natural lease expiry,
+current policy/source and quiet remain mandatory. An open challenge, changed
+wire, foreign identity, unknown transport or unfinished ACK refuses admission.
+
+This failed return is provenance, never Pending or fresh absence. A new fenced
+owner must perform fresh inventory, the existing survivor floor/canaries and a
+new bounded absence read before ordinary confirmation of the same DELETE.
+Zero-own-read failures may repeat only through one uniquely authenticated
+direct-origin typed anchor and one bounded revalidation. No old read is selected
+over a newer failure, original record or clock is rewritten, or provider mutation
+is replayed. Migration102 changes only the continuation proof constraint and
+necessary validators; migration101 quiet and all old branches remain intact.
+Downgrade refuses retained new proofs instead of deleting evidence. The owning
+CI root retains its existing IDs, workflow, deadlines and concurrency limits.
 
 ## Recorded context-refused HTTP maintenance disposition (ADR-0103)
 
@@ -860,3 +894,71 @@ keep their original encoding and historical validation. No migration or change t
 original grants, callback authentication, protected survivor floors or the four
 existing disposal consumers is introduced. SDK/XML interpretation remains owned
 by the adapter; declared Source fixtures do not prove a native provider outcome.
+
+
+## Closed pre-destroy forward recovery (ADR-0115)
+
+A distinct internal `pre_destroy_recovery` admission covers a failed live or
+previous pre-destroy owner which qualified its own exact OFF but never obtained
+DELETE authority. It does not reuse the historical process barrier, normal
+successful-caller recovery or settled read-only continuation as an alias.
+Under the existing scope and native-profile locks, Source retains the exact
+failed run and unique dispatch ACK, natural original request/context and parent
+lease expiry, canonical parent/root/caller evidence, absolute latest complete
+positive OFF and complete current typed quiet. Unknown or open reads hold.
+
+All current-tuple authority states, epochs, realms and slots in the locked
+integration/scope/profile are examined. Ordinary confirmed creation remains
+ownership, and completely identified different physical incarnations remain
+history. Unknown or matching destroy authority refuses. Existing native
+provenance and exact physical scope/spec/profile/slot/identity checks prevent
+another integration or profile from adopting that lifetime; no global physical
+resource lock or provider-side CAS is claimed.
+
+The requested child preserves the closed parent and obtains a new fence and
+ordinary lease through the existing claim. Shared grant-writer locks and fresh
+lease/fence checks prevent a delayed old owner from issuing. The child requires
+NEW read-only OFF, exact inventory and useful survivor publications before its
+FIRST once-only DELETE. A child which failed after its own positive OFF can
+repeat this guarded admission. Later failed/open OFF remains HOLD. Once a
+destroy authority exists, this admission closes. An accepted DELETE continues
+only through the existing read/Confirm lane, preserving the exact pre-destroy
+proof even in its settled-absence descendants. Missing, null or changed carried
+proof is refused by storage. No OFF effect, DELETE, nonce, timestamp or original
+record is replayed or rewritten.
+
+Migration103 adds closed proof/absence validators, a narrow mode/CHECK extension
+and explicit trigger branches. Prior historical, normal, M101 quiet and M102
+closed-failed-read semantics remain. Down refuses any used103 proof, including
+carried descendants. Same-process repository races and declared PostgreSQL
+fixtures are Source evidence only; current-head CI, image, Native migration,
+network/Core rollout and real elastic cycles require their own actual evidence.
+
+
+## Superseded equivalent-policy HTTP maintenance disposition
+
+ADR-0116 adds a distinct administrative terminal for a recorded failed readonly
+refresh whose original capacity policy is inactive and whose latest uniquely
+active newer replacement has the same whole Spec and checksum. The original
+failed UNKNOWN return, errors, no-ACK state, original publication/read pair and
+provider evidence remain unchanged. The new closed twelve-field CAS body cannot
+supply policy equivalence, effects, clocks, a canary return or an executor barrier.
+
+The server authenticates the stored one-member birth/enrollment/installation
+lineage, original and current catalog pins, stable epoch, accepted publication
+and expired missing read, complete nonce/send custody and a closed effect scan.
+Only the proved assessment and observation bookkeeping is tolerated; provider
+authority remains absent. The existing process-after-expiry and 900-second age
+barriers remain mandatory. The immutable receipt archives normalized PostgreSQL
+preimages separately from original signed canary wire identity. Later historical
+reads depend on retained snapshots, not later active policies or members.
+
+The POST and GET `/api/v1/ops/capacity/superseded-http-maintenance-dispatch-dispositions`
+routes retain the existing current administrative human and workflow-management
+permission boundaries (GET addresses one canonical job UUID). No workflow, provider
+call, replay, successful original ACK, freshness or useful-capacity claim is made.
+The next ordinary tick requires independent current admission. Earlier M87/M91
+contracts and refusal cases remain unchanged. Capacity policy publication and
+deactivation now serialize logical names, then the same physical scope locks as
+dispatch admission, refusing publication while an unfinalized dispatch owns an
+affected scope. Existing dispatch clocks and unrelated scopes remain independent.

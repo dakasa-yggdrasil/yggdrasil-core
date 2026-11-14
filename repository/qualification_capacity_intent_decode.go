@@ -16,13 +16,18 @@ import (
 // present they are never null. qualificationClosedFields refuses this
 // declaration unless it is exactly the type's omitempty member set.
 var qualificationCapacityIntentOptional = map[string]bool{
-	"failed_installed_disposal": true,
-	"installed_guest_reconcile": true,
-	"lease_owner":               true,
-	"lease_executor_id":         true,
-	"lease_expires_at":          true,
-	"floor_degraded":            true,
-	"original_notify_window":    true,
+	"failed_unwitnessed_expansion_cleanup_id": true,
+	"retirement_forward":                      true,
+	"failed_serving_disposal":                 true,
+	"failed_expansion_terminal_reconcile":     true,
+	"failed_installed_disposal":               true,
+	"installed_guest_reconcile":               true,
+	"installed_readiness_handoff":             true,
+	"lease_owner":                             true,
+	"lease_executor_id":                       true,
+	"lease_expires_at":                        true,
+	"floor_degraded":                          true,
+	"original_notify_window":                  true,
 }
 
 // native_pod_baseline is a non-omitempty []string, so a nil baseline is

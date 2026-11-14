@@ -131,6 +131,7 @@ func (f dispatchHTTPFixture) enqueue(t *testing.T, p *CapacityDispatchPrepared) 
 
 func TestCapacityDispatchAuthorizationPostgres(t *testing.T) {
 	t.Run("actual_operator_binding_same_http_kernel", func(t *testing.T) {
+		capacityPolicyPublicationHTTPInterleavings(t)
 		f := dispatchHTTPPostgresFixture(t)
 		p := f.prepare(t)
 		job := f.enqueue(t, p)
@@ -199,12 +200,28 @@ func TestCapacityDispatchAuthorizationPostgres(t *testing.T) {
 		for _, mode := range []string{"binding", "workflow"} {
 			t.Run(mode, func(t *testing.T) {
 				f := dispatchHTTPPostgresFixture(t)
-				job := f.enqueue(t, f.prepare(t))
+				prepared := f.prepare(t)
+				original := prepared.envelope
 				if mode == "binding" {
 					p := f.spec
 					p.ControllerBinding = &model.CapacityControllerBinding{Mode: repository.CapacityDispatchProtocol, MachinePrincipalID: "different-operator", DispatchLeaseSeconds: 90}
+					// Publication while idle is legal; a previously prepared
+					// envelope must still refuse the new binding and roll back.
 					f.create("capacity_policy", "pods", p)
+					tx, err := f.db.BeginTx(t.Context(), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, _, err := prepared.Enqueue(t.Context(), tx); err == nil {
+						_ = tx.Rollback()
+						t.Fatal("old prepared binding adopted a new policy")
+					}
+					if err := tx.Rollback(); err != nil {
+						t.Fatal(err)
+					}
 				} else {
+					job := f.enqueue(t, prepared)
+					original = job.CapacityDispatchEnvelope
 					var wf model.WorkflowManifestSpec
 					if json.Unmarshal(f.workflow.Spec, &wf) != nil {
 						t.Fatal("fixture original graph missing")
@@ -212,7 +229,7 @@ func TestCapacityDispatchAuthorizationPostgres(t *testing.T) {
 					wf.Steps[0].TimeoutSeconds = 45
 					f.create("workflow", "pressure", wf)
 				}
-				if _, _, err := f.service.authorizeEnvelope(t.Context(), job.CapacityDispatchEnvelope); err == nil {
+				if _, _, err := f.service.authorizeEnvelope(t.Context(), original); err == nil {
 					t.Fatal("changed graph/binding auto-adopted original dispatch")
 				}
 			})
@@ -519,5 +536,142 @@ func qualifyDispatchOriginalTransport(t *testing.T, mode string) {
 func TestCapacityDispatchOriginalTransportPostgres(t *testing.T) {
 	for _, mode := range []string{"redirect_307", "redirect_308", "byte_cap", "read_cause", "close_cause", "child_deadline"} {
 		t.Run(mode, func(t *testing.T) { qualifyDispatchOriginalTransport(t, mode) })
+	}
+}
+
+func capacityPolicyPublicationHTTPInterleavings(t *testing.T) {
+	t.Helper()
+	for _, first := range []string{"enqueue", "publication"} {
+		f := dispatchHTTPPostgresFixture(t)
+		prepared := f.prepare(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		doc := model.ManifestDocument{APIVersion: f.policy.APIVersion, Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: f.policy.Metadata.Namespace, Name: f.policy.Metadata.Name}, Spec: f.policy.Spec}
+		doc = manifest.NormalizeDocument(doc)
+		if err := manifest.ValidateDocument(doc); err != nil {
+			t.Fatal(err)
+		}
+		snapshot := func() string {
+			var raw string
+			if err := f.db.QueryRowContext(ctx, `SELECT jsonb_build_object('catalog',(SELECT jsonb_agg(to_jsonb(m) ORDER BY id) FROM public.manifests m WHERE namespace=$1),'events',(SELECT COALESCE(jsonb_agg(to_jsonb(e) ORDER BY event_id),'[]'::jsonb) FROM public.event_log e WHERE payload->>'namespace'=$1))::text`, f.policy.Metadata.Namespace).Scan(&raw); err != nil {
+				t.Fatal(err)
+			}
+			return raw
+		}
+		before := snapshot()
+		tx, err := f.db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback()
+		var revision model.Manifest
+		if first == "enqueue" {
+			if _, _, err := prepared.Enqueue(ctx, tx); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			revision, err = repository.CreateManifestVersionTx(ctx, tx, doc, f.policy.Checksum)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		// A second real backend reaches the same advisory lock, rather than
+		// a sleep-based guess that the competing operation has started.
+		pidReady, done := make(chan int, 1), make(chan error, 1)
+		go func() {
+			conn, err := f.db.Conn(ctx)
+			if err != nil {
+				done <- err
+				return
+			}
+			defer conn.Close()
+			var pid int
+			if err := conn.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&pid); err != nil {
+				done <- err
+				return
+			}
+			other, err := conn.BeginTx(ctx, nil)
+			if err != nil {
+				done <- err
+				return
+			}
+			defer other.Rollback()
+			pidReady <- pid
+			if first == "enqueue" {
+				_, err = repository.CreateManifestVersionTx(ctx, other, doc, f.policy.Checksum)
+			} else {
+				_, _, err = prepared.Enqueue(ctx, other)
+			}
+			// Both losing paths must roll back; a stale post-authorization
+			// must never commit the temporary run/job/wake it inserted.
+			done <- errors.Join(err, other.Rollback())
+		}()
+		var pid int
+		select {
+		case pid = <-pidReady:
+		case err := <-done:
+			t.Fatal("second backend did not reach the operation", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		waiting := false
+		until := time.Now().Add(2 * time.Second)
+		for time.Now().Before(until) {
+			if err := f.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock' AND wait_event='advisory')`, pid).Scan(&waiting); err != nil {
+				t.Fatal(err)
+			}
+			if waiting {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !waiting {
+			t.Fatal("real competing backend did not wait on the dispatch scope")
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		var losing error
+		select {
+		case losing = <-done:
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		if first == "enqueue" {
+			if !errors.Is(losing, repository.ErrCapacityPolicyPublicationConflict) || snapshot() != before {
+				t.Fatal("publication raced through queued owner or changed catalog/outbox", losing)
+			}
+			if _, _, err := f.service.authorizeEnvelope(ctx, prepared.envelope); err != nil {
+				t.Fatal("refused publication revoked the original pin", err)
+			}
+			// Exercise the actual administrative handler and existing error
+			// mapping, including a same-spec publication that would get a new ID.
+			body, err := json.Marshal(consoleCreateManifestRequest{Name: doc.Metadata.Name, Namespace: doc.Metadata.Namespace, Spec: doc.Spec})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/manifests?kind=capacity_policy", bytes.NewReader(body)).WithContext(contextWithClaims(ctx, map[string]any{"sub": "declared-policy-publication-console-fixture"}))
+			response := httptest.NewRecorder()
+			f.server.handleManifestCreate(response, request, "capacity_policy")
+			var problem struct {
+				Code string `json:"code"`
+			}
+			if response.Code != http.StatusConflict || json.Unmarshal(response.Body.Bytes(), &problem) != nil || problem.Code != "manifest.conflict" || snapshot() != before {
+				t.Fatalf("public policy refusal changed catalog/outbox or lost HTTP 409: %d %s", response.Code, response.Body.String())
+			}
+		} else {
+			if losing == nil {
+				t.Fatal("stale prepared envelope committed after publication won")
+			}
+			var leaked int
+			if err := f.db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM public.capacity_dispatch_jobs WHERE id=$1)+(SELECT count(*) FROM public.capacity_dispatch_wakes WHERE job_id=$1)+(SELECT count(*) FROM public.workflow_runs WHERE id=$2)`, prepared.envelope.JobID, prepared.envelope.RunID).Scan(&leaked); err != nil || leaked != 0 {
+				t.Fatal("stale post-authorization leaked a run/job/wake", leaked, err)
+			}
+			current, err := repository.ResolveManifest(ctx, f.db, "capacity_policy", doc.Metadata.Namespace, doc.Metadata.Name, nil, true)
+			if err != nil || current.ID != revision.ID || current.ID == f.policy.ID || current.Checksum != f.policy.Checksum {
+				t.Fatal("publication winner did not preserve the same-checksum new pin", err)
+			}
+		}
+		t.Logf("real policy publication/admission interleaving: %s first", first)
 	}
 }

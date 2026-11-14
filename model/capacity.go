@@ -505,6 +505,7 @@ type CapacityIntent struct {
 	FailedInstalledDisposal             *CapacityFailedInstalledDisposal          `json:"failed_installed_disposal,omitempty"`
 	FailedExpansionTerminalReconcile    *CapacityFailedExpansionTerminalReconcile `json:"failed_expansion_terminal_reconcile,omitempty"`
 	InstalledGuestReconcile             *CapacityInstalledGuestReconcile          `json:"installed_guest_reconcile,omitempty"`
+	InstalledReadinessHandoff           *CapacityInstalledReadinessHandoff        `json:"installed_readiness_handoff,omitempty"`
 	Namespace                           string                                    `json:"namespace"`
 	PolicyName                          string                                    `json:"policy_name"`
 	PolicyID                            uuid.UUID                                 `json:"policy_id"`

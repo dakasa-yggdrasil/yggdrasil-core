@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-11T13:34:15-03:00_
+_Generated from HEAD at: 2026-11-14T06:24:33-03:00_
 
 ## Languages
 
-- `.go`: 1526 files
-- `.json`: 246 files
+- `.go`: 1547 files
+- `.json`: 249 files
 - `.py`: 197 files
-- `.sql`: 101 files
+- `.sql`: 107 files
 - `.yaml`: 11 files
 - `.yml`: 37 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-11-11T13:34:15-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **97**  (db/migrations)
+- DB Migrations: **103**  (db/migrations)
 
 ## Docs
 
@@ -24,14 +24,14 @@ _Generated from HEAD at: 2026-11-11T13:34:15-03:00_
 
 ## Top Directories by File Count
 
-- repository: 383 files (5228.2 KB)
-- controllers/httpapi: 259 files (2631.5 KB)
-- controllers/message: 202 files (1763.7 KB)
+- repository: 399 files (5639.4 KB)
+- controllers/httpapi: 262 files (2658.1 KB)
+- controllers/message: 202 files (1764.6 KB)
 - internal/capacity: 127 files (1393.9 KB)
-- db/migrations: 97 files (946.6 KB)
-- model: 89 files (483.3 KB)
+- db/migrations: 103 files (1288.8 KB)
+- model: 91 files (485.6 KB)
 - manifest: 65 files (397.9 KB)
-- ops/network-guardian/tests: 60 files (1176.0 KB)
+- ops/network-guardian/tests: 60 files (1180.8 KB)
 - addons: 51 files (307.6 KB)
 - internal/capacitynativeqemu: 47 files (298.1 KB)
 - cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)

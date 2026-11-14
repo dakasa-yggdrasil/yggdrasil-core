@@ -342,9 +342,9 @@ jobs:
           record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
           # Separate processes keep Goose/registry globals independent while
           # unique disposable databases overlap their unchanged natural clocks.
-          record normal_finish_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForwardNormalFinishRecoveryPostgres$' &
+          record normal_finish_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForward(NormalFinishRecoveryPostgres|ClosedGuardsPostgres|MissingPrefixPostgres|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)$' &
           normal_finish_pid=$!
-          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|ClosedGuardsPostgres|MissingPrefixPostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
+          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
           normal_finish_rc=0
           wait "$normal_finish_pid" || normal_finish_rc=$?
           if [[ "$normal_finish_rc" != 0 ]]; then failed=1; fi
@@ -361,15 +361,16 @@ jobs:
               'TestGuestRetirementForwardLivePostgres',
               'TestGuestRetirementForwardHistoricalAndAtomicityPostgres',
               'TestGuestRetirementForwardLivePendingHistoricalResumePostgres',
-              'TestGuestRetirementForwardClosedGuardsPostgres',
-              'TestGuestRetirementForwardMissingPrefixPostgres',
               'TestGuestRetirementForwardStorageDecoderIsClosedAndAtomic',
               'TestGuestRetirementForwardFailedCallerTimeline',
               'TestGuestRetirementForwardReadonlyObserverJoins',
-              'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
-              'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres',
               'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn']),
-            'normal_finish_repository':('repository',['TestGuestRetirementForwardNormalFinishRecoveryPostgres']),
+            'normal_finish_repository':('repository',[
+              'TestGuestRetirementForwardNormalFinishRecoveryPostgres',
+              'TestGuestRetirementForwardClosedGuardsPostgres',
+              'TestGuestRetirementForwardMissingPrefixPostgres',
+              'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
+              'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres']),
             'continuation_repository':('repository',['TestGuestRetirementForwardContinuationPostgres']),
             'message':('controllers/message',[
               'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
@@ -480,7 +481,9 @@ jobs:
 
   installed-provision-timeout:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Three sequential 12-minute test waves need setup, compilation and evidence time.
+    # Keep child deadlines and real lease waits unchanged within this runner budget.
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -585,6 +588,107 @@ jobs:
           result={'schema':'installed_provision_timeout_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':98,'race':True,'count':1,'distinct_roots':1,'root_executions':len(children),'children':children,'processes':len(children),'original_dispatch_deadline_seconds':300,'original_exit':0,'old_acknowledgment_lane_unchanged':True,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
           PY_TIMEOUT_CENSUS
+      - name: Qualify the native capacity intent declaration and fixture exclusion
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          evidence="$INSTALLED_TIMEOUT_LOGS/native-intent-decoder"
+          mkdir -m 0700 "$evidence"
+          go list -json -tags=nativequalification ./repository > "$evidence/build-native.json"
+          set +e
+          GOMAXPROCS=1 GOMEMLIMIT=512MiB go test -buildvcs=true -tags=nativequalification -p=1 -race -count=1 -timeout=90s -json ./repository -run '^(TestDecodeQualificationCapacityIntent.*|TestQualificationCapacityIntent.*)$' > "$evidence/original.jsonl" 2> "$evidence/original.stderr"
+          original_exit=$?
+          set -e
+          printf '%s\n' "$original_exit" > "$evidence/original.exit"
+          [[ "$original_exit" == 0 ]]
+          python3 - "$evidence" <<'PY_NATIVE_INTENT_CENSUS'
+          import collections,json,os,pathlib,sys
+          p=pathlib.Path(sys.argv[1]);package='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+          expected=['TestDecodeQualificationCapacityIntentAcceptsLabNullBaselineRow','TestDecodeQualificationCapacityIntentPreservesEmptyAndNonEmptyBaseline','TestDecodeQualificationCapacityIntentRefusesNonClosedWire','TestQualificationCapacityIntentDeclarationMatchesModel']
+          rows=[json.loads(line) for line in (p/'original.jsonl').read_text().splitlines() if line.strip()]
+          assert (p/'original.exit').read_text().strip()=='0'
+          assert all(r.get('Package',package)==package for r in rows)
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          for action in ('run','pass'):
+              actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r)
+              assert actual==collections.Counter(expected),(action,actual)
+          assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1
+          build=json.loads((p/'build-native.json').read_text())
+          assert build['ImportPath']==package
+          assert 'capacity_guest_authority_source.go' in build.get('GoFiles',[])
+          assert 'capacity_guest_authority_source_recoveryfixture.go' not in build.get('GoFiles',[])
+          assert 'capacity_guest_authority_source_recoveryfixture.go' in build.get('IgnoredGoFiles',[])
+          result={'schema':'native_capacity_intent_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'roots':expected,'root_executions':len(expected),'race':True,'count':1,'original_exit':0,'fixture_issuer_backend_excluded':True,'production_authority':False}
+          (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          PY_NATIVE_INTENT_CENSUS
+      - name: Qualify pre-action failed PLAN on the same isolated PostgreSQL owner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          evidence="$INSTALLED_TIMEOUT_LOGS/preaction99"
+          mkdir -m 0700 "$evidence"
+          export PREACTION_PLAN_LOGS="$evidence"
+          export PREACTION_PLAN_HANDOFF="$evidence/repeat-owned-ids.json"
+          git rev-parse HEAD > "$evidence/source-head.txt"
+          record_case() {
+            local case_name="$1"
+            set +e
+            GOMAXPROCS=1 GOMEMLIMIT=512MiB go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run "^TestCapacityDispatchPreActionFailedPlanDispositionPostgres/$case_name\$" > "$evidence/$case_name.jsonl" 2> "$evidence/$case_name.stderr"
+            original_exit=$?
+            printf '%s\n' "$original_exit" > "$evidence/$case_name.exit"
+            exit "$original_exit"
+          }
+          # Seven separate processes use at most eight DB connections: only
+          # the racing case opens two. All old M98 processes already finished.
+          first=(closed_failed_plan_after_M98_anchor second_failed_plan_phase_a concurrent_wakes_single_successor committed_resume_cannot_be_relabelled wire_shape_and_effect_guards deferred_links_and_immutability catalog_index_and_old_schema)
+          pids=()
+          for case_name in "${first[@]}"; do
+            (record_case "$case_name") &
+            pids+=("$!")
+          done
+          failed=0
+          for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+          pids=()
+          # Continue the authentic retained fixture even if another case failed,
+          # so phase B owns cleanup. No clock or database row is reconstructed.
+          if [[ "$(cat "$evidence/second_failed_plan_phase_a.exit")" == 0 ]]; then
+            (record_case second_failed_plan_phase_b) &
+            pids+=("$!")
+          else
+            printf '125\n' > "$evidence/second_failed_plan_phase_b.exit"
+            printf 'Phase A did not complete; no retained fixture is eligible.\n' > "$evidence/second_failed_plan_phase_b.not-started"
+            failed=1
+          fi
+          (record_case unanchored_plan_refused) &
+          pids+=("$!")
+          for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+          printf '%s\n' "$failed" > "$evidence/original.exit"
+          [[ "$failed" == 0 ]]
+          python3 - "$evidence" <<'PY_PREACTION_CENSUS'
+          import collections,hashlib,json,os,pathlib,re,sys
+          p=pathlib.Path(sys.argv[1]);root='TestCapacityDispatchPreActionFailedPlanDispositionPostgres'
+          children=['closed_failed_plan_after_M98_anchor','second_failed_plan_phase_a','second_failed_plan_phase_b','concurrent_wakes_single_successor','committed_resume_cannot_be_relabelled','wire_shape_and_effect_guards','deferred_links_and_immutability','catalog_index_and_old_schema','unanchored_plan_refused']
+          package='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+          for child in children:
+              assert (p/(child+'.exit')).read_text().strip()=='0',child
+              rows=[json.loads(line) for line in (p/(child+'.jsonl')).read_text().splitlines() if line.strip()]
+              assert all(r.get('Package',package)==package for r in rows),child
+              assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows),child
+              assert not any('WARNING: DATA RACE' in r.get('Output','') for r in rows),child
+              for action in ('run','pass'):
+                  actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r)
+                  assert actual==collections.Counter([root,root+'/'+child]),(child,action,actual)
+              assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1,child
+          assert (p/'source-head.txt').read_text().strip()==os.environ['SOURCE_COMMIT']
+          source=pathlib.Path('repository/capacity_guest_installed_reconcile.go').read_text()
+          query=re.search(r'const installedGuestOriginalFailedRunQuery = `([^`]+)`',source).group(1).encode()
+          assert hashlib.sha256(query).hexdigest()=='2d400ff15f2496c5c1ff1f5b712c4ecb8323f299b5f0a9efe853d5d5b0913b28'
+          result={'schema':'preaction_failed_plan_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':99,'race':True,'count':1,'distinct_roots':1,'root_executions':len(children),'children':children,'processes':len(children),'original_dispatch_deadline_seconds':300,'repeat_natural_dispatches':3,'repeat_process_phases':2,'max_concurrent_fixture_DB_connections':8,'old_query_641_sha256':hashlib.sha256(query).hexdigest(),'original_exit':0,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          PY_PREACTION_CENSUS
       - name: Retain installed timeout recovery originals
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

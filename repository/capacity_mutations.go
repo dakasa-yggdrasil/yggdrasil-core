@@ -201,7 +201,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		return result, err
 	}
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, intent model.CapacityIntent, now time.Time) error {
-		if intent.FailedUnwitnessedExpansionCleanupID != "" || intent.FailedExpansionTerminalReconcile != nil {
+		if intent.FailedUnwitnessedExpansionCleanupID != "" || intent.FailedExpansionTerminalReconcile != nil || intent.InstalledReadinessHandoff != nil {
 			return ErrCapacityConflict
 		}
 		if intent.RetirementForward != nil && intent.RetirementForward.Mode == GuestRetirementForwardContinuationMode {
@@ -529,7 +529,7 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		if err != nil {
 			return err
 		}
-		if intent.FailedUnwitnessedExpansionCleanupID != "" || intent.FailedExpansionTerminalReconcile != nil {
+		if intent.FailedUnwitnessedExpansionCleanupID != "" || intent.FailedExpansionTerminalReconcile != nil || intent.InstalledReadinessHandoff != nil {
 			return ErrCapacityConflict
 		}
 		if intent.RetirementForward != nil && intent.RetirementForward.Mode == GuestRetirementForwardContinuationMode {

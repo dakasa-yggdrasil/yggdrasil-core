@@ -513,8 +513,10 @@ def ordinary_refresh(job, run, anchor, intent, observed):
             need(step['status'] == 'succeeded' and type(step['attempts']) is int and step['attempts'] == 1,
                  'ONLY_PLAN_AND_READONLY_REFRESH_ACTIVE')
         else:
+            condition = '{{ steps.plan-original-guest.metadata.mode }} == ' + ('provision' if n in (1,4) else 'retire')
             need(step['status'] == 'skipped' and type(step.get('attempts',0)) is int
-                 and step.get('attempts',0) == 0 and not step.get('metadata'),
+                 and step.get('attempts',0) == 0
+                 and step.get('metadata') == {'condition':condition,'skip_reason':'condition'},
                  'NO_PROVISION_RETIRE_DELETE_COMPLETION_STEP')
     p = steps[0]['metadata']
     closed(p, 'mode reason slot generation fencing_token lease_owner preregistration_id', 'CLOSED_ORDINARY_REFRESH_PLAN')

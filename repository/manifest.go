@@ -44,6 +44,11 @@ func CreateManifestVersion(ctx context.Context, db *sql.DB, doc model.ManifestDo
 // Use this when the caller needs to combine the manifest creation with other
 // state mutations (e.g., emitting an event in the same tx for atomicity).
 func CreateManifestVersionTx(ctx context.Context, tx *sql.Tx, doc model.ManifestDocument, checksum string) (model.Manifest, error) {
+	if doc.Kind == "capacity_policy" {
+		if err := guardCapacityPolicyPublicationTx(ctx, tx, doc.Metadata.Namespace, doc.Metadata.Name, &doc.Spec, false, uuid.Nil); err != nil {
+			return model.Manifest{}, err
+		}
+	}
 	labels, err := marshalLabels(doc.Metadata.Labels)
 	if err != nil {
 		return model.Manifest{}, err
@@ -554,6 +559,12 @@ func HardDeleteManifestByID(ctx context.Context, db *sql.DB, manifestID uuid.UUI
 		return 0, err
 	}
 
+	if kind == "capacity_policy" {
+		if err := guardCapacityPolicyPublicationTx(ctx, tx, namespace, name, nil, true, manifestID); err != nil {
+			return 0, err
+		}
+	}
+
 	res, err := tx.ExecContext(
 		ctx,
 		`DELETE FROM public.manifests WHERE kind = $1 AND namespace = $2 AND name = $3`,
@@ -602,6 +613,12 @@ func MarkManifestInactiveByID(ctx context.Context, db *sql.DB, manifestID uuid.U
 			return 0, ErrManifestNotFound
 		}
 		return 0, err
+	}
+
+	if kind == "capacity_policy" {
+		if err := guardCapacityPolicyPublicationTx(ctx, tx, namespace, name, nil, false, manifestID); err != nil {
+			return 0, err
+		}
 	}
 
 	res, err := tx.ExecContext(

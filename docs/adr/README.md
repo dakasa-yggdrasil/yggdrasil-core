@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**105 decisions.**
+**111 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -21,8 +21,8 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0009](0009-replace-per-user-tartaro-rbac-roles-with-team-scoped-action.md) | Replace per-user Tartaro RBAC roles with team-scoped action grants materialized via the reactor framework | Superseded by 0085 | 2026-05-18 | yggdrasil-core (canon events + team_grant endpoints), integration-tartaro-dakasa, dakasa-tartaro-fe (tartaro-operations, tartaro-api and sibling services), dakasa-commons |
 | [0010](0010-team-mirroring-reactors-ack-via-a-reserved-envelope-into-a-p.md) | Team-mirroring reactors ack via a reserved envelope into a provisioning log, self-healed by an anti-join reconcile sweep | Accepted | 2026-05-18 | yggdrasil-core (reactor dispatcher extension), integration-slack, integration-github, integration-google-workspace |
 | [0011](0011-bootstrap-internal-public-oidc-clients-declaratively.md) | Bootstrap internal public OIDC clients declaratively | Accepted | 2026-08-25 | yggdrasil-core / internal OIDC client lifecycle |
-| [0012](0012-keep-sensitive-integration-outputs-transient-between-workflow-steps.md) | Keep sensitive integration outputs transient between workflow steps | Superseded | 2026-09-01 | yggdrasil-core / workflow execution and integration adapter contract |
-| [0013](0013-scope-adapter-mutation-event-credentials-to-event-publishing.md) | Scope adapter mutation-event credentials to event publishing | Superseded | 2026-09-01 | yggdrasil-core / adapter authentication |
+| [0012](0012-keep-sensitive-integration-outputs-transient-between-workflow-steps.md) | Keep sensitive integration outputs transient between workflow steps | Superseded by 0016 | 2026-09-01 | yggdrasil-core / workflow execution and integration adapter contract |
+| [0013](0013-scope-adapter-mutation-event-credentials-to-event-publishing.md) | Scope adapter mutation-event credentials to event publishing | Superseded by 0017 | 2026-09-01 | yggdrasil-core / adapter authentication |
 | [0014](0014-bootstrap-confidential-oidc-clients-from-read-only-secret-files.md) | Bootstrap confidential OIDC clients from read-only Secret files | Accepted | 2026-09-02 | yggdrasil-core / confidential OIDC client lifecycle |
 | [0015](0015-validate-and-redact-workflow-inputs-before-async-persistence.md) | Validate and redact workflow inputs before async persistence | Accepted | 2026-09-04 | yggdrasil-core / workflow dispatch and durable run evidence |
 | [0016](0016-constrain-provider-generated-secrets-to-one-step-private-leases.md) | Constrain provider-generated secrets to one-step private leases | Accepted | 2026-09-05 | yggdrasil-core / workflow execution and integration adapter transport |
@@ -145,9 +145,14 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0103](0103-dispose-recorded-context-refused-http-maintenance-without-replay.md) | Dispose recorded context-refused HTTP maintenance without replay | Proposed | 2026-11-03 | Core recorded maintenance disposition |
 | [0104](0104-separate-retirement-observer-from-historical-mutation-authority.md) | Separate the retirement observer from historical mutation authority | Proposed | 2026-11-04 | Existing dedicated read-only service / partial-retirement absence |
 | [0105](0105-continue-settled-retirement-absence-under-a-new-owner.md) | Continue settled retirement absence under a new owner | Proposed | 2026-11-04 | Original Guest retirement / automatic GET-only settled-absence continuation |
-| [0106](0106-close-an-accepted-unwitnessed-expansion-with-a-separate-cleanup.md) | Close an accepted unwitnessed expansion with a separate cleanup | Proposed | 2026-11-05 | Core / failed unwitnessed expansion cleanup, normal one-shot destroy and truthful physical closure |
+| [0106](0106-close-an-accepted-unwitnessed-expansion-with-a-separate-cleanup.md) | Close an accepted unwitnessed expansion with a separate cleanup | Accepted | 2026-11-05 | Core / failed unwitnessed expansion cleanup, normal one-shot destroy and truthful physical closure |
 | [0107](0107-count-tartaro-action-holders-with-the-effective-actions-predicate.md) | Count Tartaro action holders with the same predicate as the effective-actions read | Accepted | 2026-11-08 | yggdrasil-core / Tartaro action-holder roster (`GET /api/v1/tartaro/action-holders`) |
 | [0108](0108-resume-a-failed-settled-continuation-before-its-first-read.md) | Resume a failed settled continuation before its first read | Proposed | 2026-11-10 | Original Guest retirement / typed automatic pre-read-failure provenance |
 | [0109](0109-read-legacy-profile-inventory-through-an-independent-observer.md) | Read legacy profile inventory through an independent observer | Proposed | 2026-11-10 | Core / exact AWS/c34 forward inventory, independent actual observer source and unchanged mutation authority |
-| [0110](0110-recover-a-closed-failed-finish-after-normal-guest-poweroff.md) | Recover a closed failed finish after normal Guest poweroff | Proposed | 2026-11-11 | Original Guest retirement / automatic normal-success failed-finish provenance and fresh fenced native owner |
+| [0110](0110-recover-a-closed-failed-finish-after-normal-guest-poweroff.md) | Recover a closed failed finish after normal Guest poweroff | Accepted | 2026-11-11 | Original Guest retirement / automatic normal-success failed-finish provenance and fresh fenced native owner |
 | [0111](0111-resume-installed-readiness-after-a-recorded-provision-timeout.md) | Resume installed readiness after a recorded provision timeout | Proposed | 2026-11-11 | Core / distinct automatic unknown installed-provision timeout disposition and fresh readiness origin |
+| [0112](0112-close-a-recorded-failed-plan-without-committed-authority.md) | Close a recorded failed plan without committed authority | Proposed | 2026-11-11 | Core / automatic pre-action dispatch disposition |
+| [0113](0113-handoff-exhausted-installed-readiness-to-one-new-generation.md) | Hand off exhausted installed readiness to one new generation | Proposed | 2026-11-12 | Core / one immutable exhausted origin and one readiness-only successor |
+| [0114](0114-continue-after-a-closed-deadline-failed-absence-read.md) | Continue after a closed deadline-failed absence read | Proposed | 2026-11-12 | Core / typed read-only continuation after an authentic closed absence deadline failure |
+| [0115](0115-recover-a-closed-forward-before-any-delete-authority.md) | Recover a closed forward before any DELETE authority | Proposed | 2026-11-12 | Core / exact closed pre-DELETE failure and new fenced first-delete owner |
+| [0116](0116-dispose-a-superseded-equivalent-policy-readonly-maintenance-failure.md) | Dispose a superseded equivalent-policy readonly maintenance failure | Proposed | 2026-11-14 | Core / serialized policy publication and immutable superseded-policy HTTP maintenance disposition |
