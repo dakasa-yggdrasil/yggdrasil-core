@@ -46,6 +46,12 @@ type witnessedCleanup106Fixture struct {
 	base             map[string][]json.RawMessage
 }
 
+// TestWitnessedUnenrolledExpansionCleanupPostgres owns the unchanged M106
+// regression in its own CI process, including its real 300-second Guest claim.
+func TestWitnessedUnenrolledExpansionCleanupPostgres(t *testing.T) {
+	witnessedCleanup106PostgresRegression(t)
+}
+
 func witnessedCleanup106PostgresRegression(t *testing.T) {
 	t.Helper()
 	base := newFailedServingFixtureHistory(t, "hetzner", true)
@@ -65,15 +71,15 @@ func witnessedCleanup106PostgresRegression(t *testing.T) {
 	witnessedCleanup106OldGoose(t, base.db, migrations, put)
 	f := witnessedCleanup106Current(t, base)
 	// Current Source really captured and exhausted its ORIGINAL dispatch context.
-	// The unchanged public HZN profile budget is 420s; the original public 30s fixture claim
+	// The unchanged public HZN profile budget is 420s; the real Guest dispatch 300s claim
 	// clips it through GuestOriginalProvisioningDeadline, without clock rewriting.
 	put("M106-CURRENT-SOURCE-PRODUCER-WITNESS.PUBLIC.json", failedServingWire(t, map[string]any{
 		"schema": "witnessed_cleanup106_current_source_fixture_v1", "fixture_only": true,
 		"workflow_result_fixture_declared": true, "full_workflow_execution_claimed": false,
 		"SDK_and_Guest_DTOs_declared": true, "provider_or_Guest_executed": false,
 		"real_enqueue_claim_start_finish_UNKNOWN": true, "original_ACK_absent": true,
-		"unchanged_profile_420_seconds": true, "original_context_clipped_by_real_30_second_claim": true,
-		"live_300_second_execution_claimed": false, "originals": json.RawMessage(witnessedCleanup106Originals(t, f)),
+		"unchanged_profile_420_seconds": true, "original_context_clipped_by_real_300_second_claim": true,
+		"original_300_second_context_naturally_expired": true, "originals": json.RawMessage(witnessedCleanup106Originals(t, f)),
 	}))
 	witnessedCleanup106AdmissionNegatives(t, f, put)
 	f.base = witnessedCleanup106Rows(t, f.DB)

@@ -481,7 +481,7 @@ jobs:
 
   installed-provision-timeout:
     runs-on: ubuntu-24.04
-    # Three sequential 12-minute test waves need setup, compilation and evidence time.
+    # Four sequential 12-minute test waves retain their own process budgets.
     # Keep child deadlines and real lease waits unchanged within this runner budget.
     timeout-minutes: 50
     strategy:
@@ -689,6 +689,36 @@ jobs:
           result={'schema':'preaction_failed_plan_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':99,'race':True,'count':1,'distinct_roots':1,'root_executions':len(children),'children':children,'processes':len(children),'original_dispatch_deadline_seconds':300,'repeat_natural_dispatches':3,'repeat_process_phases':2,'max_concurrent_fixture_DB_connections':8,'old_query_641_sha256':hashlib.sha256(query).hexdigest(),'original_exit':0,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
           (p/'SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
           PY_PREACTION_CENSUS
+      - name: Qualify witnessed unenrolled cleanup in its independent process
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          evidence="$INSTALLED_TIMEOUT_LOGS/preaction99"
+          export PREACTION_PLAN_LOGS="$evidence"
+          set +e
+          GOMAXPROCS=1 GOMEMLIMIT=512MiB go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestWitnessedUnenrolledExpansionCleanupPostgres$' > "$evidence/witnessed_unenrolled_cleanup106.jsonl" 2> "$evidence/witnessed_unenrolled_cleanup106.stderr"
+          original_exit=$?
+          set -e
+          printf '%s\n' "$original_exit" > "$evidence/witnessed_unenrolled_cleanup106.exit"
+          [[ "$original_exit" == 0 ]]
+          python3 - "$evidence" <<'PY_WITNESSED_CLEANUP_CENSUS'
+          import collections,json,os,pathlib,sys
+          p=pathlib.Path(sys.argv[1]);root='TestWitnessedUnenrolledExpansionCleanupPostgres'
+          package='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+          assert (p/'witnessed_unenrolled_cleanup106.exit').read_text().strip()=='0'
+          rows=[json.loads(line) for line in (p/'witnessed_unenrolled_cleanup106.jsonl').read_text().splitlines() if line.strip()]
+          assert all(r.get('Package',package)==package for r in rows)
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          assert not any('WARNING: DATA RACE' in r.get('Output','') for r in rows)
+          for action in ('run','pass'):
+              actual=collections.Counter(r['Test'] for r in rows if r.get('Action')==action and 'Test' in r)
+              assert actual==collections.Counter([root]),(action,actual)
+          assert sum(r.get('Action')=='pass' and 'Test' not in r for r in rows)==1
+          assert (p/'source-head.txt').read_text().strip()==os.environ['SOURCE_COMMIT']
+          result={'schema':'witnessed_unenrolled_cleanup_exact_Source_CI_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'postgres_major':int(os.environ['FAILED_SERVING_TEST_PG_MAJOR']),'schema_version':106,'root':root,'race':True,'count':1,'processes':1,'original_dispatch_deadline_seconds':300,'unchanged_profile_budget_seconds':420,'original_exit':0,'fixture_only':True,'cloud_SDK_execution':False,'native_Guest_qualification':False,'production_authority':False}
+          (p/'M106-SOURCE-CI.PUBLIC.json').write_text(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          PY_WITNESSED_CLEANUP_CENSUS
       - name: Retain installed timeout recovery originals
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
