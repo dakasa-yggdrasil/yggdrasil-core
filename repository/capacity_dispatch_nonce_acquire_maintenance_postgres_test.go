@@ -511,6 +511,12 @@ func nonceAcquire105HistoricalChecks(t *testing.T, h nonceAcquire105Historical, 
 		{"extra_member", `INSERT INTO capacity_resource_slots(integration_instance_id,scope_checksum,profile_name,slot,namespace,environment,domain,dimension,resource_id,slot_record,revision,updated_at) SELECT integration_instance_id,scope_checksum,profile_name,2,namespace,environment,domain,dimension,'declared-other-member',slot_record,revision,clock_timestamp() FROM capacity_resource_slots LIMIT 1`},
 		{"provider_authority", `INSERT INTO capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at,updated_at) SELECT $2,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,2,'issued',grant_record,clock_timestamp()+interval '1 minute',clock_timestamp() FROM capacity_mutation_grants LIMIT 1`},
 	}
+	const logicalCatalogQuery = `SELECT COALESCE(jsonb_agg(to_jsonb(m) ORDER BY m.version,m.id),'[]'::jsonb)::text FROM public.manifests m WHERE m.kind='capacity_policy' AND m.namespace=$1 AND m.name=$2`
+	var catalogBefore string
+	if err := h.db.QueryRow(logicalCatalogQuery, h.policy.Metadata.Namespace, h.policy.Metadata.Name).Scan(&catalogBefore); err != nil {
+		t.Fatal("M105 whole logical policy catalog before faults", err)
+	}
+	otherActiveStorageRefused := false
 	for _, fault := range faults {
 		tx, err := h.db.Begin()
 		if err != nil {
@@ -527,8 +533,23 @@ func nonceAcquire105HistoricalChecks(t *testing.T, h nonceAcquire105Historical, 
 			args = []any{uuid.New()}
 		}
 		if _, err = tx.Exec(fault.query, args...); err != nil {
+			rollbackErr := tx.Rollback()
+			var pg *pq.Error
+			// A second ACTIVE row cannot reach a scan: the original schema's
+			// partial UNIQUE index rejects it before any catalog activation.
+			if fault.name != "other_active_policy" || rollbackErr != nil || !errors.As(err, &pg) || pg.Code != "23505" || pg.Constraint != "manifests_single_active_uidx" {
+				t.Fatal("M105 append-only fault must reach real scan or exact original storage boundary", fault.name, err, rollbackErr)
+			}
+			var catalogAfter string
+			if catalogErr := h.db.QueryRow(logicalCatalogQuery, h.policy.Metadata.Namespace, h.policy.Metadata.Name).Scan(&catalogAfter); catalogErr != nil || catalogAfter != catalogBefore || nonceAcquire105Snapshot(t, h) != before {
+				t.Fatal("M105 original ACTIVE uniqueness refusal changed catalog or originals", catalogErr)
+			}
+			otherActiveStorageRefused = true
+			continue
+		}
+		if fault.name == "other_active_policy" {
 			tx.Rollback()
-			t.Fatal("M105 append-only fault must reach real scan", fault.name, err)
+			t.Fatal("M105 original single-ACTIVE storage boundary did not refuse")
 		}
 		var ok bool
 		err = tx.QueryRow(`SELECT public.unknown_maintenance_dispatch_effect_scan_tolerable(public.unknown_maintenance_dispatch_effect_scan($1))`, h.request.JobID).Scan(&ok)
@@ -536,6 +557,9 @@ func nonceAcquire105HistoricalChecks(t *testing.T, h nonceAcquire105Historical, 
 		if err != nil || ok || nonceAcquire105Snapshot(t, h) != before {
 			t.Fatal("M105 live fault admitted or changed originals", fault.name, err, ok)
 		}
+	}
+	if !otherActiveStorageRefused {
+		t.Fatal("M105 original single-ACTIVE storage refusal was not exercised")
 	}
 	var wg sync.WaitGroup
 	results := make(chan error, 2)
@@ -637,7 +661,7 @@ func nonceAcquire105HistoricalChecks(t *testing.T, h nonceAcquire105Historical, 
 	if err = h.db.QueryRow(`SELECT public.unknown_maintenance_nonce_acquire_receipt_valid105(d) FROM capacity_dispatch_unknown_maintenance_dispositions d WHERE job_id=$1`, h.request.JobID).Scan(&pure); err != nil || !pure {
 		t.Fatal("M105 pure archived receipt followed later policy/member state", err)
 	}
-	put("M105-DECLARED-HISTORICAL-OPERATOR-WITNESS.PUBLIC.json", failedServingWire(t, map[string]any{"schema": "nonce_acquire105_declared_historical_operator_fixture_v1", "fixture_only": true, "mature_history_constructed_before_first_insert": true, "unfiltered_same_slot_confirmed_families": priorFamilies, "exact_current_physical_family_selected": selected, "unselected_prior_family_declared_storage_only": true, "duplicate_same_full_tuple_refused_23505_before_seal": true, "live_900_second_itinerary_claimed": false, "unchanged_M87_nine_field_operator_and_GET": true, "CAS_refusals": len(cas), "same_request_race_winners": winners, "old87_result_and91_admission_still_refuse": true, "original_job_run_challenge_authority_and_ACK_preserved": true, "historical_GET_after_later_policy_and_members": true, "record": d}))
+	put("M105-DECLARED-HISTORICAL-OPERATOR-WITNESS.PUBLIC.json", failedServingWire(t, map[string]any{"schema": "nonce_acquire105_declared_historical_operator_fixture_v1", "fixture_only": true, "mature_history_constructed_before_first_insert": true, "unfiltered_same_slot_confirmed_families": priorFamilies, "exact_current_physical_family_selected": selected, "unselected_prior_family_declared_storage_only": true, "duplicate_same_full_tuple_refused_23505_before_seal": true, "live_900_second_itinerary_claimed": false, "unchanged_M87_nine_field_operator_and_GET": true, "CAS_refusals": len(cas), "other_active_policy_refused_by_existing_unique_23505": otherActiveStorageRefused, "same_request_race_winners": winners, "old87_result_and91_admission_still_refuse": true, "original_job_run_challenge_authority_and_ACK_preserved": true, "historical_GET_after_later_policy_and_members": true, "record": d}))
 }
 
 func nonceAcquire105DifferentDigest(value string) string {
