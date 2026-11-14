@@ -342,9 +342,9 @@ jobs:
           record capacity go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=2m -json ./internal/capacity -run '^TestGuestRetirementForward' || failed=1
           # Separate processes keep Goose/registry globals independent while
           # unique disposable databases overlap their unchanged natural clocks.
-          record normal_finish_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForwardNormalFinishRecoveryPostgres$' &
+          record normal_finish_repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^TestGuestRetirementForward(NormalFinishRecoveryPostgres|ClosedGuardsPostgres|MissingPrefixPostgres|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)$' &
           normal_finish_pid=$!
-          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|ClosedGuardsPostgres|MissingPrefixPostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins|ReadonlyFreshCustodyPostgres|OrdinaryReadonlyCustodyPostgres)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
+          record repository go test -buildvcs=true -tags=recoveryfixture -p=1 -race -count=1 -timeout=12m -json ./repository -run '^(TestGuestRetirementForward(LivePostgres|HistoricalAndAtomicityPostgres|LivePendingHistoricalResumePostgres|StorageDecoderIsClosedAndAtomic|FailedCallerTimeline|ReadonlyObserverJoins)|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn)$' || failed=1
           normal_finish_rc=0
           wait "$normal_finish_pid" || normal_finish_rc=$?
           if [[ "$normal_finish_rc" != 0 ]]; then failed=1; fi
@@ -361,15 +361,16 @@ jobs:
               'TestGuestRetirementForwardLivePostgres',
               'TestGuestRetirementForwardHistoricalAndAtomicityPostgres',
               'TestGuestRetirementForwardLivePendingHistoricalResumePostgres',
-              'TestGuestRetirementForwardClosedGuardsPostgres',
-              'TestGuestRetirementForwardMissingPrefixPostgres',
               'TestGuestRetirementForwardStorageDecoderIsClosedAndAtomic',
               'TestGuestRetirementForwardFailedCallerTimeline',
               'TestGuestRetirementForwardReadonlyObserverJoins',
-              'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
-              'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres',
               'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn']),
-            'normal_finish_repository':('repository',['TestGuestRetirementForwardNormalFinishRecoveryPostgres']),
+            'normal_finish_repository':('repository',[
+              'TestGuestRetirementForwardNormalFinishRecoveryPostgres',
+              'TestGuestRetirementForwardClosedGuardsPostgres',
+              'TestGuestRetirementForwardMissingPrefixPostgres',
+              'TestGuestRetirementForwardReadonlyFreshCustodyPostgres',
+              'TestGuestRetirementForwardOrdinaryReadonlyCustodyPostgres']),
             'continuation_repository':('repository',['TestGuestRetirementForwardContinuationPostgres']),
             'message':('controllers/message',[
               'TestGuestRetirementForwardAWSReadDoesNotRelabelPendingAsOff',
