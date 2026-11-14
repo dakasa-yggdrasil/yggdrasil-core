@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 8f9d88790329034cc7cf76b3b92f63e37a9e54c7
-verified_diff_sha256: a349ef577a8551902c08f60c210b9beb32d5c3c863bed80981f43bd7f8b5819a
+verified_at_commit: 56986bd08e18cc383cca3564348be8c541f8d0ca
+verified_diff_sha256: cb0803a9afe4fe900b0d3332225c323675045a157d15ac0b0f71b3485da7e24e
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -506,3 +506,7 @@ prepared_nonce_SQL_companion_review: Reviewed the closed Goose105 prepared-only 
 prepared_nonce_ADR_status_review: Corrected the new Proposed ADR status label to the exact structural convention identified by current CI. Its complete Decision body, SQL105, regression helper and every runtime source remain unchanged. Earlier failed CI is retained for diagnosis; exact successor CI remains required. No local tests ran.
 
 elastic_host_and_SQL_companion_main_integration_review: Reconciled the normal merge of the published host tooling and prepared-nonce SQL companion histories. Every one of the43 changed nonmetadata paths remains byte-identical to its respective published parent; only the three generated companions conflicted and all prior freshness review lines were retained. The unchanged running Core15 source/image and physical M17 host pair remain separate facts. Source contracts and ADR index remain accurate; the released CLI regenerated the combined repository map and content-addressed this source. Current companion CI and actual schema105 delivery, fresh HZN cycle, remote Main integration and catalog/control-plane/final-E2E acceptance remain pending. No local product tests or SQL ran.
+
+prepared_nonce_fixture_original_time_review: Current CI exposed two uses of the validating-now fixture factory after original expiry. The current local signed refusal operand is now prepared before the real five-second wait; the declared historical nonce is retained, rebound and signed before initial commit and validated at its declared original time. No persisted prepared nonce, production guard, SQL, deadline, clock, assertion or test ID changed. All36 original installed streams and both failed archives are retained; only the new cleanup failed. Exact successor full CI remains required, and no operational105 or cycle acceptance is claimed. No local product tests or SQL ran.
+
+prepared_nonce_single_active_storage_review: Current PostgreSQL16 and17 CI reached the prepared-only proof, closed refusals and old-directory compatibility, then correctly refused a fixture attempt to insert a second active policy. The test now requires the original exact23505 and partial UNIQUE constraint, successful rollback and whole catalog/original-row equality; unexpected insertion succeeds nowhere. The remaining three live faults still require actual scan refusal. SQL105, runtime, deadlines, clocks, test and artifact IDs remain unchanged. The previous failed cohort is retained and exact successor CI remains required; no operational or cycle acceptance is claimed. No local product tests or SQL ran.
