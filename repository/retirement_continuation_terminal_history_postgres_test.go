@@ -153,8 +153,8 @@ func retirementContinuationTypedHistoryRegression(t *testing.T, f *installedTime
 			t.Fatal(err)
 		}
 	}
-	// A real ordinary version append leaves the historical policy immutable
-	// and inactive, matching production after the normal 3/.25 restoration.
+	// The current API must protect this genuine STARTED requester. The later
+	// historical policy operand is a DECLARED pre-guard catalog fixture only.
 	p := f.p
 	p.Signals = append([]model.CapacitySignalRule(nil), f.p.Signals...)
 	for i := range p.Signals {
@@ -162,15 +162,60 @@ func retirementContinuationTypedHistoryRegression(t *testing.T, f *installedTime
 	}
 	enabled := true
 	spec := installedTimeoutWire(t, p)
-	newPolicy, err := CreateManifestVersionTx(ctx, tx, model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: f.policy.Metadata.Namespace, Name: f.policy.Metadata.Name, Active: &enabled}, Spec: spec}, capacity.BusinessCreationSHA256(spec))
+	doc := model.ManifestDocument{APIVersion: "v1", Kind: "capacity_policy", Metadata: model.ManifestMetadataInput{Namespace: f.policy.Metadata.Namespace, Name: f.policy.Metadata.Name, Active: &enabled}, Spec: spec}
+	checksum := capacity.BusinessCreationSHA256(spec)
+	snapshot := func() map[string]string {
+		t.Helper()
+		rows := map[string]string{}
+		for _, table := range []string{"manifests", "capacity_dispatch_jobs", "workflow_runs", "capacity_dispatch_installed_provision_timeout_dispositions", "capacity_dispatch_preaction_plan_dispositions", "capacity_mutation_grants", "capacity_vm_provisioning_preregistrations", "capacity_guest_original_create_witnesses", "capacity_vm_original_enrollments", "capacity_guest_original_installations", "capacity_guest_notify_canary_challenges", "capacity_guest_notify_canary_nonces", "capacity_guest_notify_canary_sends", "capacity_guest_notify_canary_returns", "capacity_vm_retirement_intents", "capacity_vm_retirement_delete_bindings", "capacity_original_create_dispositions", "capacity_intents", "capacity_intent_events", "capacity_resource_slots"} {
+			var raw string
+			if err := tx.QueryRowContext(ctx, "SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY to_jsonb(x)::text COLLATE \"C\"),'[]'::jsonb)::text FROM public."+table+" x").Scan(&raw); err != nil {
+				t.Fatal("same-transaction historical operand preservation", table, err)
+			}
+			rows[table] = raw
+		}
+		return rows
+	}
+	var busyOwn bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs WHERE id=$1 AND run_id=$2 AND envelope_sha256=$3 AND fencing_token=$4 AND lease_owner=$5 AND state='started' AND started_at IS NOT NULL AND returned_at IS NULL AND finalization_ack_at IS NULL)`, own.JobID, own.RunID, own.EnvelopeSHA256, own.FencingToken, own.LeaseOwner).Scan(&busyOwn); err != nil || !busyOwn {
+		t.Fatal("exact started requester must remain busy during publication refusal", busyOwn, err)
+	}
+	beforePublication := snapshot()
+	if _, err = CreateManifestVersionTx(ctx, tx, doc, checksum); !errors.Is(err, ErrCapacityPolicyPublicationConflict) {
+		t.Fatal("current API must refuse publication during the started requester", err)
+	}
+	if !reflect.DeepEqual(beforePublication, snapshot()) {
+		t.Fatal("refused publication changed full catalog, own job/run or retained originals")
+	}
+	// DECLARED historical/pre-guard catalog fault in this SAME rollback-only
+	// transaction. Preserve the original writer's first-INSERT fields/defaults;
+	// do not open another transaction, close the requester or invent any ACK.
+	var version int
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0)+1 FROM public.manifests WHERE kind=$1 AND namespace=$2 AND name=$3`, doc.Kind, doc.Metadata.Namespace, doc.Metadata.Name).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE public.manifests SET active=false WHERE kind=$1 AND namespace=$2 AND name=$3 AND active`, doc.Kind, doc.Metadata.Namespace, doc.Metadata.Name); err != nil {
+		t.Fatal(err)
+	}
+	labels, err := marshalLabels(doc.Metadata.Labels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newPolicy, err := scanManifest(tx.QueryRowContext(ctx, `INSERT INTO public.manifests(api_version,kind,namespace,name,version,active,description,labels,spec,checksum) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10) RETURNING id,api_version,kind,namespace,name,version,active,description,labels,spec,checksum,created_at,updated_at`, doc.APIVersion, doc.Kind, doc.Metadata.Namespace, doc.Metadata.Name, version, documentActive(doc), strings.TrimSpace(doc.Metadata.Description), labels, spec, checksum))
 	if err != nil || newPolicy.ID == f.policy.ID || newPolicy.Version != f.policy.Version+1 {
-		t.Fatal("ordinary compatible append-only policy publication", err)
+		t.Fatal("declared historical compatible policy operand", err)
+	}
+	afterHistoricalCatalog := snapshot()
+	delete(beforePublication, "manifests")
+	delete(afterHistoricalCatalog, "manifests")
+	if !reflect.DeepEqual(beforePublication, afterHistoricalCatalog) {
+		t.Fatal("declared catalog operand changed own job/run or retained originals")
 	}
 	var oldActive bool
 	if err = tx.QueryRowContext(ctx, "SELECT active FROM public.manifests WHERE id=$1", f.policy.ID).Scan(&oldActive); err != nil || oldActive {
 		t.Fatal("actual original policy must now be inactive", oldActive, err)
 	}
-	requireQuiet("after compatible policy version append")
+	requireQuiet("after declared historical compatible policy version operand")
 	if err = tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +226,7 @@ func retirementContinuationTypedHistoryRegression(t *testing.T, f *installedTime
 	if dir == "" {
 		t.Fatal("existing M99 evidence directory required")
 	}
-	result := map[string]any{"schema": "typed_M98_M99_retirement_quiet_schema101_fixture_v1", "schema_version": 101, "old_go_busy_count": oldBusy, "old_sql_quiet": false, "new_full_go_and_sql_quiet": true, "genuine_M98_job": anchor.JobID, "genuine_M99_job": plan.JobID, "real_started_requester": own.RunID.String(), "forged_or_missing_receipts_refused": true, "unknown_and_returned_without_ack_refused": true, "inactive_original_policy_historical_validators_passed": true, "originals_unchanged": true, "fixture_only": true, "native_cloud": false, "Root_acceptance": false}
+	result := map[string]any{"schema": "typed_M98_M99_retirement_quiet_schema101_fixture_v1", "schema_version": 101, "old_go_busy_count": oldBusy, "old_sql_quiet": false, "new_full_go_and_sql_quiet": true, "genuine_M98_job": anchor.JobID, "genuine_M99_job": plan.JobID, "real_started_requester": own.RunID.String(), "forged_or_missing_receipts_refused": true, "unknown_and_returned_without_ack_refused": true, "inactive_original_policy_historical_validators_passed": true, "current_busy_publication_refused": true, "declared_historical_policy_catalog_fixture": true, "originals_unchanged": true, "fixture_only": true, "native_cloud": false, "Root_acceptance": false}
 	for name, raw := range map[string][]byte{"M101-PG-BEFORE100-CATALOG.original.json": beforeCatalog, "M101-PG-AFTER101-CATALOG.original.json": afterCatalog, "M101-TYPED-TERMINAL-QUIET.RESULT.PUBLIC.json": installedTimeoutWire(t, result)} {
 		out, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
