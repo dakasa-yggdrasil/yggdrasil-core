@@ -20,6 +20,7 @@ func TestOriginalGuestReconcilePostgresCannotInventAuthority(t *testing.T) {
 	defer cancel()
 	testGuestContractResolverPostgres(t, ctx, db)
 	testGuestContractHistoricalRecoveryPostgres(t, ctx, db, policy.Metadata.Namespace)
+	testOriginalGuestPresendRecoveryPostgres(t, ctx, db)
 	legacy := CapacityStore{DB: db, ExecutionEnabled: true, ExecutorID: uuid.NewString()}
 	intent, err := legacy.Assess(ctx, policy, assessment)
 	if err != nil {

@@ -40,6 +40,7 @@ type CapacityStore struct {
 	hostOriginalFactory                 *hostOriginalFactoryScope
 	hostOriginalOrdinary                *hostOriginalOrdinaryFactory
 	guestReconcile                      *guestReconcileSource
+	guestPresendRecovery                *guestPresendRecovery
 	witnessedExpansionOwner             *witnessedExpansionOwner
 	witnessedExpansionTerminalReconcile *model.CapacityWitnessedExpansionTerminalReconcile
 	failedExpansionOwner                *failedExpansionOwner
@@ -520,6 +521,11 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 			return model.CapacityIntent{}, err
 		}
 	}
+	if s.guestPresendRecovery != nil {
+		if !historical || s.guestPresendRecovery.guardTx(ctx, tx, policy, previous, now.UTC()) != nil {
+			return model.CapacityIntent{}, ErrCapacityConflict
+		}
+	}
 	if previous != nil && previous.FailedInstalledDisposal != nil && previous.FailedInstalledDisposal.Stage != "terminal" {
 		return model.CapacityIntent{}, ErrCapacityConflict
 	}
@@ -602,7 +608,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if err != nil {
 		return model.CapacityIntent{}, err
 	}
-	if s.guestReconcile != nil && !guestReconcileLive(ctx) {
+	if (s.guestReconcile != nil || s.guestPresendRecovery != nil) && !guestReconcileLive(ctx) {
 		return model.CapacityIntent{}, ErrCapacityLease
 	}
 	if previous == nil {
@@ -635,7 +641,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if err = tx.Commit(); err != nil {
 		return model.CapacityIntent{}, err
 	}
-	if s.guestReconcile != nil && !guestReconcileLive(ctx) {
+	if (s.guestReconcile != nil || s.guestPresendRecovery != nil) && !guestReconcileLive(ctx) {
 		return model.CapacityIntent{}, ErrCapacityLease
 	}
 	if s.hostOriginalClaim != nil {

@@ -475,6 +475,23 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		return fail(err)
 	}
 	store = bindReconcile(parsed.Mode, parsed.RequestID)
+	if step.Use.Operation == capacity.PlanOriginalGuestOperation && coverageErr == nil {
+		stage = "expired_presend_recovery"
+		recovered, recoveryErr := store.TryRecoverOriginalGuestPresend(ctx, policy, assessment)
+		if recoveryErr != nil {
+			return fail(recoveryErr)
+		}
+		if recovered {
+			if originalGuestReconcileLive(ctx) != nil {
+				return fail(errOriginalGuestStep)
+			}
+			// Closure is a ledger fact. A later scheduled invocation must make
+			// its own fresh assessment before any new claim or provider grant.
+			result.Metadata = map[string]any{"mode": "hold", "reason": "expired_original_presend_aborted"}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
+	}
 	stage = "native_installed_members"
 	members, pending, err := store.OriginalGuestReconcileMembers(ctx, policy)
 	if err != nil {
