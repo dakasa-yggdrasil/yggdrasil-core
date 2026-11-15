@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 
 def exercise_g21_compiler_binding(test, root):
-    source = root / 'rollout/assemble_g25_pair_package.py'
+    source = root / 'rollout/assemble_g26_pair_package.py'
     raw_compiler = source.read_bytes()
-    module = types.ModuleType('declared_g25_compiler_CI')
+    module = types.ModuleType('declared_g26_compiler_CI')
     module.__file__ = str(source)
     exec(compile(raw_compiler, str(source), 'exec'), module.__dict__)
     test.assertIs(module.SOURCE_BOUND, False)
@@ -30,16 +30,16 @@ def exercise_g21_compiler_binding(test, root):
                 any(isinstance(t, ast.Name) and t.id == 'keys' for t in n.targets))
     test.assertEqual(ast.literal_eval(keys), {'schema', 'source_worktree', 'out', 'ci_attestation_ref',
         'root_controller_review_ref', 'root_standing_review_ref', 'controller_unit_ref',
-        'predecessor_manifest_ref', 'actual_M16_swap_return_ref', 'continuity_peer_ipv4',
+        'predecessor_manifest_ref', 'actual_M17_swap_return_ref', 'continuity_peer_ipv4',
         'expected_controller_identity', 'expected_guardian_identity'})
-    test.assertEqual(module.OLD_MANIFEST_SHA, 'b78df9192cb32b97abaa6acd3268f54eb57a8cce95be848ca78342449d4cd16a')
+    test.assertEqual(module.OLD_MANIFEST_SHA, '085ea7652954fa08a10118423df2c8a9ecc976344bf6e8ee58aa0edc32068c98')
     test.assertEqual(module.PYTHON_BINDINGS, {
         'source/network_guardian.py': {'PROPOSAL_BOUND', 'HEAD_CORE_SOURCE',
-            'HEAD_NEW_CORE_DIGEST', 'G25_CONTROLLER_CONFIG_SHA'},
+            'HEAD_NEW_CORE_DIGEST', 'G26_CONTROLLER_CONFIG_SHA'},
         'tools/pair_change_contract.py': {'PROPOSAL_BOUND', 'SOURCE_R', 'NEW_DIGEST',
-            'G25_CONFIG_SHA', 'OLD_CORE_POD_UID', 'OLD_CORE_CONTAINER_ID'},
+            'G26_CONFIG_SHA', 'OLD_CORE_POD_UID', 'OLD_CORE_CONTAINER_ID'},
         'tools/derive_g15pair_controller_config.py': {'PROPOSAL_BOUND',
-            'HEAD_NEW_CORE_DIGEST', 'G25_CONFIG_SHA'},
+            'HEAD_NEW_CORE_DIGEST', 'G26_CONFIG_SHA'},
         'tools/derive_standing_config.py': {'PROPOSAL_BOUND'},
         'tools/g15cut.py': {'PROPOSAL_BOUND'},
     })
@@ -84,8 +84,8 @@ def exercise_g21_compiler_binding(test, root):
     module.CONTROLLER_UNIT_SHA = 'f' * 64
     values = {'PROPOSAL_BOUND': True, 'HEAD_CORE_SOURCE': module.EXPECTED_R,
         'SOURCE_R': module.EXPECTED_R, 'HEAD_NEW_CORE_DIGEST': 'sha256:' + module.EXPECTED_D,
-        'NEW_DIGEST': module.EXPECTED_D, 'G25_CONTROLLER_CONFIG_SHA': 'e' * 64,
-        'G25_CONFIG_SHA': 'e' * 64, 'OLD_CORE_POD_UID': '11111111-1111-4111-8111-111111111111',
+        'NEW_DIGEST': module.EXPECTED_D, 'G26_CONTROLLER_CONFIG_SHA': 'e' * 64,
+        'G26_CONFIG_SHA': 'e' * 64, 'OLD_CORE_POD_UID': '11111111-1111-4111-8111-111111111111',
         'OLD_CORE_CONTAINER_ID': 'containerd://' + 'a' * 64}
     bound = {}
     for name, allowed in module.PYTHON_BINDINGS.items():
@@ -134,7 +134,7 @@ def exercise_g21_compiler_binding(test, root):
         fixed_width_latebind_Guardian_bytes=len(bound[guardian]))
     bound_package['files'] = {name: module.sha(bound.get(name, data)) for name, data in raw.items() if name != 'PACKAGE.json'}
     bound['PACKAGE.json'] = module.wire(bound_package)
-    with tempfile.TemporaryDirectory(prefix='declared-g25-overlay-') as folder:
+    with tempfile.TemporaryDirectory(prefix='declared-g26-overlay-') as folder:
         folder = Path(folder)
         def write(name, data):
             path = folder / name
@@ -143,7 +143,7 @@ def exercise_g21_compiler_binding(test, root):
                 stream.write(data)
             path.chmod(0o600)
             return {'path': str(path), 'sha256': module.sha(data)}
-        binding = {'schema': 'g25_root_literal_source_bindings_v1',
+        binding = {'schema': 'g26_root_literal_source_bindings_v1',
             'source_commit': module.EXPECTED_HEAD, 'reviewed_by_root': True,
             'bound_source_refs': {name: write(name, data) for name, data in bound.items()}}
         module.BINDINGS_REF = {'path': str(folder / 'DECLARED-BINDING.json'), 'sha256': '1' * 64}
