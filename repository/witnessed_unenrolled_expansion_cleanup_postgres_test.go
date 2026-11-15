@@ -1519,8 +1519,8 @@ func witnessedCleanup106OldGoose(t *testing.T, db *sql.DB, migrations string, pu
 	put("M106-OLD-GOOSE104-DIRECTORY-NOOP.PUBLIC.json", failedServingWire(t, map[string]any{"schema": "witnessed_cleanup106_old_goose_directory_noop_v1", "local_migration_files": files, "local_max": 104, "database_schema": 106, "whole_catalog_and_history_before_sha256": capacity.BusinessCreationSHA256(before), "whole_catalog_and_history_after_sha256": capacity.BusinessCreationSHA256(after), "whole_equal": true, "old_image_boot_claimed": false, "fixture_only": true}))
 }
 
-// The control must reproduce PostgreSQL's parallel EXCEPTION failure before
-// the production function proves that its UNSAFE declaration prevents it.
+// The SAFE control follows each supported server's parallel subtransaction rules.
+// The production marker remains UNSAFE on both versions.
 func witnessedCleanup106ParallelIndexBuild(t *testing.T) {
 	t.Helper()
 	db := failedServingDBAtSchema(t, 93)
@@ -1549,6 +1549,14 @@ func witnessedCleanup106ParallelIndexBuild(t *testing.T) {
 			t.Fatal("parallel-index fixture setup", err)
 		}
 	}
+	var serverVersion int
+	if err := conn.QueryRowContext(ctx, `SELECT current_setting('server_version_num')::integer`).Scan(&serverVersion); err != nil {
+		t.Fatal("parallel-index fixture server version", err)
+	}
+	major := serverVersion / 10000
+	if major != 16 && major != 17 {
+		t.Fatal("parallel-index fixture requires PostgreSQL 16 or 17", serverVersion)
+	}
 	var definition string
 	if err := conn.QueryRowContext(ctx, `SELECT pg_get_functiondef('public.witnessed_expansion_dispatch_marker_present106(text)'::regprocedure)`).Scan(&definition); err != nil {
 		t.Fatal(err)
@@ -1568,12 +1576,26 @@ func witnessedCleanup106ParallelIndexBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, buildErr := tx.ExecContext(ctx, `CREATE INDEX witnessed_marker_parallel106_idx ON public.witnessed_marker_parallel106_fixture(id) WHERE NOT public.witnessed_marker_parallel106_control(envelope)`)
+	var controlValid, controlClassified bool
+	var controlIndexErr, controlClassErr error
+	if major == 17 && buildErr == nil {
+		controlIndexErr = tx.QueryRowContext(ctx, `SELECT indisvalid AND indisready FROM pg_index WHERE indexrelid='public.witnessed_marker_parallel106_idx'::regclass`).Scan(&controlValid)
+		controlClassErr = tx.QueryRowContext(ctx, `SELECT count(*)=49152 FROM public.witnessed_marker_parallel106_fixture WHERE NOT public.witnessed_marker_parallel106_control(envelope)`).Scan(&controlClassified)
+	}
 	if err := tx.Rollback(); err != nil {
 		t.Fatal("parallel control transaction rollback", err)
 	}
-	var pgErr *pq.Error
-	if !errors.As(buildErr, &pgErr) || pgErr.Code != "25000" || !strings.Contains(pgErr.Message, "cannot start subtransactions during a parallel operation") {
-		t.Fatal("SAFE EXCEPTION control must exercise the actual parallel index failure", buildErr)
+	if major == 16 {
+		var pgErr *pq.Error
+		if !errors.As(buildErr, &pgErr) || pgErr.Code != "25000" || !strings.Contains(pgErr.Message, "cannot start subtransactions during a parallel operation") {
+			t.Fatal("SAFE EXCEPTION control must exercise the actual parallel index failure", buildErr)
+		}
+	} else {
+		// PG17 permits read-only error-recovery subtransactions in parallel:
+		// https://www.postgresql.org/docs/17/parallel-safety.html
+		if buildErr != nil || controlIndexErr != nil || controlClassErr != nil || !controlValid || !controlClassified {
+			t.Fatal("PostgreSQL 17 SAFE control must build a valid index and preserve classification", buildErr, controlIndexErr, controlClassErr, controlValid, controlClassified)
+		}
 	}
 	if _, err := conn.ExecContext(ctx, `CREATE INDEX witnessed_marker_parallel106_idx ON public.witnessed_marker_parallel106_fixture(id) WHERE NOT public.witnessed_expansion_dispatch_marker_present106(envelope)`); err != nil {
 		t.Fatal("actual UNSAFE marker must build the same partial index", err)
