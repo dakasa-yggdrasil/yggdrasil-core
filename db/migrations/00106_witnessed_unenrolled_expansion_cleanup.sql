@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.capacity_witnessed_unenrolled_expansion_dispat
 
 -- +goose StatementBegin
 CREATE FUNCTION public.witnessed_expansion_dispatch_marker_present106(envelope_text text) RETURNS boolean
-LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $$
+LANGUAGE plpgsql IMMUTABLE PARALLEL UNSAFE AS $$
 DECLARE doc jsonb;
 BEGIN
  doc:=envelope_text::jsonb;

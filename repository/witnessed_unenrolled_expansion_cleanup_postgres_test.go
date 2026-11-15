@@ -49,6 +49,7 @@ type witnessedCleanup106Fixture struct {
 // TestWitnessedUnenrolledExpansionCleanupPostgres owns the unchanged M106
 // regression in its own CI process, including its real 300-second Guest claim.
 func TestWitnessedUnenrolledExpansionCleanupPostgres(t *testing.T) {
+	witnessedCleanup106ParallelIndexBuild(t)
 	witnessedCleanup106PostgresRegression(t)
 }
 
@@ -1516,4 +1517,76 @@ func witnessedCleanup106OldGoose(t *testing.T, db *sql.DB, migrations string, pu
 		t.Fatal("old Goose changed whole DB106 history/catalog")
 	}
 	put("M106-OLD-GOOSE104-DIRECTORY-NOOP.PUBLIC.json", failedServingWire(t, map[string]any{"schema": "witnessed_cleanup106_old_goose_directory_noop_v1", "local_migration_files": files, "local_max": 104, "database_schema": 106, "whole_catalog_and_history_before_sha256": capacity.BusinessCreationSHA256(before), "whole_catalog_and_history_after_sha256": capacity.BusinessCreationSHA256(after), "whole_equal": true, "old_image_boot_claimed": false, "fixture_only": true}))
+}
+
+// The control must reproduce PostgreSQL's parallel EXCEPTION failure before
+// the production function proves that its UNSAFE declaration prevents it.
+func witnessedCleanup106ParallelIndexBuild(t *testing.T) {
+	t.Helper()
+	db := failedServingDBAtSchema(t, 93)
+	ctx := context.Background()
+	migrations := filepath.Join(failedServingRepositoryRoot(t), "db/migrations")
+	if err := goose.UpToContext(ctx, db, migrations, 106); err != nil {
+		t.Fatal("parallel-index fixture M106 Up", err)
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Error("parallel-index fixture connection close", err)
+		}
+	}()
+	for _, statement := range []string{
+		`SET max_parallel_maintenance_workers=2`,
+		`SET min_parallel_index_scan_size=0`,
+		`SET min_parallel_table_scan_size=0`,
+		`CREATE TABLE public.witnessed_marker_parallel106_fixture(id integer, envelope text) WITH (parallel_workers=2)`,
+		`INSERT INTO public.witnessed_marker_parallel106_fixture SELECT n, CASE n%4 WHEN 0 THEN '{bad' WHEN 1 THEN NULL WHEN 2 THEN '{}' ELSE '{"witnessed_unenrolled_expansion_cleanup_id":"fixture"}' END FROM generate_series(1,65536) n`,
+	} {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
+			t.Fatal("parallel-index fixture setup", err)
+		}
+	}
+	var definition string
+	if err := conn.QueryRowContext(ctx, `SELECT pg_get_functiondef('public.witnessed_expansion_dispatch_marker_present106(text)'::regprocedure)`).Scan(&definition); err != nil {
+		t.Fatal(err)
+	}
+	control := strings.Replace(definition, "FUNCTION public.witnessed_expansion_dispatch_marker_present106(", "FUNCTION public.witnessed_marker_parallel106_control(", 1)
+	if control == definition {
+		t.Fatal("exact marker declaration required for the isolated SAFE control")
+	}
+	if _, err := conn.ExecContext(ctx, control); err != nil {
+		t.Fatal("create exact-body parallel control", err)
+	}
+	if _, err := conn.ExecContext(ctx, `ALTER FUNCTION public.witnessed_marker_parallel106_control(text) PARALLEL SAFE`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, buildErr := tx.ExecContext(ctx, `CREATE INDEX witnessed_marker_parallel106_idx ON public.witnessed_marker_parallel106_fixture(id) WHERE NOT public.witnessed_marker_parallel106_control(envelope)`)
+	if err := tx.Rollback(); err != nil {
+		t.Fatal("parallel control transaction rollback", err)
+	}
+	var pgErr *pq.Error
+	if !errors.As(buildErr, &pgErr) || pgErr.Code != "25000" || !strings.Contains(pgErr.Message, "cannot start subtransactions during a parallel operation") {
+		t.Fatal("SAFE EXCEPTION control must exercise the actual parallel index failure", buildErr)
+	}
+	if _, err := conn.ExecContext(ctx, `CREATE INDEX witnessed_marker_parallel106_idx ON public.witnessed_marker_parallel106_fixture(id) WHERE NOT public.witnessed_expansion_dispatch_marker_present106(envelope)`); err != nil {
+		t.Fatal("actual UNSAFE marker must build the same partial index", err)
+	}
+	var parallel string
+	var indexed, valid bool
+	if err := conn.QueryRowContext(ctx, `SELECT proparallel::text FROM pg_proc WHERE oid='public.witnessed_expansion_dispatch_marker_present106(text)'::regprocedure`).Scan(&parallel); err != nil || parallel != "u" {
+		t.Fatal("EXCEPTION marker must remain PARALLEL UNSAFE", parallel, err)
+	}
+	if err := conn.QueryRowContext(ctx, `SELECT indisvalid AND indisready FROM pg_index WHERE indexrelid='public.witnessed_marker_parallel106_idx'::regclass`).Scan(&valid); err != nil || !valid {
+		t.Fatal("complete valid ordinary partial index", valid, err)
+	}
+	if err := conn.QueryRowContext(ctx, `SELECT count(*)=49152 FROM public.witnessed_marker_parallel106_fixture WHERE NOT public.witnessed_expansion_dispatch_marker_present106(envelope)`).Scan(&indexed); err != nil || !indexed {
+		t.Fatal("unchanged marked, ordinary, malformed and null classification", indexed, err)
+	}
 }

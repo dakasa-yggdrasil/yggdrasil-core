@@ -117,8 +117,8 @@
   },
   "schema": "witnessed_unenrolled_expansion_source_review_v1",
   "source_only": true,
-  "sql106_bytes": 123220,
-  "sql106_sha256": "989fdb79cf239d5db0f98b6f4dae4876922e81b3db67ec4235b88f493e13c2ef",
+  "sql106_bytes": 123222,
+  "sql106_sha256": "ef0dc9dd2caa6972f304e4b59da605120252462883be59a4f141f34a27b35a86",
   "status": "source_only_ci_pending",
   "validation_owner": "Go producer and historical consumer validate native HZN content; SQL authenticates stored joins/transitions/immutability; no full SQL content-parity claim"
 }
