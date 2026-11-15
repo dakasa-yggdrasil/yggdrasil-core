@@ -328,7 +328,12 @@ func witnessedCleanup106Clone(t *testing.T, f *witnessedCleanup106Fixture, migra
 	out.DB = db
 	clone := *f.private
 	clone.db = db
+	// The copied store must use this isolated clone, never the producer DB.
+	clone.store.DB = db
 	out.private = &clone
+	if out.DB == f.DB || out.private.db != out.DB || out.private.store.DB != out.DB {
+		t.Fatal("declared clone must own one isolated database across fixture and store")
+	}
 	return &out
 }
 
