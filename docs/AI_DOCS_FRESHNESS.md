@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: a7c91f2bb7f2d28e2a36c536ae7f27833facc672
-verified_diff_sha256: 5a9e694bbf78b447ba7e78a2b6f5d5b6d351c6269ae87a581454780d63887308
+verified_at_commit: 8d38bbc6c0b8eeff908a93431cf969aab6d39a0b
+verified_diff_sha256: 0be571c69dd8757602dca8715b2ad7ce82141dfbd089c2fdd9d7c05318aeb2a1
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -532,3 +532,5 @@ Reviewed source 3a6b88973510ca26e37261554e5167db2a7484fc reuses the existing fai
 native_direct_failure_diagnostic_review_20261114: Root independently reviewed the complete nine-file Native diagnostic correction and regenerated current static contract companions. Same-run nullable public workflow identity retains every other scope guard; closed24 HTTP return and closed7 export disposition preserve original returned stamps, flags, body hashes and errors. No original transport or budget changed. Existing roots retain old bodies with appended pure checks. Source review passes; current CI, runtime SQL and Native execution remain required.
 
 native_owner_exact14_diagnostic_children_review_20261114: Root independently reviewed the one-file explicit roster correction against both actual current census artifacts. Every old12 node remains required and the two already passing diagnostic children are additionally required; failure/skip/missing/repetition/unexpected/package guards remain unchanged. No Go/runtime/source census or authority/deadline changes. Current owning CI still required.
+
+native_signed_failure_original_clock_review_20261115: Root independently reviewed the complete six-source bridge and current static contract companions. Compiled Native/profile/member scope binds immutable successful original witness bytes and authenticates the closed canonical signed negative report before the existing real Core clock wait; actual downstream validation at first Driver remains unchanged. Original HTTP body/defer and old validators/test names remain byte exact; production is inert. Three regular callers share the binding, while distinct fresh DTOs retain their existing policy. No authority, tolerance, replay, timestamp rewrite or new deadline. Actual canceled-case cause remains unproven; current CI and Native remain required.

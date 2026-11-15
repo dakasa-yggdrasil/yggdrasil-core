@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-14T21:43:28-03:00",
+  "generated_at": "2026-11-14T22:21:48-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1568,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "a7c91f2bb7f2d28e2a36c536ae7f27833facc672",
+    "commit": "8d38bbc6c0b8eeff908a93431cf969aab6d39a0b",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "3b1476a284edca0c97abf464d1b8a1601b0e9111803839815e3fcebb8c92193e"
+        "sha256": "7adee396f1d04145728d6b53a5d7ed3fd38dc282bd6528a58e21c9275169b08e"
       },
       {
         "path": "AGENTS.md",
@@ -81,7 +81,7 @@
     {
       "path": "internal/capacity",
       "files": 132,
-      "kb": 1439
+      "kb": 1444
     },
     {
       "path": "db/migrations",
@@ -111,7 +111,7 @@
     {
       "path": "internal/capacitynativeqemu",
       "files": 47,
-      "kb": 298
+      "kb": 308
     },
     {
       "path": "cmd/native-guest-lifecycle-fixture",
