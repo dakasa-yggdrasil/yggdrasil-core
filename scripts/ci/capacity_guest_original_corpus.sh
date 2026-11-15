@@ -146,7 +146,9 @@ elif mode == 'native-owners':
         'all_original_returns_are_required_once', 'original_cancellation_does_not_join_pending_return'),
         'TestOriginalNativeHTTPReturnedOwners': (
             'serve_close_does_not_join_original_handler',
-            'same_handler_return_is_required_after_shutdown'),
+            'same_handler_return_is_required_after_shutdown',
+            'nullable_workflow_id_requires_same_authenticated_result',
+            'closed_disposition_fields_and_error_classes'),
     }
     packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi',
                 'github.com/dakasa-yggdrasil/yggdrasil-core/cmd/native-guest-lifecycle-fixture'}
