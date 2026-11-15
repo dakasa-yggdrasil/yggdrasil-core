@@ -847,7 +847,7 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
         closure = source_span(NEW / 'tools/g15cut.py', 'Backend', 'final_closure')
         self.assertIn('self.protected() == self.protected_before', closure)
         self.assertIn('COLD_HUB_SAME_ORIGINAL_COMPLETED_LIFETIMES_NO_EXECUTION', closure)
-        # Current overlap is 1cf5/Core14; historical digests are refused.
+        # Current overlap is 81c08/Core15; all historical digests are refused.
         with binding():
             image = CUT.C.IMAGE_PREFIX + CUT.C.OLD_DIGEST
             dep = {'metadata': {'uid': CUT.C.OLD_CORE_UID, 'generation': CUT.C.OLD_CORE_GENERATION,
@@ -868,7 +868,8 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
             with patch.object(CUT, 'native', side_effect=[replies[0], SimpleNamespace(returncode=0, stdout=C.wire({'items': [wrong_pod]}))]):
                 with self.assertRaises(CUT.C.Hold): CUT.core_overlap()
 
-            for previous_digest in ('346bdc09c343cabe15fdff724187c7d75551c597511139c3262e7b9da1a40e67',
+            for previous_digest in ('1cf53bc24b112d46e4a5dfda14e4639f474979be799996ec22249331a96bddd9',
+                                    '346bdc09c343cabe15fdff724187c7d75551c597511139c3262e7b9da1a40e67',
                                     '2eafea02c56c75dc607494e4c9c15a143abb782f3a317d37fe2f05ae83349869',
                                     '8d79a2284adaac863cf8ae1dc0ee6853195cb643402936b753b55cbddfc290ad',
                                     '8dcf22ae1aa0e16c5cace160c4d71398363e460ac54f6ca80a9c32ffbda5cac9',
