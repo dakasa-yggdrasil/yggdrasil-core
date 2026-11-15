@@ -46,6 +46,7 @@ func AcquireQualificationProbeNonce(original context.Context, client *GuestOrigi
 		return c, err
 	}
 	returned, err := client.Original(original, http.MethodGet, "/v1/qualification-serving-probe-nonce", wire)
+	LogGuestOriginalNativeHTTPFailure(original, http.MethodGet, "/v1/qualification-serving-probe-nonce", returned, err)
 	if err != nil {
 		return c, err
 	}

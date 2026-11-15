@@ -57,6 +57,7 @@ func TestGuestOriginalHTTPLateCloseCannotRenewBudget(t *testing.T) {
 		t.Fatal("late original admitted")
 	}
 	guestNativeV1ClockContracts(t)
+	guestOriginalNativeHTTPFailureDiagnosticContracts(t)
 }
 
 func TestGuestOriginalHTTPOnlyClosedCanaryRoutes(t *testing.T) {

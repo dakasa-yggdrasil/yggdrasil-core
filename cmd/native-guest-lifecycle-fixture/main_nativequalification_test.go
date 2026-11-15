@@ -5,6 +5,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -127,6 +129,7 @@ func TestOriginalNativeHTTPReturnedOwners(t *testing.T) {
 	})
 	originalNativeHTTPDiagnosticContracts(t)
 	originalNativeFailureExportSelectionContracts(t)
+	originalNativeFailureDispositionContracts(t)
 }
 
 // Runs within the existing owner-lifetime root; no native capacity evidence is
@@ -230,3 +233,61 @@ func originalNativeFailureExportSelectionContracts(t *testing.T) {
 	missing.exportFailedOriginalRetirement(context.Background(), uuid.Nil, original)
 	(&fixture{}).exportFailedOriginalRetirement(context.Background(), uuid.Nil, original)
 }
+
+// Appended to the already invoked owner root. These checks make no SQL calls.
+func originalNativeFailureDispositionContracts(t *testing.T) {
+	t.Run("nullable_workflow_id_requires_same_authenticated_result", func(t *testing.T) {
+		for _, guard := range []string{
+			"JOIN public.workflow_runs w ON w.id=$1", "w.result#>>'{workflow,id}'=$2::text", "(w.workflow_id IS NULL OR w.workflow_id=$2)",
+			"i.preregistration_id=$3", "w.workflow_namespace=$8", "w.workflow_name=$9", "w.inputs->>'mode'='retire'", "w.inputs->'slot'='2'::jsonb", "w.inputs->>'preregistration_id'=$3::text",
+			"p.preregistration_record->'slot'='2'::jsonb", "p.preregistration_record->>'policy_id'=$4::text", "p.preregistration_record->>'policy_checksum'=$5", "p.preregistration_record->>'workflow_id'=$2::text", "p.preregistration_record->>'workflow_checksum'=$6",
+			"i.intent_record->'slot'='2'::jsonb", "i.intent_record->>'policy_id'=$4::text", "i.intent_record->>'policy_checksum'=$5", "i.intent_record->>'workflow_id'=$2::text", "i.intent_record->>'workflow_checksum'=$6",
+			"i.intent_record->'tuple'=e.enrollment_record#>'{statement,tuple}'", "i.intent_record#>>'{tuple,resource_id}'=$7", "w.started_at IS NOT NULL", "i.created_at>=w.started_at", "(w.finished_at IS NULL OR i.created_at<=w.finished_at)",
+		} {
+			if !strings.Contains(failedOriginalRetirementIntentSQL, guard) {
+				t.Fatal("same-run scope guard missing", guard)
+			}
+		}
+		for _, widening := range []string{"ORDER BY", "LIMIT", "DISTINCT", "w.id=$1 AND w.workflow_id=$2"} {
+			if strings.Contains(failedOriginalRetirementIntentSQL, widening) {
+				t.Fatal("ambiguous/latest or nullable-only selector", widening)
+			}
+		}
+	})
+	t.Run("closed_disposition_fields_and_error_classes", func(t *testing.T) {
+		for _, test := range []struct {
+			err          error
+			class, state string
+		}{
+			{nil, "none", ""}, {context.Canceled, "cancelled", ""}, {context.DeadlineExceeded, "deadline", ""}, {sql.ErrNoRows, "sql_no_rows", ""},
+			{originalNativeDiagnosticSQLState("23505"), "sqlstate", "23505"}, {originalNativeDiagnosticSQLState("secret-SQL-or-id"), "other", ""}, {errors.New("private-error-SQL-secret"), "other", ""},
+		} {
+			d := originalRetirementFailureDisposition{Schema: originalRetirementFailureDispositionSchema, Status: "not_exported", Matches: 1, Stage: "helper_load"}
+			d.setError(test.err)
+			if d.ErrorClass != test.class || d.SQLState != test.state {
+				t.Fatal("nonclosed error classification", d)
+			}
+			wire, err := json.Marshal(d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var object map[string]json.RawMessage
+			if json.Unmarshal(wire, &object) != nil || len(object) != 7 {
+				t.Fatal("disposition ABI is not seven fields")
+			}
+			for _, key := range []string{"schema", "status", "matches", "caller_projection_present", "error_class", "sqlstate", "stage"} {
+				if _, ok := object[key]; !ok {
+					t.Fatal("missing closed field", key)
+				}
+			}
+			if strings.Contains(string(wire), "private-error") || strings.Contains(string(wire), "secret-SQL") {
+				t.Fatal("raw error escaped")
+			}
+		}
+	})
+}
+
+type originalNativeDiagnosticSQLState string
+
+func (e originalNativeDiagnosticSQLState) Error() string    { return "private database error" }
+func (e originalNativeDiagnosticSQLState) SQLState() string { return string(e) }

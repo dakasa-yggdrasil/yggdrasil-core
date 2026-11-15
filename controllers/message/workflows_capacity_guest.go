@@ -555,6 +555,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			client = client.WithNativeV1ReturnClock(stored.Binding, stored.Receipt.Enrollment, stored.Request.Intent)
 		}
 		returned, callErr := client.Original(original, http.MethodPost, "/v1/retirement", body)
+		capacity.LogGuestOriginalNativeHTTPFailure(original, http.MethodPost, "/v1/retirement", returned, callErr)
 		floorJoinErr := joinOriginalFloor(original)
 		var observed model.CapacityGuestRetirementObservation
 		decoded := capacity.GuestOriginalHTTPDecode(returned, &observed) == nil
