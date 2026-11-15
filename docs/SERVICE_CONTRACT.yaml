@@ -100,7 +100,7 @@
     {
       "evidence": "docs/service-contract/WITNESSED_UNENROLLED_EXPANSION_SOURCE_REVIEW.json",
       "id": "witnessed_unenrolled_expansion_cleanup_source_review",
-      "sha256": "538e4aa008dc5c1915a21fe7935c6833b8a48c7c347dd2f9e67d58c393356255"
+      "sha256": "8961d2ca4bc6a1592a2a0ca0b88d532b5f7b702b98bb1dad9a368f8dfa497d56"
     }
   ],
   "coverage": "complete",
