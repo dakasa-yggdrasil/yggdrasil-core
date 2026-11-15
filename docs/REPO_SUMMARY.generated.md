@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-15T12:32:34-03:00_
+_Generated from HEAD at: 2026-11-15T12:52:14-03:00_
 
 ## Languages
 
@@ -30,7 +30,7 @@ _Generated from HEAD at: 2026-11-15T12:32:34-03:00_
 - internal/capacity: 132 files (1449.5 KB)
 - db/migrations: 106 files (1521.0 KB)
 - model: 92 files (487.6 KB)
-- ops/network-guardian/tests: 67 files (1358.8 KB)
+- ops/network-guardian/tests: 67 files (1359.0 KB)
 - manifest: 65 files (398.1 KB)
 - addons: 51 files (307.6 KB)
 - internal/capacitynativeqemu: 47 files (308.6 KB)
