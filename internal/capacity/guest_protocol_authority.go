@@ -32,8 +32,12 @@ var guestB509ProtocolProfileApprovals = append(
 	guestProductionProfileApproval{Provider: "hetzner", Profile: "notify-hetzner-elastic", ProductionCatalogSHA256: "6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", ContractSHA256: "e9e6745ef3e0ef627bbe2080f196ed55b6037b42839ddf99bd0fbf353b386c9d"},
 )
 
-// Freeze all six original approvals before a future Source-qualified append.
-var guestProductionProfileApprovals = append([]guestProductionProfileApproval(nil), guestB509ProtocolProfileApprovals...)
+// Preserve the six historical approvals and append only the current4720
+// Hetzner full-profile contract from its original owning-Go compilation.
+var guestProductionProfileApprovals = append(
+	append([]guestProductionProfileApproval(nil), guestB509ProtocolProfileApprovals...),
+	guestProductionProfileApproval{Provider: "hetzner", Profile: "notify-hetzner-elastic", ProductionCatalogSHA256: "6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", ContractSHA256: "90ae5b64ae602abfbd0672eb2ca33f59ceb5b3e4ff8a62e45379e50de755d3e9"},
+)
 
 func guestProtocolAuthoritySupported(authority, actualBuild, provider, profile string) bool {
 	if !businessSource.MatchString(actualBuild) || !businessSource.MatchString(authority) {
