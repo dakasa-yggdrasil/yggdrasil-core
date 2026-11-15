@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 37307ffee0fdac44f02667986397f059daa7e9cd
-verified_diff_sha256: d2e3afcc57205fed34c12dfaa73e4f6d1da06182deec9a53f4249f13c02cc785
+verified_at_commit: 3d5979f8745b4be45dce9ae6b2d85951d35c5f7a
+verified_diff_sha256: 606f694adb4351a8c9e8b11a0df060b5f480f630832e86e5646b61f26f252634
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -564,3 +564,5 @@ m107_isolated_fixture_store_and_existing_root_order_review_20261115: Complete PG
 g27_guardian_static_and_forward_repair_review: Reviewed the actual S27-to-S26 static prefix correction and mechanically preserved Guardian-only repair protocol. The real initializer regression retains exact installed DATA and six wrong-prefix refusals. Independent Source peer found and resolved one test claim-prefix mismatch before CI. Runtime Core, SQL, controller lifetime, clocks and all original gates stay unchanged. Genuine metadata was regenerated; current operations CI and actual forward repair remain required.
 historical_successor_recovery_review: Reviewed the bounded propagation of historical recovery intent to existing exact contract resolution. Normal acquisition and mutation calls retain current-policy enforcement. Fourteen real PostgreSQL ledger scenarios are attached to the existing selected test root without new census nodes. Independent Source peer corrected two fixture-only issues before publication. Gofmt and diff checks completed; no local Go, product test, import, build, SQL, vet or Doctor ran. Current-commit CI and all future runtime/image/operational outcomes remain required.
 historical_successor_source_census_companion_review: The first actual CI rejected two stale production-source hash/byte facts. Root authorized the unmodified deterministic metadata producer and one manual guarded inventory-SHA pin before this plan. All other ten census outputs, schema, bounds and runtime/regression bodies remain unchanged. Current Go PG root passed without skip on the first Source head; current successor CI remains required. No local Doctor or product test/build was run.
+
+canonical_guest_expired_presend_review: Root and two independent peers reviewed the same canonical-workflow recovery hook, strict original ownership and fresh no-effect guards. The source census and exact guarded inventory pin were manually reviewed before reconciliation; 26 new plain PostgreSQL cases preserve the existing owning root and prior 14 cases. No local functional execution or production effect occurred; fresh current CI remains required.
