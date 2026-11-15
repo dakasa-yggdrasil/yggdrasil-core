@@ -4,6 +4,8 @@ package repository
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"go/ast"
 	"go/parser"
@@ -12,6 +14,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 )
 
 // Bytes Core itself published (json.Marshal of the provider's
@@ -106,6 +110,7 @@ func TestQualificationNativeReadMatchesCoreWireMembers(t *testing.T) {
 	if shapes != len(qualificationNativeReadRawShapes) {
 		t.Fatal("declared JSON kinds do not match the raw members")
 	}
+	qualificationFailureProbeDigestWire(t)
 }
 
 func TestDecodeQualificationNativeReadRefusesNonClosedWire(t *testing.T) {
@@ -256,5 +261,128 @@ func TestQualificationEpochTimeUTCMatchesJSONRoundTrip(t *testing.T) {
 	}
 	if withMonotonic := time.Now(); !reflect.DeepEqual(withMonotonic.UTC(), roundTrip(withMonotonic.UTC())) {
 		t.Fatal("UTC() did not strip the monotonic reading")
+	}
+}
+
+// A wire vector, not an original owner return: the explicit exit pointer keeps
+// every required member non-null. This exercises the repository decoder used
+// by CompleteSourceRecoveryCleanupRead without a database or new test root.
+func qualificationFailureProbeDigestWire(t *testing.T) {
+	t.Helper()
+	// Source parity includes all failure-local nested types, field order, kinds
+	// and tags; repository and provider must sign precisely the same wire.
+	declarations := func(path string) map[string]*ast.StructType {
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := map[string]*ast.StructType{}
+		ast.Inspect(parsed, func(n ast.Node) bool {
+			if spec, ok := n.(*ast.TypeSpec); ok {
+				if body, ok := spec.Type.(*ast.StructType); ok {
+					found[spec.Name.Name] = body
+				}
+			}
+			return true
+		})
+		return found
+	}
+	provider := declarations("../internal/capacitynativeqemu/failure_linux.go")
+	repository := declarations("capacity_canonical_source_compensation_qualification.go")
+	fieldShape := func(body *ast.StructType) []string {
+		if body == nil {
+			t.Fatal("failure wire type missing")
+		}
+		result := []string{}
+		for _, f := range body.Fields.List {
+			if f.Tag == nil || len(f.Names) != 1 {
+				t.Fatal("failure wire field shape changed")
+			}
+			var kind func(ast.Expr) string
+			kind = func(e ast.Expr) string {
+				switch v := e.(type) {
+				case *ast.Ident:
+					return v.Name
+				case *ast.SelectorExpr:
+					return kind(v.X) + "." + v.Sel.Name
+				case *ast.StarExpr:
+					return "*" + kind(v.X)
+				case *ast.ArrayType:
+					if v.Len == nil {
+						return "[]" + kind(v.Elt)
+					}
+				}
+				t.Fatal("unexpected failure wire kind")
+				return ""
+			}
+			result = append(result, f.Names[0].Name+":"+kind(f.Type)+":"+f.Tag.Value)
+		}
+		return result
+	}
+	for _, name := range []string{"QualificationFailureRecord", "QualificationFailedOwnerReturn", "QualificationProvisioningRecordRead", "QualificationProvisioningJournalRead", "CanonicalPayloadPreparation"} {
+		if !reflect.DeepEqual(fieldShape(provider[name]), fieldShape(repository[name])) {
+			t.Fatalf("repository/provider failure wire drift: %s", name)
+		}
+	}
+	exit := -9
+	digest := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	value := QualificationFailureRecord{Schema: "original_qualification_failed_owner_returns_v1", OriginalExitCode: &exit, OriginalProbeChallengeSHA256: digest}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded QualificationFailureRecord
+	if err := capacity.DecodeGuestLifecycle(raw, &decoded); err != nil || decoded.OriginalProbeChallengeSHA256 != digest {
+		t.Fatalf("probe-bearing repository failure wire refused or changed: %v", err)
+	}
+	roundTrip, err := json.Marshal(decoded)
+	if err != nil || !bytes.Equal(raw, roundTrip) {
+		t.Fatal("failure wire changed during closed decode")
+	}
+	// The immutable challenge is signed; losing or changing it must invalidate
+	// that same signature rather than reconstruct a different failure body.
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{37}, ed25519.SeedSize))
+	signature := ed25519.Sign(key, raw)
+	if !ed25519.Verify(key.Public().(ed25519.PublicKey), roundTrip, signature) {
+		t.Fatal("failure signature did not survive decode")
+	}
+	decoded.OriginalProbeChallengeSHA256 = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	changed, err := json.Marshal(decoded)
+	if err != nil || ed25519.Verify(key.Public().(ed25519.PublicKey), changed, signature) {
+		t.Fatal("changed challenge retained failure signature")
+	}
+	// A valid digest is a semantic requirement of the existing validator, not
+	// a new relaxation in the closed JSON decoder. Wrong kinds/aliases remain
+	// refused here, and old non-probe records retain their absent optional key.
+	members := qualificationNativeReadMembersOf(t, raw)
+	for _, mutation := range []struct {
+		name  string
+		value json.RawMessage
+	}{
+		{"original_probe_challenge_sha256", json.RawMessage(`true`)},
+		{"OriginalProbeChallengeSHA256", json.RawMessage(`"` + digest + `"`)},
+		{"original_probe_challenge_sha256_alias", json.RawMessage(`"` + digest + `"`)},
+	} {
+		copy := qualificationNativeReadMembersOf(t, raw)
+		copy[mutation.name] = mutation.value
+		if capacity.DecodeGuestLifecycle(qualificationNativeReadWire(t, copy), &QualificationFailureRecord{}) == nil {
+			t.Fatal("non-closed failure digest accepted")
+		}
+	}
+	delete(members, "original_probe_challenge_sha256")
+	legacy := qualificationNativeReadWire(t, members)
+	var old QualificationFailureRecord
+	if capacity.DecodeGuestLifecycle(legacy, &old) != nil || old.OriginalProbeChallengeSHA256 != "" {
+		t.Fatal("old absent optional challenge refused")
+	}
+	oldWire, err := json.Marshal(old)
+	if err != nil || bytes.Contains(oldWire, []byte(`"original_probe_challenge_sha256"`)) {
+		t.Fatal("absent optional challenge was introduced")
+	}
+	signed := value
+	signed.Signature = base64.StdEncoding.EncodeToString(signature)
+	signedWire, err := json.Marshal(signed)
+	if err != nil || capacity.DecodeGuestLifecycle(signedWire, &decoded) != nil || decoded.Signature != signed.Signature {
+		t.Fatal("signed failure wire not preserved")
 	}
 }
