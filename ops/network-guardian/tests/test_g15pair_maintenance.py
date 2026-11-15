@@ -247,10 +247,25 @@ def g26_operand():
                  g25_predecessor_standing_config_sha256=G.G25_PREDECESSOR_CONFIG_SHA,
                  guardian_source_sha256=G.G26_PREDECESSOR_SOURCE_SHA,
                  new_controller_config_sha256=G.G26_CONTROLLER_CONFIG_SHA,
+                 controller_unit_sha256='e69484d43261ff04b020551e16a20dd725ea8f054f70a746542d976191ada725',
+                 cold_unit_sha256='da3a1c350be82850ddf808d3f51badc577381685df41a5f1f685e198f1048adc',
+                 guardian_unit_sha256='2faa4336e600810d80ae3d0639fe67880888fdf7b2427832fd24473707d53e3c',
+                 Root_review='Declared prior S26, not new Native/Root evidence. ' * 4)
+    return value
+
+
+
+DECLARED_G27_SOURCE = b'Declared G27 predecessor Source operand; not an installed artifact.'
+def g27_operand():
+    value = g26_operand()
+    value.update(g26_predecessor_guardian_source_sha256=G.G26_PREDECESSOR_SOURCE_SHA,
+                 g26_predecessor_standing_config_sha256=G.G26_PREDECESSOR_CONFIG_SHA,
+                 guardian_source_sha256=G.G27_PREDECESSOR_SOURCE_SHA,
+                 new_controller_config_sha256=G.G27_CONTROLLER_CONFIG_SHA,
                  controller_unit_sha256=C.OLD_UNIT_SHAS[C.CTRL],
                  cold_unit_sha256=C.OLD_UNIT_SHAS[C.COLD],
                  guardian_unit_sha256=C.OLD_UNIT_SHAS[C.GUARD],
-                 Root_review='Declared prior S26, not new Native/Root evidence. ' * 4)
+                 Root_review='Declared prior S27, not new Native/Root evidence. ' * 4)
     return value
 
 
@@ -264,11 +279,11 @@ def binding():
     """Bind declared CI operands; retain whole C19/C20/C21/C22/C23 and production validators."""
     new_digest = digest(b'declared replacement Core15 image; not an OCI artifact')
     image = G.CORE_IMAGE_REF + 'sha256:' + new_digest
-    pairs = [{'image': G.CORE_G26, 'image_id': G.CORE_G26}, {'image': image, 'image_id': image}]
-    chain = (*G.PAIR_CHAIN[:-1], ('g27pair', pairs, G.NEW_CONFIG, None))
+    pairs = [{'image': G.CORE_G27, 'image_id': G.CORE_G27}, {'image': image, 'image_id': image}]
+    chain = (*G.PAIR_CHAIN[:-1], ('g28pair', pairs, G.NEW_CONFIG, None))
     prior19 = g19_operand(); prior19['guardian_source_sha256'] = digest(DECLARED_G19_SOURCE)
     standing19_sha = digest(G.wire(prior19))
-    head_sha = digest(b'declared G27 controller data')
+    head_sha = digest(b'declared G28 controller data')
     with contextlib.ExitStack() as stack:
         stack.enter_context(patch.multiple(G, G19_PREDECESSOR_CONFIG_SHA=standing19_sha,
             G19_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G19_SOURCE)))
@@ -298,18 +313,23 @@ def binding():
             G25_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G25_SOURCE)))
         prior26 = g26_operand(); prior26['guardian_source_sha256'] = digest(DECLARED_G26_SOURCE)
         standing26_sha = digest(G.wire(prior26))
+        stack.enter_context(patch.multiple(G, G26_PREDECESSOR_CONFIG_SHA=standing26_sha,
+            G26_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G26_SOURCE)))
+        prior27 = g27_operand(); prior27['guardian_source_sha256'] = digest(DECLARED_G27_SOURCE)
+        standing27_sha = digest(G.wire(prior27))
         stack.enter_context(patch.multiple(G, PROPOSAL_BOUND=True, HEAD_CORE_SOURCE='c' * 40,
-            HEAD_NEW_CORE_DIGEST='sha256:' + new_digest, CORE_G27=image, G27_CORE_IMAGE_PAIRS=pairs,
-            G27_CONTROLLER_CONFIG_SHA=head_sha, G26_PREDECESSOR_CONFIG_SHA=standing26_sha,
+            HEAD_NEW_CORE_DIGEST='sha256:' + new_digest, CORE_G28=image, G28_CORE_IMAGE_PAIRS=pairs,
+            G28_CONTROLLER_CONFIG_SHA=head_sha, G27_PREDECESSOR_CONFIG_SHA=standing27_sha,
+            G27_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G27_SOURCE), G26_PREDECESSOR_CONFIG_SHA=standing26_sha,
             G26_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G26_SOURCE), G25_PREDECESSOR_CONFIG_SHA=standing25_sha,
             G25_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G25_SOURCE), G24_PREDECESSOR_CONFIG_SHA=standing24_sha,
             G24_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G24_SOURCE),
             PAIR_CHAIN=chain, ALLOWED_CORE_IMAGE_PAIRS=tuple(row[1] for row in chain)))
         for contract in {id(value): value for value in (C, S.C, CUT.C)}.values():
             stack.enter_context(patch.multiple(contract, PROPOSAL_BOUND=True, SOURCE_R='c' * 40,
-                NEW_DIGEST=new_digest, G27_CONFIG_SHA=head_sha, HEAD_CONFIG_SHA=head_sha,
+                NEW_DIGEST=new_digest, G28_CONFIG_SHA=head_sha, HEAD_CONFIG_SHA=head_sha,
                 OLD_CORE_UID='22222222-2222-4222-8222-222222222222', OLD_CORE_GENERATION=287, OLD_CORE_POD_UID='11111111-1111-4111-8111-111111111111', OLD_CORE_CONTAINER_ID='containerd://declared',
-                ACTUAL_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G26_SOURCE), ACTUAL_PREDECESSOR_STANDING_SHA=standing26_sha,
+                ACTUAL_PREDECESSOR_SOURCE_SHA=digest(DECLARED_G27_SOURCE), ACTUAL_PREDECESSOR_STANDING_SHA=standing27_sha,
                 ANCESTORS={**contract.ANCESTORS,
                     'g19_predecessor_guardian_source_sha256': digest(DECLARED_G19_SOURCE), 'g19_predecessor_standing_config_sha256': standing19_sha,
                     'g20_predecessor_guardian_source_sha256': digest(DECLARED_G20_SOURCE), 'g20_predecessor_standing_config_sha256': standing20_sha,
@@ -318,13 +338,18 @@ def binding():
                     'g23_predecessor_guardian_source_sha256': digest(DECLARED_G23_SOURCE), 'g23_predecessor_standing_config_sha256': standing_sha,
                     'g24_predecessor_guardian_source_sha256': digest(DECLARED_G24_SOURCE), 'g24_predecessor_standing_config_sha256': standing24_sha,
                     'g25_predecessor_guardian_source_sha256': digest(DECLARED_G25_SOURCE), 'g25_predecessor_standing_config_sha256': standing25_sha,
-                    'g26_predecessor_guardian_source_sha256': digest(DECLARED_G26_SOURCE), 'g26_predecessor_standing_config_sha256': standing26_sha},
+                    'g26_predecessor_guardian_source_sha256': digest(DECLARED_G26_SOURCE), 'g26_predecessor_standing_config_sha256': standing26_sha,
+                    'g27_predecessor_guardian_source_sha256': digest(DECLARED_G27_SOURCE), 'g27_predecessor_standing_config_sha256': standing27_sha},
                 REQUIRED_CI=frozenset({('Owned Network Guardian', 'pull_request')})))
         yield
 
 class G15MaintenanceTests(unittest.TestCase):
     def _assert_actual_g27_owner_static_prefix(self):
-        # Original installed bytes are fixture DATA, never imported or executed.
+        # Definitions from the retained accepted G27 DATA fixture; no main/Native call.
+        G = ModuleType('declared_historical_actual_g27')
+        accepted = ROOT / 'tests/fixtures/g28-predecessor-static-frame/G27-ACCEPTED-V2-GUARDIAN.DATA.gz'
+        G.__file__ = str(accepted)
+        exec(compile(gzip.decompress(accepted.read_bytes()), str(accepted), 'exec'), G.__dict__)
         # Host/module checks after the current-prefix seam remain Native-owned.
         fixture = ROOT / 'tests/fixtures/g27-original-static-frame'
         actual_raw = (fixture / 'S27.ROOT-EXACT-TRANSFER.DATA.json').read_bytes()
@@ -409,6 +434,67 @@ class G15MaintenanceTests(unittest.TestCase):
                 operand[0] = original
             self.assertEqual(len(unit_reads), 1, 'all foreign prefixes must refuse before the host-unit seam')
 
+
+    def _assert_actual_g28_repaired_predecessor(self):
+        fixture = ROOT / 'tests/fixtures/g28-predecessor-static-frame'
+        parent_raw = [(fixture / 'S27-V2.ROOT-EXACT-TRANSFER.DATA.json').read_bytes()]
+        source_raw = [gzip.decompress((fixture / 'G27-ACCEPTED-V2-GUARDIAN.DATA.gz').read_bytes())]
+        parent = json.loads(parent_raw[0])
+        self.assertEqual(digest(parent_raw[0]), G.G27_PREDECESSOR_CONFIG_SHA)
+        self.assertEqual(digest(source_raw[0]), G.G27_PREDECESSOR_SOURCE_SHA)
+        prior26 = json.loads((ROOT / 'tests/fixtures/g26-original-standing/S26.ROOT-EXACT-TRANSFER.DATA.json').read_bytes())
+        own_raw = (NEW / 'source/network_guardian.py').read_bytes()
+        head = digest(b'Declared G28 controller, not Native authority')
+        value = {**parent, 'guardian_source_sha256': digest(own_raw), 'new_controller_config_sha256': head,
+                 'g27_predecessor_guardian_source_sha256': G.G27_PREDECESSOR_SOURCE_SHA,
+                 'g27_predecessor_standing_config_sha256': G.G27_PREDECESSOR_CONFIG_SHA,
+                 'Root_review': 'Declared G28 static fixture only. ' * 5}
+        config_raw, owners, units = [G.wire(value)], [], []
+        class UnitSeam(Exception): pass
+        def read(path, *_):
+            if path == G.SELF: return own_raw
+            if path == G.CONFIG: return config_raw[0]
+            if path == G.G27_PREDECESSOR_HERE / 'network_guardian.py': return source_raw[0]
+            if path == G.G27_PREDECESSOR_CONFIG: return parent_raw[0]
+            if str(path).startswith('/etc/systemd/system/'):
+                units.append(str(path)); raise UnitSeam()
+            self.fail('unexpected static read: ' + str(path))
+        def anchor(owner): owners.append(owner); return {'identity': {'boot_id': '2b7e9be2-e45a-4cd5-86f2-6f0a3372576d'}}
+        def older26(config): self.assertEqual(config, parent); return prior26
+        host = SimpleNamespace(BRIDGE_SHA='a'*64,NATIVE_SHA='b'*64,instance=lambda:'2b7e9be2-e45a-4cd5-86f2-6f0a3372576d')
+        image=G.CORE_IMAGE_REF+'sha256:'+'d'*64
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.multiple(G,PROPOSAL_BOUND=True,HEAD_CORE_SOURCE='c'*40,
+                HEAD_NEW_CORE_DIGEST='sha256:'+'d'*64,CORE_G28=image,G28_CONTROLLER_CONFIG_SHA=head,
+                G28_CORE_IMAGE_PAIRS=[G.G27_CORE_IMAGE_PAIRS[-1],{'image':image,'image_id':image}],__file__=str(G.SELF)))
+            stack.enter_context(patch.object(G.os,'geteuid',return_value=0))
+            stack.enter_context(patch.object(G,'read',side_effect=read))
+            stack.enter_context(patch.object(G,'module',return_value=host))
+            stack.enter_context(patch.object(G,'directory'))
+            stack.enter_context(patch.object(G.Owner,'actual_R42_anchor',autospec=True,side_effect=anchor))
+            current27=stack.enter_context(patch.object(G,'g27_predecessor_config',wraps=G.g27_predecessor_config))
+            older=stack.enter_context(patch.object(G,'g26_predecessor_config',side_effect=older26))
+            for generation in range(16,26):
+                stack.enter_context(patch.object(G,'g'+str(generation)+'_predecessor_config',return_value={'fixture_historical_generation':generation}))
+            stack.enter_context(patch.object(G,'pair_predecessor_standings',return_value=[]))
+            for name in ('r13_predecessor_standing','g6_predecessor_standing','g6_boot_v2_predecessor_standing',*('g'+str(i)+'_predecessor_standing'for i in range(7,16))):
+                stack.enter_context(patch.object(G,name,return_value=('a'*64,'b'*64)))
+            with self.assertRaises(UnitSeam): G.Owner(digest(own_raw))
+            self.assertEqual(current27.call_count,2);self.assertEqual(older.call_count,2);self.assertEqual(len(units),1)
+            owner=owners[-1];cached=owner.g27_predecessor_config
+            owner.g27_predecessor_config={**cached,'hub_unit_sha256':'0'*64}
+            with self.assertRaisesRegex(RuntimeError,'UNCHANGED_G23_G22_G21_G20_G19_G18_G17_G16_PREFIX'):owner.static()
+            owner.g27_predecessor_config=cached
+            for field in ('g27_predecessor_guardian_source_sha256','g27_predecessor_standing_config_sha256'):
+                config_raw[0]=G.wire({**value,field:'0'*64})
+                with self.assertRaisesRegex(RuntimeError,'EXACT_G27_PREFIX'):G.Owner(digest(own_raw))
+            config_raw[0]=G.wire(value)
+            for operand,guard in ((source_raw,'G27_SOURCE'),(parent_raw,'G27_STANDING')):
+                original=operand[0];operand[0]+=b' '
+                with self.assertRaisesRegex(RuntimeError,guard):G.Owner(digest(own_raw))
+                operand[0]=original
+            self.assertEqual(len(units),1)
+
     def test_forced_unbound_entrypoints_refuse_before_io(self):
         with patch.object(G, 'PROPOSAL_BOUND', False), patch.object(G, 'read') as read:
             for call in (G.require_bound, G.pair_chain_digests, G.main, lambda: G.Owner('1' * 64)):
@@ -469,23 +555,24 @@ class G15MaintenanceTests(unittest.TestCase):
         for name in package['unchanged_owner_methods_sha256']:
             self.assertEqual(method_ast(NEW / 'source/network_guardian.py', 'Owner', name),
                              method_ast(historical.NEW / 'source/network_guardian.py', 'Owner', name))
-        self.assertEqual(G.PAIR_CHAIN[:-14], historical.G.PAIR_CHAIN[:-1])
-        self.assertEqual(G.PAIR_CHAIN[-14][:2], historical.G.PAIR_CHAIN[-1][:2])
-        self.assertEqual(G.PAIR_CHAIN[-14][2:], (historical.G.NEW_CONFIG, historical.G.G14_CONTROLLER_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-13], ('g15pair', G.G15_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g15pair.production.json'), C.G15_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-12], ('g16pair', G.G16_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g16pair.production.json'), C.G16_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-11], ('g17pair', G.G17_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g17pair.production.json'), C.G17_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-10], ('g18pair', G.G18_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g18pair.production.json'), C.G18_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-9], ('g19pair', G.G19_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g19pair.production.json'), C.G19_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-8], ('g20pair', G.G20_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g20pair.production.json'), C.G20_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-7], ('g21pair', G.G21_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g21pair.production.json'), C.G21_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-6], ('g22pair', G.G22_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g22pair.production.json'), C.G22_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-5], ('g23pair', G.G23_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g23pair.production.json'), C.G23_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-4], ('g24pair', G.G24_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g24pair.production.json'), C.G24_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-3], ('g25pair', G.G25_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g25pair.production.json'), C.G25_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[:-15], historical.G.PAIR_CHAIN[:-1])
+        self.assertEqual(G.PAIR_CHAIN[-15][:2], historical.G.PAIR_CHAIN[-1][:2])
+        self.assertEqual(G.PAIR_CHAIN[-15][2:], (historical.G.NEW_CONFIG, historical.G.G14_CONTROLLER_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-14], ('g15pair', G.G15_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g15pair.production.json'), C.G15_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-13], ('g16pair', G.G16_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g16pair.production.json'), C.G16_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-12], ('g17pair', G.G17_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g17pair.production.json'), C.G17_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-11], ('g18pair', G.G18_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g18pair.production.json'), C.G18_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-10], ('g19pair', G.G19_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g19pair.production.json'), C.G19_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-9], ('g20pair', G.G20_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g20pair.production.json'), C.G20_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-8], ('g21pair', G.G21_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g21pair.production.json'), C.G21_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-7], ('g22pair', G.G22_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g22pair.production.json'), C.G22_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-6], ('g23pair', G.G23_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g23pair.production.json'), C.G23_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-5], ('g24pair', G.G24_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g24pair.production.json'), C.G24_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-4], ('g25pair', G.G25_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g25pair.production.json'), C.G25_CONFIG_SHA))
         self.assertEqual(C.G18_CONFIG_SHA, 'd8ed4b268c112fc396860b57f57b36090dcc8b63f768a3a47b291984aa6eab1a')
-        self.assertEqual(G.PAIR_CHAIN[-2], ('g26pair', G.G26_CORE_IMAGE_PAIRS, C.OLD_CONFIG, C.G26_CONFIG_SHA))
-        self.assertEqual(G.PAIR_CHAIN[-1][0], 'g27pair')
+        self.assertEqual(G.PAIR_CHAIN[-3], ('g26pair', G.G26_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g26pair.production.json'), C.G26_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-2], ('g27pair', G.G27_CORE_IMAGE_PAIRS, C.OLD_CONFIG, C.G27_CONFIG_SHA))
+        self.assertEqual(G.PAIR_CHAIN[-1][0], 'g28pair')
         self.assertEqual(G.PAIR_CHAIN[-1][1][0], G.PAIR_CHAIN[-2][1][-1])
         self.assertNotEqual(G.PAIR_CHAIN[-1][1][0], G.PAIR_CHAIN[-2][1][0])
         for name in ('HISTORICAL_G6_FIELDS','HISTORICAL_F315_FIELDS','HISTORICAL_G7_FIELDS','HISTORICAL_G8_FIELDS','HISTORICAL_G9_FIELDS'):
@@ -511,6 +598,7 @@ class G15MaintenanceTests(unittest.TestCase):
         actual_s26_raw = (ROOT / 'tests/fixtures/g26-original-standing/S26.ROOT-EXACT-TRANSFER.DATA.json').read_bytes()
         self.assertEqual(digest(actual_s26_raw), 'c252c81f1773fdc5ac20a97749d06c893b00a0b7dcef49802dd3cd52deb77573')
         self.assertEqual(frozenset(json.loads(actual_s26_raw)), G.HISTORICAL_G26_FIELDS)
+        self.assertEqual(G.HISTORICAL_G27_FIELDS, G.HISTORICAL_G26_FIELDS | {'g26_predecessor_guardian_source_sha256','g26_predecessor_standing_config_sha256'})
         self.assertEqual(G.PAIR_STANDING_CHAIN, historical.G.PAIR_STANDING_CHAIN)
         self.assertEqual(G.RUNTIME_HASHES, historical.G.RUNTIME_HASHES)
         self.assertEqual((C.G13_SOURCE_SHA, C.G13_STANDING_SHA),
@@ -527,7 +615,7 @@ class G15MaintenanceTests(unittest.TestCase):
                             for n in archival_calls))
 
         self.assertEqual((C.ACTUAL_PREDECESSOR_SOURCE_SHA, C.ACTUAL_PREDECESSOR_STANDING_SHA),
-                         (G.G26_PREDECESSOR_SOURCE_SHA, G.G26_PREDECESSOR_CONFIG_SHA))
+                         (G.G27_PREDECESSOR_SOURCE_SHA, G.G27_PREDECESSOR_CONFIG_SHA))
 
         # Real root-owned file I/O and the inherited default cap are exercised
         # together in a CI-only child. No custody/read/cap mock or fallback.
@@ -538,7 +626,7 @@ class G15MaintenanceTests(unittest.TestCase):
         current_package = json.loads((NEW / 'PACKAGE.json').read_bytes())
         self.assertEqual(current_package['files']['source/network_guardian.py'], digest(source_raw))
         binding_names = {'PROPOSAL_BOUND', 'HEAD_CORE_SOURCE', 'HEAD_NEW_CORE_DIGEST',
-                         'G27_CONTROLLER_CONFIG_SHA'}
+                         'G28_CONTROLLER_CONFIG_SHA'}
         literals = {}
         for node in ast.parse(source_raw).body:
             if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and
@@ -558,7 +646,7 @@ class G15MaintenanceTests(unittest.TestCase):
         self.assertIs(current_package['proposal_bound'], literals['PROPOSAL_BOUND'])
         if literals['PROPOSAL_BOUND'] is False:
             self.assertEqual(literals, {'PROPOSAL_BOUND': False, 'HEAD_CORE_SOURCE': None,
-                'HEAD_NEW_CORE_DIGEST': None, 'G27_CONTROLLER_CONFIG_SHA': None})
+                'HEAD_NEW_CORE_DIGEST': None, 'G28_CONTROLLER_CONFIG_SHA': None})
             self.assertIs(type(current_package['prepared_Guardian_bytes']), int)
             self.assertEqual(current_package['prepared_Guardian_bytes'], len(source_raw))
             self.assertIsNone(current_package['bound_Guardian_bytes'])
@@ -567,7 +655,7 @@ class G15MaintenanceTests(unittest.TestCase):
             for old, new in ((b'PROPOSAL_BOUND=False', b'PROPOSAL_BOUND=True'),
                              (b'HEAD_CORE_SOURCE=None', b"HEAD_CORE_SOURCE='" + b'c' * 40 + b"'"),
                              (b'HEAD_NEW_CORE_DIGEST=None', b"HEAD_NEW_CORE_DIGEST='sha256:" + b'd' * 64 + b"'"),
-                             (b'G27_CONTROLLER_CONFIG_SHA=None', b"G27_CONTROLLER_CONFIG_SHA='" + b'e' * 64 + b"'")):
+                             (b'G28_CONTROLLER_CONFIG_SHA=None', b"G28_CONTROLLER_CONFIG_SHA='" + b'e' * 64 + b"'")):
                 self.assertEqual(bound_raw.count(old), 1)
                 bound_raw = bound_raw.replace(old, new, 1)
             ast.parse(bound_raw)
@@ -575,7 +663,7 @@ class G15MaintenanceTests(unittest.TestCase):
         else:
             core_source = literals['HEAD_CORE_SOURCE']
             core_digest = literals['HEAD_NEW_CORE_DIGEST']
-            config_sha = literals['G27_CONTROLLER_CONFIG_SHA']
+            config_sha = literals['G28_CONTROLLER_CONFIG_SHA']
             for value, pattern, placeholder in (
                     (core_source, r'\A[a-f0-9]{40}\Z', '0' * 40),
                     (core_digest, r'\Asha256:[a-f0-9]{64}\Z', 'sha256:' + '0' * 64),
@@ -588,11 +676,11 @@ class G15MaintenanceTests(unittest.TestCase):
             self.assertEqual(core_source, C.SOURCE_R)
             self.assertEqual(core_digest, 'sha256:' + C.NEW_DIGEST)
             self.assertEqual(core_digest, D.HEAD_NEW_CORE_DIGEST)
-            self.assertEqual(config_sha, C.G27_CONFIG_SHA)
+            self.assertEqual(config_sha, C.G28_CONFIG_SHA)
             self.assertEqual(config_sha, C.HEAD_CONFIG_SHA)
-            self.assertEqual(config_sha, D.G27_CONFIG_SHA)
-            self.assertEqual(G.CORE_G27, G.CORE_IMAGE_REF + core_digest)
-            self.assertEqual(D.CORE_G27, G.CORE_G27)
+            self.assertEqual(config_sha, D.G28_CONFIG_SHA)
+            self.assertEqual(G.CORE_G28, G.CORE_IMAGE_REF + core_digest)
+            self.assertEqual(D.CORE_G28, G.CORE_G28)
             self.assertEqual(current_package['base_Core_source'], core_source)
             self.assertEqual(current_package['amd64_Core_manifest_digest'], core_digest)
             self.assertEqual(current_package['controller_config_sha256'], config_sha)
@@ -600,9 +688,9 @@ class G15MaintenanceTests(unittest.TestCase):
             review = (NEW / 'proposal/ROOT-CONTROLLER-REVIEW.txt').read_bytes().decode()
             self.assertEqual(proposal['root_review_attestation'], review.removesuffix('\n'))
             proposal_sha = digest(D.canonical(proposal))
-            self.assertEqual(proposal_sha, G.G27_CONTROLLER_CONFIG_SHA)
-            self.assertEqual(proposal_sha, C.G27_CONFIG_SHA)
-            self.assertEqual(proposal_sha, D.G27_CONFIG_SHA)
+            self.assertEqual(proposal_sha, G.G28_CONTROLLER_CONFIG_SHA)
+            self.assertEqual(proposal_sha, C.G28_CONFIG_SHA)
+            self.assertEqual(proposal_sha, D.G28_CONFIG_SHA)
             self.assertIs(type(current_package['bound_Guardian_bytes']), int)
             self.assertEqual(current_package['bound_Guardian_bytes'], len(source_raw))
         program = r"""
@@ -643,19 +731,19 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
             ('G13', D.G13_CORE_IMAGE_PAIRS), ('G14', D.G14_CORE_IMAGE_PAIRS),
             ('G15', D.G15_CORE_IMAGE_PAIRS), ('G16', D.G16_CORE_IMAGE_PAIRS),
             ('G17', D.G17_CORE_IMAGE_PAIRS), ('G18', D.G18_CORE_IMAGE_PAIRS),
-            ('G19', D.G19_CORE_IMAGE_PAIRS), ('G20', D.G20_CORE_IMAGE_PAIRS), ('G21', D.G21_CORE_IMAGE_PAIRS), ('G22', D.G22_CORE_IMAGE_PAIRS), ('G23', D.G23_CORE_IMAGE_PAIRS), ('G24', D.G24_CORE_IMAGE_PAIRS), ('G25', D.G25_CORE_IMAGE_PAIRS), ('G26', D.G26_CORE_IMAGE_PAIRS)]
+            ('G19', D.G19_CORE_IMAGE_PAIRS), ('G20', D.G20_CORE_IMAGE_PAIRS), ('G21', D.G21_CORE_IMAGE_PAIRS), ('G22', D.G22_CORE_IMAGE_PAIRS), ('G23', D.G23_CORE_IMAGE_PAIRS), ('G24', D.G24_CORE_IMAGE_PAIRS), ('G25', D.G25_CORE_IMAGE_PAIRS), ('G26', D.G26_CORE_IMAGE_PAIRS), ('G27', D.G27_CORE_IMAGE_PAIRS)]
         for generation, pairs in generations:
             previous = copy.deepcopy(previous)
             previous.update(core_container_images=pairs,
                 root_review_attestation=('Declared '+generation+' CI predecessor; no Root approval. ')*3)
             added.append(D.canonical(previous))
-        review = 'Declared G27 CI controller operand; no installed-state authority. '*3
+        review = 'Declared G28 CI controller operand; no installed-state authority. '*3
         with binding():
             # This pure Guardian check retains C19 [D8,ed5] and overlaps its actual ed5 tail.
-            self.assertEqual(G.pair_chain_digests()[-1], G.CORE_G27)
+            self.assertEqual(G.pair_chain_digests()[-1], G.CORE_G28)
             original_chain = G.PAIR_CHAIN
-            malformed = [('g27pair', [G.G18_CORE_IMAGE_PAIRS[-1], G.G27_CORE_IMAGE_PAIRS[1]], G.NEW_CONFIG, None),
-                         ('g19pair', G.G27_CORE_IMAGE_PAIRS, G.NEW_CONFIG, None)]
+            malformed = [('g28pair', [G.G18_CORE_IMAGE_PAIRS[-1], G.G28_CORE_IMAGE_PAIRS[1]], G.NEW_CONFIG, None),
+                         ('g19pair', G.G28_CORE_IMAGE_PAIRS, G.NEW_CONFIG, None)]
             for head in malformed:
                 with self.subTest(Guardian_head=head[0], first=head[1][0]), patch.object(G,'PAIR_CHAIN',(*original_chain[:-1],head)), self.assertRaises(RuntimeError):
                     G.pair_chain_digests()
@@ -668,23 +756,23 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                     G.pair_chain_digests()
             seen={p['image'] for _,pairs,_,_ in original_chain[:-1] for p in pairs}
             for old_image in sorted(seen):
-                pairs=[dict(G.G26_CORE_IMAGE_PAIRS[-1]),{'image':old_image,'image_id':old_image}]
+                pairs=[dict(G.G27_CORE_IMAGE_PAIRS[-1]),{'image':old_image,'image_id':old_image}]
                 with self.subTest(readmitted=old_image), patch.multiple(G,
                         HEAD_NEW_CORE_DIGEST='sha256:'+old_image.rsplit(':',1)[-1],
-                        CORE_G27=old_image,G27_CORE_IMAGE_PAIRS=pairs,
-                        PAIR_CHAIN=(*original_chain[:-1],('g27pair',pairs,G.NEW_CONFIG,None))), self.assertRaises(RuntimeError):
+                        CORE_G28=old_image,G28_CORE_IMAGE_PAIRS=pairs,
+                        PAIR_CHAIN=(*original_chain[:-1],('g28pair',pairs,G.NEW_CONFIG,None))), self.assertRaises(RuntimeError):
                     G.pair_chain_digests()
             expected = copy.deepcopy(previous)
-            expected.update(core_container_images=G.G27_CORE_IMAGE_PAIRS, root_review_attestation=review)
+            expected.update(core_container_images=G.G28_CORE_IMAGE_PAIRS, root_review_attestation=review)
             chain = (*D.PAIR_CHAIN[:-len(generations)-1],
                 *((name.lower()+'pair', pairs, next(row[2] for row in D.PAIR_CHAIN if row[0]==name.lower()+'pair'),digest(raw))
                   for (name,pairs),raw in zip(generations,added)),
-                ('g27pair',G.G27_CORE_IMAGE_PAIRS,G.NEW_CONFIG,None))
+                ('g28pair',G.G28_CORE_IMAGE_PAIRS,G.NEW_CONFIG,None))
             with patch.multiple(D, PROPOSAL_BOUND=True, HEAD_NEW_CORE_DIGEST=G.HEAD_NEW_CORE_DIGEST,
-                    CORE_G27=G.CORE_G27,G27_CORE_IMAGE_PAIRS=G.G27_CORE_IMAGE_PAIRS,
-                    G19_CONFIG_SHA=digest(added[-8]), G20_CONFIG_SHA=digest(added[-7]), G21_CONFIG_SHA=digest(added[-6]),
-                    G22_CONFIG_SHA=digest(added[-5]), G23_CONFIG_SHA=digest(added[-4]), G24_CONFIG_SHA=digest(added[-3]), G25_CONFIG_SHA=digest(added[-2]), G26_CONFIG_SHA=digest(added[-1]),
-                    G27_CONFIG_SHA=digest(D.canonical(expected)),PAIR_CHAIN=chain):
+                    CORE_G28=G.CORE_G28,G28_CORE_IMAGE_PAIRS=G.G28_CORE_IMAGE_PAIRS,
+                    G19_CONFIG_SHA=digest(added[-9]), G20_CONFIG_SHA=digest(added[-8]), G21_CONFIG_SHA=digest(added[-7]),
+                    G22_CONFIG_SHA=digest(added[-6]), G23_CONFIG_SHA=digest(added[-5]), G24_CONFIG_SHA=digest(added[-4]), G25_CONFIG_SHA=digest(added[-3]), G26_CONFIG_SHA=digest(added[-2]), G27_CONFIG_SHA=digest(added[-1]),
+                    G28_CONFIG_SHA=digest(D.canonical(expected)),PAIR_CHAIN=chain):
                 all_prefix=[*prefix,*added]
                 self.assertEqual(D.strict_loads(D.derive(r42,all_prefix,review)),expected)
                 self.assertEqual({k for k in previous if previous[k]!=expected[k]},
@@ -693,27 +781,27 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                     wrong=list(all_prefix);wrong[index]+=b' '
                     with self.subTest(prefix=index),self.assertRaises(D.Refused):D.derive(r42,wrong,review)
                 with self.assertRaises(D.Refused):D.derive(r42,all_prefix,previous['root_review_attestation'])
-                bad_heads=[('g27pair',[D.G18_CORE_IMAGE_PAIRS[-1],G.G27_CORE_IMAGE_PAIRS[1]]),
-                           ('g27pair',[D.G19_CORE_IMAGE_PAIRS[0],G.G27_CORE_IMAGE_PAIRS[1]]),
-                           ('g27pair',D.G19_CORE_IMAGE_PAIRS),('g19pair',G.G27_CORE_IMAGE_PAIRS)]
+                bad_heads=[('g28pair',[D.G18_CORE_IMAGE_PAIRS[-1],G.G28_CORE_IMAGE_PAIRS[1]]),
+                           ('g28pair',[D.G19_CORE_IMAGE_PAIRS[0],G.G28_CORE_IMAGE_PAIRS[1]]),
+                           ('g28pair',D.G19_CORE_IMAGE_PAIRS),('g19pair',G.G28_CORE_IMAGE_PAIRS)]
                 for name,pairs in bad_heads:
                     altered={**previous,'core_container_images':pairs,'root_review_attestation':review}
                     # Match the output hash so the overlap invariant itself must refuse.
                     with self.subTest(deriver_head=name,pairs=pairs), patch.multiple(D,
-                            G27_CONFIG_SHA=digest(D.canonical(altered)),
+                            G28_CONFIG_SHA=digest(D.canonical(altered)),
                             PAIR_CHAIN=(*chain[:-1],(name,pairs,G.NEW_CONFIG,None))),self.assertRaises(D.Refused):
                         D.derive(r42,all_prefix,review)
     def test_standing_adds_only_g14_axis_and_retains_g13_literal(self):
         controller_raw, hub_raw = b'{"declared":"G15 controller"}\n', b'{"declared":"same Hub"}\n'
-        with binding(), patch.object(G, 'G27_CONTROLLER_CONFIG_SHA', digest(controller_raw)), \
+        with binding(), patch.object(G, 'G28_CONTROLLER_CONFIG_SHA', digest(controller_raw)), \
                 patch.object(S.C, 'HEAD_CONFIG_SHA', digest(controller_raw)):
-            old = g26_operand(); old['hub_boot_config_sha256'] = digest(hub_raw)
+            old = g27_operand(); old['hub_boot_config_sha256'] = digest(hub_raw)
             units = {S.C.CTRL: digest(b'declared G15 controller unit'), S.C.HUB: old['hub_unit_sha256'],
                      S.C.COLD: digest((NEW / 'units' / G.COLD).read_bytes()),
                      S.C.GUARD: digest((NEW / 'units' / G.GUARDIAN).read_bytes())}
             manifest = {'files': {'source/network_guardian.py': digest(b'declared G15 Source')}}
             value = S.build(G, manifest, old, controller_raw, hub_raw, 'Declared G15 standing review; no Root approval. ' * 4, units)
-            self.assertEqual(set(value) - set(old), {'g26_predecessor_guardian_source_sha256', 'g26_predecessor_standing_config_sha256'})
+            self.assertEqual(set(value) - set(old), {'g27_predecessor_guardian_source_sha256', 'g27_predecessor_standing_config_sha256'})
             self.assertEqual({key for key in old if old[key] != value[key]},
                 {'guardian_source_sha256', 'controller_unit_sha256', 'cold_unit_sha256', 'guardian_unit_sha256', 'new_controller_config_sha256', 'Root_review'})
             # Existing GS/TS aliases and their literal expansion construct identical DATA.
@@ -749,11 +837,11 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                 'standing_config_sha256': digest(S.C.wire(value)), 'standing_config_written': True,
                 'review_text_printed': False, 'private_files_read': False,
                 'input_sha256': {'successor_guardian_source_sha256': expected['source_sha256'],
-                    'head_generation': 'g27pair', 'head_core_digest': 'sha256:'+S.C.NEW_DIGEST,
+                    'head_generation': 'g28pair', 'head_core_digest': 'sha256:'+S.C.NEW_DIGEST,
                     'head_controller_config_sha256': S.C.HEAD_CONFIG_SHA,
                     'historical_g6_controller_config_sha256': S.C.G6_CONFIG_SHA,
                     'pair_predecessor_standing_config_sha256': S.C.PREFIX_STANDINGS, **S.C.ANCESTORS,
-                    'pair_chain_controller_config_sha256': {**prefix,'g27pair': S.C.HEAD_CONFIG_SHA},
+                    'pair_chain_controller_config_sha256': {**prefix,'g28pair': S.C.HEAD_CONFIG_SHA},
                     **units, **ancestry}}
             S.C.validate_standing_output(output, expected, 'staged')
             for fault in ('missing_g14','foreign_g14','missing_g15','foreign_g15','missing_g16','foreign_g16','missing_g17','foreign_g17','missing_g18','foreign_g18','missing_g19','foreign_g19','missing_g20','foreign_g20','missing_g21','foreign_g21','missing_g22','foreign_g22','missing_g23','foreign_g23','missing_g24','foreign_g24'):
@@ -769,6 +857,7 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
 
     def test_g14_predecessor_requires_original_source_and_standing_bytes(self):
         self._assert_actual_g27_owner_static_prefix()
+        self._assert_actual_g28_repaired_predecessor()
         # S25 authenticates whole S24, S23, S22, S21, S20, S19, S18, S17 and S16; no historical relabelling.
         with binding(), contextlib.ExitStack() as stack:
             for generation in (16, 17, 18):
@@ -820,13 +909,27 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
             value27={**prior26,'new_controller_config_sha256':G.G27_CONTROLLER_CONFIG_SHA,
                 'g26_predecessor_guardian_source_sha256':G.G26_PREDECESSOR_SOURCE_SHA,
                 'g26_predecessor_standing_config_sha256':digest(raw26)}
+            prior27=g27_operand();raw27=G.wire(prior27)
+            stack.enter_context(patch.object(G,'G27_PREDECESSOR_CONFIG_SHA',digest(raw27)))
+            value28={**prior27,'new_controller_config_sha256':G.G28_CONTROLLER_CONFIG_SHA,
+                'g27_predecessor_guardian_source_sha256':G.G27_PREDECESSOR_SOURCE_SHA,
+                'g27_predecessor_standing_config_sha256':digest(raw27)}
             originals={}
-            for generation,raw in ((16,raw16),(17,raw17),(18,raw18),(19,raw19),(20,raw20),(21,raw21),(22,raw22),(23,raw23),(24,raw24),(25,raw25),(26,raw26)):
+            for generation,raw in ((16,raw16),(17,raw17),(18,raw18),(19,raw19),(20,raw20),(21,raw21),(22,raw22),(23,raw23),(24,raw24),(25,raw25),(26,raw26),(27,raw27)):
                 originals[getattr(G,'G'+str(generation)+'_PREDECESSOR_HERE')/'network_guardian.py']=globals()['DECLARED_G'+str(generation)+'_SOURCE']
                 originals[getattr(G,'G'+str(generation)+'_PREDECESSOR_CONFIG')]=raw
             def read(path,*_):
                 self.assertIn(path,originals);return originals[path]
             with patch.object(G,'read',side_effect=read):
+                self.assertEqual(G.g27_predecessor_config(value28),prior27)
+                for key in ('g27_predecessor_guardian_source_sha256','g27_predecessor_standing_config_sha256','new_controller_config_sha256','g26_predecessor_guardian_source_sha256','hub_unit_sha256'):
+                    wrong=copy.deepcopy(value28);wrong[key]=digest(b'foreign G27 prefix')
+                    with self.assertRaises(RuntimeError):G.g27_predecessor_config(wrong)
+                for key in ('controller_unit_sha256','cold_unit_sha256','guardian_unit_sha256','foreign_field'):
+                    bad=copy.deepcopy(prior27);bad[key]=digest(b'foreign M19 unit/field');badraw=G.wire(bad)
+                    wrong={**value28,'g27_predecessor_standing_config_sha256':digest(badraw)}
+                    with patch.object(G,'G27_PREDECESSOR_CONFIG_SHA',digest(badraw)),patch.object(G,'read',side_effect=lambda path,*_:badraw if path==G.G27_PREDECESSOR_CONFIG else originals[path]),self.assertRaisesRegex(RuntimeError,'G27_WHOLE_PREFIX'):
+                        G.g27_predecessor_config(wrong)
                 self.assertEqual(G.g26_predecessor_config(value27),prior26)
                 for key in ('g26_predecessor_guardian_source_sha256','g26_predecessor_standing_config_sha256','new_controller_config_sha256','g25_predecessor_guardian_source_sha256','hub_unit_sha256'):
                     wrong=copy.deepcopy(value27);wrong[key]=digest(b'foreign g26')
@@ -920,18 +1023,20 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                                 and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Attribute)
                                 and n.value.func.attr == 'r13_predecessor_standing')
                 walk = derive.body[built + 1:archival]
-                operands = {'G': G, 'value': copy.deepcopy(value27)}
+                operands = {'G': G, 'value': copy.deepcopy(value28)}
                 exec(compile(ast.Module(body=copy.deepcopy(walk), type_ignores=[]),
                              str(deriver_path) + ':actual-predecessor-walk', 'exec'), operands)
-                self.assertEqual(walk[0].value.func.attr, 'g26_predecessor_config')
+                self.assertEqual(walk[0].value.func.attr, 'g27_predecessor_config')
+                self.assertEqual(operands['g27_predecessor'],prior27)
+                self.assertEqual(walk[1].value.func.attr, 'g26_predecessor_config')
                 self.assertEqual(operands['g26_predecessor'],prior26)
-                self.assertEqual(walk[1].value.func.attr, 'g25_predecessor_config')
+                self.assertEqual(walk[2].value.func.attr, 'g25_predecessor_config')
                 self.assertEqual(operands['g25_predecessor'],prior25)
-                self.assertEqual(walk[2].value.func.attr, 'g24_predecessor_config')
+                self.assertEqual(walk[3].value.func.attr, 'g24_predecessor_config')
                 self.assertEqual(operands['g24_predecessor'],prior24)
-                self.assertEqual(walk[3].value.func.attr, 'g23_predecessor_config')
-                self.assertEqual(walk[4].value.func.attr, 'g22_predecessor_config')
-                self.assertEqual(operands['value']['new_controller_config_sha256'], G.G27_CONTROLLER_CONFIG_SHA)
+                self.assertEqual(walk[4].value.func.attr, 'g23_predecessor_config')
+                self.assertEqual(walk[5].value.func.attr, 'g22_predecessor_config')
+                self.assertEqual(operands['value']['new_controller_config_sha256'], G.G28_CONTROLLER_CONFIG_SHA)
                 self.assertEqual(operands['g23_predecessor'], prior23)
                 self.assertEqual(operands['g23_predecessor']['new_controller_config_sha256'], G.G23_CONTROLLER_CONFIG_SHA)
                 self.assertEqual(operands['g22_predecessor'], prior22)
@@ -965,7 +1070,7 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                     seen.append(path)
                     return originals[path]+b' ' if path==changed else originals[path]
                 with self.subTest(changed=changed),patch.object(G,'read',side_effect=changed_read),self.assertRaises(RuntimeError):
-                    prior=G.g26_predecessor_config(value27);prior=G.g25_predecessor_config(prior);prior=G.g24_predecessor_config(prior);prior=G.g23_predecessor_config(prior);prior=G.g22_predecessor_config(prior);prior=G.g21_predecessor_config(prior);prior=G.g20_predecessor_config(prior);prior=G.g19_predecessor_config(prior);prior=G.g18_predecessor_config(prior);prior=G.g17_predecessor_config(prior);G.g16_predecessor_config(prior)
+                    prior=G.g27_predecessor_config(value28);prior=G.g26_predecessor_config(prior);prior=G.g25_predecessor_config(prior);prior=G.g24_predecessor_config(prior);prior=G.g23_predecessor_config(prior);prior=G.g22_predecessor_config(prior);prior=G.g21_predecessor_config(prior);prior=G.g20_predecessor_config(prior);prior=G.g19_predecessor_config(prior);prior=G.g18_predecessor_config(prior);prior=G.g17_predecessor_config(prior);G.g16_predecessor_config(prior)
                 self.assertIn(changed,seen)
     def test_protected43_budget_cold_hub_and_six_commands_are_unchanged(self):
         with binding(): self.assertEqual(C.protected_ref_union(), historical.C.protected_ref_union())
