@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/base32"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"reflect"
@@ -37,6 +39,16 @@ func testOriginalGuestPresendRecoveryPostgres(t *testing.T, ctx context.Context,
 			t.Fatal("existing public contract")
 		}
 		return p
+	}
+	// The public binding stores hexadecimal digests; native labels use the
+	// canonical lowercase unpadded base32 encoding in vmLabelDigest. Keep this
+	// fixture data encoding available in the default repository test build.
+	labelDigest := func(digest string) string {
+		raw, err := hex.DecodeString(digest)
+		if err != nil {
+			t.Fatal("declared binding digest", err)
+		}
+		return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
 	}
 	for _, fault := range []string{"complete", "interrupted_expired", "interrupted_live", "wrong_original_owner", "wrong_executor", "nonfailed_run", "missing_ack", "live_original_lease", "unexpired_grant", "attempt", "settlement", "changed_baseline", "incomplete_inventory", "missing_coverage", "other_authority", "wrong_plan_owner", "wrong_run_selector", "duplicate_failed_run", "cleanup_lane", "installed_lane", "undisposed_history", "foreign_source", "current_dispatch_expired", "stopped_member", "locked_member", "confirmed_epoch"} {
 		func() {
@@ -139,7 +151,7 @@ func testOriginalGuestPresendRecoveryPostgres(t *testing.T, ctx context.Context,
 					}
 				}
 				if populated {
-					inv.Members = []model.CapacityVMFleetInventoryMember{{Slot: 1, Protected: binding.ProtectedSlots >= 1, DesiredSpec: *d.DesiredSpec, RequestSHA256: d.DesiredSpecSHA256, Server: model.CapacityVMServerObservation{CapacityVMNativeTuple: model.CapacityVMNativeTuple{ID: "700001", CreatedAt: now.Add(-time.Hour).Format(time.RFC3339Nano)}, Name: d.DesiredSpec.NativeName, Status: "running", PhysicalSpecVerified: true, ObservedAt: inv.ObservedAt, Labels: map[string]string{"yggdrasil.io/owner": view.Owner, "yggdrasil.io/scope": forwardFixtureVMLabelDigest(binding.ScopeChecksum), "yggdrasil.io/spec": forwardFixtureVMLabelDigest(d.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": binding.ProfileName, "yggdrasil.io/slot": "1"}}}}
+					inv.Members = []model.CapacityVMFleetInventoryMember{{Slot: 1, Protected: binding.ProtectedSlots >= 1, DesiredSpec: *d.DesiredSpec, RequestSHA256: d.DesiredSpecSHA256, Server: model.CapacityVMServerObservation{CapacityVMNativeTuple: model.CapacityVMNativeTuple{ID: "700001", CreatedAt: now.Add(-time.Hour).Format(time.RFC3339Nano)}, Name: d.DesiredSpec.NativeName, Status: "running", PhysicalSpecVerified: true, ObservedAt: inv.ObservedAt, Labels: map[string]string{"yggdrasil.io/owner": view.Owner, "yggdrasil.io/scope": labelDigest(binding.ScopeChecksum), "yggdrasil.io/spec": labelDigest(d.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": binding.ProfileName, "yggdrasil.io/slot": "1"}}}}
 				}
 				return inv
 			}
