@@ -265,8 +265,8 @@ func (s CapacityStore) TryClaimWitnessedExpansionCleanup(ctx context.Context, po
 		return s, zero, a, true, err
 	}
 	if events[len(events)-1].Stage != "requested" {
-		// Later ownership can only continue an authenticated Pending or complete read
-		// of the same settled child, after its actual failed workflow ACK/expiry.
+		// Closed pre-DELETE inventory may obtain only a fresh inventory read;
+		// post-DELETE continuation remains tied to the same settled child.
 		old, ok := latestWitnessedExpansionClaim(events)
 		if !ok {
 			return s, zero, a, true, ErrCapacityConflict
@@ -274,36 +274,49 @@ func (s CapacityStore) TryClaimWitnessedExpansionCleanup(ctx context.Context, po
 		if err = witnessedExpansionClosedOwnerTx(ctx, tx, old); err != nil {
 			return s, zero, a, true, err
 		}
-		child, childErr := witnessedExpansionChildTx(ctx, tx, a)
-		if childErr != nil {
-			return s, zero, a, true, ErrCapacityConflict
-		}
-		qualified := events[len(events)-1]
-		if qualified.Stage == "absence_returned" {
-			// The failed read remains raw custody. Only its preceding qualified
-			// same-owner read may anchor a fresh read-only successor.
-			if !witnessedExpansionDeadlineReturnContinuation(events, old, a, child, p, now) {
+		if events[len(events)-1].Stage == "inventory_returned" {
+			if !witnessedExpansionPredeleteReturnContinuation(events, old, a, p, now) {
 				return s, zero, a, true, ErrCapacityConflict
 			}
-			qualified = events[len(events)-3]
-			var returnedBeforeACK bool
-			if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$1::uuid AND j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.finished_at=j.returned_at AND j.returned_at>=$2)`, old.RunID, events[len(events)-1].RecordedAt).Scan(&returnedBeforeACK); err != nil {
+			var eligible bool
+			if err = tx.QueryRowContext(ctx, `SELECT NOT EXISTS(SELECT 1 FROM public.capacity_mutation_grants WHERE id=$1::uuid OR grant_record->>'witnessed_unenrolled_expansion_cleanup_id'=$4) AND EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$2::uuid AND j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.finished_at=j.returned_at AND j.returned_at>=$3)`, a.ChildGrantID, old.RunID, events[len(events)-1].RecordedAt, a.ID).Scan(&eligible); err != nil {
 				return s, zero, a, true, err
 			}
-			if !returnedBeforeACK {
+			if !eligible {
 				return s, zero, a, true, ErrCapacityConflict
 			}
-		}
-		var pending WitnessedExpansionReadReturn
-		if (qualified.Stage != "pending_absence" && qualified.Stage != "absence_complete") || json.Unmarshal(qualified.Evidence, &pending) != nil || pending.Pending == pending.Complete {
-			return s, zero, a, true, ErrCapacityConflict
-		}
-		if pending.Receipt == nil || !reflect.DeepEqual(guestMutationReceiptV2(child), *pending.Receipt) {
-			return s, zero, a, true, ErrCapacityConflict
-		}
-		if _, actualPending, contentErr := witnessedExpansionReadContent(pending, p, a); contentErr != nil || actualPending != pending.Pending {
-			err = ErrCapacityConflict
-			return s, zero, a, true, err
+		} else {
+			child, childErr := witnessedExpansionChildTx(ctx, tx, a)
+			if childErr != nil {
+				return s, zero, a, true, ErrCapacityConflict
+			}
+			qualified := events[len(events)-1]
+			if qualified.Stage == "absence_returned" {
+				// The failed read remains raw custody. Only its preceding qualified
+				// same-owner read may anchor a fresh read-only successor.
+				if !witnessedExpansionDeadlineReturnContinuation(events, old, a, child, p, now) {
+					return s, zero, a, true, ErrCapacityConflict
+				}
+				qualified = events[len(events)-3]
+				var returnedBeforeACK bool
+				if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$1::uuid AND j.state='returned' AND j.return_status='failed' AND j.finalization_ack_at>=j.returned_at AND w.status='failed' AND w.finished_at=j.returned_at AND j.returned_at>=$2)`, old.RunID, events[len(events)-1].RecordedAt).Scan(&returnedBeforeACK); err != nil {
+					return s, zero, a, true, err
+				}
+				if !returnedBeforeACK {
+					return s, zero, a, true, ErrCapacityConflict
+				}
+			}
+			var pending WitnessedExpansionReadReturn
+			if (qualified.Stage != "pending_absence" && qualified.Stage != "absence_complete") || json.Unmarshal(qualified.Evidence, &pending) != nil || pending.Pending == pending.Complete {
+				return s, zero, a, true, ErrCapacityConflict
+			}
+			if pending.Receipt == nil || !reflect.DeepEqual(guestMutationReceiptV2(child), *pending.Receipt) {
+				return s, zero, a, true, ErrCapacityConflict
+			}
+			if _, actualPending, contentErr := witnessedExpansionReadContent(pending, p, a); contentErr != nil || actualPending != pending.Pending {
+				err = ErrCapacityConflict
+				return s, zero, a, true, err
+			}
 		}
 	}
 	// Original failed N2 decision/baseline remain unchanged. Only this distinct
@@ -327,6 +340,37 @@ func (s CapacityStore) TryClaimWitnessedExpansionCleanup(ctx context.Context, po
 	}
 	s.witnessedExpansionOwner = &witnessedExpansionOwner{id: a.ID, claim: c.Sequence}
 	return s, next, a, true, nil
+}
+
+// This original successful dry-run is eligibility for a new owner, never an
+// inventory qualification or send authority. Its exact old wire remains intact;
+// the new owner must prepare and return its own bounded, fresh inventory read.
+// Failed/late reads, missing returns and every post-issue history still HOLD.
+func witnessedExpansionPredeleteReturnContinuation(events []WitnessedUnenrolledExpansionCleanupEvent, claim WitnessedUnenrolledExpansionCleanupEvent, a WitnessedUnenrolledExpansionCleanup, p model.CapacityPolicySpec, now time.Time) bool {
+	if len(events) < 3 || claim.Stage != "claimed" || claim.Schema != WitnessedUnenrolledExpansionCleanupSchema || claim.LeaseExpiresAt == nil || !now.After(*claim.LeaseExpiresAt) {
+		return false
+	}
+	for _, event := range events {
+		if event.Stage == "issued" || event.Stage == "possible_send" {
+			return false
+		}
+	}
+	old, prepared, returned := events[len(events)-3], events[len(events)-2], events[len(events)-1]
+	if !reflect.DeepEqual(old, claim) || prepared.Stage != "inventory_prepared" || returned.Stage != "inventory_returned" || prepared.Sequence != claim.Sequence+1 || returned.Sequence != prepared.Sequence+1 {
+		return false
+	}
+	for _, event := range []WitnessedUnenrolledExpansionCleanupEvent{claim, prepared, returned} {
+		if event.Schema != WitnessedUnenrolledExpansionCleanupSchema || event.CleanupID != a.ID || event.ChildGrantID != a.ChildGrantID || event.RunID != claim.RunID || event.Generation != claim.Generation || event.FencingToken != claim.FencingToken || event.LeaseOwner != claim.LeaseOwner || event.ExecutorID != claim.ExecutorID || event.LeaseExpiresAt == nil || !event.LeaseExpiresAt.Equal(*claim.LeaseExpiresAt) || event.RecordedAt.Before(claim.RecordedAt) || event.RecordedAt.After(now) {
+			return false
+		}
+	}
+	var read WitnessedExpansionRead
+	var raw WitnessedExpansionReadReturn
+	if capacity.DecodeGuestLifecycle(prepared.Evidence, &read) != nil || capacity.DecodeGuestLifecycle(returned.Evidence, &raw) != nil || !reflect.DeepEqual(raw.Read, read) || read.Kind != "inventory" || read.ClaimSequence != claim.Sequence || read.IssuedAtCore.Before(prepared.RecordedAt) || read.OriginalDeadlineCore.After(*claim.LeaseExpiresAt) || raw.ReturnedAtCore.After(returned.RecordedAt) || returned.RecordedAt.Before(prepared.RecordedAt) || raw.Pending || raw.Complete || raw.Receipt != nil || len(raw.ReceiptWire) != 0 || raw.Observation != nil || raw.ObserverSourceCommit != "" || len(raw.OriginalObserverReturn) != 0 {
+		return false
+	}
+	_, pending, err := witnessedExpansionReadContent(raw, p, a)
+	return err == nil && !pending
 }
 
 // A deadline-failed read is never absence evidence. This exact contiguous

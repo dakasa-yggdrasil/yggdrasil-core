@@ -8,13 +8,23 @@
     "legacy_grant_job_columns_added": 0
   },
   "adr": "docs/adr/0118-close-a-witnessed-unenrolled-expansion-with-a-separate-cleanup.md",
-  "current_source_census_sha256": "d12021185db1f1f4003177e0f17d09f923886ac81681cc8a22a633ee3280ab25",
+  "current_source_census_sha256": "8b8fb3b588a53770d58d91576de81e5ac993df0409f383fec1495037e200ea4a",
   "pending": [
     "independent Source reviews",
     "both current owning PostgreSQL CI lanes/races",
     "Root current full CI qualification",
     "native whole proof acceptance"
   ],
+  "predelete_inventory_recovery_source_only": {
+    "exact_original_primary_ip_membership": true,
+    "failed_or_late_inventory_stays_HOLD": true,
+    "fresh_successor_read_and_S1_floor_before_one_child": true,
+    "no_child_or_issued_or_possible_send": true,
+    "old_four_events_immutable": true,
+    "old_successful_on_time_read_is_eligibility_only": true,
+    "production_or_native_qualification": false,
+    "real_failed_owner_ACK_and_expired_lease_required": true
+  },
   "production_or_native_qualification": false,
   "runtime_source_count": 843,
   "runtime_sources": {
@@ -99,12 +109,12 @@
       "sha256": "5ca0a74c0d420b8b3e3abd9101e824fbc24824687064f0f3be3b9c25980d2476"
     },
     "repository/witnessed_expansion_native.go": {
-      "bytes": 26452,
-      "sha256": "14ed759e3a94473a2d82e5bdcc7c3501a6ad7a7d6b50b9517ebb3c873258c4ce"
+      "bytes": 28502,
+      "sha256": "59587768b8e36b8aadb4118ccf6cbcbe69601e57eb5f96f01ae48c863762bdbe"
     },
     "repository/witnessed_expansion_owner.go": {
-      "bytes": 33727,
-      "sha256": "4160efbd4ec687078d4f7e159d8b4cf5ae3d8b73b95e2349be592c08cbc23ff0"
+      "bytes": 37272,
+      "sha256": "9a10a0ef68628f99160214cf5dcf4fcc48c4aaf3d0e0c5a7606294f4e960d830"
     },
     "repository/witnessed_expansion_terminal_reconcile.go": {
       "bytes": 18054,
@@ -119,6 +129,8 @@
   "source_only": true,
   "sql106_bytes": 123222,
   "sql106_sha256": "ef0dc9dd2caa6972f304e4b59da605120252462883be59a4f141f34a27b35a86",
+  "sql107_bytes": 56700,
+  "sql107_sha256": "980f2a10cabdf9df473090e065a82c54354b0deabe8a58b5298b3e75649da452",
   "status": "source_only_ci_pending",
-  "validation_owner": "Go producer and historical consumer validate native HZN content; SQL authenticates stored joins/transitions/immutability; no full SQL content-parity claim"
+  "validation_owner": "Go validates the full typed native HZN content; SQL107 adds closed original-primary-IP and successful pre-DELETE read transitions while retaining SQL106 historical joins and immutability. No general SQL/Go JSON encoding equivalence or native qualification is claimed."
 }

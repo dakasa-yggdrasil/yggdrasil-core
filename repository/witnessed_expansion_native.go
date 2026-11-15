@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -142,12 +143,15 @@ func witnessedExpansionReadContent(r WitnessedExpansionReadReturn, p model.Capac
 	}
 	b := plan.Binding
 	if c.Kind == "inventory" {
+		if r.Pending || r.Complete || r.Receipt != nil || len(r.ReceiptWire) != 0 || r.Observation != nil || r.ObserverSourceCommit != "" || len(r.OriginalObserverReturn) != 0 {
+			return proof, false, ErrCapacityConflict
+		}
 		v := r.Plan
 		var desired model.CapacityMutationSpecV1
 		if json.Unmarshal(plan.CanonicalSpec, &desired) != nil {
 			return proof, false, ErrCapacityConflict
 		}
-		if r.Status != "dry_run" || v == nil || v.Server == nil || v.RequestSHA256 != plan.RequestSHA256 || !reflect.DeepEqual(v.DesiredSpec, desired) || v.Protected || v.CompensationOf != "" || v.CompensationIdentityVerified || v.ProviderFencingEvidence || v.WarmReadinessEvidence || v.BusinessReadyEvidence || v.Server.ID != a.ResourceID || v.Server.CreatedAt != a.ResourceCreatedAt || !v.Server.PhysicalSpecVerified || !v.Server.AuxiliaryInventoryComplete || v.Server.IndependentBillableResources || v.Server.ProtectedFromDelete || v.Server.Locked || v.Server.Labels["yggdrasil.io/intent"] != a.GrantID {
+		if r.Status != "dry_run" || v == nil || v.Server == nil || v.RequestSHA256 != plan.RequestSHA256 || !reflect.DeepEqual(v.DesiredSpec, desired) || v.Protected || v.CompensationOf != "" || v.CompensationIdentityVerified || v.ProviderFencingEvidence || v.WarmReadinessEvidence || v.BusinessReadyEvidence || len(v.AuxiliaryResources) != 0 || v.Server.ID != a.ResourceID || v.Server.CreatedAt != a.ResourceCreatedAt || !v.Server.PhysicalSpecVerified || !v.Server.AuxiliaryInventoryComplete || !witnessedExpansionOriginalPrimaryIPs(*v.Server, a) || v.Server.CompensationIdentityVerified || v.Server.ProtectedFromDelete || v.Server.Locked || v.Server.Labels["yggdrasil.io/intent"] != a.GrantID {
 			return proof, false, ErrCapacityConflict
 		}
 		return proof, false, nil
@@ -188,6 +192,40 @@ func witnessedExpansionReadContent(r WitnessedExpansionReadReturn, p model.Capac
 		return model.CapacityMutationProof{}, true, nil
 	}
 	return model.CapacityMutationProof{}, false, ErrCapacityConflict
+}
+
+// The owning Hetzner observer marks an attached primary IPv4 as independently
+// billable. It is safe inventory only when every attached IP is exactly an
+// auxiliary sealed by this admission's original accepted CREATE. Unknown paid
+// resources still HOLD; the ordinary writer separately rechecks each IP's
+// assignee, auto-delete and protection before its one DELETE.
+func witnessedExpansionOriginalPrimaryIPs(server model.CapacityVMServerObservation, a WitnessedUnenrolledExpansionCleanup) bool {
+	var parent capacityMutationRecord
+	if !a.OriginalAuxiliaryKnown || json.Unmarshal(a.OriginalGrantWire, &parent) != nil || parent.Grant.GrantID != a.GrantID || parent.Grant.State != "settled" || parent.Settlement == nil {
+		return false
+	}
+	s := parent.Settlement
+	if s.GrantID != a.GrantID || s.Outcome != "accepted" || !s.TransportCompleted || !s.AuxiliaryInventoryComplete || s.ResourceID != a.ResourceID || s.ResourceCreatedAt != a.ResourceCreatedAt || s.AuxiliaryResources == nil || len(s.AuxiliaryResources) < 1 || len(s.AuxiliaryResources) > 2 || server.IndependentBillableResources != (server.PrimaryIPv4ID != "") {
+		return false
+	}
+	expected := make(map[string]bool, len(s.AuxiliaryResources))
+	for _, aux := range s.AuxiliaryResources {
+		id, err := strconv.ParseInt(aux.ID, 10, 64)
+		if err != nil || id <= 0 || strconv.FormatInt(id, 10) != aux.ID || aux.Kind != "primary_ip" || !aux.RequiresAbsence || expected[aux.ID] {
+			return false
+		}
+		expected[aux.ID] = true
+	}
+	seen := make(map[string]bool, 2)
+	for _, id := range []string{server.PrimaryIPv4ID, server.PrimaryIPv6ID} {
+		if id != "" {
+			if !expected[id] || seen[id] {
+				return false
+			}
+			seen[id] = true
+		}
+	}
+	return len(seen) == len(expected)
 }
 
 // Persist the complete actual return before deciding whether it conveys fresh

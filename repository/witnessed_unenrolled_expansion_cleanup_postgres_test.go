@@ -84,6 +84,7 @@ func witnessedCleanup106PostgresRegression(t *testing.T) {
 	}))
 	witnessedCleanup106AdmissionNegatives(t, f, put)
 	f.base = witnessedCleanup106Rows(t, f.DB)
+	witnessedExpansion107Postgres(t, f, migrations, put)
 	// Each race starts from a separately declared exact copy of this immutable
 	// failed history; none backdates or alters the current producer's originals.
 	for _, kind := range []string{"enrollment", "installation"} {
@@ -1079,6 +1080,12 @@ func witnessedCleanup106InventoryReturn(t *testing.T, f *witnessedCleanup106Fixt
 	inv := witnessedCleanup106Inventory(t, f, a, true)
 	server := inv.Members[1].Server
 	server.AuxiliaryInventoryComplete = true
+	server.PrimaryIPv4ID = f.parent.Settlement.AuxiliaryResources[0].ID
+	server.PrimaryIPv6ID = ""
+	if len(f.parent.Settlement.AuxiliaryResources) > 1 {
+		server.PrimaryIPv6ID = f.parent.Settlement.AuxiliaryResources[1].ID
+	}
+	server.IndependentBillableResources = true
 	return WitnessedExpansionReadReturn{Schema: "witnessed_unenrolled_expansion_native_return_v1", Read: read, ReadWire: failedServingWire(t, read), Status: "dry_run", Plan: &model.CapacityVMFleetPlan{DesiredSpec: desired, RequestSHA256: plan.RequestSHA256, Server: &server, ObservedAt: at.Format(time.RFC3339Nano)}, StartedAtCore: at, ReturnedAtCore: at}
 }
 
