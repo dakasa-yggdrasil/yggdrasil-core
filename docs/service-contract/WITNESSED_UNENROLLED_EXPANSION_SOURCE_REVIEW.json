@@ -8,7 +8,7 @@
     "legacy_grant_job_columns_added": 0
   },
   "adr": "docs/adr/0118-close-a-witnessed-unenrolled-expansion-with-a-separate-cleanup.md",
-  "current_source_census_sha256": "9ba1b3bd2f22bbba704cbecc1c5924b80ab55dab42ef45793a48f18b134a7cfe",
+  "current_source_census_sha256": "be9f70d470a1e9f20f2b2631276ecdf18d59a86d8f3b97f376efcc58f2e71fdd",
   "pending": [
     "independent Source reviews",
     "both current owning PostgreSQL CI lanes/races",
