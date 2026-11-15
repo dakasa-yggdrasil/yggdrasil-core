@@ -21,7 +21,7 @@ func installedGuestResumeCandidate(old *model.CapacityIntent, p model.CapacityPo
 	if old != nil && old.InstalledReadinessHandoff != nil {
 		return false
 	}
-	if old == nil || old.FailedExpansionTerminalReconcile != nil || old.FailedInstalledDisposal != nil || old.RecoveryOnly || old.FloorDegraded || (old.Phase != "preparing" && old.Phase != "prepared" && old.Phase != "canary") || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Generation <= 0 || old.FencingToken <= 0 || old.FencingToken >= maxCapacityGeneration || old.LeaseExpiresAt == nil || old.LeaseExpiresAt.After(now) || old.Decision.Units < p.Floor || old.Decision.Units > p.Ceiling {
+	if old == nil || old.WitnessedExpansionTerminalReconcile != nil || old.WitnessedUnenrolledExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil || old.FailedInstalledDisposal != nil || old.RecoveryOnly || old.FloorDegraded || (old.Phase != "preparing" && old.Phase != "prepared" && old.Phase != "canary") || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Generation <= 0 || old.FencingToken <= 0 || old.FencingToken >= maxCapacityGeneration || old.LeaseExpiresAt == nil || old.LeaseExpiresAt.After(now) || old.Decision.Units < p.Floor || old.Decision.Units > p.Ceiling {
 		return false
 	}
 	m := old.InstalledGuestReconcile

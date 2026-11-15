@@ -228,7 +228,7 @@
       "expression_complete": true,
       "file": "internal/capacity/guest_original_http.go",
       "function": "Original",
-      "line": 104
+      "line": 106
     },
     {
       "argument_expression": "request",
@@ -238,7 +238,7 @@
       "expression_complete": true,
       "file": "internal/capacity/guest_original_http.go",
       "function": "Original",
-      "line": 111
+      "line": 113
     },
     {
       "argument_expression": "ctx, method, origin+path, bytes.NewReader(body)",
@@ -308,7 +308,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "api",
-      "line": 191
+      "line": 192
     },
     {
       "argument_expression": "req",
@@ -318,7 +318,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "api",
-      "line": 200
+      "line": 201
     },
     {
       "argument_expression": "ctx, http.MethodPost, r.CoreOrigin+\"/api/v1/capacity/mutations/redeem\", bytes.NewReader(body)",
@@ -328,7 +328,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "sourceFenceRedeem",
-      "line": 767
+      "line": 791
     },
     {
       "argument_expression": "req",
@@ -338,7 +338,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "sourceFenceRedeem",
-      "line": 773
+      "line": 797
     },
     {
       "argument_expression": "ctx, http.MethodPost, provider.TokenURL, strings.NewReader(form.Encode())",

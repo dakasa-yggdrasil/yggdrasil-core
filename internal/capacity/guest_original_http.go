@@ -44,9 +44,10 @@ type GuestOriginalHTTPReturn struct {
 }
 
 type GuestOriginalHTTPClient struct {
-	origin    string
-	client    *http.Client
-	transport *http.Transport
+	origin        string
+	client        *http.Client
+	transport     *http.Transport
+	nativeV1Clock *guestOriginalNativeV1Clock
 }
 
 // Credentials are loaded from the exact approved source references outside
@@ -75,6 +76,7 @@ func (c *GuestOriginalHTTPClient) Close() {
 // Each invocation is exactly one HTTP call. The workflow/store decides whether
 // it is the sole original POST or a same-identity read; this client never retries.
 func (c *GuestOriginalHTTPClient) Original(ctx context.Context, method, path string, body []byte) (result GuestOriginalHTTPReturn, returnedError error) {
+	var nativeClockErr error
 	result.StartedAt = time.Now().UTC()
 	result.ResponseBodyScope = GuestOriginalBodyNoRead
 	result.RetainedPrefixSHA256 = BusinessCreationSHA256([]byte{})
@@ -125,6 +127,9 @@ func (c *GuestOriginalHTTPClient) Original(ctx context.Context, method, path str
 		if readErr != nil || len(result.Body) > GuestBootstrapLimit {
 			result.ResponseBodyScope = GuestOriginalBodyIncompleteRead
 		}
+		if doErr == nil && readErr == nil && len(result.Body) <= GuestBootstrapLimit && result.Status == http.StatusOK {
+			nativeClockErr = c.waitNativeV1ReturnClock(ctx, method, path, body, result.Body)
+		}
 		closeErr := response.Body.Close()
 		result.CloseReturnedAt = time.Now().UTC()
 		result.ReadFailed, result.CloseFailed = readErr != nil || len(result.Body) > GuestBootstrapLimit, closeErr != nil
@@ -139,6 +144,9 @@ func (c *GuestOriginalHTTPClient) Original(ctx context.Context, method, path str
 		result.DoFailed = true
 	}
 	result.OriginalContextFailed = ctx.Err() != nil || !deadlinePresent || !time.Now().Before(originalDeadline)
+	if nativeClockErr != nil {
+		return result, errors.Join(ErrGuestOriginalTransport, nativeClockErr, ctx.Err())
+	}
 	if result.DoFailed || result.ReadFailed || result.CloseFailed || result.OriginalContextFailed || result.Status != http.StatusOK {
 		return result, errors.Join(ErrGuestOriginalTransport, ctx.Err())
 	}
@@ -172,4 +180,137 @@ func GuestOriginalHTTPBodyFactsValid(scope string, readAt time.Time, received in
 		return !readFailed && received <= GuestBootstrapLimit && prefix == received && responseSHA == prefixSHA
 	}
 	return scope == GuestOriginalBodyIncompleteRead && readFailed
+}
+
+// This private frame can only be installed through the compiled Native profile
+// selector. It supplies no capacity authority; the existing validators still run.
+type guestOriginalNativeV1Clock struct {
+	failureTarget func(request, response []byte) (time.Time, bool)
+	enrollment    model.CapacityGuestRetirementEnrollment
+	intent        model.CapacityGuestRetirementIntent
+	profileSHA    string
+}
+
+// WithNativeV1ReturnClock is inert in production, including for invalid inputs.
+// The binding/enrollment/intent are the immutable original read by the store,
+// never a workflow selector or a timestamp supplied by an HTTP caller.
+func (c *GuestOriginalHTTPClient) WithNativeV1ReturnClock(b model.CapacityGuestRetirementBinding, e model.CapacityGuestRetirementEnrollment, i model.CapacityGuestRetirementIntent) *GuestOriginalHTTPClient {
+	if c == nil || !GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
+		return c
+	}
+	if b.EvidenceClass != "native_qemu_qualification" || b.ProfileManifest.Profile != GuestQualificationProfile || b.ProfileManifest.CoverageClass != "native_qualification_subset" || e.Statement.SourceClass != b.EvidenceClass || e.Statement.Tuple.Provider != "native-qemu" || !ValidDigest(b.ProfileManifestSHA256) || GuestRetirementSHA(b.ProfileManifest) != b.ProfileManifestSHA256 || e.Statement.CoreAuthoritySourceCommit != b.CoreAuthoritySourceCommit || i.Tuple != e.Statement.Tuple || i.BindingName != e.Statement.BindingName || i.EnrollmentSHA256 != GuestRetirementSHA(e) || !guestRetirementVerify(b.EnrollmentIssuerPublicKey, e.Signature, e.Statement) {
+		return c
+	}
+	memberBound := false
+	for _, member := range b.Members {
+		memberBound = memberBound || (member.Name == e.Statement.BindingName && member.Slot == e.Statement.Tuple.Slot && member.Origin == c.origin)
+	}
+	if !memberBound {
+		return c
+	}
+	copy := *c
+	copy.nativeV1Clock = &guestOriginalNativeV1Clock{enrollment: e, intent: i, profileSHA: b.ProfileManifestSHA256}
+	return &copy
+}
+
+// A trusted Source owner supplies the full typed negative-record authenticator.
+// The capacity package owns only the existing Native profile/member transport
+// gate and the real-clock wait; it does not import the Source failure DTO.
+func (c *GuestOriginalHTTPClient) WithNativeV1FailureReturnClock(b model.CapacityGuestRetirementBinding, member model.CapacityGuestRetirementMemberBinding, target func([]byte, []byte) (time.Time, bool)) *GuestOriginalHTTPClient {
+	if c == nil || !GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
+		return c
+	}
+	if target == nil || b.EvidenceClass != "native_qemu_qualification" || b.ProfileManifest.Profile != GuestQualificationProfile || b.ProfileManifest.CoverageClass != "native_qualification_subset" || !ValidDigest(b.ProfileManifestSHA256) || GuestRetirementSHA(b.ProfileManifest) != b.ProfileManifestSHA256 || member.Slot < 1 || member.Slot > 2 || member.Origin != c.origin {
+		return c
+	}
+	matches := 0
+	for _, bound := range b.Members {
+		if bound == member {
+			matches++
+		}
+	}
+	if matches != 1 {
+		return c
+	}
+	copy := *c
+	frame := guestOriginalNativeV1Clock{}
+	if c.nativeV1Clock != nil {
+		frame = *c.nativeV1Clock
+	}
+	frame.failureTarget = target
+	copy.nativeV1Clock = &frame
+	return &copy
+}
+
+func (c *GuestOriginalHTTPClient) waitNativeV1ReturnClock(ctx context.Context, method, path string, request, response []byte) error {
+	if c == nil || c.nativeV1Clock == nil || !GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
+		return nil
+	}
+	notBefore, strictlyAfter, authenticated := c.nativeV1Clock.target(method, path, request, response)
+	if !authenticated {
+		// Malformed/foreign/unsigned bytes retain the original HTTP facts and
+		// remain inadmissible under the unchanged downstream validators.
+		return nil
+	}
+	return guestOriginalWaitCoreClock(ctx, notBefore, strictlyAfter)
+}
+
+func (f guestOriginalNativeV1Clock) target(method, path string, request, response []byte) (time.Time, time.Time, bool) {
+	if method == http.MethodGet && path == "/v1/qualification-source-refusal" && f.failureTarget != nil {
+		if at, authenticated := f.failureTarget(request, response); authenticated && !at.IsZero() {
+			return at, time.Time{}, true
+		}
+		return time.Time{}, time.Time{}, false
+	}
+
+	if method == http.MethodGet && path == "/v1/runtime-snapshot" {
+		var r model.CapacityGuestRuntimeSnapshotRequest
+		var s model.CapacityGuestRuntimeSnapshot
+		if DecodeGuestLifecycle(request, &r) != nil || DecodeGuestLifecycle(response, &s) != nil || r.Challenge.ProfileManifestSHA256 != f.profileSHA || GuestRuntimeSnapshot(r.Challenge, f.enrollment, f.intent, s, s.ObservedAt) != nil {
+			return time.Time{}, time.Time{}, false
+		}
+		return s.ObservedAt, time.Time{}, true
+	}
+	if (method == http.MethodGet || method == http.MethodPost) && path == "/v1/retirement" {
+		var r model.CapacityGuestRetirementRequest
+		var o model.CapacityGuestRetirementObservation
+		if DecodeGuestLifecycle(request, &r) != nil || r.Intent != f.intent || !guestRetirementVerify(f.enrollment.Statement.CoreIntentPublicKey, r.Signature, r.Intent) || DecodeGuestLifecycle(response, &o) != nil || !GuestRetirementObservedReturnAuthentic(o, f.enrollment, f.intent, o.ObservedAt) {
+			return time.Time{}, time.Time{}, false
+		}
+		return o.ObservedAt, o.Record.RecordedAt, true
+	}
+	return time.Time{}, time.Time{}, false
+}
+
+// Read has already returned. Wait for the REAL Core wall clock before the ONE
+// original Close and its FIRST timestamp. No saved event is restamped, no I/O is
+// replayed, and the original context/deadline is never replaced or extended.
+func guestOriginalWaitCoreClock(ctx context.Context, notBefore, strictlyAfter time.Time) error {
+	if ctx == nil {
+		return ErrGuestOriginalTransport
+	}
+	deadline, exists := ctx.Deadline()
+	if !exists || notBefore.IsZero() || !notBefore.Before(deadline) || (!strictlyAfter.IsZero() && !strictlyAfter.Before(deadline)) {
+		return ErrGuestOriginalTransport
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		now := time.Now()
+		if !now.Before(notBefore) && (strictlyAfter.IsZero() || now.After(strictlyAfter)) {
+			return nil
+		}
+		delay := notBefore.Sub(now)
+		if strictlyAfter.Sub(now) > delay {
+			delay = strictlyAfter.Sub(now)
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }

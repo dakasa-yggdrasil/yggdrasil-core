@@ -275,7 +275,7 @@ jobs:
           umask 077
           guest_reconcile_dir="$RUNNER_TEMP/original-guest-reconcile-source"
           mkdir -m 700 "$guest_reconcile_dir"
-          go test -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run '^TestOriginalGuest(Reconcile|Dispatch|Administrative|Production)' 2>"$guest_reconcile_dir/stderr.log" | tee "$guest_reconcile_dir/original.jsonl"
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run '^TestOriginalGuest(Reconcile|Dispatch|Administrative|Production)' 2>"$guest_reconcile_dir/stderr.log" | tee "$guest_reconcile_dir/original.jsonl"
           python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -1014,7 +1014,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Apply production migrations through schema105
+      - name: Apply production migrations through schema106
         shell: bash
         run: |
           set -euo pipefail
@@ -1030,7 +1030,7 @@ jobs:
           import json, os
           from pathlib import Path
           actual=json.loads((Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/database.json').read_text())
-          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':105}:
+          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':106}:
               raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
           PYCHECK
       - name: Qualify exact skip calendar, bounded search and original PG dispatch

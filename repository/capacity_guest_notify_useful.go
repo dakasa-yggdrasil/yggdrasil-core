@@ -66,6 +66,9 @@ func guestNotifyMemberReceiptTx(ctx context.Context, tx *sql.Tx, policy model.Ma
 		return empty, err
 	}
 	stored, err := loadGuestOriginalTx(ctx, tx, id)
+	if err == nil {
+		p, err = guestStoredContractSpecTx(ctx, tx, policy, p, stored)
+	}
 	if err != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || stored.member != member || stored.pre.Slot != member.Slot || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || guestPolicyContinuityTx(ctx, tx, policy, p, stored.pre.PolicyID, stored.pre.PolicyChecksum) != nil {
 		return empty, ErrCapacityConflict
 	}
@@ -89,6 +92,9 @@ func guestNotifyMemberReceiptTx(ctx context.Context, tx *sql.Tx, policy model.Ma
 // counts ONLY surviving physical members with a fresh same-original useful
 // business creation, excluding the target and every other pending destroy.
 func (s CapacityStore) guestNotifyUsefulMembersTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, excludedSlot int, now time.Time, usage string, afterPG time.Time) (int, error) {
+	if p.GuestContractSuccessor != nil {
+		return s.guestContractUsefulMembersTx(ctx, tx, policy, p, current, excludedSlot, now, usage, afterPG)
+	}
 	if p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil || p.GuestRetirementBinding == nil {
 		return 0, ErrCapacityConflict
 	}

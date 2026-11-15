@@ -10,6 +10,7 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
+	GuestContractSuccessor      *CapacityGuestContractSuccessor      `json:"guest_contract_successor,omitempty"`
 	GuestNotifyCanaryBinding    *CapacityGuestNotifyCanaryBinding    `json:"guest_notify_canary_binding,omitempty"`
 	ExecutorPowerBinding        *executorpower.Binding               `json:"executor_power_binding,omitempty"`
 	Environment                 string                               `json:"environment"`
@@ -43,6 +44,19 @@ type CapacityPolicySpec struct {
 	ExecutorActivityBinding     *CapacityExecutorActivityBinding     `json:"executor_activity_binding,omitempty"`
 	NativeNotifyWindowBinding   *CapacityNativeNotifyWindowBinding   `json:"native_notify_window_binding,omitempty"`
 	GuestNotifyReconcileBinding *CapacityGuestNotifyReconcileBinding `json:"guest_notify_reconcile_binding,omitempty"`
+}
+
+// References retain complete immutable birth contracts. They are not caller
+// selectable mutation bindings and never authorize creation under a predecessor.
+type CapacityGuestContractSuccessor struct {
+	Schema                  string                                `json:"schema"`
+	RetainedPolicyContracts []CapacityGuestRetainedPolicyContract `json:"retained_policy_contracts"`
+}
+
+type CapacityGuestRetainedPolicyContract struct {
+	PolicyID       string `json:"policy_id"`
+	PolicyChecksum string `json:"policy_checksum"`
+	ContractSHA256 string `json:"contract_sha256"`
 }
 
 // This optional source-owned VM collector is separate from the HPA snapshot
@@ -499,35 +513,37 @@ type CapacityDecision struct {
 
 // CapacityIntent is one durable generation per logical domain/dimension.
 type CapacityIntent struct {
-	FailedUnwitnessedExpansionCleanupID string                                    `json:"failed_unwitnessed_expansion_cleanup_id,omitempty"`
-	RetirementForward                   *CapacityGuestRetirementForwardMarker     `json:"retirement_forward,omitempty"`
-	FailedServingDisposal               *CapacityFailedServingDisposal            `json:"failed_serving_disposal,omitempty"`
-	FailedInstalledDisposal             *CapacityFailedInstalledDisposal          `json:"failed_installed_disposal,omitempty"`
-	FailedExpansionTerminalReconcile    *CapacityFailedExpansionTerminalReconcile `json:"failed_expansion_terminal_reconcile,omitempty"`
-	InstalledGuestReconcile             *CapacityInstalledGuestReconcile          `json:"installed_guest_reconcile,omitempty"`
-	InstalledReadinessHandoff           *CapacityInstalledReadinessHandoff        `json:"installed_readiness_handoff,omitempty"`
-	Namespace                           string                                    `json:"namespace"`
-	PolicyName                          string                                    `json:"policy_name"`
-	PolicyID                            uuid.UUID                                 `json:"policy_id"`
-	PolicyChecksum                      string                                    `json:"policy_checksum"`
-	Environment                         string                                    `json:"environment"`
-	Domain                              string                                    `json:"domain"`
-	Dimension                           string                                    `json:"dimension"`
-	Generation                          int64                                     `json:"generation"`
-	FencingToken                        int64                                     `json:"fencing_token"`
-	Phase                               string                                    `json:"phase"`
-	LeaseOwner                          string                                    `json:"lease_owner,omitempty"`
-	LeaseExecutorID                     string                                    `json:"lease_executor_id,omitempty"`
-	LeaseExpiresAt                      *time.Time                                `json:"lease_expires_at,omitempty"`
-	RecoveryOnly                        bool                                      `json:"recovery_only"`
-	FloorDegraded                       bool                                      `json:"floor_degraded,omitempty"`
-	NativeHPAGeneration                 int64                                     `json:"native_hpa_generation"`
-	NativePodBaseline                   []string                                  `json:"native_pod_baseline"`
-	BaselineSnapshot                    CapacitySnapshot                          `json:"baseline_snapshot"`
-	Decision                            CapacityDecision                          `json:"decision"`
-	Assessment                          CapacityAssessment                        `json:"assessment"`
-	UpdatedAt                           time.Time                                 `json:"updated_at"`
-	OriginalNotifyWindow                *CapacityOriginalNotifyWindowMarker       `json:"original_notify_window,omitempty"`
+	WitnessedUnenrolledExpansionCleanupID string                                       `json:"witnessed_unenrolled_expansion_cleanup_id,omitempty"`
+	WitnessedExpansionTerminalReconcile   *CapacityWitnessedExpansionTerminalReconcile `json:"witnessed_expansion_terminal_reconcile,omitempty"`
+	FailedUnwitnessedExpansionCleanupID   string                                       `json:"failed_unwitnessed_expansion_cleanup_id,omitempty"`
+	RetirementForward                     *CapacityGuestRetirementForwardMarker        `json:"retirement_forward,omitempty"`
+	FailedServingDisposal                 *CapacityFailedServingDisposal               `json:"failed_serving_disposal,omitempty"`
+	FailedInstalledDisposal               *CapacityFailedInstalledDisposal             `json:"failed_installed_disposal,omitempty"`
+	FailedExpansionTerminalReconcile      *CapacityFailedExpansionTerminalReconcile    `json:"failed_expansion_terminal_reconcile,omitempty"`
+	InstalledGuestReconcile               *CapacityInstalledGuestReconcile             `json:"installed_guest_reconcile,omitempty"`
+	InstalledReadinessHandoff             *CapacityInstalledReadinessHandoff           `json:"installed_readiness_handoff,omitempty"`
+	Namespace                             string                                       `json:"namespace"`
+	PolicyName                            string                                       `json:"policy_name"`
+	PolicyID                              uuid.UUID                                    `json:"policy_id"`
+	PolicyChecksum                        string                                       `json:"policy_checksum"`
+	Environment                           string                                       `json:"environment"`
+	Domain                                string                                       `json:"domain"`
+	Dimension                             string                                       `json:"dimension"`
+	Generation                            int64                                        `json:"generation"`
+	FencingToken                          int64                                        `json:"fencing_token"`
+	Phase                                 string                                       `json:"phase"`
+	LeaseOwner                            string                                       `json:"lease_owner,omitempty"`
+	LeaseExecutorID                       string                                       `json:"lease_executor_id,omitempty"`
+	LeaseExpiresAt                        *time.Time                                   `json:"lease_expires_at,omitempty"`
+	RecoveryOnly                          bool                                         `json:"recovery_only"`
+	FloorDegraded                         bool                                         `json:"floor_degraded,omitempty"`
+	NativeHPAGeneration                   int64                                        `json:"native_hpa_generation"`
+	NativePodBaseline                     []string                                     `json:"native_pod_baseline"`
+	BaselineSnapshot                      CapacitySnapshot                             `json:"baseline_snapshot"`
+	Decision                              CapacityDecision                             `json:"decision"`
+	Assessment                            CapacityAssessment                           `json:"assessment"`
+	UpdatedAt                             time.Time                                    `json:"updated_at"`
+	OriginalNotifyWindow                  *CapacityOriginalNotifyWindowMarker          `json:"original_notify_window,omitempty"`
 }
 
 // CapacityTransitionProof is a receipt assembled by the policy's protected

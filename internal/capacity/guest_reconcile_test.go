@@ -283,6 +283,7 @@ func TestOriginalGuestReconcileGraphRejectsCallerAuthority(t *testing.T) {
 }
 
 func TestOriginalGuestReconcileSnapshotUsesCompleteNativePartition(t *testing.T) {
+	testGuestContractInventoryUnion(t)
 	for _, name := range []string{"empty", "present", "reordered", "incomplete", "stale", "unknown", "business", "scope", "partition", "foreign_owner"} {
 		t.Run(name, func(t *testing.T) {
 			policy, p, inv, now := guestReconcileUnit(t)

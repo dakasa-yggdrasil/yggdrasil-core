@@ -17,6 +17,7 @@ import (
 // Exercises the actual collector, snapshot validation, coverage contract and
 // planner with declared fixture responses. No adapter/provider is called.
 func TestOriginalGuestFloorCollectionAndStrictAdmission(t *testing.T) {
+	testOriginalGuestContractCollection(t)
 	raw, err := os.ReadFile("../../internal/capacity/testdata/original-notify-aws-production-contract.json")
 	if err != nil {
 		t.Fatal(err)

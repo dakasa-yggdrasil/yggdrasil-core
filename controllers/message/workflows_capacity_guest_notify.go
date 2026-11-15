@@ -26,6 +26,18 @@ func executeOriginalGuestNotifyProbe(ctx context.Context, db *sql.DB, store repo
 }
 
 func executeOriginalGuestNotifyProbeForUsage(ctx context.Context, db *sql.DB, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, key ed25519.PrivateKey, usage string) (any, error) {
+	if p.GuestContractSuccessor != nil {
+		resolved, err := store.OriginalGuestMemberContract(ctx, policy, input.PreregistrationID, input.Slot)
+		if err != nil {
+			return nil, err
+		}
+		p = resolved
+		key, err = sourceGuestSigningKey(ctx, db, p.GuestRetirementBinding.IntentSigningKeyRef)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	originalProbe, cancelProbe := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelProbe()
 	ctx = originalProbe

@@ -17,6 +17,9 @@ import (
 
 func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, error) {
 	var spec model.CapacityPolicySpec
+	if err := capacity.ValidateGuestContractSuccessorJSON(raw); err != nil {
+		return spec, err
+	}
 	if err := validateGuestReconcileJSON(raw); err != nil {
 		return spec, err
 	}
@@ -208,6 +211,9 @@ func validateNativeNotifyWindowJSON(raw []byte) error {
 }
 
 func ValidateCapacityPolicySpec(spec model.CapacityPolicySpec) error {
+	if err := capacity.ValidateGuestContractSuccessor(spec); err != nil {
+		return err
+	}
 	if err := capacity.ValidatePolicy(spec); err != nil {
 		return err
 	}

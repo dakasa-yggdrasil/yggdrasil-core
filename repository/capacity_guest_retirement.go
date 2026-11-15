@@ -53,6 +53,9 @@ func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Ma
 			return ErrCapacityConflict // A retained forward admission never rearms the Guest caller.
 		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preregistrationID)
+		if err == nil {
+			p, err = guestStoredContractSpecTx(ctx, tx, policy, p, stored)
+		}
 		origin := s.guestRetirementOrigin
 		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
 			return ErrCapacityConflict
@@ -212,6 +215,9 @@ func (s CapacityStore) guestRetirementCurrentTx(ctx context.Context, tx *sql.Tx,
 		return policy, p, current, err
 	}
 	p, err = parseCapacityPolicy(policy)
+	if err == nil {
+		p, err = guestContractForPreTx(ctx, tx, policy, p, stored.Receipt.PreregistrationID)
+	}
 	if err != nil || !active || policy.Checksum != i.PolicyChecksum || !capacity.GuestBindingAuthorityCurrent(p, stored.Binding) || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.Binding) || (liveOriginal && !now.Before(i.OriginalDeadline)) {
 		return policy, p, current, ErrCapacityConflict
 	}

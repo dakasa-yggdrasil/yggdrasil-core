@@ -32,7 +32,7 @@ func (s CapacityStore) GuestRetirementWorkflowOriginalV2(ctx context.Context, po
 	return out, err
 }
 
-func (s CapacityStore) guestDestroyEligibilityV2Tx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, b model.CapacityMutationBinding, slot int, resourceID, created string, now time.Time, destroyGrantID, id string) error {
+func (s CapacityStore) guestDestroyEligibilityV2Tx(ctx context.Context, tx *sql.Tx, policy model.Manifest, _ model.CapacityPolicySpec, current model.CapacityIntent, b model.CapacityMutationBinding, slot int, resourceID, created string, now time.Time, destroyGrantID, id string) error {
 	stored, err := loadGuestRetirementV2Tx(ctx, tx, id, true)
 	if err != nil {
 		return err
@@ -43,7 +43,8 @@ func (s CapacityStore) guestDestroyEligibilityV2Tx(ctx context.Context, tx *sql.
 	}
 	// Adapter callbacks carry only the policy ID/checksum. Retain the full
 	// revalidated policy so the survivor lookup uses its actual namespace.
-	if policy, _, _, err = s.guestRetirementV2CurrentTx(ctx, tx, stored, now, false); err != nil {
+	var p model.CapacityPolicySpec
+	if policy, p, _, err = s.guestRetirementV2CurrentTx(ctx, tx, stored, now, false); err != nil {
 		return err
 	}
 	if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {

@@ -400,6 +400,7 @@ func (s *Server) serveGuestOriginalAuthority(w http.ResponseWriter, r *http.Requ
 	}
 	ctx, cancel := context.WithDeadline(r.Context(), read.Deadline)
 	defer cancel()
+	client = client.WithNativeV1ReturnClock(original.Binding, original.Receipt.Enrollment, original.Request.Intent)
 	if read.Challenge != nil {
 		body, err := json.Marshal(model.CapacityGuestRuntimeSnapshotRequest{Challenge: *read.Challenge})
 		if err != nil {

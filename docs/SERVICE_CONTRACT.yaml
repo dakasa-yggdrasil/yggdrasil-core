@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "b7b62fd667369717e0779710b11438f2d190c6701b39e1f9eac4f201bf7a941b"
+      "sha256": "3edac12ffcb45e45bd3e919c0d28763ed77f4e1943565ffda596ae3f827f8c88"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "0aa19f9d12b3849d4669e302e518b68f6e70747ecdfe74750f28d9a6d01f4486"
+      "sha256": "3e800a737e4262f5ebf450cc6dfe7bad843880e52558cb536b70e6339f66a605"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "0aa19f9d12b3849d4669e302e518b68f6e70747ecdfe74750f28d9a6d01f4486"
+      "sha256": "3e800a737e4262f5ebf450cc6dfe7bad843880e52558cb536b70e6339f66a605"
     },
     {
       "evidence": "go.mod",
@@ -96,6 +96,11 @@
       "evidence": "docs/service-contract/SUPERSEDED_HTTP_MAINTENANCE_SOURCE_REVIEW.json",
       "id": "superseded_equivalent_policy_http_maintenance_source_review",
       "sha256": "fb962c543629bcf999c33c0b2080730ef11329e2de0fb033987cf207788317aa"
+    },
+    {
+      "evidence": "docs/service-contract/WITNESSED_UNENROLLED_EXPANSION_SOURCE_REVIEW.json",
+      "id": "witnessed_unenrolled_expansion_cleanup_source_review",
+      "sha256": "0f163a0be1de08dd8112abaacc634d0f5e4c94458269f37328da24a808e45bf1"
     }
   ],
   "coverage": "complete",
@@ -103,24 +108,24 @@
     {
       "evidence": "docs/service-contract/source/http-routes.json",
       "id": "http_mux_registrations",
-      "sha256": "47b09570f1aba9f4f873e8522ea23c61d434916bbed3043fb2fc2ed405a4107a"
+      "sha256": "a91d85677da939fb159e06fca54235c776a2a593ddc1fc2ff2f960d24ae48d6c"
     },
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "37993f131ec0f198503900b566447600132de1f2526e1459601d14310557a54d"
+      "sha256": "24a5d91cfc64bd850bc22002fe43193e20f2d2e178f4816396192e46d04bb892"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "14de51370264471f326ca979eccabd346046b3b453f43a1d40655cef0b781f55"
+      "sha256": "03becc15b446f4c4c61d8aad472d3141b58dde52836f69dea51c66a55a62a76b"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "7771ce4f202f3bab7d50b774eaec1952f2167e37f4cd881795d417976e7c12b7"
+      "sha256": "dbe549ad10505965f110c6af4d68afd4b7bc049878a53097331be1201bc9e0ca"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -144,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "810f106ee131d6d5c1e9195c961c90937d9444b5a1276c42060169ab97807142"
+    "sha256": "d12021185db1f1f4003177e0f17d09f923886ac81681cc8a22a633ee3280ab25"
   },
   "unresolved": []
 }

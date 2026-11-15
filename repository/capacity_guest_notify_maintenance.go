@@ -83,6 +83,11 @@ func (s CapacityStore) guestNotifyMaintenanceTransaction(ctx context.Context, po
 	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
 		return err
 	}
+	if p.GuestContractSuccessor != nil {
+		if err = guestContractLockBindingsTx(ctx, tx, policy, p); err != nil {
+			return err
+		}
+	}
 	if reconcile {
 		if err = s.guestReconcileSourceTx(ctx, tx, policy, p); err != nil {
 			return err

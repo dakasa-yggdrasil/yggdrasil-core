@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"reflect"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -30,6 +31,12 @@ type guestPolicyContinuityQueryer interface {
 // that run this outside their locking transaction still recheck the current
 // policy's activeness under their own lock.
 func guestPolicyContinuityTx(ctx context.Context, q guestPolicyContinuityQueryer, policy model.Manifest, p model.CapacityPolicySpec, priorID, priorChecksum string) error {
+	if p.GuestContractSuccessor != nil {
+		if _, err := guestContractSetTx(ctx, q, policy, p); err != nil {
+			return err
+		}
+		return guestContractLineageTx(ctx, q, policy, p, priorID, priorChecksum)
+	}
 	if priorID == policy.ID.String() && priorChecksum == policy.Checksum {
 		return nil
 	}
@@ -59,6 +66,9 @@ func guestPolicyContinuityTx(ctx context.Context, q guestPolicyContinuityQueryer
 // must carry the same Guest contract as p. It never accepts a newer prior, another
 // policy name or a changed contract.
 func guestPolicyLineageContinuousTx(ctx context.Context, q guestPolicyContinuityQueryer, policy model.Manifest, p model.CapacityPolicySpec, currentVersion int, prior uuid.UUID, priorChecksum string) error {
+	if p.GuestContractSuccessor != nil {
+		return guestContractLineageTx(ctx, q, policy, p, prior.String(), priorChecksum)
+	}
 	if prior == uuid.Nil || prior == policy.ID || !capacity.ValidDigest(priorChecksum) || !capacity.ValidDigest(capacity.GuestPolicyContinuitySHA256(p)) {
 		return ErrCapacityConflict
 	}
@@ -166,6 +176,26 @@ func guestIssuePolicyContinuityTx(ctx context.Context, q guestPolicyContinuityQu
 	}
 	if err = guestPolicyLineageContinuousTx(ctx, q, issue, p, version, prior, pre.PolicyChecksum); err != nil {
 		return p, err
+	}
+	if p.GuestContractSuccessor != nil {
+		var wire []byte
+		if err = q.QueryRowContext(ctx, `SELECT binding_wire FROM public.capacity_vm_provisioning_preregistrations WHERE id=$1`, pre.PreregistrationID).Scan(&wire); err != nil {
+			return p, err
+		}
+		var binding model.CapacityGuestRetirementBinding
+		if json.Unmarshal(wire, &binding) != nil {
+			return p, ErrCapacityConflict
+		}
+		cs, e := guestContractSetAtPolicyTx(ctx, q, issue, p, false)
+		if e != nil {
+			return p, e
+		}
+		for _, c := range cs {
+			if c.spec.GuestRetirementBinding != nil && reflect.DeepEqual(*c.spec.GuestRetirementBinding, binding) {
+				return c.spec, nil
+			}
+		}
+		return p, ErrCapacityConflict
 	}
 	return p, nil
 }

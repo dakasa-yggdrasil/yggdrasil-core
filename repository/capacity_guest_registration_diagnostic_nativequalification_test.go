@@ -12,7 +12,7 @@ import (
 )
 
 func TestGuestRegistrationDiagnosticClosed(t *testing.T) {
-	for _, stage := range []string{"principal", "current", "witness_load", "production_clock", "keys", "witness_validation", "registration_validation", "enrollment_validation"} {
+	for _, stage := range []string{"principal", "current", "witness_load", "production_clock", "keys", "witness_validation", "registration_validation", "enrollment_validation", "enrollment_insert", "authority_issue"} {
 		err := guestRegistrationFailure(stage, ErrCapacityConflict)
 		if !errors.Is(err, ErrCapacityConflict) || GuestRegistrationDiagnostic(err) != stage || strings.Contains(err.Error(), stage) {
 			t.Fatal("diagnostic changed or exposed source guard", stage)

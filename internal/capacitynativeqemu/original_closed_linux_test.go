@@ -4,12 +4,15 @@ package capacitynativeqemu
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
 // Structural parser inputs only: no process, QMP socket, provider call, source
@@ -111,6 +114,7 @@ func TestOriginalNativeQEMUClosedSourceBytes(t *testing.T) {
 			}
 		})
 	}
+	originalFailureClockAuthenticationContracts(t)
 }
 
 func TestOriginalNativeQEMUMetadataDecoderSeparate(t *testing.T) {
@@ -139,4 +143,94 @@ func TestOriginalNativeQEMUMetadataDecoderSeparate(t *testing.T) {
 			t.Fatal("QMP metadata supplied privileged original create fields")
 		}
 	})
+}
+
+// Pure signed records inside the existing structural Source root; no Native
+// effect, database, HTTP call or new census name is created by these vectors.
+func originalFailureClockAuthenticationContracts(t *testing.T) {
+	at := time.Now().UTC().Add(50 * time.Millisecond)
+	deadline := at.Add(-time.Millisecond)
+	guest := strings.Repeat("a", 40)
+	core := strings.Repeat("b", 40)
+	digest := strings.Repeat("c", 64)
+	pre := model.CapacityGuestOriginalProvisioningPreregistration{PreregistrationID: "10000000-0000-0000-0000-000000000001", Slot: 2, OriginalDeadline: deadline}
+	witness := model.CapacityGuestOriginalCreateWitness{PreregistrationID: pre.PreregistrationID, ObservedAt: deadline.Add(-3 * time.Second), CoreSourceCommit: core, Tuple: model.CapacityGuestNativeTuple{Provider: "native-qemu", Slot: 2, ResourceID: "20000000-0000-0000-0000-000000000002"}}
+	validation := &Realm{Request: SourceRequest{NativeCase: "held_hello_original_deadline", SourceCommit: guest, OriginalContextDeadline: at.Add(time.Second)}, Profile: model.CapacityGuestProtectedProfileManifest{OwnerBinarySHA256: digest}}
+	key := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{'f'}, ed25519.SeedSize))
+	public := base64.StdEncoding.EncodeToString(key.Public().(ed25519.PublicKey))
+	returned := deadline.Add(100 * time.Microsecond)
+	fact := QualificationFailedOwnerReturn{OriginalReturnedAt: returned, OriginalBodySHA256: capacity.BusinessCreationSHA256(nil), ErrorClass: "original_owner_error"}
+	journalStart := returned.Add(100 * time.Microsecond)
+	exit := -9
+	record := QualificationFailureRecord{Schema: "original_qualification_failed_owner_returns_v1", NativeCase: validation.Request.NativeCase, SourceCommit: guest, Scope: "failed_original_owners_diagnostic_not_capacity_admission_or_quiescence", Phase: "original_preownership_failure", Tuple: witness.Tuple, PreregistrationID: pre.PreregistrationID, OriginalCreateWitnessSHA256: capacity.GuestRetirementSHA(witness), OriginalProvisioningDeadline: deadline, OriginalOperationDeadline: deadline, Runtime: model.CapacityGuestRetirementLifetime{PID: 2, StartTicks: 1, SourceCommit: guest, BinarySHA256: digest}, OriginalChild: model.CapacityGuestRetirementNativeProcess{PID: 3, StartTicks: 2}, OriginalStartCalledAt: deadline.Add(-2 * time.Second), OriginalStartReturnedAt: deadline.Add(-time.Second), OriginalWait: fact, OriginalExitCode: &exit, OriginalOutputEOFAndClose: fact, OriginalDiagnosticEOFAndClose: fact, NativeCensusErrorClass: "original_census_error", RecordedAt: at, ProducerPublicKey: public, ProvisioningJournal: &QualificationProvisioningJournalRead{LastSequence: 1, LastState: "possible_profile_start", LastRecordSHA256: digest, OriginalReadStartedAt: journalStart, OriginalReadReturnedAt: journalStart.Add(100 * time.Microsecond), OriginalCloseReturnedAt: journalStart.Add(200 * time.Microsecond), Records: []QualificationProvisioningRecordRead{{Sequence: 1, OriginalRecordSHA256: digest, OriginalReadReturnedAt: journalStart.Add(50 * time.Microsecond), OriginalCloseReturnedAt: journalStart.Add(75 * time.Microsecond)}}}}
+	sign := func(v *QualificationFailureRecord) []byte {
+		v.Signature = ""
+		signature, err := capacity.GuestLifecycleSignature(key, *v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v.Signature = signature
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	wire := sign(&record)
+	if validation.ValidateOriginalFailure(record, pre, witness, public, record.RecordedAt) != nil {
+		t.Fatal("declared complete signed negative record invalid")
+	}
+	if validation.ValidateOriginalFailure(record, pre, witness, public, record.RecordedAt.Add(-time.Nanosecond)) == nil {
+		t.Fatal("downstream future-time guard weakened")
+	}
+	auth := originalFailureClockTarget(validation, pre, witness, public)
+	if target, ok := auth([]byte("{}"), wire); !ok || target != record.RecordedAt {
+		t.Fatal("fully signed failure target refused")
+	}
+	for _, raw := range [][]byte{[]byte(`{"unknown":true}`), append(append([]byte{}, wire...), ' '), append(append([]byte{}, wire...), []byte("{}")...)} {
+		if _, ok := auth([]byte("{}"), raw); ok {
+			t.Fatal("malformed/noncanonical response acquired wait")
+		}
+	}
+	for _, request := range [][]byte{nil, []byte(" {}"), []byte(`{"schema":"canonical_postloss_fresh_failure_request_v1"}`), []byte(`{"schema":"canonical_recovery_fresh_failure_request_v1"}`)} {
+		if _, ok := auth(request, wire); ok {
+			t.Fatal("foreign/fresh request acquired original report wait")
+		}
+	}
+	for _, mutate := range []func(*QualificationFailureRecord){
+		func(v *QualificationFailureRecord) { v.NativeCase = "foreign" }, func(v *QualificationFailureRecord) { v.SourceCommit = core }, func(v *QualificationFailureRecord) { v.Tuple.ResourceID = "foreign" }, func(v *QualificationFailureRecord) { v.PreregistrationID = "foreign" }, func(v *QualificationFailureRecord) { v.OriginalCreateWitnessSHA256 = digest }, func(v *QualificationFailureRecord) { v.Runtime.PID = 1 }, func(v *QualificationFailureRecord) { v.Runtime.BinarySHA256 = strings.Repeat("d", 64) }, func(v *QualificationFailureRecord) { v.OriginalProvisioningDeadline = at }, func(v *QualificationFailureRecord) { v.OriginalWait.OriginalReturnedAt = at.Add(time.Second) }, func(v *QualificationFailureRecord) { v.RecordedAt = time.Time{} }, func(v *QualificationFailureRecord) { v.ProducerPublicKey = "foreign" },
+	} {
+		var changed QualificationFailureRecord
+		if capacity.DecodeGuestLifecycle(wire, &changed) != nil {
+			t.Fatal("fixture decode")
+		}
+		mutate(&changed)
+		bad := sign(&changed)
+		if _, ok := auth([]byte("{}"), bad); ok {
+			t.Fatal("foreign signed identity/lifetime/chronology acquired wait")
+		}
+	}
+	unsigned := record
+	unsigned.Signature = ""
+	bad, _ := json.Marshal(unsigned)
+	if _, ok := auth([]byte("{}"), bad); ok {
+		t.Fatal("unsigned report acquired wait")
+	}
+	foreignPre := pre
+	foreignPre.PreregistrationID = "foreign"
+	if _, ok := originalFailureClockTarget(validation, foreignPre, witness, public)([]byte("{}"), wire); ok {
+		t.Fatal("foreign sealed pre acquired wait")
+	}
+	foreignWitness := witness
+	foreignWitness.PreregistrationNonceSHA256 = digest
+	if _, ok := originalFailureClockTarget(validation, pre, foreignWitness, public)([]byte("{}"), wire); ok {
+		t.Fatal("foreign sealed nonce/witness acquired wait")
+	}
+	if _, ok := originalFailureClockTarget(validation, pre, witness, "foreign")([]byte("{}"), wire); ok {
+		t.Fatal("foreign trusted producer key acquired wait")
+	}
+	after, _ := json.Marshal(record)
+	if !bytes.Equal(after, wire) {
+		t.Fatal("immutable signed failure changed")
+	}
 }

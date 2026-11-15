@@ -3,7 +3,9 @@
 package capacitynativeqemu
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"time"
@@ -136,4 +138,54 @@ func (r *Realm) FreshOriginalNative(ctx context.Context, slot int) (IndependentR
 	read, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return Observe(read, SlotDirectory(r.PrivateDirectory, slot), native.Original, r.QEMUBinarySHA256)
+}
+
+// Bind only immutable originals already retained by the successful Source hook.
+// Missing/foreign scope grants no wait and leaves the original client unchanged.
+func (r *Realm) BindOriginalFailureReturnClock(client *capacity.GuestOriginalHTTPClient, binding model.CapacityGuestRetirementBinding, slot int) *capacity.GuestOriginalHTTPClient {
+	if r == nil || client == nil || !capacity.GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
+		return client
+	}
+	r.mu.Lock()
+	pre, found := r.preregistrations[slot]
+	sealed := append([]byte(nil), r.witnesses[slot]...)
+	request, profile := r.Request, r.Profile
+	r.mu.Unlock()
+	var witness model.CapacityGuestOriginalCreateWitness
+	if !found || slot < 1 || slot > 2 || pre.Slot != slot || len(request.Slots) != 2 || capacity.DecodeGuestLifecycle(sealed, &witness) != nil || binding.GuestSourceCommit != request.SourceCommit || binding.ProvisionerSourceCommit != request.SourceCommit || profile.OwnerSourceCommit != request.SourceCommit || binding.ProfileManifestSHA256 != capacity.GuestRetirementSHA(profile) || pre.ProfileManifestSHA256 != binding.ProfileManifestSHA256 || binding.CoreAuthoritySourceCommit != pre.CoreSourceCommit || witness.CoreSourceCommit != pre.CoreSourceCommit || witness.PreregistrationID != pre.PreregistrationID || witness.PreregistrationNonceSHA256 != pre.NonceSHA256 || !capacity.ValidDigest(pre.NonceSHA256) || witness.Tuple.Slot != slot || witness.Tuple.Provider != "native-qemu" || witness.Tuple.ResourceID != request.Slots[slot-1].ResourceID || witness.OriginalCreateGrantID != pre.OriginalCreateGrantID || witness.OriginalCreateRequestSHA256 != pre.OriginalCreateRequestSHA256 || !witness.OriginalDeadline.Equal(pre.OriginalDeadline) || witness.ProfileManifestSHA256 != binding.ProfileManifestSHA256 {
+		return client
+	}
+	member := model.CapacityGuestRetirementMemberBinding{}
+	matches := 0
+	for _, candidate := range binding.Members {
+		if candidate.Slot == slot && candidate.Name == pre.BindingName && candidate.Name == witness.BindingName {
+			member = candidate
+			matches++
+		}
+	}
+	if matches != 1 {
+		return client
+	}
+	// This detached validation view contains no store, mutex or mutable maps.
+	validation := &Realm{Request: request, Profile: profile}
+	return client.WithNativeV1FailureReturnClock(binding, member, originalFailureClockTarget(validation, pre, witness, binding.ProvisionerPublicKey))
+}
+
+func originalFailureClockTarget(validation *Realm, pre model.CapacityGuestOriginalProvisioningPreregistration, witness model.CapacityGuestOriginalCreateWitness, key string) func([]byte, []byte) (time.Time, bool) {
+	return func(request, response []byte) (time.Time, bool) {
+		// The fresh postloss/recovery schemas are distinct reads and keep their
+		// existing freshness policy. Only the original exact {} report is bound.
+		if validation == nil || !bytes.Equal(request, []byte("{}")) {
+			return time.Time{}, false
+		}
+		var record QualificationFailureRecord
+		if capacity.DecodeGuestLifecycle(response, &record) != nil || record.RecordedAt.IsZero() {
+			return time.Time{}, false
+		}
+		canonical, err := json.Marshal(record)
+		if err != nil || !bytes.Equal(canonical, response) || validation.ValidateOriginalFailure(record, pre, witness, key, record.RecordedAt) != nil {
+			return time.Time{}, false
+		}
+		return record.RecordedAt, true
+	}
 }

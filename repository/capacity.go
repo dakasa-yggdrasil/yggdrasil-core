@@ -23,26 +23,28 @@ const maxCapacityGeneration int64 = 9007199254740991
 // CapacityStore serializes each logical dimension in PostgreSQL. The process
 // gate is explicit and defaults to false in the workflow handler.
 type CapacityStore struct {
-	OriginalRunID                    uuid.UUID // Private actual dispatch run, never a wire-supplied recovery selector.
-	ExecutorPowerEnabled             bool
-	ExecutorPowerOperator            string
-	ExecutorPowerObserver            executorpower.Observer
-	DB                               *sql.DB
-	ExecutionEnabled                 bool
-	AdmissionOnly                    bool
-	WorkflowID                       uuid.UUID
-	ExecutorID                       string
-	ExecutorActivityPrincipal        string
-	guestOriginal                    *guestOriginalProvisioningContext
-	guestRetirementOrigin            *guestOriginalProvisioningContext
-	guestNotifyOrigin                *guestOriginalProvisioningContext
-	hostOriginalClaim                *hostOriginalClaim
-	hostOriginalFactory              *hostOriginalFactoryScope
-	hostOriginalOrdinary             *hostOriginalOrdinaryFactory
-	guestReconcile                   *guestReconcileSource
-	failedExpansionOwner             *failedExpansionOwner
-	failedExpansionTerminalReconcile *model.CapacityFailedExpansionTerminalReconcile
-	installedReadinessHandoff        *model.CapacityInstalledReadinessHandoff
+	OriginalRunID                       uuid.UUID // Private actual dispatch run, never a wire-supplied recovery selector.
+	ExecutorPowerEnabled                bool
+	ExecutorPowerOperator               string
+	ExecutorPowerObserver               executorpower.Observer
+	DB                                  *sql.DB
+	ExecutionEnabled                    bool
+	AdmissionOnly                       bool
+	WorkflowID                          uuid.UUID
+	ExecutorID                          string
+	ExecutorActivityPrincipal           string
+	guestOriginal                       *guestOriginalProvisioningContext
+	guestRetirementOrigin               *guestOriginalProvisioningContext
+	guestNotifyOrigin                   *guestOriginalProvisioningContext
+	hostOriginalClaim                   *hostOriginalClaim
+	hostOriginalFactory                 *hostOriginalFactoryScope
+	hostOriginalOrdinary                *hostOriginalOrdinaryFactory
+	guestReconcile                      *guestReconcileSource
+	witnessedExpansionOwner             *witnessedExpansionOwner
+	witnessedExpansionTerminalReconcile *model.CapacityWitnessedExpansionTerminalReconcile
+	failedExpansionOwner                *failedExpansionOwner
+	failedExpansionTerminalReconcile    *model.CapacityFailedExpansionTerminalReconcile
+	installedReadinessHandoff           *model.CapacityInstalledReadinessHandoff
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation
@@ -50,6 +52,9 @@ type CapacityStore struct {
 func (s CapacityStore) Assess(ctx context.Context, policy model.Manifest, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
 	intent, err := s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
 		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" {
+			return *old, "", nil
+		}
+		if old != nil && old.WitnessedUnenrolledExpansionCleanupID != "" {
 			return *old, "", nil
 		}
 		if old != nil && pendingCapacityPhase(old.Phase) && old.Phase != "proposed" {
@@ -167,6 +172,9 @@ func (s CapacityStore) Renew(ctx context.Context, policy model.Manifest, generat
 		if err := s.checkLease(p, policy, old, generation, fence, owner, now); err != nil {
 			return model.CapacityIntent{}, "", err
 		}
+		if old.WitnessedUnenrolledExpansionCleanupID != "" || old.WitnessedExpansionTerminalReconcile != nil {
+			return model.CapacityIntent{}, "", ErrCapacityConflict
+		}
 		if old.FailedUnwitnessedExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil || old.InstalledReadinessHandoff != nil {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
@@ -218,6 +226,12 @@ func (s CapacityStore) Advance(ctx context.Context, policy model.Manifest, gener
 }
 
 func (s CapacityStore) checkLease(p model.CapacityPolicySpec, policy model.Manifest, old *model.CapacityIntent, generation, fence int64, owner string, now time.Time) error {
+	if old != nil && old.WitnessedUnenrolledExpansionCleanupID != "" && s.witnessedExpansionOwner == nil {
+		return ErrCapacityConflict
+	}
+	if old != nil && old.WitnessedExpansionTerminalReconcile != nil && (s.witnessedExpansionTerminalReconcile == nil || *old.WitnessedExpansionTerminalReconcile != *s.witnessedExpansionTerminalReconcile || old.WitnessedExpansionTerminalReconcile.RunID != s.OriginalRunID.String() || old.WitnessedExpansionTerminalReconcile.ExecutorID != s.ExecutorID) {
+		return ErrCapacityConflict
+	}
 	if old != nil && old.InstalledReadinessHandoff != nil && (s.installedReadinessHandoff == nil || *old.InstalledReadinessHandoff != *s.installedReadinessHandoff || old.InstalledReadinessHandoff.RunID != s.OriginalRunID.String() || old.InstalledReadinessHandoff.ExecutorID != s.ExecutorID || old.InstalledReadinessHandoff.CoreSource != capacity.CurrentGuestCoreSource()) {
 		return ErrCapacityConflict
 	}
@@ -260,6 +274,9 @@ func (s CapacityStore) Observe(ctx context.Context, policy model.Manifest) (mode
 func (s CapacityStore) Recover(ctx context.Context, policy model.Manifest, generation int64, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
 	return s.recoveryTransaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
 		if old != nil && old.InstalledReadinessHandoff != nil {
+			return model.CapacityIntent{}, "", ErrCapacityConflict
+		}
+		if old != nil && (old.WitnessedUnenrolledExpansionCleanupID != "" || old.WitnessedExpansionTerminalReconcile != nil) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
 		if old != nil && (old.FailedUnwitnessedExpansionCleanupID != "" || old.FailedExpansionTerminalReconcile != nil) {
@@ -454,7 +471,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(key)); err != nil {
 		return model.CapacityIntent{}, err
 	}
-	if err = lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings); err != nil {
+	if err = guestContractLockBindingsTx(ctx, tx, policy, p); err != nil {
 		return model.CapacityIntent{}, err
 	}
 	var checksum string
@@ -649,6 +666,9 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 	var p model.CapacityPolicySpec
 	if policy.Kind != "capacity_policy" || policy.ID == uuid.Nil || policy.Checksum == "" || policy.Metadata.Namespace == "" || policy.Metadata.Name == "" {
 		return p, fmt.Errorf("capacity requires a stored policy identity")
+	}
+	if err := capacity.ValidateGuestContractSuccessorJSON(policy.Spec); err != nil {
+		return p, err
 	}
 	if err := json.Unmarshal(policy.Spec, &p); err != nil {
 		return p, err

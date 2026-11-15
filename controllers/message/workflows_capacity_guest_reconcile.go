@@ -77,7 +77,11 @@ func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, 
 	if p.GuestNotifyReconcileBinding == nil || capacity.ValidateGuestNotifyReconcileBinding(p) != nil {
 		return inv, assessment, reporting, errOriginalGuestStep
 	}
-	read := func(binding model.CapacityObservationAdapterBinding, operation string, input map[string]any, out any) error {
+	return collectOriginalGuestAssessmentFromReads(ctx, policy, p, originalGuestAssessmentReader(ctx, conn, db))
+}
+
+func originalGuestAssessmentReader(ctx context.Context, conn *amqp.Connection, db *sql.DB) originalGuestBoundRead {
+	return func(binding model.CapacityObservationAdapterBinding, operation string, input map[string]any, out any) error {
 		if originalGuestReconcileLive(ctx) != nil {
 			return errOriginalGuestStep
 		}
@@ -98,10 +102,59 @@ func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, 
 		}
 		return capacity.DecodeVMObservation(returned.Output, out)
 	}
-	return collectOriginalGuestAssessmentFromReads(ctx, policy, p, read)
 }
 
 type originalGuestBoundRead func(model.CapacityObservationAdapterBinding, string, map[string]any, any) error
+
+// Each authorized immutable contract supplies its own actual native inventory.
+// The demand and coverage bindings stay those of the current policy; membership
+// coverage must account for the complete logical union, including retained S1.
+func collectOriginalGuestContractAssessmentFromReads(ctx context.Context, policy model.Manifest, p model.CapacityPolicySpec, contracts []model.CapacityPolicySpec, read originalGuestBoundRead) ([]capacity.GuestContractInventory, []int, model.CapacityAssessment, model.CapacityMetricRangeObservation, error) {
+	var inventories []capacity.GuestContractInventory
+	var missing []int
+	var assessment model.CapacityAssessment
+	var reporting model.CapacityMetricRangeObservation
+	if p.GuestContractSuccessor == nil || capacity.ValidateGuestNotifyReconcileBinding(p) != nil || read == nil || len(contracts) < 2 || len(contracts) > p.Ceiling+1 {
+		return inventories, missing, assessment, reporting, errOriginalGuestStep
+	}
+	for _, view := range contracts {
+		if capacity.ValidateGuestNotifyReconcileBinding(view) != nil || view.GuestRetirementBinding == nil || originalGuestReconcileLive(ctx) != nil {
+			return inventories, missing, assessment, reporting, errOriginalGuestStep
+		}
+		b := view.MutationBindings[0]
+		hash := capacity.GuestProductionProfileContractSHA256(view, *view.GuestRetirementBinding, view.Profiles[0].Provider)
+		if !capacity.ValidDigest(hash) {
+			return inventories, missing, assessment, reporting, errOriginalGuestStep
+		}
+		var inv model.CapacityVMFleetInventory
+		revision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
+		if err := read(revision, capacity.VMObserveInventory, map[string]any{"profile": b.ProfileName}, &inv); err != nil {
+			return inventories, missing, assessment, reporting, err
+		}
+		inventories = append(inventories, capacity.GuestContractInventory{ContractSHA256: hash, Inventory: inv})
+	}
+	var err error
+	assessment.Snapshot, missing, err = capacity.GuestContractReconcileSnapshot(policy, p, contracts, inventories, time.Now().UTC())
+	if err != nil || originalGuestReconcileLive(ctx) != nil {
+		return inventories, missing, assessment, reporting, errOriginalGuestStep
+	}
+	assessment.Evidence, err = collectOriginalGuestDemand(p, assessment.Snapshot, func(binding model.CapacityMetricSignalBinding) (model.CapacityMetricRangeObservation, error) {
+		var raw model.CapacityMetricRangeObservation
+		err := read(binding.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": binding.BindingName}, &raw)
+		return raw, err
+	})
+	if err != nil {
+		return inventories, missing, assessment, reporting, err
+	}
+	coverage := *p.GuestNotifyReconcileBinding.MemberCoverage
+	if err = read(coverage.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": coverage.BindingName}, &reporting); err != nil {
+		return inventories, missing, assessment, reporting, err
+	}
+	if err = capacity.GuestReconcileMemberCoverage(p, reporting, assessment.Snapshot.Units, time.Now().UTC()); err != nil {
+		return inventories, missing, assessment, reporting, err
+	}
+	return inventories, missing, assessment, reporting, nil
+}
 
 // The live caller above resolves and authenticates each adapter. Keeping the
 // ordered reads together also allows qualification of the full decision path.
@@ -168,16 +221,21 @@ func collectOriginalGuestDemand(p model.CapacityPolicySpec, snapshot model.Capac
 }
 
 func originalGuestNextSlot(p model.CapacityPolicySpec, inv model.CapacityVMFleetInventory, members []repository.GuestNotifyFloorMember, decision model.CapacityDecision) (string, int, string, error) {
+	return originalGuestNextMissingSlot(p, inv.MissingSlots, members, decision)
+}
+
+// Missing slots here are an internal logical partition, never a provider return.
+func originalGuestNextMissingSlot(p model.CapacityPolicySpec, missing []int, members []repository.GuestNotifyFloorMember, decision model.CapacityDecision) (string, int, string, error) {
 	if decision.Profile != p.Profiles[0].Name {
 		return "", 0, "", errOriginalGuestStep
 	}
 	switch decision.Action {
 	case "expand", "prepare":
-		if decision.Units != len(members)+1 || len(inv.MissingSlots) == 0 {
+		if decision.Units != len(members)+1 || len(missing) == 0 {
 			return "", 0, "", errOriginalGuestStep
 		}
-		slot := inv.MissingSlots[0]
-		for _, candidate := range inv.MissingSlots {
+		slot := missing[0]
+		for _, candidate := range missing {
 			if candidate < slot {
 				slot = candidate
 			}
@@ -308,6 +366,29 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		var handled bool
 		var cleanupErr error
 		if step.Use.Operation == capacity.PlanOriginalGuestOperation {
+			cleanup, handled, cleanupErr = planWitnessedExpansionCleanup(ctx, store, policy, wf, step)
+		} else {
+			cleanup, handled, cleanupErr = completeWitnessedExpansionCleanup(ctx, store, policy, wf, p, step, parsed)
+		}
+		if cleanupErr != nil {
+			return fail(cleanupErr)
+		}
+		if handled {
+			raw, e := json.Marshal(cleanup)
+			if e != nil || json.Unmarshal(raw, &result.Metadata) != nil {
+				return fail(errOriginalGuestStep)
+			}
+			result.Status = "succeeded"
+			result.Error = ""
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+	}
+	if step.Use.Operation == capacity.PlanOriginalGuestOperation || step.Use.Operation == capacity.CompleteOriginalGuestOperation && parsed.Mode == "retire" {
+		var cleanup any
+		var handled bool
+		var cleanupErr error
+		if step.Use.Operation == capacity.PlanOriginalGuestOperation {
 			cleanup, handled, cleanupErr = planFailedExpansionCleanup(ctx, store, policy, wf, step)
 		} else {
 			cleanup, handled, cleanupErr = completeFailedExpansionCleanup(ctx, store, policy, wf, p, step, parsed)
@@ -343,12 +424,29 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		}
 	}
 	var inv model.CapacityVMFleetInventory
+	var inventories []capacity.GuestContractInventory
+	var missingSlots []int
 	var assessment model.CapacityAssessment
 	var reporting model.CapacityMetricRangeObservation
 	collect := func(readCtx context.Context) error {
 		var e error
-		inv, assessment, reporting, e = collectOriginalGuestAssessment(readCtx, conn, db, policy, p)
+		if p.GuestContractSuccessor == nil {
+			inv, assessment, reporting, e = collectOriginalGuestAssessment(readCtx, conn, db, policy, p)
+			missingSlots = inv.MissingSlots
+			return e
+		}
+		contracts, e := store.OriginalGuestContractSpecs(readCtx, policy)
+		if e != nil {
+			return e
+		}
+		inventories, missingSlots, assessment, reporting, e = collectOriginalGuestContractAssessmentFromReads(readCtx, policy, p, contracts, originalGuestAssessmentReader(readCtx, conn, db))
 		return e
+	}
+	bindReconcile := func(mode, requestID string) repository.CapacityStore {
+		if p.GuestContractSuccessor != nil {
+			return store.WithOriginalGuestContractReconcile(wf, step, capacity.CurrentGuestCoreSource(), mode, requestID, inventories, reporting)
+		}
+		return store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), mode, requestID, inv, reporting)
 	}
 	stage = "source_assessment"
 	if step.Use.Operation == capacity.CompleteOriginalGuestOperation && parsed.Mode != "refresh" {
@@ -364,8 +462,8 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	// every other operation keeps the strict gate. A gate that cannot answer
 	// fails this stage with its own cause instead of hiding behind coverage.
 	var coverageErr error
-	if err != nil && originalGuestPlanCoverageMayDefer(step.Use.Operation, err) {
-		requested, requestedErr := store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv, reporting).FailedInstalledGuestDisposalRequested(ctx, policy)
+	if err != nil && p.GuestContractSuccessor == nil && originalGuestPlanCoverageMayDefer(step.Use.Operation, err) {
+		requested, requestedErr := bindReconcile(parsed.Mode, parsed.RequestID).FailedInstalledGuestDisposalRequested(ctx, policy)
 		if requestedErr != nil {
 			return fail(errors.Join(err, requestedErr))
 		}
@@ -376,7 +474,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	if err != nil {
 		return fail(err)
 	}
-	store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv, reporting)
+	store = bindReconcile(parsed.Mode, parsed.RequestID)
 	stage = "native_installed_members"
 	members, pending, err := store.OriginalGuestReconcileMembers(ctx, policy)
 	if err != nil {
@@ -417,6 +515,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 				}
 			}
 			if !disposalEligible && !eligible {
+				store, resumed, eligible, resumeErr = store.TryClaimWitnessedExpansionTerminalReconcile(ctx, policy, assessment)
+				if resumeErr != nil {
+					return fail(resumeErr)
+				}
+			}
+			if !disposalEligible && !eligible {
 				store, resumed, eligible, resumeErr = store.TryClaimFailedExpansionTerminalReconcile(ctx, policy, assessment)
 				if resumeErr != nil {
 					return fail(resumeErr)
@@ -438,6 +542,9 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 				if resumed.InstalledReadinessHandoff != nil {
 					plan.Reason = "installed_readiness_exhausted_handoff"
 				}
+				if resumed.WitnessedExpansionTerminalReconcile != nil {
+					plan.Reason = "witnessed_expansion_terminal_readonly_reconcile"
+				}
 				if resumed.FailedExpansionTerminalReconcile != nil {
 					plan.Reason = "failed_expansion_terminal_readonly_reconcile"
 				}
@@ -451,16 +558,16 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 				plan.Generation, plan.FencingToken = intent.Generation, intent.FencingToken
 				plan.Reason = intent.Decision.Reason
 				if intent.Phase == "proposed" && intent.Decision.ExecutionPermitted {
-					mode, slot, preID, e := originalGuestNextSlot(p, inv, members, intent.Decision)
+					mode, slot, preID, e := originalGuestNextMissingSlot(p, missingSlots, members, intent.Decision)
 					if e != nil {
 						return fail(e)
 					}
 					// Actual source reread immediately before the existing Claim.
-					inv, assessment, reporting, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
+					e = collect(ctx)
 					if e != nil {
 						return fail(e)
 					}
-					store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), "", "", inv, reporting)
+					store = bindReconcile("", "")
 					fresh, unresolved, e := store.OriginalGuestReconcileMembers(ctx, policy)
 					if e != nil || unresolved || !reflect.DeepEqual(fresh, members) {
 						return fail(errOriginalGuestStep)
@@ -500,6 +607,12 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 				}
 			}
 			if !resuming {
+				store, epoch, resuming, err = store.OriginalGuestWitnessedExpansionTerminalReconcileEpoch(ctx, policy)
+				if err != nil {
+					return fail(err)
+				}
+			}
+			if !resuming {
 				store, epoch, resuming, err = store.OriginalGuestFailedExpansionTerminalReconcileEpoch(ctx, policy)
 				if err != nil {
 					return fail(err)
@@ -527,8 +640,19 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 						return fail(e)
 					}
 				}
+				memberSpec, memberKey := p, key
+				if p.GuestContractSuccessor != nil {
+					memberSpec, e = store.OriginalGuestMemberContract(ctx, policy, member.PreregistrationID, member.Slot)
+					if e != nil {
+						return fail(e)
+					}
+					memberKey, e = sourceGuestSigningKey(ctx, db, memberSpec.GuestRetirementBinding.IntentSigningKeyRef)
+					if e != nil {
+						return fail(e)
+					}
+				}
 				stage = "fresh_original_canary"
-				if _, e = executeOriginalGuestNotifyProbe(ctx, db, store, policy, p, probe, key); e != nil {
+				if _, e = executeOriginalGuestNotifyProbe(ctx, db, store, policy, memberSpec, probe, memberKey); e != nil {
 					return fail(e)
 				}
 			}
@@ -541,7 +665,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		} else {
 			// Refresh source observations after all actual original canaries.
 			stage = "post_canary_source_assessment"
-			inv, assessment, reporting, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
+			e = collect(ctx)
 			if e != nil {
 				return fail(e)
 			}
@@ -549,7 +673,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			if resuming {
 				effectiveMode = "provision"
 			}
-			store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), effectiveMode, parsed.RequestID, inv, reporting)
+			store = bindReconcile(effectiveMode, parsed.RequestID)
 			phases := []string{"prepared", "canary", "promoted"}
 			if parsed.Mode == "retire" {
 				// Finish already committed drained from the original V2/off

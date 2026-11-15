@@ -573,6 +573,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/data/{viewId}", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceData))
 	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceAction))
 	mux.HandleFunc("POST /api/v1/ops/capacity/original-create-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDisposition))
+	mux.HandleFunc("POST /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWitnessedUnenrolledExpansionCleanup))
+	mux.HandleFunc("GET /api/v1/ops/capacity/witnessed-unenrolled-expansion-cleanups/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWitnessedUnenrolledExpansionCleanupRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/failed-unwitnessed-expansion-cleanups", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedUnwitnessedExpansionCleanup))
 	mux.HandleFunc("GET /api/v1/ops/capacity/failed-unwitnessed-expansion-cleanups/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedUnwitnessedExpansionCleanupRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/native-denied-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDisposition))

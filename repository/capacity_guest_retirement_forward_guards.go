@@ -156,6 +156,9 @@ func (s CapacityStore) RefreshGuestRetirementForwardInventory(ctx context.Contex
 	if x.policy.ID != policy.ID || x.policy.Checksum != policy.Checksum || r.Generation != generation || r.Fence != fence || r.LeaseOwner != owner {
 		return ErrCapacityConflict
 	}
+	if x.spec.GuestContractSuccessor != nil {
+		return ErrCapacityConflict
+	}
 	proofs, err := capacity.VMInventoryProofs(x.spec, x.binding, inv, "", 0, x.now, "retirement-forward-inventory:"+r.ID)
 	if err != nil {
 		return err

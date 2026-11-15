@@ -17,8 +17,8 @@ func testGuestActualA900ProfileApprovals(t *testing.T) {
 		"aws":     {"8066c34878d2a476f926207e65c27cf3f5bc87743c8380549e360040b7499b48", "97beb27b884fcf3928f2da6f14d8840ba0fb6f460012fdb50b8ab02b01334df7"},
 		"hetzner": {"6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", "3fcb7fc4634fc5102d2172cc1d7f66bd92a61b9d544525a3438e8cdf914803f9"},
 	}
-	if len(guestD15ProtocolProfileApprovals) != 4 || guestProtocolCompatibilityMapSHA256(guestD15ProtocolProfileApprovals) != GuestD15ProtocolCompatibilityMapSHA256 || len(guestProductionProfileApprovals) != 6 || guestProtocolCompatibilityMapSHA256(guestD12ProtocolProfileApprovals) != GuestD12ProtocolCompatibilityMapSHA256 || GuestProtocolCompatibilityMapSHA256() == GuestD12ProtocolCompatibilityMapSHA256 || GuestProtocolCompatibilityMapSHA256() == GuestD15ProtocolCompatibilityMapSHA256 {
-		t.Fatal("historical two/four-map snapshot changed or current six-map absent")
+	if len(guestD15ProtocolProfileApprovals) != 4 || guestProtocolCompatibilityMapSHA256(guestD15ProtocolProfileApprovals) != GuestD15ProtocolCompatibilityMapSHA256 || len(guestProductionProfileApprovals) != 7 || guestProtocolCompatibilityMapSHA256(guestD12ProtocolProfileApprovals) != GuestD12ProtocolCompatibilityMapSHA256 || GuestProtocolCompatibilityMapSHA256() == GuestD12ProtocolCompatibilityMapSHA256 || GuestProtocolCompatibilityMapSHA256() == GuestD15ProtocolCompatibilityMapSHA256 {
+		t.Fatal("historical two/four-map snapshot changed or current seven-map absent")
 	}
 	for _, provider := range []string{"aws", "hetzner"} {
 		data, err := os.ReadFile("testdata/a900-notify-" + provider + "-production-contract.json")
