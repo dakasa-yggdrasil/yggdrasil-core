@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 3d5979f8745b4be45dce9ae6b2d85951d35c5f7a
-verified_diff_sha256: 606f694adb4351a8c9e8b11a0df060b5f480f630832e86e5646b61f26f252634
+verified_at_commit: 98cb85a1666cfb655a4935e2fb587e7f1923efe3
+verified_diff_sha256: 49475dcb76986b0f855cac145cd19e5da9ecd9079de9d5a9276d5eb344ffa15e
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -566,3 +566,5 @@ historical_successor_recovery_review: Reviewed the bounded propagation of histor
 historical_successor_source_census_companion_review: The first actual CI rejected two stale production-source hash/byte facts. Root authorized the unmodified deterministic metadata producer and one manual guarded inventory-SHA pin before this plan. All other ten census outputs, schema, bounds and runtime/regression bodies remain unchanged. Current Go PG root passed without skip on the first Source head; current successor CI remains required. No local Doctor or product test/build was run.
 
 canonical_guest_expired_presend_review: Root and two independent peers reviewed the same canonical-workflow recovery hook, strict original ownership and fresh no-effect guards. The source census and exact guarded inventory pin were manually reviewed before reconciliation; 26 new plain PostgreSQL cases preserve the existing owning root and prior 14 cases. No local functional execution or production effect occurred; fresh current CI remains required.
+
+default_build_guest_recovery_fixture_review: Root reviewed the exact local canonical public-digest label encoding and two fixture call replacements after genuine CI exposed a tagged-helper dependency. All runtime code, census, service contract, 26 scenarios and prior14 cases remain unchanged. Fresh current CI must compile and execute the owning PG root; no local functional or production credit is claimed.
