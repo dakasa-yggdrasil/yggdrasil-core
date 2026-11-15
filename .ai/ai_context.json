@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-14T11:38:09-03:00",
+  "generated_at": "2026-11-15T06:50:20-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1548,
-    ".json": 253,
+    ".go": 1568,
+    ".json": 255,
     ".py": 210,
-    ".sql": 108,
+    ".sql": 109,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "7baf987b36689c83ec6f47ffcbd63190787cebd7",
+    "commit": "3894198062c6dcf13615dc21b27d08ce0ead0d80",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "a1c533ea3c9dabb4058751e4d1a369368354a6a58241215ae5699f8caca245d6"
+        "sha256": "0d37dbf388ee05666033d3c14aba2fd456a8eecf0785b8c6bd7cd296fe974c5b"
       },
       {
         "path": "AGENTS.md",
@@ -65,33 +65,33 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 400,
-      "kb": 5704
+      "files": 408,
+      "kb": 5940
     },
     {
       "path": "controllers/httpapi",
-      "files": 262,
-      "kb": 2658
+      "files": 264,
+      "kb": 2670
     },
     {
       "path": "controllers/message",
-      "files": 202,
-      "kb": 1764
+      "files": 205,
+      "kb": 1793
     },
     {
       "path": "internal/capacity",
-      "files": 127,
-      "kb": 1393
+      "files": 132,
+      "kb": 1449
     },
     {
       "path": "db/migrations",
-      "files": 104,
-      "kb": 1345
+      "files": 105,
+      "kb": 1465
     },
     {
       "path": "model",
-      "files": 91,
-      "kb": 485
+      "files": 92,
+      "kb": 487
     },
     {
       "path": "ops/network-guardian/tests",
@@ -101,7 +101,7 @@
     {
       "path": "manifest",
       "files": 65,
-      "kb": 397
+      "kb": 398
     },
     {
       "path": "addons",
@@ -111,7 +111,7 @@
     {
       "path": "internal/capacitynativeqemu",
       "files": 47,
-      "kb": 298
+      "kb": 308
     },
     {
       "path": "ops/network-guardian/rollout",
@@ -120,8 +120,8 @@
     },
     {
       "path": "cmd/native-guest-lifecycle-fixture",
-      "files": 28,
-      "kb": 249
+      "files": 29,
+      "kb": 268
     }
   ],
   "top_files_by_size": [
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 104,
+    "migrations": 105,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {

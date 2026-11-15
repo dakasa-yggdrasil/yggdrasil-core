@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-14T11:38:09-03:00_
+_Generated from HEAD at: 2026-11-15T06:50:20-03:00_
 
 ## Languages
 
-- `.go`: 1548 files
-- `.json`: 253 files
+- `.go`: 1568 files
+- `.json`: 255 files
 - `.py`: 210 files
-- `.sql`: 108 files
+- `.sql`: 109 files
 - `.yaml`: 11 files
 - `.yml`: 37 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-11-14T11:38:09-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **104**  (db/migrations)
+- DB Migrations: **105**  (db/migrations)
 
 ## Docs
 
@@ -24,18 +24,18 @@ _Generated from HEAD at: 2026-11-14T11:38:09-03:00_
 
 ## Top Directories by File Count
 
-- repository: 400 files (5704.1 KB)
-- controllers/httpapi: 262 files (2658.1 KB)
-- controllers/message: 202 files (1764.6 KB)
-- internal/capacity: 127 files (1393.9 KB)
-- db/migrations: 104 files (1345.3 KB)
-- model: 91 files (485.6 KB)
+- repository: 408 files (5940.9 KB)
+- controllers/httpapi: 264 files (2670.7 KB)
+- controllers/message: 205 files (1793.4 KB)
+- internal/capacity: 132 files (1449.5 KB)
+- db/migrations: 105 files (1465.7 KB)
+- model: 92 files (487.6 KB)
 - ops/network-guardian/tests: 67 files (1351.2 KB)
-- manifest: 65 files (397.9 KB)
+- manifest: 65 files (398.1 KB)
 - addons: 51 files (307.6 KB)
-- internal/capacitynativeqemu: 47 files (298.1 KB)
+- internal/capacitynativeqemu: 47 files (308.6 KB)
 - ops/network-guardian/rollout: 33 files (2496.1 KB)
-- cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)
+- cmd/native-guest-lifecycle-fixture: 29 files (268.5 KB)
 
 ## Heaviest Files
 
