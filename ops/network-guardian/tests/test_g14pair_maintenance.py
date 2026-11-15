@@ -443,6 +443,155 @@ with tempfile.TemporaryDirectory(prefix='g14-default-read-') as name:
                         REPAIR.validate_repair_return(fakecut,Path('/declared/package'),{'source_commit':declared['OPS_SOURCE']},bad,Path('/declared/read-only'))
                     raw_refs.clear();raw_refs.update(saved)
 
+        declared_g27_guardian_repair_vectors(self)
+
+
+def declared_g27_guardian_repair_vectors(self):
+    """Declared CI only: authentic G15 failed prefix, G27 source-only repair."""
+    R27 = load(ROOT / 'rollout/g27_guardian_source_repair_once.py')
+    for call in (R27.main, lambda: R27.repair_once(None, None), lambda: R27.observe_guardian(None, None, None, None)):
+        with self.assertRaisesRegex(RuntimeError, 'INERT_G27'):
+            call()
+    # Declared CI only: one new semantic repair may submit exactly the two
+    # final commands; neither controller nor Cold/Hub has a callable action.
+    declared = dict(SOURCE_BOUND=True, OPS_SOURCE='c'*40, PACKAGE_SHA256='a'*64,
+                    GUARDIAN_SOURCE_SHA256='b'*64, CONFIG_SHA256='d'*64,
+                    TOOL_PINS={n:'e'*64 for n in ('pair_change_contract.py','derive_g15pair_controller_config.py','derive_standing_config.py','g15cut.py')})
+    self.assertEqual(R27.REPAIR_SEQUENCE, CUT.NATIVE_SEQUENCE[4:])
+    class RepairBackend:
+        def __init__(self, unknown=False, bad_constructor=False):
+            self.claimed=False; self.records={}; self.calls=[]; self.unknown=unknown; self.bad_constructor=bad_constructor
+        def preconditions(self): self.calls.append('preconditions')
+        def claim_once(self):
+            if self.claimed: raise FileExistsError('same semantic claim')
+            self.claimed=True; self.calls.append('claim')
+        def install_future_units(self): self.calls.append('Cold/Guardian-files-only')
+        def install_standing_once(self): self.calls.append('new-standing-only')
+        def failed_state(self, loaded_new=False): self.calls.append(('failed-state',loaded_new))
+        def record_once(self,name,value):
+            if name in self.records: raise FileExistsError(name)
+            self.records[name]=value
+        def native(self,argv,seconds):
+            self.calls.append(tuple(argv))
+            if self.unknown and argv==R27.REPAIR_SEQUENCE[1][1]: raise TimeoutError('declared lostACK')
+            return SimpleNamespace(returncode=0,stdout=b'DECLARED',stderr=b'')
+        def validate_static_owner(self):
+            self.calls.append('real-static-owner-before-START-no-runtime-credit')
+            if self.bad_constructor: raise RuntimeError('declared actual constructor refusal')
+        def wait_new_guardian(self): self.calls.append('same-controller-fresh120/own15')
+        def final_closure(self): self.calls.append('independent-fresh15'); return {'declared_CI_only':True}
+    with patch.multiple(R27, **declared):
+        b=RepairBackend(); R27.repair_once(CUT,b)
+        effects=[v for v in b.calls if isinstance(v,tuple)and v and v[0]=='/usr/bin/systemctl']
+        self.assertEqual(effects,[tuple(v)for _,v in R27.REPAIR_SEQUENCE])
+        self.assertLess(b.calls.index('claim'),b.calls.index('Cold/Guardian-files-only'))
+        self.assertIn('same-controller-fresh120/own15',b.calls); self.assertIn('independent-fresh15',b.calls)
+        self.assertLess(b.calls.index(tuple(R27.REPAIR_SEQUENCE[0][1])), b.calls.index('real-static-owner-before-START-no-runtime-credit'))
+        self.assertLess(b.calls.index('real-static-owner-before-START-no-runtime-credit'), b.calls.index(tuple(R27.REPAIR_SEQUENCE[1][1])))
+        self.assertEqual(b.records['RETURN.json']['schema'],'g27_guardian_source_forward_repair_return_v1')
+        with self.assertRaises(FileExistsError): R27.repair_once(CUT,b)
+        self.assertEqual(len([v for v in b.calls if isinstance(v,tuple)and v and v[0]=='/usr/bin/systemctl']),2)
+        b=RepairBackend(bad_constructor=True)
+        with self.assertRaisesRegex(RuntimeError,'constructor refusal'): R27.repair_once(CUT,b)
+        self.assertTrue(b.claimed)
+        self.assertNotIn(tuple(R27.REPAIR_SEQUENCE[1][1]),b.calls)
+        b=RepairBackend(unknown=True)
+        with self.assertRaises(CUT.Hold): R27.repair_once(CUT,b)
+        self.assertTrue(b.claimed);self.assertNotIn('RETURN.json',b.records)
+        self.assertEqual(b.records['START-NEW-GUARDIAN-NATIVE-RETURN.json']['acknowledgement_uncertain'],True)
+        # Actual repair observer: inherited3 is not a new restart; 0 and3
+        # are separately frozen per incarnation, any drift or PID swap HOLDs.
+        boot='11111111-1111-4111-8111-111111111111'
+        identity={'boot_id':boot,'pid':4242,'start_ticks':7,'InvocationID':'a'*32,'ExecMainStartTimestampMonotonic':'123456'}
+        props={'ActiveState':'active','SubState':'running','Result':'success','MainPID':'4242','ExecMainPID':'4242',
+               'FragmentPath':str(CUT.C.UNIT_DIR/CUT.C.GUARD),'DropInPaths':'','Restart':'on-failure',
+               'InvocationID':identity['InvocationID'],'ExecMainStartTimestampMonotonic':'123456'}
+        stat=b'4242 (python3) '+b' '.join([b'S']+[b'0']*18+[b'7'])
+        cmd=b'\0'.join(v.encode()for v in CUT.guardian_argv(CUT.C.NEW_SOURCE,declared['GUARDIAN_SOURCE_SHA256']))+b'\0'
+        def proc(path,*_): return cmd if path.endswith('/cmdline')else stat
+        for baseline in(0,3):
+            with patch.object(CUT,'properties',return_value={**props,'NRestarts':str(baseline)}), \
+                    patch.object(CUT,'proc_bytes',side_effect=proc),patch.object(R27.Path,'read_text',return_value=boot):
+                self.assertEqual(R27.observe_guardian(CUT,declared['GUARDIAN_SOURCE_SHA256'],identity,baseline),identity)
+        for fault in('restart_increment','different_pid','different_invocation','different_ticks','baseline_bool'):
+            expected=dict(identity);p={**props,'NRestarts':'3'};baseline=3
+            if fault=='restart_increment': p['NRestarts']='4'
+            elif fault=='different_pid': p.update(MainPID='4243',ExecMainPID='4243')
+            elif fault=='different_invocation': p['InvocationID']='b'*32
+            elif fault=='different_ticks': expected['start_ticks']=8
+            else: baseline=False
+            with patch.object(CUT,'properties',return_value=p), \
+                    patch.object(CUT,'proc_bytes',side_effect=proc),patch.object(R27.Path,'read_text',return_value=boot):
+                with self.assertRaises(RuntimeError):R27.observe_guardian(CUT,declared['GUARDIAN_SOURCE_SHA256'],expected,baseline)
+
+    # Real lineage validator over declared immutable bytes. These are not
+    # production receipts, Root approval or future operational health.
+    with patch.multiple(R27, **declared):
+        state=Path('/declared/g15pair');leaf=state/'swap-once-DECLARED'
+        raw_refs={}
+        def ref(path,value):
+            raw=G.wire(value);raw_refs[str(path)]=raw
+            return {'path':str(path),'sha256':digest(raw)}
+        oldctrl={**identity,'pid':4000,'start_ticks':6,'InvocationID':'c'*32}
+        oldguard={**identity,'pid':4001,'start_ticks':5,'InvocationID':'b'*32}
+        current={**identity,'pid':4002,'start_ticks':8,'InvocationID':'d'*32}
+        before={'controller':oldctrl,'guardian':oldguard,'core':{'declared_CI_only':True},'protected_refs':{}}
+        original_claim={'schema':'g15_once_only_swap_claim_v1','manifest_sha256':R27.FAILED_MANIFEST_SHA256,
+            'old_controller':oldctrl,'old_guardian':oldguard,'run':str(leaf),'automatic_replay':False}
+        failed={**props,'LoadState':'loaded','ActiveState':'failed','SubState':'failed','Result':'exit-code',
+            'MainPID':'0','ExecMainPID':'4004','NRestarts':'3','InvocationID':'e'*32}
+        standing={'guardian_source_sha256':'f'*64,'new_controller_config_sha256':R27.CONTROLLER_CONFIG_SHA256}
+        originals={'claim':ref(state/('SWAP-'+R27.FAILED_MANIFEST_SHA256+'-POSSIBLE.json'),original_claim),
+            'hold':ref(leaf/'HOLD.json',{'schema':'g15_pair_swap_HOLD_v1','automatic_replay':False}),
+            'before':ref(leaf/'BEFORE.json',before),'standing':ref(leaf/'LIVE-STANDING.json',standing),
+            'failed_guardian_descriptor':ref(state/'DECLARED-FAILED-GUARDIAN.json',failed),
+            'controller_commit':ref(leaf/'NEW-CONTROLLER-FIRST-COMPLETE-COMMIT.json',{'identity':current,'conservative_per_role_gap_seconds':{'backend:core':0}}),
+            'native_commands':{}}
+        for name,argv in CUT.NATIVE_SEQUENCE:
+            originals['native_commands'][name]={'possible_ref':ref(leaf/(name+'-POSSIBLE-SEND.json'),
+                {'schema':'g15_native_possible_send_v1','name':name,'argv':argv,'retry':False}),
+                'return_ref':ref(leaf/(name+'-NATIVE-RETURN.json'),{'schema':'g15_native_return_v1','name':name,'exit_code':0,'retry':False})}
+        helper_path=Path(R27.__file__).absolute();raw_refs[str(helper_path)]=b'DECLARED trusted helper bytes'
+        helper_ref={'path':str(helper_path),'sha256':digest(raw_refs[str(helper_path)])}
+        claim_path=state/('GUARDIAN-SOURCE-REPAIR-FROM-'+R27.FAILED_MANIFEST_SHA256+'-POSSIBLE.json')
+        repair_claim={'schema':'g27_guardian_source_repair_possible_v1','failed_swap_manifest_sha256':R27.FAILED_MANIFEST_SHA256,
+            'failed_swap_originals':originals,'controller':current,'new_manifest_sha256':declared['PACKAGE_SHA256'],
+            'script_sha256':helper_ref['sha256'],'config_sha256':declared['CONFIG_SHA256'],
+            'run':str(state/'guardian-source-repair-11111111-1111-4111-8111-111111111111'),'automatic_replay':False}
+        repair={'schema':R27.EVIDENCE_SCHEMA,'failed_swap_manifest_sha256':R27.FAILED_MANIFEST_SHA256,
+            'failed_swap_originals':originals,'failed_guardian_restart_count':3,'repair_claim_ref':ref(claim_path,repair_claim),'repair_helper_ref':helper_ref}
+        result={'repair':repair,'controller':current,'guardian':identity,'guardian_restart_baseline':3,
+            'source_commit':declared['OPS_SOURCE'],'new_guardian_source_sha256':declared['GUARDIAN_SOURCE_SHA256'],
+            'controller_config_sha256':R27.CONTROLLER_CONFIG_SHA256}
+        returned={'schema':R27.REPAIR_SCHEMA,'status':'GUARDIAN_SOURCE_REPAIR_OK','result':result,
+            'automatic_replay':False,'Guest_or_Core_business_authority':False}
+        FC=SimpleNamespace(STATE=state,UNIT_DIR=CUT.C.UNIT_DIR,GUARD=CUT.C.GUARD,NEW_SOURCE=CUT.C.NEW_SOURCE,
+            sha=digest,loads=json.loads,wire=G.wire,identity=CUT.C.identity,read=lambda path,*args:raw_refs[str(path)])
+        fakecut=SimpleNamespace(C=FC,NATIVE_SEQUENCE=CUT.NATIVE_SEQUENCE,guardian_argv=CUT.guardian_argv,
+            properties=lambda unit:{**props,'NRestarts':'3'},proc_bytes=proc)
+        with patch.multiple(R27,FAILED_STANDING_SHA256=originals['standing']['sha256'],FAILED_SOURCE_SHA256='f'*64), \
+                patch.object(R27.Path,'read_text',return_value=boot):
+            self.assertEqual(R27.original_swap(fakecut,originals)['controller_commit']['identity'],current)
+            self.assertEqual(R27.validate_repair_return(fakecut,Path('/declared/package'),
+                {'source_commit':declared['OPS_SOURCE']},returned,Path('/declared/read-only')) ,repair)
+            for fault in('wrong_controller_commit','one_failed_ack','old_claim_rearmed','foreign_helper_path','changed_repair_claim'):
+                bad=copy.deepcopy(returned);saved=dict(raw_refs)
+                if fault=='wrong_controller_commit':bad['result']['controller']={**current,'pid':4999}
+                elif fault=='one_failed_ack':
+                    name=CUT.NATIVE_SEQUENCE[5][0];path=leaf/(name+'-NATIVE-RETURN.json')
+                    value=json.loads(raw_refs[str(path)]);value['exit_code']=1
+                    bad['result']['repair']['failed_swap_originals']['native_commands'][name]['return_ref']=ref(path,value)
+                elif fault=='old_claim_rearmed':
+                    path=Path(originals['claim']['path']);value=copy.deepcopy(original_claim);value['automatic_replay']=True
+                    bad['result']['repair']['failed_swap_originals']['claim']=ref(path,value)
+                elif fault=='foreign_helper_path':bad['result']['repair']['repair_helper_ref']['path']='/declared/foreign-helper.py'
+                else:
+                    value=copy.deepcopy(repair_claim);value['new_manifest_sha256']='f'*64
+                    bad['result']['repair']['repair_claim_ref']=ref(claim_path,value)
+                with self.assertRaises(RuntimeError):
+                    R27.validate_repair_return(fakecut,Path('/declared/package'),{'source_commit':declared['OPS_SOURCE']},bad,Path('/declared/read-only'))
+                raw_refs.clear();raw_refs.update(saved)
+
 
 
 if __name__ == '__main__':

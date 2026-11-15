@@ -2,6 +2,7 @@
 import ast
 import contextlib
 import copy
+import gzip
 import json
 from pathlib import Path
 import unittest
@@ -322,6 +323,92 @@ def binding():
         yield
 
 class G15MaintenanceTests(unittest.TestCase):
+    def _assert_actual_g27_owner_static_prefix(self):
+        # Original installed bytes are fixture DATA, never imported or executed.
+        # Host/module checks after the current-prefix seam remain Native-owned.
+        fixture = ROOT / 'tests/fixtures/g27-original-static-frame'
+        actual_raw = (fixture / 'S27.ROOT-EXACT-TRANSFER.DATA.json').read_bytes()
+        actual = json.loads(actual_raw)
+        prior_raw = (ROOT / 'tests/fixtures/g26-original-standing/S26.ROOT-EXACT-TRANSFER.DATA.json').read_bytes()
+        prior = json.loads(prior_raw)
+        prior25 = json.loads((ROOT / 'tests/fixtures/g25-original-standing/S25.ROOT-EXACT-TRANSFER.DATA.json').read_bytes())
+        installed = gzip.decompress((fixture / 'G27-FAILED-V1-GUARDIAN.DATA.gz').read_bytes())
+        predecessor = gzip.decompress((fixture / 'G26-ACCEPTED-GUARDIAN.DATA.gz').read_bytes())
+        self.assertEqual(digest(actual_raw), '86203b9518abd3d1391f05d5a9a68dbf0c7bb0df7b7cda4cb586a527eaa01ef5')
+        self.assertEqual(digest(prior_raw), G.G26_PREDECESSOR_CONFIG_SHA)
+        self.assertEqual(digest(installed), actual['guardian_source_sha256'])
+        self.assertEqual(digest(predecessor), G.G26_PREDECESSOR_SOURCE_SHA)
+        image = G.CORE_IMAGE_REF + 'sha256:346cc922d68520cf3222f3cad6a0a1d5f659f5bfb6388c24040cba88831e8c9b'
+        config_raw, source_raw, parent_raw = [actual_raw], [predecessor], [prior_raw]
+        owners, unit_reads = [], []
+        class CurrentPrefixAccepted(Exception):
+            pass
+        def read(path, *_):
+            if path == G.SELF: return installed
+            if path == G.CONFIG: return config_raw[0]
+            if path == G.G26_PREDECESSOR_HERE / 'network_guardian.py': return source_raw[0]
+            if path == G.G26_PREDECESSOR_CONFIG: return parent_raw[0]
+            if str(path).startswith('/etc/systemd/system/'):
+                unit_reads.append(str(path))
+                raise CurrentPrefixAccepted()
+            self.fail('unexpected host read: ' + str(path))
+        def older25(config):
+            self.assertEqual(config, prior, 'G25 must receive original S26, never current S27')
+            return prior25
+        def anchor(owner):
+            owners.append(owner)
+            return {'identity': {'boot_id': '2b7e9be2-e45a-4cd5-86f2-6f0a3372576d'}}
+        host = SimpleNamespace(BRIDGE_SHA='a' * 64, NATIVE_SHA='b' * 64,
+                               instance=lambda: '2b7e9be2-e45a-4cd5-86f2-6f0a3372576d')
+        pairs = [{'image': G.CORE_G26, 'image_id': G.CORE_G26}, {'image': image, 'image_id': image}]
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.multiple(G, PROPOSAL_BOUND=True,
+                HEAD_CORE_SOURCE='4e301def29404ced6ca5f8985d8e3be5be8fc29e',
+                HEAD_NEW_CORE_DIGEST='sha256:346cc922d68520cf3222f3cad6a0a1d5f659f5bfb6388c24040cba88831e8c9b',
+                CORE_G27=image, G27_CORE_IMAGE_PAIRS=pairs,
+                G27_CONTROLLER_CONFIG_SHA=actual['new_controller_config_sha256'], __file__=str(G.SELF)))
+            stack.enter_context(patch.object(G.os, 'geteuid', return_value=0))
+            stack.enter_context(patch.object(G, 'read', side_effect=read))
+            stack.enter_context(patch.object(G, 'module', return_value=host))
+            stack.enter_context(patch.object(G, 'directory'))
+            stack.enter_context(patch.object(G.Owner, 'actual_R42_anchor', autospec=True, side_effect=anchor))
+            current26 = stack.enter_context(patch.object(G, 'g26_predecessor_config', wraps=G.g26_predecessor_config))
+            older = stack.enter_context(patch.object(G, 'g25_predecessor_config', side_effect=older25))
+            for generation in range(16, 25):
+                stack.enter_context(patch.object(G, 'g' + str(generation) + '_predecessor_config',
+                                                return_value={'fixture_historical_generation': generation}))
+            stack.enter_context(patch.object(G, 'pair_predecessor_standings', return_value=[]))
+            for name in ('r13_predecessor_standing', 'g6_predecessor_standing', 'g6_boot_v2_predecessor_standing',
+                         *('g' + str(i) + '_predecessor_standing' for i in range(7, 16))):
+                stack.enter_context(patch.object(G, name, return_value=('a' * 64, 'b' * 64)))
+            # REAL __init__ calls REAL static. Success means its entire current
+            # G27 -> original S26 -> historical S25 prefix reaches the unit-I/O seam.
+            with self.assertRaises(CurrentPrefixAccepted):
+                G.Owner(actual['guardian_source_sha256'])
+            self.assertEqual(current26.call_count, 2)  # initialization and ongoing static revalidation
+            self.assertEqual(older.call_count, 2)
+            self.assertEqual(len(unit_reads), 1)
+            owner = owners[-1]
+            cached = owner.g26_predecessor_config
+            owner.g26_predecessor_config = {**cached, 'hub_unit_sha256': '0' * 64}
+            with self.assertRaisesRegex(RuntimeError, 'UNCHANGED_G23_G22_G21_G20_G19_G18_G17_G16_PREFIX'):
+                owner.static()
+            owner.g26_predecessor_config = cached
+            for field, guard in (('g26_predecessor_standing_config_sha256', 'EXACT_G26_PREFIX'),
+                                 ('g26_predecessor_guardian_source_sha256', 'EXACT_G26_PREFIX'),
+                                 ('new_controller_config_sha256', 'EXPLICIT_G6_AUTHORITY_AND_CURRENT_G15_CONTROLLER')):
+                bad = {**actual, field: '0' * 64}
+                config_raw[0] = G.wire(bad)
+                with self.subTest(actual_static_parent=field), self.assertRaisesRegex(RuntimeError, guard):
+                    G.Owner(actual['guardian_source_sha256'])
+            config_raw[0] = actual_raw
+            for operand, guard in ((source_raw, 'G26_SOURCE'), (parent_raw, 'G26_STANDING')):
+                original = operand[0]; operand[0] += b' '
+                with self.subTest(actual_static_bytes=guard), self.assertRaisesRegex(RuntimeError, guard):
+                    G.Owner(actual['guardian_source_sha256'])
+                operand[0] = original
+            self.assertEqual(len(unit_reads), 1, 'all foreign prefixes must refuse before the host-unit seam')
+
     def test_forced_unbound_entrypoints_refuse_before_io(self):
         with patch.object(G, 'PROPOSAL_BOUND', False), patch.object(G, 'read') as read:
             for call in (G.require_bound, G.pair_chain_digests, G.main, lambda: G.Owner('1' * 64)):
@@ -681,6 +768,7 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                 with self.subTest(old_axis=key), self.assertRaises(S.C.Hold): S.build(G, manifest, wrong, controller_raw, hub_raw, 'Declared review. ' * 20, units)
 
     def test_g14_predecessor_requires_original_source_and_standing_bytes(self):
+        self._assert_actual_g27_owner_static_prefix()
         # S25 authenticates whole S24, S23, S22, S21, S20, S19, S18, S17 and S16; no historical relabelling.
         with binding(), contextlib.ExitStack() as stack:
             for generation in (16, 17, 18):

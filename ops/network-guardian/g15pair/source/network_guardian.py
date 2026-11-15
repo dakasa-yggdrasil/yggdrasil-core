@@ -18,9 +18,9 @@ ROOT=Path('/opt/dakasa/capacity-network')
 ETC=Path('/etc/dakasa/capacity-network')
 CP='controller.r13-netlink-'
 SP='network-boot-recovery-r13-'
-HERE=ROOT/(SP+'g27pair-source-v1')
+HERE=ROOT/(SP+'g27pair-source-v2')
 SELF=HERE/'network_guardian.py'
-CONFIG=ETC/'network-recovery.r13-g27pair.production.json'
+CONFIG=ETC/'network-recovery.r13-g27pair.source-v2.production.json'
 R13_PREDECESSOR_HERE=ROOT/(SP+'netlink-source-v1')
 R13_PREDECESSOR_SOURCE_SHA='2f5bb7e1946d905fbfc83c0662b0df281f6fb9f1fba2c85b4036ba825376021c'
 R13_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-netlink.production.json'
@@ -945,7 +945,7 @@ class Owner:
 
  def static(self):
   require(read(CONFIG,32768,0o600)==self.raw_config,'UNCHANGED_STANDING_ROOT_AUTHORITY')
-  require(g25_predecessor_config(self.config)==self.g25_predecessor_config and g24_predecessor_config(self.g25_predecessor_config)==self.g24_predecessor_config and g23_predecessor_config(self.g24_predecessor_config)==self.g23_predecessor_config and g22_predecessor_config(self.g23_predecessor_config)==self.g22_predecessor_config and g21_predecessor_config(self.g22_predecessor_config)==self.g21_predecessor_config and g20_predecessor_config(self.g21_predecessor_config)==self.g20_predecessor_config and g19_predecessor_config(self.g20_predecessor_config)==self.immediate_predecessor_config and g18_predecessor_config(self.immediate_predecessor_config)==self.current_predecessor_config and g17_predecessor_config(self.current_predecessor_config)==self.head_predecessor_config and g16_predecessor_config(self.head_predecessor_config)==self.predecessor_config,'UNCHANGED_G23_G22_G21_G20_G19_G18_G17_G16_PREFIX')
+  require(g26_predecessor_config(self.config)==self.g26_predecessor_config and g25_predecessor_config(self.g26_predecessor_config)==self.g25_predecessor_config and g24_predecessor_config(self.g25_predecessor_config)==self.g24_predecessor_config and g23_predecessor_config(self.g24_predecessor_config)==self.g23_predecessor_config and g22_predecessor_config(self.g23_predecessor_config)==self.g22_predecessor_config and g21_predecessor_config(self.g22_predecessor_config)==self.g21_predecessor_config and g20_predecessor_config(self.g21_predecessor_config)==self.g20_predecessor_config and g19_predecessor_config(self.g20_predecessor_config)==self.immediate_predecessor_config and g18_predecessor_config(self.immediate_predecessor_config)==self.current_predecessor_config and g17_predecessor_config(self.current_predecessor_config)==self.head_predecessor_config and g16_predecessor_config(self.head_predecessor_config)==self.predecessor_config,'UNCHANGED_G23_G22_G21_G20_G19_G18_G17_G16_PREFIX')
   for unit,key in((UNIT,'controller_unit_sha256'),(HUB,'hub_unit_sha256'),(COLD,'cold_unit_sha256'),(GUARDIAN,'guardian_unit_sha256')):
    require(sha(read('/etc/systemd/system/'+unit,32768))==self.config[key],'EXACT_REVIEWED_FUTURE_SERVICE_UNITS')
   require(sha(read('/etc/systemd/system.control/'+UNIT+'.d/50-CPUQuota.conf',4096))==self.C.DROPIN_SHA,'UNCHANGED_CPU100_DROPIN')
