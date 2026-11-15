@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 98cb85a1666cfb655a4935e2fb587e7f1923efe3
-verified_diff_sha256: 49475dcb76986b0f855cac145cd19e5da9ecd9079de9d5a9276d5eb344ffa15e
+verified_at_commit: 9ed468655b836e22a50789220f361666b891cc67
+verified_diff_sha256: cd50a2f1f16c5701000a9cbb90e890157727ed441654d3a2107633ab6dd9914a
 reconciler_schema: 1
 startup_log_redaction_review_20261030: Reviewed startup logging to record only broker configuration presence; Linux race test passed both cases on the isolated LAB. No production secret values were read; candidate CI and release qualification remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
@@ -568,3 +568,5 @@ historical_successor_source_census_companion_review: The first actual CI rejecte
 canonical_guest_expired_presend_review: Root and two independent peers reviewed the same canonical-workflow recovery hook, strict original ownership and fresh no-effect guards. The source census and exact guarded inventory pin were manually reviewed before reconciliation; 26 new plain PostgreSQL cases preserve the existing owning root and prior 14 cases. No local functional execution or production effect occurred; fresh current CI remains required.
 
 default_build_guest_recovery_fixture_review: Root reviewed the exact local canonical public-digest label encoding and two fixture call replacements after genuine CI exposed a tagged-helper dependency. All runtime code, census, service contract, 26 scenarios and prior14 cases remain unchanged. Fresh current CI must compile and execute the owning PG root; no local functional or production credit is claimed.
+
+c28_inert_next_pair_source_review: Root approved the exact eighteen-path inert successor Source and reused its independently reviewed whole inverses and protected ownership/runtime geometry. Historical repaired G27 originals and regressions remain exact; future runtime source, image digest, operations publication and controller configuration remain absent until qualified external binding. Runtime Go, SQL, workflow gates and service-contract edges are unchanged from the728 parent. Actual current Source CI including Owned Network remains required; no assembler, product tests, Native, image, release or cycle outcome is claimed.
