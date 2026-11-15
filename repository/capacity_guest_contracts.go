@@ -28,10 +28,16 @@ func guestContractDigest(p model.CapacityPolicySpec) string {
 }
 
 func guestContractLockBindingsTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec) error {
+	return guestContractLockBindingsAtPolicyTx(ctx, tx, policy, p, true)
+}
+
+// Historical recovery locks the exact original contract set without requiring
+// that immutable policy revision to remain the current acquisition authority.
+func guestContractLockBindingsAtPolicyTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, currentRequired bool) error {
 	if p.GuestContractSuccessor == nil {
 		return lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings)
 	}
-	cs, err := guestContractSetTx(ctx, tx, policy, p)
+	cs, err := guestContractSetAtPolicyTx(ctx, tx, policy, p, currentRequired)
 	if err != nil {
 		return err
 	}

@@ -471,7 +471,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(key)); err != nil {
 		return model.CapacityIntent{}, err
 	}
-	if err = guestContractLockBindingsTx(ctx, tx, policy, p); err != nil {
+	if err = guestContractLockBindingsAtPolicyTx(ctx, tx, policy, p, !historical); err != nil {
 		return model.CapacityIntent{}, err
 	}
 	var checksum string
