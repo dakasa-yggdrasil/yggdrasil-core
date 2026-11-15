@@ -872,10 +872,13 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
                         patch.object(G,'read',side_effect=lambda path,*_:changed_raw if path==G.G19_PREDECESSOR_CONFIG else originals[path]),self.assertRaisesRegex(RuntimeError,'G19_WHOLE_PREFIX'):
                     G.g19_predecessor_config(wrong)
             for changed in originals:
+                seen=[]
                 def changed_read(path,*_):
+                    seen.append(path)
                     return originals[path]+b' ' if path==changed else originals[path]
                 with self.subTest(changed=changed),patch.object(G,'read',side_effect=changed_read),self.assertRaises(RuntimeError):
-                    prior=G.g25_predecessor_config(value26);prior=G.g24_predecessor_config(prior);prior=G.g23_predecessor_config(prior);prior=G.g22_predecessor_config(prior);prior=G.g21_predecessor_config(prior);prior=G.g20_predecessor_config(prior);prior=G.g19_predecessor_config(prior);prior=G.g18_predecessor_config(prior);prior=G.g17_predecessor_config(prior);G.g16_predecessor_config(prior)
+                    prior=G.g26_predecessor_config(value27);prior=G.g25_predecessor_config(prior);prior=G.g24_predecessor_config(prior);prior=G.g23_predecessor_config(prior);prior=G.g22_predecessor_config(prior);prior=G.g21_predecessor_config(prior);prior=G.g20_predecessor_config(prior);prior=G.g19_predecessor_config(prior);prior=G.g18_predecessor_config(prior);prior=G.g17_predecessor_config(prior);G.g16_predecessor_config(prior)
+                self.assertIn(changed,seen)
     def test_protected43_budget_cold_hub_and_six_commands_are_unchanged(self):
         with binding(): self.assertEqual(C.protected_ref_union(), historical.C.protected_ref_union())
         self.assertEqual(CUT.NATIVE_SEQUENCE, historical.CUT.NATIVE_SEQUENCE)
@@ -888,7 +891,7 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
         closure = source_span(NEW / 'tools/g15cut.py', 'Backend', 'final_closure')
         self.assertIn('self.protected() == self.protected_before', closure)
         self.assertIn('COLD_HUB_SAME_ORIGINAL_COMPLETED_LIFETIMES_NO_EXECUTION', closure)
-        # Current overlap is 81c08/Core15; all historical digests are refused.
+        # Current overlap is c69acb50/Core16; all historical digests are refused.
         with binding():
             image = CUT.C.IMAGE_PREFIX + CUT.C.OLD_DIGEST
             dep = {'metadata': {'uid': CUT.C.OLD_CORE_UID, 'generation': CUT.C.OLD_CORE_GENERATION,
@@ -909,7 +912,8 @@ with tempfile.TemporaryDirectory(prefix='g15-default-read-') as name:
             with patch.object(CUT, 'native', side_effect=[replies[0], SimpleNamespace(returncode=0, stdout=C.wire({'items': [wrong_pod]}))]):
                 with self.assertRaises(CUT.C.Hold): CUT.core_overlap()
 
-            for previous_digest in ('1cf53bc24b112d46e4a5dfda14e4639f474979be799996ec22249331a96bddd9',
+            for previous_digest in ('81c08ab33f4ae0f1e10d127fb1025a467e21853b6f9934f707f2e79347eeb062',
+                                    '1cf53bc24b112d46e4a5dfda14e4639f474979be799996ec22249331a96bddd9',
                                     '346bdc09c343cabe15fdff724187c7d75551c597511139c3262e7b9da1a40e67',
                                     '2eafea02c56c75dc607494e4c9c15a143abb782f3a317d37fe2f05ae83349869',
                                     '8d79a2284adaac863cf8ae1dc0ee6853195cb643402936b753b55cbddfc290ad',
