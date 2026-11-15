@@ -185,9 +185,10 @@ func GuestOriginalHTTPBodyFactsValid(scope string, readAt time.Time, received in
 // This private frame can only be installed through the compiled Native profile
 // selector. It supplies no capacity authority; the existing validators still run.
 type guestOriginalNativeV1Clock struct {
-	enrollment model.CapacityGuestRetirementEnrollment
-	intent     model.CapacityGuestRetirementIntent
-	profileSHA string
+	failureTarget func(request, response []byte) (time.Time, bool)
+	enrollment    model.CapacityGuestRetirementEnrollment
+	intent        model.CapacityGuestRetirementIntent
+	profileSHA    string
 }
 
 // WithNativeV1ReturnClock is inert in production, including for invalid inputs.
@@ -212,6 +213,35 @@ func (c *GuestOriginalHTTPClient) WithNativeV1ReturnClock(b model.CapacityGuestR
 	return &copy
 }
 
+// A trusted Source owner supplies the full typed negative-record authenticator.
+// The capacity package owns only the existing Native profile/member transport
+// gate and the real-clock wait; it does not import the Source failure DTO.
+func (c *GuestOriginalHTTPClient) WithNativeV1FailureReturnClock(b model.CapacityGuestRetirementBinding, member model.CapacityGuestRetirementMemberBinding, target func([]byte, []byte) (time.Time, bool)) *GuestOriginalHTTPClient {
+	if c == nil || !GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
+		return c
+	}
+	if target == nil || b.EvidenceClass != "native_qemu_qualification" || b.ProfileManifest.Profile != GuestQualificationProfile || b.ProfileManifest.CoverageClass != "native_qualification_subset" || !ValidDigest(b.ProfileManifestSHA256) || GuestRetirementSHA(b.ProfileManifest) != b.ProfileManifestSHA256 || member.Slot < 1 || member.Slot > 2 || member.Origin != c.origin {
+		return c
+	}
+	matches := 0
+	for _, bound := range b.Members {
+		if bound == member {
+			matches++
+		}
+	}
+	if matches != 1 {
+		return c
+	}
+	copy := *c
+	frame := guestOriginalNativeV1Clock{}
+	if c.nativeV1Clock != nil {
+		frame = *c.nativeV1Clock
+	}
+	frame.failureTarget = target
+	copy.nativeV1Clock = &frame
+	return &copy
+}
+
 func (c *GuestOriginalHTTPClient) waitNativeV1ReturnClock(ctx context.Context, method, path string, request, response []byte) error {
 	if c == nil || c.nativeV1Clock == nil || !GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
 		return nil
@@ -226,6 +256,13 @@ func (c *GuestOriginalHTTPClient) waitNativeV1ReturnClock(ctx context.Context, m
 }
 
 func (f guestOriginalNativeV1Clock) target(method, path string, request, response []byte) (time.Time, time.Time, bool) {
+	if method == http.MethodGet && path == "/v1/qualification-source-refusal" && f.failureTarget != nil {
+		if at, authenticated := f.failureTarget(request, response); authenticated && !at.IsZero() {
+			return at, time.Time{}, true
+		}
+		return time.Time{}, time.Time{}, false
+	}
+
 	if method == http.MethodGet && path == "/v1/runtime-snapshot" {
 		var r model.CapacityGuestRuntimeSnapshotRequest
 		var s model.CapacityGuestRuntimeSnapshot

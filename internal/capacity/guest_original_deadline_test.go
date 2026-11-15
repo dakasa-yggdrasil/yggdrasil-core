@@ -58,6 +58,7 @@ func TestGuestOriginalHTTPLateCloseCannotRenewBudget(t *testing.T) {
 	}
 	guestNativeV1ClockContracts(t)
 	guestOriginalNativeHTTPFailureDiagnosticContracts(t)
+	guestNativeFailureReturnClockContracts(t)
 }
 
 func TestGuestOriginalHTTPOnlyClosedCanaryRoutes(t *testing.T) {
@@ -243,4 +244,80 @@ func guestNativeClockSnapshotOperand(t *testing.T, at time.Time) (model.Capacity
 	request, _ := json.Marshal(model.CapacityGuestRuntimeSnapshotRequest{Challenge: challenge})
 	response, _ := json.Marshal(snapshot)
 	return b, e, i, request, response, at
+}
+
+// The existing root retains its census: no new test or subtest names.
+func guestNativeFailureReturnClockContracts(t *testing.T) {
+	wire := []byte(`{"declared":"negative-record-authenticated-by-source-owner"}`)
+	for _, cancelAtEOF := range []bool{false, true} {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		target := time.Now().Add(10 * time.Millisecond)
+		b, _, _, _, _, _ := guestNativeClockJournalOperand(t, target)
+		member := b.Members[0]
+		calls, authentications := 0, 0
+		body := &guestNativeClockBody{Reader: bytes.NewReader(wire)}
+		if cancelAtEOF {
+			body.afterEOF = cancel
+		}
+		base := &GuestOriginalHTTPClient{origin: member.Origin, client: &http.Client{Transport: guestOriginalTestTransport(func(r *http.Request) (*http.Response, error) {
+			if r.Context() != ctx {
+				t.Fatal("negative report changed original context")
+			}
+			calls++
+			return &http.Response{StatusCode: http.StatusOK, Body: body}, nil
+		})}}
+		authenticate := func(request, response []byte) (time.Time, bool) {
+			authentications++
+			return target, bytes.Equal(request, []byte("{}")) && bytes.Equal(response, wire)
+		}
+		frame := guestOriginalNativeV1Clock{failureTarget: authenticate}
+		if at, strict, ok := frame.target(http.MethodGet, "/v1/qualification-source-refusal", []byte("{}"), wire); !ok || !at.Equal(target) || !strict.IsZero() {
+			t.Fatal("original negative target lost")
+		}
+		before := authentications
+		for _, route := range []struct{ method, path string }{{http.MethodPost, "/v1/qualification-source-refusal"}, {http.MethodGet, "/v1/qualification-source-refusal/foreign"}} {
+			if _, _, ok := frame.target(route.method, route.path, []byte("{}"), wire); ok {
+				t.Fatal("foreign negative route acquired clock")
+			}
+		}
+		if authentications != before {
+			t.Fatal("negative authenticator escaped fixed route")
+		}
+		if _, _, ok := frame.target(http.MethodGet, "/v1/qualification-source-refusal", []byte(`{"schema":"fresh"}`), wire); ok {
+			t.Fatal("fresh request acquired original failure wait")
+		}
+		for _, bad := range []model.CapacityGuestRetirementBinding{{}, func() model.CapacityGuestRetirementBinding { x := b; x.ProfileManifestSHA256 = ""; return x }(), func() model.CapacityGuestRetirementBinding { x := b; x.Members = nil; return x }()} {
+			if base.WithNativeV1FailureReturnClock(bad, member, authenticate) != base {
+				t.Fatal("foreign failure clock binding adopted")
+			}
+		}
+		foreign := member
+		foreign.Origin = "https://foreign.invalid"
+		if base.WithNativeV1FailureReturnClock(b, foreign, authenticate) != base || base.WithNativeV1FailureReturnClock(b, member, nil) != base {
+			t.Fatal("foreign origin or nil authenticator adopted")
+		}
+		client := base.WithNativeV1FailureReturnClock(b, member, authenticate)
+		if !GuestOriginalNativeQEMUProviderEnabled("native-qemu") {
+			if client != base || base.nativeV1Clock != nil {
+				t.Fatal("production acquired negative clock frame")
+			}
+			cancel()
+			continue
+		}
+		if client == base || base.nativeV1Clock != nil {
+			t.Fatal("Native frame mutated original client")
+		}
+		returned, err := client.Original(ctx, http.MethodGet, "/v1/qualification-source-refusal", []byte("{}"))
+		if calls != 1 || body.closes != 1 || returned.DriverReturnedAt.IsZero() || returned.DriverReturnedAt.Before(body.closedAt) {
+			t.Fatal("negative wait replayed I/O or lost original Close/driver")
+		}
+		if cancelAtEOF {
+			if err == nil || !returned.OriginalContextFailed {
+				t.Fatal("negative clock renewed cancelled owner")
+			}
+		} else if err != nil || body.closedAt.Before(target) || returned.DriverReturnedAt.Before(target) {
+			t.Fatal("negative Close/first driver preceded signed time", err)
+		}
+		cancel()
+	}
 }

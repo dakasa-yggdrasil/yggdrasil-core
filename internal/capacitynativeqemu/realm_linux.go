@@ -84,6 +84,7 @@ type Realm struct {
 	started          map[int]bool
 	prepared         map[int]PreCreateRequest
 	originals        map[int]IndependentReturn
+	witnesses        map[int][]byte
 	preregistrations map[int]model.CapacityGuestOriginalProvisioningPreregistration
 	enrollments      map[int]model.CapacityGuestOriginalProvisioningReceipt
 	retirementPins   map[int]*OriginalPIDFD
@@ -135,7 +136,7 @@ func NewRealm(private string, request SourceRequest, profile model.CapacityGuest
 	if err != nil {
 		return nil, err
 	}
-	return &Realm{PrivateDirectory: private, Request: request, Profile: profile, MutationToken: mutationToken, CoreOrigin: "https://127.0.0.1:18447", Client: client, QEMUBinarySHA256: binarySHA, started: map[int]bool{}, prepared: map[int]PreCreateRequest{}, originals: map[int]IndependentReturn{}, preregistrations: map[int]model.CapacityGuestOriginalProvisioningPreregistration{}, enrollments: map[int]model.CapacityGuestOriginalProvisioningReceipt{}}, nil
+	return &Realm{PrivateDirectory: private, Request: request, Profile: profile, MutationToken: mutationToken, CoreOrigin: "https://127.0.0.1:18447", Client: client, QEMUBinarySHA256: binarySHA, started: map[int]bool{}, prepared: map[int]PreCreateRequest{}, originals: map[int]IndependentReturn{}, witnesses: map[int][]byte{}, preregistrations: map[int]model.CapacityGuestOriginalProvisioningPreregistration{}, enrollments: map[int]model.CapacityGuestOriginalProvisioningReceipt{}}, nil
 }
 
 // Prepare reads the ORIGINAL final ISO/bootstrap body BEFORE grant issuance.
@@ -592,6 +593,20 @@ func (r *Realm) Witnessed(ctx context.Context, grant model.CapacityMutationGrant
 	if witness.PreregistrationID != pre.PreregistrationID || witness.OriginalCreateGrantID != grant.GrantID || witness.Tuple.Slot != grant.Slot || witness.Tuple.ResourceID != r.Request.Slots[grant.Slot-1].ResourceID {
 		return ErrOriginalUnknown
 	}
+	// Retain only this original Core witness, after the existing publication
+	// succeeds. Owned bytes prevent later pointer/slice mutation or replacement.
+	wire, encodeErr := json.Marshal(witness)
+	if encodeErr != nil {
+		return ErrOriginalUnknown
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.preregistrations[grant.Slot] != pre {
+		return ErrOriginalUnknown
+	}
+	if sealed, ok := r.witnesses[grant.Slot]; ok && !bytes.Equal(sealed, wire) {
+		return ErrOriginalUnknown
+	}
 	if PostlossSourceCase(r.Request.NativeCase) && pre.Slot == SourceFailureSlot(r.Request.NativeCase) {
 		if witness.SourceObservation == nil {
 			return ErrOriginalUnknown
@@ -602,7 +617,16 @@ func (r *Realm) Witnessed(ctx context.Context, grant model.CapacityMutationGrant
 	}
 	stage := Stage{FixtureSchema, "original-create-settled.json", grant.Slot, capacity.CurrentGuestCoreSource(), r.Request.SourceCommit, pre.OriginalDeadline, time.Now().UTC(), capacity.GuestRetirementSHA(witness)}
 	_, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), stage.Stage), stage)
-	return err
+	if err != nil {
+		return err
+	}
+	if r.witnesses == nil {
+		r.witnesses = map[int][]byte{}
+	}
+	if _, exists := r.witnesses[grant.Slot]; !exists {
+		r.witnesses[grant.Slot] = append([]byte(nil), wire...)
+	}
+	return nil
 }
 
 func (r *Realm) Close() {

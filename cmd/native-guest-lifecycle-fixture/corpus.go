@@ -17,7 +17,11 @@ import (
 func (f *fixture) sourceClient(slot int) (*capacity.GuestOriginalHTTPClient, error) {
 	for _, member := range f.binding.Members {
 		if member.Slot == slot {
-			return capacity.NewGuestOriginalHTTPClient(member, f.caPEM, f.callerCertificate, f.callerKey)
+			client, err := capacity.NewGuestOriginalHTTPClient(member, f.caPEM, f.callerCertificate, f.callerKey)
+			if err != nil {
+				return nil, err
+			}
+			return f.realm.BindOriginalFailureReturnClock(client, f.binding, slot), nil
 		}
 	}
 	return nil, q.ErrOriginalUnknown
