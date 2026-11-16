@@ -213,7 +213,7 @@ func (s CapacityStore) TryClaimWitnessedExpansionCleanup(ctx context.Context, po
 	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
 		return s, zero, a, false, err
 	}
-	if err = lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings); err != nil {
+	if err = guestContractLockBindingsTx(ctx, tx, policy, p); err != nil {
 		return s, zero, a, false, err
 	}
 	current, err := loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true)
@@ -274,7 +274,18 @@ func (s CapacityStore) TryClaimWitnessedExpansionCleanup(ctx context.Context, po
 		if err = witnessedExpansionClosedOwnerTx(ctx, tx, old); err != nil {
 			return s, zero, a, true, err
 		}
-		if events[len(events)-1].Stage == "inventory_returned" {
+		if events[len(events)-1].Stage == "claimed" {
+			if old.RunID == s.OriginalRunID.String() || !witnessedExpansionClaimOnlyContinuation(events, old, a, current, now) {
+				return s, zero, a, true, ErrCapacityConflict
+			}
+			var eligible bool
+			if err = tx.QueryRowContext(ctx, `SELECT NOT EXISTS(SELECT 1 FROM public.capacity_mutation_grants g WHERE g.id=$1::uuid OR g.grant_record->>'witnessed_unenrolled_expansion_cleanup_id'=$2) AND (SELECT count(*) FROM public.capacity_dispatch_jobs j WHERE j.run_id=$3::uuid)=1 AND EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$3::uuid AND j.state='returned' AND j.return_status='failed' AND j.returned_at>=$4 AND j.finalization_ack_at>=j.returned_at AND j.finalization_ack_at<=$5 AND w.status='failed' AND w.started_at=j.started_at AND w.finished_at=j.returned_at AND(w.workflow_id IS NULL OR w.workflow_id=$6::uuid) AND j.realm=$7 AND j.environment=$8 AND j.domain=$9 AND j.dimension=$10 AND j.envelope::jsonb#>>'{workflow,id}'=$6::text AND j.envelope::jsonb#>>'{workflow,checksum}'=$11 AND j.envelope::jsonb#>>'{policy,id}'=$12 AND j.envelope::jsonb#>>'{policy,checksum}'=$13)`, a.ChildGrantID, a.ID, old.RunID, old.RecordedAt, now, a.WorkflowID, a.Namespace, a.Environment, a.Domain, a.Dimension, a.WorkflowChecksum, a.PolicyID, a.PolicyChecksum).Scan(&eligible); err != nil {
+				return s, zero, a, true, err
+			}
+			if !eligible {
+				return s, zero, a, true, ErrCapacityConflict
+			}
+		} else if events[len(events)-1].Stage == "inventory_returned" {
 			if !witnessedExpansionPredeleteReturnContinuation(events, old, a, p, now) {
 				return s, zero, a, true, ErrCapacityConflict
 			}
@@ -340,6 +351,35 @@ func (s CapacityStore) TryClaimWitnessedExpansionCleanup(ctx context.Context, po
 	}
 	s.witnessedExpansionOwner = &witnessedExpansionOwner{id: a.ID, claim: c.Sequence}
 	return s, next, a, true, nil
+}
+
+// A closed claim with no read or child cannot have sent its DELETE. Its new
+// owner still needs fresh physical inventory, survivor canaries and its own
+// qualified native read. An uncertain read/send never enters this branch.
+func witnessedExpansionClaimOnlyContinuation(events []WitnessedUnenrolledExpansionCleanupEvent, claim WitnessedUnenrolledExpansionCleanupEvent, a WitnessedUnenrolledExpansionCleanup, current model.CapacityIntent, now time.Time) bool {
+	if len(events) < 2 || !reflect.DeepEqual(events[len(events)-1], claim) || claim.Stage != "claimed" || claim.LeaseExpiresAt == nil || !now.After(*claim.LeaseExpiresAt) || current.LeaseExpiresAt == nil || !claim.LeaseExpiresAt.Equal(*current.LeaseExpiresAt) || current.WitnessedUnenrolledExpansionCleanupID != a.ID || current.Decision.Reason != WitnessedUnenrolledExpansionCleanupMode || claim.Generation != current.Generation || claim.FencingToken != current.FencingToken || claim.LeaseOwner != current.LeaseOwner || claim.ExecutorID != current.LeaseExecutorID {
+		return false
+	}
+	runs := map[string]bool{}
+	for i, event := range events {
+		if event.Schema != WitnessedUnenrolledExpansionCleanupSchema || event.CleanupID != a.ID || event.ChildGrantID != a.ChildGrantID || event.Sequence != int64(i+1) || event.Generation != a.OriginalGeneration || event.FencingToken != a.OriginalFencingToken+event.Sequence-1 || len(event.Evidence) != 0 || event.RecordedAt.IsZero() || event.RecordedAt.After(now) {
+			return false
+		}
+		if i == 0 {
+			if event.Stage != "requested" || event.RunID != "" {
+				return false
+			}
+			continue
+		}
+		if event.Stage != "claimed" || event.RunID == "" || runs[event.RunID] || event.RecordedAt.Before(events[i-1].RecordedAt) || event.LeaseExpiresAt == nil {
+			return false
+		}
+		if i > 1 && !event.RecordedAt.After(*events[i-1].LeaseExpiresAt) {
+			return false
+		}
+		runs[event.RunID] = true
+	}
+	return true
 }
 
 // This original successful dry-run is eligibility for a new owner, never an
@@ -444,7 +484,7 @@ func (s CapacityStore) witnessedExpansionTransaction(ctx context.Context, policy
 	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
 		return err
 	}
-	if err = lockRetirementForwardBindingsTx(ctx, tx, p.MutationBindings); err != nil {
+	if err = guestContractLockBindingsTx(ctx, tx, policy, p); err != nil {
 		return err
 	}
 	current, err := loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true)
@@ -558,6 +598,108 @@ func (s CapacityStore) RefreshWitnessedExpansionSurvivors(ctx context.Context, p
 					if json.Unmarshal(e.Evidence, &r) == nil {
 						_, pending, readErr := witnessedExpansionReadContent(r, p, a)
 						knownPending = knownPending || readErr == nil && pending
+					}
+				}
+			}
+			if !knownPending {
+				return ErrCapacityConflict
+			}
+		}
+		return nil
+	})
+}
+
+// Retained survivors are refreshed against their own immutable contract, never
+// the failed target's newer scope. No combined adapter return is manufactured.
+func (s CapacityStore) RefreshWitnessedExpansionContractSurvivors(ctx context.Context, policy model.Manifest, originals []capacity.GuestContractInventory) error {
+	return s.witnessedExpansionTransaction(ctx, policy, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, a WitnessedUnenrolledExpansionCleanup, c WitnessedUnenrolledExpansionCleanupEvent, now time.Time) error {
+		if p.GuestContractSuccessor == nil {
+			return ErrCapacityConflict
+		}
+		cs, err := guestContractSetTx(ctx, tx, policy, p)
+		if err != nil {
+			return err
+		}
+		views := make([]model.CapacityPolicySpec, len(cs))
+		for i, contract := range cs {
+			views[i] = contract.spec
+		}
+		if _, _, err = capacity.GuestContractReconcileSnapshot(policy, p, views, originals, now); err != nil {
+			return err
+		}
+		currentBinding, err := capacity.VMObservationBinding(p, a.BindingName)
+		if err != nil {
+			return err
+		}
+		seen := map[int]bool{}
+		target := false
+		for i, contract := range cs {
+			b := contract.spec.MutationBindings[0]
+			proofs, err := capacity.VMInventoryProofs(contract.spec, b, originals[i].Inventory, "", 0, now, "failed-expansion-native-survivors:"+a.ID)
+			if err != nil {
+				return err
+			}
+			for _, proof := range proofs {
+				if seen[proof.Slot] {
+					return ErrCapacityConflict
+				}
+				seen[proof.Slot] = true
+				if proof.Slot == a.Slot {
+					if i != 0 || !reflect.DeepEqual(b, currentBinding) || proof.ResourceID != a.ResourceID || proof.ResourceCreatedAt != a.ResourceCreatedAt {
+						return ErrCapacityConflict
+					}
+					target = true
+					continue
+				}
+				if proof.Slot < 1 || proof.Slot >= a.Slot {
+					return ErrCapacityConflict
+				}
+				logical, err := guestLogicalSlotTx(ctx, tx, policy, p, proof.Slot)
+				if err != nil || !logical.exists || !reflect.DeepEqual(logical.binding, b) || logical.slot.BindingName != b.Name || logical.slot.ProfileName != b.ProfileName || logical.slot.ResourceID != proof.ResourceID || logical.slot.ResourceCreatedAt != proof.ResourceCreatedAt || logical.slot.DesiredSpecSHA256 != proof.RequestSHA256 {
+					return ErrCapacityConflict
+				}
+				slot := logical.slot
+				slot.ObservedAt, slot.ReceiptRef = proof.ObservedAt, proof.ReceiptRef
+				if err = saveMutationSlot(ctx, tx, a.Namespace, contract.spec, b, proof.Slot, slot); err != nil {
+					return err
+				}
+			}
+		}
+		survivors := len(seen)
+		if target {
+			survivors--
+		}
+		if survivors != a.SurvivorCount {
+			return ErrCapacityConflict
+		}
+		_, events, err := loadWitnessedExpansionTx(ctx, tx, a.ID)
+		if err != nil {
+			return err
+		}
+		absent := false
+		for _, event := range events {
+			if event.Stage == "absence_complete" {
+				var returned WitnessedExpansionReadReturn
+				if json.Unmarshal(event.Evidence, &returned) == nil && returned.Complete {
+					absent = true
+				}
+			}
+		}
+		if absent && target {
+			return ErrCapacityConflict
+		}
+		if !target && !absent {
+			child, err := witnessedExpansionChildTx(ctx, tx, a)
+			if err != nil || child.Grant.State != "settled" || child.Settlement == nil || child.Settlement.Outcome != "accepted" || !child.Settlement.AuxiliaryInventoryComplete {
+				return ErrCapacityConflict
+			}
+			knownPending := false
+			for _, event := range events {
+				if event.Stage == "pending_absence" {
+					var returned WitnessedExpansionReadReturn
+					if json.Unmarshal(event.Evidence, &returned) == nil {
+						_, pending, err := witnessedExpansionReadContent(returned, p, a)
+						knownPending = knownPending || err == nil && pending
 					}
 				}
 			}
@@ -703,6 +845,13 @@ func (s CapacityStore) witnessedExpansionFloorMembers(ctx context.Context, polic
 			if excludedSlot == 1 {
 				return nil
 			}
+		}
+		if p.GuestContractSuccessor != nil {
+			out, err = s.guestContractFloorMembersTx(ctx, tx, policy, p, excludedSlot)
+			if err == nil && (len(out) < p.Floor || cleanupActive && len(out) != cleanup.SurvivorCount || !cleanupActive && len(out) < current.Decision.Units) {
+				return ErrCapacityConflict
+			}
+			return err
 		}
 		r := *p.GuestRetirementBinding
 		b, err := capacity.VMObservationBinding(p, r.MutationBindingName)

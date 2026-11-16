@@ -85,6 +85,7 @@ func witnessedCleanup106PostgresRegression(t *testing.T) {
 	witnessedCleanup106AdmissionNegatives(t, f, put)
 	f.base = witnessedCleanup106Rows(t, f.DB)
 	witnessedExpansion107Postgres(t, f, migrations, put)
+	witnessedExpansion108Postgres(t, f, migrations, put)
 	// Each race starts from a separately declared exact copy of this immutable
 	// failed history; none backdates or alters the current producer's originals.
 	for _, kind := range []string{"enrollment", "installation"} {

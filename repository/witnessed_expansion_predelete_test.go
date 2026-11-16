@@ -185,6 +185,7 @@ func TestWitnessedExpansionInventoryAcceptsOnlyOriginalAttachedPrimaryIPs(t *tes
 }
 
 func TestWitnessedExpansionPredeleteContinuationRequiresExactOnTimeOriginalRead(t *testing.T) {
+	testWitnessedExpansionClaimOnlyContinuation(t)
 	p, a, events, now := witnessedPredelete107Unit(t)
 	if !witnessedExpansionPredeleteReturnContinuation(events, events[1], a, p, now) {
 		t.Fatal("closed original on-time inventory suffix should permit only a fresh read")

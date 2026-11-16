@@ -45,6 +45,7 @@ func TestProductionOriginalGuestWitnessRefusesUnsupportedSources(t *testing.T) {
 }
 
 func TestOriginalGuestSupplierRequiresActualClosedCatalog(t *testing.T) {
+	testWitnessedExpansionContractCollection(t)
 	raw, err := os.ReadFile("../../repository/testdata/capacity_hetzner_type_v1.json")
 	if err != nil {
 		t.Fatal(err)

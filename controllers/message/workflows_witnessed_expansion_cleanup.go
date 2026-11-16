@@ -35,6 +35,35 @@ func witnessedExpansionResult(a repository.WitnessedUnenrolledExpansionCleanup) 
 }
 
 func refreshWitnessedExpansionSurvivors(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput) error {
+	if p.GuestContractSuccessor != nil {
+		contracts, err := store.OriginalGuestContractSpecs(ctx, policy)
+		if err != nil {
+			return err
+		}
+		read := func(revision model.CapacityObservationAdapterBinding, operation string, fixed map[string]any, out any) error {
+			for _, view := range contracts {
+				b := view.MutationBindings[0]
+				if revision.IntegrationInstanceID != b.IntegrationInstanceID || revision.InstanceChecksum != b.IntegrationChecksum || revision.IntegrationTypeID != b.IntegrationTypeID || revision.TypeChecksum != b.IntegrationTypeChecksum {
+					continue
+				}
+				supplier, err := productionRetirementSupplierV2(ctx, store, policy, view, b, input)
+				if err != nil || supplier.provider != "hetzner" {
+					return errOriginalGuestStep
+				}
+				status, err := supplier.call(ctx, operation, fixed, out)
+				if err != nil || status != "observed" {
+					return errOriginalGuestStep
+				}
+				return nil
+			}
+			return errOriginalGuestStep
+		}
+		inventories, err := collectWitnessedExpansionContractInventoriesFromReads(ctx, policy, p, contracts, read)
+		if err != nil {
+			return err
+		}
+		return store.RefreshWitnessedExpansionContractSurvivors(ctx, policy, inventories)
+	}
 	b, err := capacity.VMObservationBinding(p, input.BindingName)
 	if err != nil {
 		return err
@@ -49,6 +78,35 @@ func refreshWitnessedExpansionSurvivors(ctx context.Context, store repository.Ca
 		return errOriginalGuestStep
 	}
 	return store.RefreshWitnessedExpansionSurvivors(ctx, policy, inv)
+}
+
+// Each retained cohort keeps its original adapter return and scope. This is
+// physical membership only; the existing survivor canaries still own usefulness.
+func collectWitnessedExpansionContractInventoriesFromReads(ctx context.Context, policy model.Manifest, p model.CapacityPolicySpec, contracts []model.CapacityPolicySpec, read originalGuestBoundRead) ([]capacity.GuestContractInventory, error) {
+	if p.GuestContractSuccessor == nil || read == nil || len(contracts) < 2 || len(contracts) > p.Ceiling+1 {
+		return nil, errOriginalGuestStep
+	}
+	var inventories []capacity.GuestContractInventory
+	for _, view := range contracts {
+		if len(view.MutationBindings) != 1 || view.GuestRetirementBinding == nil || len(view.Profiles) != 1 || originalGuestReconcileLive(ctx) != nil {
+			return nil, errOriginalGuestStep
+		}
+		b := view.MutationBindings[0]
+		hash := capacity.GuestProductionProfileContractSHA256(view, *view.GuestRetirementBinding, view.Profiles[0].Provider)
+		if !capacity.ValidDigest(hash) {
+			return nil, errOriginalGuestStep
+		}
+		var inv model.CapacityVMFleetInventory
+		revision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
+		if err := read(revision, capacity.VMObserveInventory, map[string]any{"profile": b.ProfileName}, &inv); err != nil {
+			return nil, err
+		}
+		inventories = append(inventories, capacity.GuestContractInventory{ContractSHA256: hash, Inventory: inv})
+	}
+	if _, _, err := capacity.GuestContractReconcileSnapshot(policy, p, contracts, inventories, time.Now().UTC()); err != nil || originalGuestReconcileLive(ctx) != nil {
+		return nil, errOriginalGuestStep
+	}
+	return inventories, nil
 }
 
 // Only the existing registered retire/finish steps select this typed lane.
