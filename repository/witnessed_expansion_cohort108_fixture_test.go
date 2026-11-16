@@ -3,10 +3,14 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -24,23 +28,47 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 	t.Helper()
 	f := witnessedCleanup106Clone(t, original, migrations)
 	oldPolicy, oldSpec := f.Policy, f.Spec
+	originalS1 := failedServingWire(t, []any{f.private.p, f.private.pre, f.private.reg, f.private.receipt})
 	var head model.CapacityPolicySpec
 	if json.Unmarshal(failedServingWire(t, oldSpec), &head) != nil {
 		t.Fatal("declared current cohort spec")
 	}
-	b := &head.MutationBindings[0]
+	// Use the complete current Source profile and all eight matching bootstrap
+	// projections. Keep the original S1's test keys, member credentials and
+	// signed DTOs; a different instance alone is not a different Guest contract.
+	currentRaw, err := os.ReadFile(filepath.Join(failedServingRepositoryRoot(t), "internal", "capacity", "testdata", "current4720-notify-hetzner-production-contract.json"))
+	var current model.CapacityPolicySpec
+	if err != nil || json.Unmarshal(currentRaw, &current) != nil || current.GuestRetirementBinding == nil || len(current.MutationBindings) != 1 || len(head.MutationBindings) != 1 || !reflect.DeepEqual(head.Profiles, current.Profiles) {
+		t.Fatal("declared current complete Source profile", err)
+	}
+	guest, currentGuest := head.GuestRetirementBinding, current.GuestRetirementBinding
+	guest.ProfileManifest, guest.ProfileManifestSHA256 = currentGuest.ProfileManifest, currentGuest.ProfileManifestSHA256
+	guest.GuestSourceCommit, guest.ProvisionerSourceCommit = currentGuest.GuestSourceCommit, currentGuest.ProvisionerSourceCommit
+	if reflect.DeepEqual(guest, oldSpec.GuestRetirementBinding) || guest.ProfileManifestSHA256 == oldSpec.GuestRetirementBinding.ProfileManifestSHA256 || guest.GuestSourceCommit == oldSpec.GuestRetirementBinding.GuestSourceCommit || guest.ProvisionerSourceCommit == oldSpec.GuestRetirementBinding.ProvisionerSourceCommit || capacity.GuestRetirementSHA(guest.ProfileManifest) != guest.ProfileManifestSHA256 || guest.ProfileManifest.OriginalProvisioningBudgetSeconds != 420 {
+		t.Fatal("declared current Guest contract must differ from retained S1")
+	}
+	b, currentBinding := &head.MutationBindings[0], current.MutationBindings[0]
+	if b.Name != currentBinding.Name || b.ProfileName != currentBinding.ProfileName || b.MaxSlots != 8 || len(b.Slots) != 8 || len(currentBinding.Slots) != 8 || len(guest.ProfileManifest.SlotBootstraps) != 8 {
+		t.Fatal("declared current logical profile and eight slots")
+	}
 	oldInstance := b.IntegrationInstanceID
 	b.IntegrationInstanceID = uuid.NewString()
 	b.IntegrationChecksum = capacity.BusinessCreationSHA256([]byte("declared108-current-instance-" + b.IntegrationInstanceID))
 	b.ScopeChecksum = capacity.BusinessCreationSHA256([]byte("declared108-current-scope-" + b.IntegrationInstanceID))
 	for i := range b.Slots {
+		source := currentBinding.Slots[i]
+		if source.Slot != b.Slots[i].Slot || source.DesiredSpec == nil || source.DesiredSpec.ProfileName != b.ProfileName || source.DesiredSpec.ProfileChecksum != currentBinding.Slots[0].DesiredSpec.ProfileChecksum || source.DesiredSpec.AdmissionChecksum != currentBinding.Slots[0].DesiredSpec.AdmissionChecksum || source.DesiredSpec.BootstrapSHA256 != capacity.GuestProfileBootstrapSHA(guest.ProfileManifest, source.Slot) {
+			t.Fatal("declared current profile/admission/bootstrap projection", i)
+		}
+		desired := *source.DesiredSpec
+		b.Slots[i].DesiredSpec = &desired
 		s := b.Slots[i].DesiredSpec
 		s.IntegrationInstanceID, s.ScopeChecksum = b.IntegrationInstanceID, b.ScopeChecksum
 		projection := map[string]any{"schema_version": s.SchemaVersion, "capability": s.Capability, "integration_instance_id": s.IntegrationInstanceID, "scope_checksum": s.ScopeChecksum, "profile_checksum": s.ProfileChecksum, "admission_checksum": s.AdmissionChecksum, "profile_name": s.ProfileName, "slot": s.Slot, "native_name": s.NativeName, "bootstrap_sha256": s.BootstrapSHA256}
 		b.Slots[i].DesiredSpecSHA256 = capacity.BusinessCreationSHA256(failedServingWire(t, projection))
 	}
 	head.GuestContractSuccessor = &model.CapacityGuestContractSuccessor{Schema: capacity.GuestContractSuccessorSchema, RetainedPolicyContracts: []model.CapacityGuestRetainedPolicyContract{{PolicyID: oldPolicy.ID.String(), PolicyChecksum: oldPolicy.Checksum, ContractSHA256: guestContractDigest(oldSpec)}}}
-	if err := capacity.RegisterRecoveryFixtureApproval(head, *head.GuestRetirementBinding, "hetzner"); err != nil || capacity.ValidateGuestContractSuccessor(head) != nil {
+	if err := capacity.RegisterRecoveryFixtureApproval(head, *guest, "hetzner"); err != nil || capacity.ValidateGuestContractSuccessor(head) != nil || capacity.ValidateGuestRetirementBinding(head, guest) != nil || !capacity.GuestOriginalProfileEnabled(head, *guest, "hetzner") {
 		t.Fatal("declared current cohort approval/retained original", err)
 	}
 	f.Policy = oldPolicy
@@ -68,6 +96,10 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 	}
 	f.pre.PolicyID, f.pre.PolicyChecksum = f.Policy.ID.String(), f.Policy.Checksum
 	f.pre.OriginalCreateRequestSHA256 = f.parent.Grant.RequestSHA256
+	f.pre.ProfileManifestSHA256 = guest.ProfileManifestSHA256
+	if !capacity.GuestOriginalProvisioningDeadlineMatches(f.pre, guest.ProfileManifest) {
+		t.Fatal("declared current profile preserves the original provisioning clock")
+	}
 	f.witness, f.registration, f.receipt = capacity.RecoveryFixtureCompensationRegistration(t, head, *head.GuestRetirementBinding, f.pre, *f.parent.Settlement)
 	f.installation = witnessedCleanup106Installation(t, f)
 	f.job.Policy = CapacityDispatchManifestPin{ID: f.Policy.ID, Namespace: f.Policy.Metadata.Namespace, Name: f.Policy.Metadata.Name, Version: f.Policy.Version, Checksum: f.Policy.Checksum}
@@ -96,7 +128,7 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 	exec("INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec,active) VALUES($1,'v1','capacity_policy',$2,$3,$4,$5,$6::jsonb,true)", f.Policy.ID, f.Policy.Metadata.Namespace, f.Policy.Metadata.Name, f.Policy.Version, f.Policy.Checksum, string(f.Policy.Spec))
 	exec("INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec,active) SELECT $1::uuid,api_version,kind,namespace,name||'-cohort108',version,$2,spec,true FROM public.manifests WHERE id=$3::uuid", b.IntegrationInstanceID, b.IntegrationChecksum, oldInstance)
 	exec("UPDATE public.capacity_mutation_grants SET integration_instance_id=$2,scope_checksum=$3,grant_record=$4::jsonb WHERE id=$1", f.pre.OriginalCreateGrantID, b.IntegrationInstanceID, b.ScopeChecksum, string(failedServingWire(t, f.parent)))
-	exec("UPDATE public.capacity_vm_provisioning_preregistrations SET preregistration_record=$2::jsonb,original_wire=$3,binding_wire=$4 WHERE id=$1", f.pre.PreregistrationID, string(failedServingWire(t, f.pre)), failedServingWire(t, f.pre), failedServingWire(t, *head.GuestRetirementBinding))
+	exec("UPDATE public.capacity_vm_provisioning_preregistrations SET preregistration_record=$2::jsonb,original_wire=$3,binding_wire=$4,profile_manifest_sha256=$5 WHERE id=$1", f.pre.PreregistrationID, string(failedServingWire(t, f.pre)), failedServingWire(t, f.pre), failedServingWire(t, *guest), guest.ProfileManifestSHA256)
 	exec("UPDATE public.capacity_guest_original_create_witnesses SET resource_tuple_sha256=$2,witness_sha256=$3,original_wire=$4,original_record=$5::jsonb WHERE preregistration_id=$1", f.pre.PreregistrationID, capacity.GuestRetirementSHA(f.witness.Tuple), capacity.GuestRetirementSHA(f.witness), failedServingWire(t, f.witness), string(failedServingWire(t, f.witness)))
 	exec("UPDATE public.capacity_dispatch_jobs SET envelope=$2,envelope_sha256=$3 WHERE id=$1", f.job.JobID, string(envelope), f.job.EnvelopeSHA256)
 	exec("UPDATE public.capacity_intents SET intent=$2::jsonb WHERE namespace=$1 AND environment=$3 AND domain=$4 AND dimension=$5", f.Policy.Metadata.Namespace, string(failedServingWire(t, f.intent)), head.Environment, head.Domain, head.Dimension)
@@ -144,6 +176,9 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 			t.Fatal("declared two-cohort native returns", e)
 		}
 		return out
+	}
+	if !bytes.Equal(originalS1, failedServingWire(t, []any{f.private.p, f.private.pre, f.private.reg, f.private.receipt})) {
+		t.Fatal("retained original S1 signed DTOs changed during current declaration")
 	}
 	return f, inventories
 }
