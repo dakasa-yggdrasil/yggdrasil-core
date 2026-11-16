@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 
 def exercise_g21_compiler_binding(test, root):
-    source = root / 'rollout/assemble_g28_pair_package.py'
+    source = root / 'rollout/assemble_g29_pair_package.py'
     raw_compiler = source.read_bytes()
-    module = types.ModuleType('declared_g28_compiler_CI')
+    module = types.ModuleType('declared_g29_compiler_CI')
     module.__file__ = str(source)
     exec(compile(raw_compiler, str(source), 'exec'), module.__dict__)
     test.assertIs(module.SOURCE_BOUND, False)
@@ -30,16 +30,16 @@ def exercise_g21_compiler_binding(test, root):
                 any(isinstance(t, ast.Name) and t.id == 'keys' for t in n.targets))
     test.assertEqual(ast.literal_eval(keys), {'schema', 'source_worktree', 'out', 'ci_attestation_ref',
         'root_controller_review_ref', 'root_standing_review_ref', 'controller_unit_ref',
-        'predecessor_manifest_ref', 'actual_M19_repair_acceptance_ref', 'continuity_peer_ipv4',
+        'predecessor_manifest_ref', 'actual_M20_acceptance_ref', 'continuity_peer_ipv4',
         'expected_controller_identity', 'expected_guardian_identity'})
-    test.assertEqual(module.OLD_MANIFEST_SHA, '1ba7c49baa0904d314e4b6cbbf6dc902b236ddd796eb575cbf3cee86e957a238')
+    test.assertEqual(module.OLD_MANIFEST_SHA, '3ecbf4038b0b3537da9a78c17a18aef4c887a18bbeb6769dfe875027d3d65972')
     test.assertEqual(module.PYTHON_BINDINGS, {
         'source/network_guardian.py': {'PROPOSAL_BOUND', 'HEAD_CORE_SOURCE',
-            'HEAD_NEW_CORE_DIGEST', 'G28_CONTROLLER_CONFIG_SHA'},
+            'HEAD_NEW_CORE_DIGEST', 'G29_CONTROLLER_CONFIG_SHA'},
         'tools/pair_change_contract.py': {'PROPOSAL_BOUND', 'SOURCE_R', 'NEW_DIGEST',
-            'G28_CONFIG_SHA'},
+            'G29_CONFIG_SHA'},
         'tools/derive_g15pair_controller_config.py': {'PROPOSAL_BOUND',
-            'HEAD_NEW_CORE_DIGEST', 'G28_CONFIG_SHA'},
+            'HEAD_NEW_CORE_DIGEST', 'G29_CONFIG_SHA'},
         'tools/derive_standing_config.py': {'PROPOSAL_BOUND'},
         'tools/g15cut.py': {'PROPOSAL_BOUND'},
     })
@@ -65,17 +65,17 @@ def exercise_g21_compiler_binding(test, root):
     raw = {name: (package_root / name).read_bytes() for name in package['files']}
     raw['PACKAGE.json'] = (package_root / 'PACKAGE.json').read_bytes()
     contract_tree = ast.parse(raw['tools/pair_change_contract.py'])
-    # G27 and Core17 are immutable predecessor facts, never late-bound fields.
-    predecessor_config = 'b91aee44a2df82d6173112f0e35deeac5acf0bbd218365d4167fe6c9216092fb'
-    predecessor_pod = '46105db4-8896-4916-98c5-510c926bcde1'
-    predecessor_container = 'containerd://834038b407c50663d18961b6a9fae8bb45d7889829631708dae083b040de730b'
-    test.assertEqual(module.literal(contract_tree, 'G27_CONFIG_SHA'), predecessor_config)
+    # G28 and auth-followup Core18 are immutable predecessor facts, never late-bound fields.
+    predecessor_config = '7b1b71c5b4c9692401f876eb6583d1315880099edb95775005aff39263f3e43b'
+    predecessor_pod = 'a943d250-4758-4f8c-b63e-64229102ce86'
+    predecessor_container = 'containerd://aff2be52ca41bf81f1a3e77ed1d3d701ca875cd63723d111c7393ed3b9572c63'
+    test.assertEqual(module.literal(contract_tree, 'G28_CONFIG_SHA'), predecessor_config)
     test.assertEqual(module.literal(contract_tree, 'OLD_CORE_POD_UID'), predecessor_pod)
     test.assertEqual(module.literal(contract_tree, 'OLD_CORE_CONTAINER_ID'), predecessor_container)
     test.assertEqual(module.literal(ast.parse(raw['source/network_guardian.py']),
-                                   'G27_CONTROLLER_CONFIG_SHA'), predecessor_config)
+                                   'G28_CONTROLLER_CONFIG_SHA'), predecessor_config)
     test.assertEqual(module.literal(ast.parse(raw['tools/derive_g15pair_controller_config.py']),
-                                   'G27_CONFIG_SHA'), predecessor_config)
+                                   'G28_CONFIG_SHA'), predecessor_config)
     modules = module.literal(contract_tree, 'MODULES')
     tools = module.literal(contract_tree, 'TOOLS')
     helpers = module.literal(contract_tree, 'HELPERS')
@@ -95,8 +95,8 @@ def exercise_g21_compiler_binding(test, root):
     module.CONTROLLER_UNIT_SHA = 'f' * 64
     values = {'PROPOSAL_BOUND': True, 'HEAD_CORE_SOURCE': module.EXPECTED_R,
         'SOURCE_R': module.EXPECTED_R, 'HEAD_NEW_CORE_DIGEST': 'sha256:' + module.EXPECTED_D,
-        'NEW_DIGEST': module.EXPECTED_D, 'G28_CONTROLLER_CONFIG_SHA': 'e' * 64,
-        'G28_CONFIG_SHA': 'e' * 64}
+        'NEW_DIGEST': module.EXPECTED_D, 'G29_CONTROLLER_CONFIG_SHA': 'e' * 64,
+        'G29_CONFIG_SHA': 'e' * 64}
     bound = {}
     for name, allowed in module.PYTHON_BINDINGS.items():
         data = raw[name]
@@ -144,7 +144,7 @@ def exercise_g21_compiler_binding(test, root):
         fixed_width_latebind_Guardian_bytes=len(bound[guardian]))
     bound_package['files'] = {name: module.sha(bound.get(name, data)) for name, data in raw.items() if name != 'PACKAGE.json'}
     bound['PACKAGE.json'] = module.wire(bound_package)
-    with tempfile.TemporaryDirectory(prefix='declared-g28-overlay-') as folder:
+    with tempfile.TemporaryDirectory(prefix='declared-g29-overlay-') as folder:
         folder = Path(folder)
         def write(name, data):
             path = folder / name
@@ -153,7 +153,7 @@ def exercise_g21_compiler_binding(test, root):
                 stream.write(data)
             path.chmod(0o600)
             return {'path': str(path), 'sha256': module.sha(data)}
-        binding = {'schema': 'g28_root_literal_source_bindings_v1',
+        binding = {'schema': 'g29_root_literal_source_bindings_v1',
             'source_commit': module.EXPECTED_HEAD, 'reviewed_by_root': True,
             'bound_source_refs': {name: write(name, data) for name, data in bound.items()}}
         module.BINDINGS_REF = {'path': str(folder / 'DECLARED-BINDING.json'), 'sha256': '1' * 64}
@@ -187,8 +187,8 @@ def exercise_g21_compiler_binding(test, root):
                     b'def sibling(name, unreviewed=False):', 1)),
             'predecessor_config_edit': ('tools/pair_change_contract.py',
                 bound['tools/pair_change_contract.py'].replace(
-                    ("G27_CONFIG_SHA='" + predecessor_config + "'").encode(),
-                    ("G27_CONFIG_SHA='" + '1' * 64 + "'").encode(), 1)),
+                    ("G28_CONFIG_SHA='" + predecessor_config + "'").encode(),
+                    ("G28_CONFIG_SHA='" + '1' * 64 + "'").encode(), 1)),
             'predecessor_pod_edit': ('tools/pair_change_contract.py',
                 bound['tools/pair_change_contract.py'].replace(predecessor_pod.encode(),
                     b'11111111-1111-4111-8111-111111111111', 1)),

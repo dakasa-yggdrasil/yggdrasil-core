@@ -18,12 +18,13 @@ ROOT=Path('/opt/dakasa/capacity-network')
 ETC=Path('/etc/dakasa/capacity-network')
 CP='controller.r13-netlink-'
 SP='network-boot-recovery-r13-'
-HERE=ROOT/(SP+'g28pair-source-v1')
+NP='network-recovery.r13-'
+HERE=ROOT/(SP+'g29pair-source-v1')
 SELF=HERE/'network_guardian.py'
-CONFIG=ETC/'network-recovery.r13-g28pair.production.json'
+CONFIG=ETC/(NP+'g29pair.production.json')
 R13_PREDECESSOR_HERE=ROOT/(SP+'netlink-source-v1')
 R13_PREDECESSOR_SOURCE_SHA='2f5bb7e1946d905fbfc83c0662b0df281f6fb9f1fba2c85b4036ba825376021c'
-R13_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-netlink.production.json'
+R13_PREDECESSOR_CONFIG=ETC/(NP+'netlink.production.json')
 SS='_successor_Core262_R43_network_boot_terminal_recovery_v1'
 R13_PREDECESSOR_SCHEMA='Root_standing_R13_netlink'+SS
 PREDECESSOR_HERE=ROOT/'network-boot-recovery-Core262-r43-adoption-source-v1'
@@ -36,7 +37,7 @@ HUB='dakasa-capacity-network-hub.service'
 COLD='dakasa-capacity-network-cold-transport.service'
 GUARDIAN='dakasa-capacity-network-guardian.service'
 RUNTIME=ROOT/'source-r13-netlink-v1'
-NEW_CONFIG=ETC/(CP+'g28pair.production.json')
+NEW_CONFIG=ETC/(CP+'g29pair.production.json')
 BASE_CONFIG=ETC/'controller.r13-netlink.production.json'
 BASE_CONFIG_SHA='460b0fd49191248fecffa7009636a82391815a64fc23db11e039b7ee9f5d928a'
 F5PAIR_CONFIG=ETC/(CP+'f5pair.production.json')
@@ -107,15 +108,18 @@ G26_CORE_IMAGE_PAIRS=[{IK:CORE_G25,JK:CORE_G25},{IK:CORE_G26,JK:CORE_G26}]
 CORE_G27=CORE_IMAGE_REF+'sha256:346cc922d68520cf3222f3cad6a0a1d5f659f5bfb6388c24040cba88831e8c9b'
 G27_CONTROLLER_CONFIG_SHA='b91aee44a2df82d6173112f0e35deeac5acf0bbd218365d4167fe6c9216092fb'
 G27_CORE_IMAGE_PAIRS=[{IK:CORE_G26,JK:CORE_G26},{IK:CORE_G27,JK:CORE_G27}]
-CORE_G28=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
-G28_CONTROLLER_CONFIG_SHA=None
+CORE_G28=CORE_IMAGE_REF+'sha256:df8c70eba4f65ac7ce18d03c3b1f1c98dcd757bc540853df85f6cebf195a3a70'
+G28_CONTROLLER_CONFIG_SHA='7b1b71c5b4c9692401f876eb6583d1315880099edb95775005aff39263f3e43b'
 G28_CORE_IMAGE_PAIRS=[{IK:CORE_G27,JK:CORE_G27},{IK:CORE_G28,JK:CORE_G28}]
+CORE_G29=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
+G29_CONTROLLER_CONFIG_SHA=None
+G29_CORE_IMAGE_PAIRS=[{IK:CORE_G28,JK:CORE_G28},{IK:CORE_G29,JK:CORE_G29}]
 G14_CONTROLLER_CONFIG_SHA='90fb39778f79963af7a515401df0e66d969de997d7762aed6f2c50284a733804'
 CORE_G9=CORE_IMAGE_REF+'sha256:7f86e55cebd3dfcd3e1e027d8ddb573358ba8b42753348bfbda108bf6d39a0b6'
 G9_CONTROLLER_CONFIG_SHA='3d8ed6cf0341d6fe36ff190ade585321a1c88274577b9ebb57f8e7c235654111'
 G9_PREDECESSOR_HERE=ROOT/(SP+'g9pair-source-v1')
 G9_PREDECESSOR_SOURCE_SHA='6defe12adc0cac920c767c09c49c25db589d9ec9a0dee5abc0f3cc03dfe18765'
-G9_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g9pair.production.json'
+G9_PREDECESSOR_CONFIG=ETC/(NP+'g9pair.production.json')
 G9_PREDECESSOR_CONFIG_SHA='af0ae4a82c5ee7504025cf4564b67ea941cc99122677aa1fa8a82f96c6a44a87'
 G9_PREDECESSOR_SCHEMA='Root_standing_R13_g9pair'+SS
 R42_CORE_IMAGE_PAIRS=[{IK:CORE_417,JK:CORE_417},{IK:CORE_C423,JK:CORE_C423}]
@@ -141,30 +145,30 @@ G13_CONTROLLER_CONFIG_SHA='2fafe364344596ec0ab4a87a1887c8a4bcc581b103937fedb807e
 G12_CONTROLLER_CONFIG_SHA='7c05da2f2ab22a08abd57d5e514e71c7c378e03387a532a8189e1845e3865879'
 G11_CONTROLLER_CONFIG_SHA='a3706d21323a4cce2ef1d0746a9daffd81c1dad538f028635765bcbc116c7777'
 G16_CONTROLLER_CONFIG_SHA='0549d1941ebc50fd77cd3800c3b4afb78505d0de6daa76c4fd0b04a2f73abe7d'
-PAIR_CHAIN=(('base',R42_CORE_IMAGE_PAIRS,BASE_CONFIG,BASE_CONFIG_SHA),('f5pair',F5_CORE_IMAGE_PAIRS,F5PAIR_CONFIG,F5PAIR_CONFIG_SHA),('g2pair',G2_CORE_IMAGE_PAIRS,G2PAIR_CONFIG,G2PAIR_CONFIG_SHA),('g3pair',G3_CORE_IMAGE_PAIRS,G3PAIR_CONFIG,G3PAIR_CONFIG_SHA),('g4pair',G4_CORE_IMAGE_PAIRS,G4PAIR_CONFIG,G4PAIR_CONFIG_SHA),('g5pair',G5_CORE_IMAGE_PAIRS,G5PAIR_CONFIG,G5PAIR_CONFIG_SHA),('g6pair',G6_CORE_IMAGE_PAIRS,G6PAIR_CONFIG,G6PAIR_CONFIG_SHA),('g7pair',G7_CORE_IMAGE_PAIRS,ETC/(CP+'g7pair.production.json'),'d68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf'),('g8pair',G8_CORE_IMAGE_PAIRS,ETC/(CP+'g8pair.production.json'),'42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5'),('g9pair',G9_CORE_IMAGE_PAIRS,ETC/(CP+'g9pair.production.json'),G9_CONTROLLER_CONFIG_SHA),('g10pair',G10_CORE_IMAGE_PAIRS,ETC/(CP+'g10pair.production.json'),G10_CONTROLLER_CONFIG_SHA),('g11pair',G11_CORE_IMAGE_PAIRS,ETC/(CP+'g11pair.production.json'),G11_CONTROLLER_CONFIG_SHA),('g12pair',G12_CORE_IMAGE_PAIRS,ETC/(CP+'g12pair.production.json'),G12_CONTROLLER_CONFIG_SHA),('g13pair',G13_CORE_IMAGE_PAIRS,ETC/(CP+'g13pair.production.json'),G13_CONTROLLER_CONFIG_SHA),('g14pair',G14_CORE_IMAGE_PAIRS,ETC/(CP+'g14pair.production.json'),G14_CONTROLLER_CONFIG_SHA),('g15pair',G15_CORE_IMAGE_PAIRS,ETC/(CP+'g15pair.production.json'),'9094bab152bae7be581b524fb32417c7cfb320ce1ad46f9a171347d3043fa4a5'),('g16pair',G16_CORE_IMAGE_PAIRS,ETC/(CP+'g16pair.production.json'),G16_CONTROLLER_CONFIG_SHA),('g17pair',G17_CORE_IMAGE_PAIRS,ETC/(CP+'g17pair.production.json'),G17_CONTROLLER_CONFIG_SHA),('g18pair',G18_CORE_IMAGE_PAIRS,ETC/(CP+'g18pair.production.json'),G18_CONTROLLER_CONFIG_SHA),('g19pair',G19_CORE_IMAGE_PAIRS,ETC/(CP+'g19pair.production.json'),G19_CONTROLLER_CONFIG_SHA),('g20pair',G20_CORE_IMAGE_PAIRS,ETC/(CP+'g20pair.production.json'),G20_CONTROLLER_CONFIG_SHA),('g21pair',G21_CORE_IMAGE_PAIRS,ETC/(CP+'g21pair.production.json'),G21_CONTROLLER_CONFIG_SHA),('g22pair',G22_CORE_IMAGE_PAIRS,ETC/(CP+'g22pair.production.json'),G22_CONTROLLER_CONFIG_SHA),('g23pair',G23_CORE_IMAGE_PAIRS,ETC/(CP+'g23pair.production.json'),G23_CONTROLLER_CONFIG_SHA),('g24pair',G24_CORE_IMAGE_PAIRS,ETC/(CP+'g24pair.production.json'),G24_CONTROLLER_CONFIG_SHA),('g25pair',G25_CORE_IMAGE_PAIRS,ETC/(CP+'g25pair.production.json'),G25_CONTROLLER_CONFIG_SHA),('g26pair',G26_CORE_IMAGE_PAIRS,ETC/(CP+'g26pair.production.json'),G26_CONTROLLER_CONFIG_SHA),('g27pair',G27_CORE_IMAGE_PAIRS,ETC/(CP+'g27pair.production.json'),G27_CONTROLLER_CONFIG_SHA),('g28pair',G28_CORE_IMAGE_PAIRS,NEW_CONFIG,None),)
+PAIR_CHAIN=(('base',R42_CORE_IMAGE_PAIRS,BASE_CONFIG,BASE_CONFIG_SHA),('f5pair',F5_CORE_IMAGE_PAIRS,F5PAIR_CONFIG,F5PAIR_CONFIG_SHA),('g2pair',G2_CORE_IMAGE_PAIRS,G2PAIR_CONFIG,G2PAIR_CONFIG_SHA),('g3pair',G3_CORE_IMAGE_PAIRS,G3PAIR_CONFIG,G3PAIR_CONFIG_SHA),('g4pair',G4_CORE_IMAGE_PAIRS,G4PAIR_CONFIG,G4PAIR_CONFIG_SHA),('g5pair',G5_CORE_IMAGE_PAIRS,G5PAIR_CONFIG,G5PAIR_CONFIG_SHA),('g6pair',G6_CORE_IMAGE_PAIRS,G6PAIR_CONFIG,G6PAIR_CONFIG_SHA),('g7pair',G7_CORE_IMAGE_PAIRS,ETC/(CP+'g7pair.production.json'),'d68912a7e24b68e6cc51faeedba4c0987c65b2a14d439d18483706bd3fd18fbf'),('g8pair',G8_CORE_IMAGE_PAIRS,ETC/(CP+'g8pair.production.json'),'42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad030413a37a2a1a5'),('g9pair',G9_CORE_IMAGE_PAIRS,ETC/(CP+'g9pair.production.json'),G9_CONTROLLER_CONFIG_SHA),('g10pair',G10_CORE_IMAGE_PAIRS,ETC/(CP+'g10pair.production.json'),G10_CONTROLLER_CONFIG_SHA),('g11pair',G11_CORE_IMAGE_PAIRS,ETC/(CP+'g11pair.production.json'),G11_CONTROLLER_CONFIG_SHA),('g12pair',G12_CORE_IMAGE_PAIRS,ETC/(CP+'g12pair.production.json'),G12_CONTROLLER_CONFIG_SHA),('g13pair',G13_CORE_IMAGE_PAIRS,ETC/(CP+'g13pair.production.json'),G13_CONTROLLER_CONFIG_SHA),('g14pair',G14_CORE_IMAGE_PAIRS,ETC/(CP+'g14pair.production.json'),G14_CONTROLLER_CONFIG_SHA),('g15pair',G15_CORE_IMAGE_PAIRS,ETC/(CP+'g15pair.production.json'),'9094bab152bae7be581b524fb32417c7cfb320ce1ad46f9a171347d3043fa4a5'),('g16pair',G16_CORE_IMAGE_PAIRS,ETC/(CP+'g16pair.production.json'),G16_CONTROLLER_CONFIG_SHA),('g17pair',G17_CORE_IMAGE_PAIRS,ETC/(CP+'g17pair.production.json'),G17_CONTROLLER_CONFIG_SHA),('g18pair',G18_CORE_IMAGE_PAIRS,ETC/(CP+'g18pair.production.json'),G18_CONTROLLER_CONFIG_SHA),('g19pair',G19_CORE_IMAGE_PAIRS,ETC/(CP+'g19pair.production.json'),G19_CONTROLLER_CONFIG_SHA),('g20pair',G20_CORE_IMAGE_PAIRS,ETC/(CP+'g20pair.production.json'),G20_CONTROLLER_CONFIG_SHA),('g21pair',G21_CORE_IMAGE_PAIRS,ETC/(CP+'g21pair.production.json'),G21_CONTROLLER_CONFIG_SHA),('g22pair',G22_CORE_IMAGE_PAIRS,ETC/(CP+'g22pair.production.json'),G22_CONTROLLER_CONFIG_SHA),('g23pair',G23_CORE_IMAGE_PAIRS,ETC/(CP+'g23pair.production.json'),G23_CONTROLLER_CONFIG_SHA),('g24pair',G24_CORE_IMAGE_PAIRS,ETC/(CP+'g24pair.production.json'),G24_CONTROLLER_CONFIG_SHA),('g25pair',G25_CORE_IMAGE_PAIRS,ETC/(CP+'g25pair.production.json'),G25_CONTROLLER_CONFIG_SHA),('g26pair',G26_CORE_IMAGE_PAIRS,ETC/(CP+'g26pair.production.json'),G26_CONTROLLER_CONFIG_SHA),('g27pair',G27_CORE_IMAGE_PAIRS,ETC/(CP+'g27pair.production.json'),G27_CONTROLLER_CONFIG_SHA),('g28pair',G28_CORE_IMAGE_PAIRS,ETC/(CP+'g28pair.production.json'),G28_CONTROLLER_CONFIG_SHA),('g29pair',G29_CORE_IMAGE_PAIRS,NEW_CONFIG,None),)
 ALLOWED_CORE_IMAGE_PAIRS=tuple(pairs for _,pairs,_,_ in PAIR_CHAIN)
 F5PAIR_PREDECESSOR_SOURCE_SHA='d83f892b087b6c604928d9a21e47af5f6086124eeecadb08e6560f47e631afeb'
-F5PAIR_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-f5pair.production.json'
+F5PAIR_PREDECESSOR_CONFIG=ETC/(NP+'f5pair.production.json')
 F5PAIR_PREDECESSOR_SCHEMA='Root_standing_R13_f5pair'+SS
 F5PAIR_PREDECESSOR_CONFIG_SHA='afcfe2e5cad8dbf59732fb805e7f6c4a709608f36ba77bc112ca6633c8e3833c'
 G2PAIR_PREDECESSOR_SOURCE_SHA='9e45ade0254496bf04458b85d0214208bcbafcd4b7e4af7285388da9c63ec1da'
-G2PAIR_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g2pair.production.json'
+G2PAIR_PREDECESSOR_CONFIG=ETC/(NP+'g2pair.production.json')
 G2PAIR_PREDECESSOR_SCHEMA='Root_standing_R13_g2pair'+SS
 G2PAIR_PREDECESSOR_CONFIG_SHA='494a57d8d4995f9f52348e6153bca5e00a73b873fbd69e8e36c187407cc0f57f'
 G3PAIR_PREDECESSOR_SOURCE_SHA='9e7d88e29a8dce5296f58df33db0ae2c7853db5d6801836ca9c1a4311f73d985'
-G3PAIR_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g3pair.production.json'
+G3PAIR_PREDECESSOR_CONFIG=ETC/(NP+'g3pair.production.json')
 G3PAIR_PREDECESSOR_SCHEMA='Root_standing_R13_g3pair'+SS
 G3PAIR_PREDECESSOR_CONFIG_SHA='2922be85534c7d93257a9d703af8509c72e585e5683edfd35496ff8294df40d9'
 G4PAIR_PREDECESSOR_SOURCE_SHA='81f7f53b9e201955cf9d53c7a8b8a791ef5bb9a143343a4f28a93b72198a9b45'
-G4PAIR_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g4pair.production.json'
+G4PAIR_PREDECESSOR_CONFIG=ETC/(NP+'g4pair.production.json')
 G4PAIR_PREDECESSOR_SCHEMA='Root_standing_R13_g4pair'+SS
 G4PAIR_PREDECESSOR_CONFIG_SHA='385928fe10e25980b918ca44bacd5b7e8b901cd2cbcde2bae8304e58d8931997'
 G5PAIR_PREDECESSOR_SOURCE_SHA='e38fe46112f471ff02565fa5fdead6315606c071cfdb074144795f1b9923c230'
-G5PAIR_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g5pair.production.json'
+G5PAIR_PREDECESSOR_CONFIG=ETC/(NP+'g5pair.production.json')
 G5PAIR_PREDECESSOR_SCHEMA='Root_standing_R13_g5pair'+SS
 G5PAIR_PREDECESSOR_CONFIG_SHA='180b38fa905099e57776e944eda2be856ccc89bc070ad6b67a9142ab380139ca'
 G6_PREDECESSOR_SOURCE_SHA='6c2cc19f1f962d9d8eaec0cd5e6f813bf49004f8ff6fef9c9fe9f8f0310d8f1b'
-G6_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g6pair.production.json'
+G6_PREDECESSOR_CONFIG=ETC/(NP+'g6pair.production.json')
 G6_PREDECESSOR_SCHEMA='Root_standing_R13_g6pair'+SS
 G6_PREDECESSOR_CONFIG_SHA='be5b25495056bd25e1512827b5ccbe7236f84928b4d20515f5000383771dcc79'
 G6_CONTROLLER_CONFIG_SHA='8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e'
@@ -173,17 +177,17 @@ G8_CONTROLLER_CONFIG_SHA='42b9d05dac25610678ebce295335ead8b6086a87527fcd5ad03041
 G15_CONTROLLER_CONFIG_SHA='9094bab152bae7be581b524fb32417c7cfb320ce1ad46f9a171347d3043fa4a5'
 G8_PREDECESSOR_HERE=ROOT/(SP+'g8pair-source-v1')
 G8_PREDECESSOR_SOURCE_SHA='8259638127d811079d6a461d3bd7407f8a53ff3ebb75e8061bf8538dcf6508b9'
-G8_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g8pair.production.json'
+G8_PREDECESSOR_CONFIG=ETC/(NP+'g8pair.production.json')
 G8_PREDECESSOR_CONFIG_SHA='a02690f5e7a8c000478ceca6c4f4715e7b589814bf93fc5cbefe3bd9126e08d3'
 G8_PREDECESSOR_SCHEMA='Root_standing_R13_g8pair'+SS
 G7_PREDECESSOR_HERE=ROOT/(SP+'g7pair-source-v1')
 G7_PREDECESSOR_SOURCE_SHA='2379e9cb0fcf36faf7dfe58e930d0eb6ae97ba4d177db6610a23583d0a00a8aa'
-G7_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g7pair.production.json'
+G7_PREDECESSOR_CONFIG=ETC/(NP+'g7pair.production.json')
 G7_PREDECESSOR_CONFIG_SHA='dd7d449ea8fdba60a43d6badb138ea9496e1342572f90633e62d7b87d9b44866'
 G7_PREDECESSOR_SCHEMA='Root_standing_R13_g7pair'+SS
 G6_BOOT_V2_PREDECESSOR_HERE=ROOT/(SP+'g6pair-boot-v2-source-v1')
 G6_BOOT_V2_PREDECESSOR_SOURCE_SHA='f3152cc6d8c5d7edee2e5349db17fac4b8650a18423dfc207c04fcc116955e6d'
-G6_BOOT_V2_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g6pair-boot-v2.production.json'
+G6_BOOT_V2_PREDECESSOR_CONFIG=ETC/(NP+'g6pair-boot-v2.production.json')
 G6_BOOT_V2_PREDECESSOR_SCHEMA='Root_standing_R13_g6pair_boot_v2'+SS
 G6_BOOT_V2_PREDECESSOR_CONFIG_SHA='faa6b2cb3132ce2e0ee4304bd833d7f0f999850244014d355f1c33ed176ebb83'
 PAIR_STANDING_CHAIN=(('f5pair',F5PAIR_PREDECESSOR_SOURCE_SHA,F5PAIR_PREDECESSOR_CONFIG,F5PAIR_PREDECESSOR_SCHEMA,F5PAIR_PREDECESSOR_CONFIG_SHA,F5PAIR_CONFIG_SHA),('g2pair',G2PAIR_PREDECESSOR_SOURCE_SHA,G2PAIR_PREDECESSOR_CONFIG,G2PAIR_PREDECESSOR_SCHEMA,G2PAIR_PREDECESSOR_CONFIG_SHA,G2PAIR_CONFIG_SHA),('g3pair',G3PAIR_PREDECESSOR_SOURCE_SHA,G3PAIR_PREDECESSOR_CONFIG,G3PAIR_PREDECESSOR_SCHEMA,G3PAIR_PREDECESSOR_CONFIG_SHA,G3PAIR_CONFIG_SHA),('g4pair',G4PAIR_PREDECESSOR_SOURCE_SHA,G4PAIR_PREDECESSOR_CONFIG,G4PAIR_PREDECESSOR_SCHEMA,G4PAIR_PREDECESSOR_CONFIG_SHA,G4PAIR_CONFIG_SHA),('g5pair',G5PAIR_PREDECESSOR_SOURCE_SHA,G5PAIR_PREDECESSOR_CONFIG,G5PAIR_PREDECESSOR_SCHEMA,G5PAIR_PREDECESSOR_CONFIG_SHA,G5PAIR_CONFIG_SHA),)
@@ -228,120 +232,126 @@ HISTORICAL_G10_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g10'+GS,'g10'+TS}
 G10_PREDECESSOR_HERE=ROOT/(SP+'g10pair-source-v1')
 G10_PREDECESSOR_SOURCE_SHA='4283341a25e1a9c344cdf564f06604f560c14a7dc7e3738039f17cb9ee3c9bb7'
-G10_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g10pair.production.json'
+G10_PREDECESSOR_CONFIG=ETC/(NP+'g10pair.production.json')
 G10_PREDECESSOR_CONFIG_SHA='71647d59c2ea21c5d0dafd38d266e34d0f360c3aaf50bf5a628947a244e879ce'
 G10_PREDECESSOR_SCHEMA='Root_standing_R13_g10pair'+SS
 HISTORICAL_G11_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g11'+GS,'g11'+TS}
 G11_PREDECESSOR_HERE=ROOT/(SP+'g11pair-source-v1')
 G11_PREDECESSOR_SOURCE_SHA='243fe177ed4be0ea7fe8be1e4472b1eee5c73db1cfd109c929cb297622959710'
-G11_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g11pair.production.json'
+G11_PREDECESSOR_CONFIG=ETC/(NP+'g11pair.production.json')
 G11_PREDECESSOR_CONFIG_SHA='b0baa40b8a479528882e352e190e17ce53989a702972edb60d36c60aeb471465'
 G11_PREDECESSOR_SCHEMA='Root_standing_R13_g11pair'+SS
 HISTORICAL_G12_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g12'+GS,'g12'+TS}
 G12_PREDECESSOR_HERE=ROOT/(SP+'g12pair-source-v1')
 G12_PREDECESSOR_SOURCE_SHA='67f8a8ffed5af5acbf3523c6d83bf0a5422e9ddaae984e75b4d322cc2dba79db'
-G12_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g12pair.production.json'
+G12_PREDECESSOR_CONFIG=ETC/(NP+'g12pair.production.json')
 G12_PREDECESSOR_CONFIG_SHA='2d663d065a920772918d34308ecd71fac1ea36d1db41449107a93d7c1c8f0f17'
 G12_PREDECESSOR_SCHEMA='Root_standing_R13_g12pair'+SS
 HISTORICAL_G13_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g13'+GS,'g13'+TS}
 G13_PREDECESSOR_HERE=ROOT/(SP+'g13pair-source-v1')
 G13_PREDECESSOR_SOURCE_SHA='f5f0e218f774deefe909e884988d845be93d8c746fc5047820f68759852e7d9f'
-G13_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g13pair.production.json'
+G13_PREDECESSOR_CONFIG=ETC/(NP+'g13pair.production.json')
 G13_PREDECESSOR_CONFIG_SHA='c8a04ab44b85f6e0c6ef5ffa89b422c49d6c64a5bb2de90358f56dc654818f3d'
 G13_PREDECESSOR_SCHEMA='Root_standing_R13_g13pair'+SS
 HISTORICAL_G14_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g14'+GS,'g14'+TS}
 G14_PREDECESSOR_HERE=ROOT/(SP+'g14pair-source-v2')
 G14_PREDECESSOR_SOURCE_SHA='f2a791b3244b7542501b596423b98d881aaba5adf52e8117bb44ec196fa93e1e'
-G14_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g14pair-v2.production.json'
+G14_PREDECESSOR_CONFIG=ETC/(NP+'g14pair-v2.production.json')
 G14_PREDECESSOR_CONFIG_SHA='e2c0ad81f395cbdd1d84224d393bf78e80ea5e1ed55cb1dbf37ab1d21bd6c950'
 G14_PREDECESSOR_SCHEMA='Root_standing_R13_g14pair'+SS
 HISTORICAL_G15_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g15'+GS,'g15'+TS}
 G15_PREDECESSOR_HERE=ROOT/(SP+'g15pair-source-v1')
 G15_PREDECESSOR_SOURCE_SHA='88afcd71d53b7f0f7f79bf1f8f0c4a31436e60cb9874c1ece77bfe3e835cc7b3'
-G15_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g15pair.production.json'
+G15_PREDECESSOR_CONFIG=ETC/(NP+'g15pair.production.json')
 G15_PREDECESSOR_CONFIG_SHA='db5267b302e2d928aa89ee3ab29310a7d15ea3f814c050a461a13a852a345d77'
 HISTORICAL_G16_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g16'+GS,'g16'+TS}
 G16_PREDECESSOR_HERE=ROOT/(SP+'g15pair-source-v2')
-G16_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g15pair-v2.production.json'
+G16_PREDECESSOR_CONFIG=ETC/(NP+'g15pair-v2.production.json')
 G16_PREDECESSOR_SOURCE_SHA='3b7bfc8b63d86daed56e66daf04e7bdbc37671ab557832cca9294abf59a8a725'
 G16_PREDECESSOR_CONFIG_SHA='c981f3770ef9895c2d8af8822df5e75ea0a8e1d54527ae1d6266fe6e8e3bade1'
 HISTORICAL_G17_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g17'+GS,'g17'+TS}
 G17_PREDECESSOR_HERE=ROOT/(SP+'g17pair-source-v1')
-G17_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g17pair.production.json'
+G17_PREDECESSOR_CONFIG=ETC/(NP+'g17pair.production.json')
 G17_PREDECESSOR_SOURCE_SHA='f7407c9b938ea00e5f73a7f976f15d8c208edad732bbad3ab80051338af9847a'
 G17_PREDECESSOR_CONFIG_SHA='7d2f5e6f0baf80ddb7cf760bf9913fb09a51d74a3425d8aa0a01fd118b30bc89'
 HISTORICAL_G18_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g18'+GS,'g18'+TS}
 G18_PREDECESSOR_HERE=ROOT/(SP+'g18pair-source-v1')
-G18_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g18pair.production.json'
+G18_PREDECESSOR_CONFIG=ETC/(NP+'g18pair.production.json')
 G18_PREDECESSOR_SOURCE_SHA='852c37d1c18098aadb60f40efc1594b5c4062197cca03c752dbac8bcffbb3973'
 G18_PREDECESSOR_CONFIG_SHA='9bd033598c6b79fa10afa6fcf25860d57ac8fd856318f783765f0ed7f84e270a'
 HISTORICAL_G19_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g19'+GS,'g19'+TS}
 G19_PREDECESSOR_HERE=ROOT/(SP+'g19pair-source-v1')
-G19_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g19pair.production.json'
+G19_PREDECESSOR_CONFIG=ETC/(NP+'g19pair.production.json')
 G19_PREDECESSOR_SOURCE_SHA='c091325ecebe1d9fbdab3a9fa379f6dd215df3cf6d8909e64aac2eca26fe2e09'
 G19_PREDECESSOR_CONFIG_SHA='be152d7171a4eebe8e9b62cdbe28ca0eb0299b709377fd71032f20c4b1414577'
 HISTORICAL_G20_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g20'+GS,'g20'+TS}
 G20_PREDECESSOR_HERE=ROOT/(SP+'g20pair-source-v1')
-G20_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g20pair.production.json'
+G20_PREDECESSOR_CONFIG=ETC/(NP+'g20pair.production.json')
 G20_PREDECESSOR_SOURCE_SHA='a041e7a54536aab02ab61fc3b90310e9c446a0f5fb582d07509b3cbdf98fa695'
 G20_PREDECESSOR_CONFIG_SHA='3e2c834a963a30058846b9227ddcc81715a02aa641b48c8f3da7292a8f23a5aa'
 HISTORICAL_G21_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g21'+GS,'g21'+TS}
 G21_PREDECESSOR_HERE=ROOT/(SP+'g21pair-source-v1')
-G21_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g21pair.production.json'
+G21_PREDECESSOR_CONFIG=ETC/(NP+'g21pair.production.json')
 G21_PREDECESSOR_SOURCE_SHA='83a13f9d42c49c6c6e22ad97534abe514081f7c3dd6a30da882147d8acd2dbde'
 G21_PREDECESSOR_CONFIG_SHA='ba8a29554ad25716aad5a0697de7432b4a9f0631317799a8fb4a5fec74c0ea36'
 HISTORICAL_G22_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g22'+GS,'g22'+TS}
 G22_PREDECESSOR_HERE=ROOT/(SP+'g22pair-source-v1')
-G22_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g22pair.production.json'
+G22_PREDECESSOR_CONFIG=ETC/(NP+'g22pair.production.json')
 G22_PREDECESSOR_SOURCE_SHA='e428984d5e4bead09c2c188f6c8797f9c7b42acada376aee4fec4473ea036d75'
 G22_PREDECESSOR_CONFIG_SHA='029dad419b70804a52dc4eaaa0f20805725b944b3a820f956fe2dc1241c40e1d'
 HISTORICAL_G23_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g23'+GS,'g23'+TS}
 G23_PREDECESSOR_HERE=ROOT/(SP+'g23pair-source-v1')
-G23_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g23pair.production.json'
+G23_PREDECESSOR_CONFIG=ETC/(NP+'g23pair.production.json')
 G23_PREDECESSOR_SOURCE_SHA='f3d14a5fc303d0c303f87e6a4551bb924e1c5a1ea87cb7f3c394994339b0302d'
 G23_PREDECESSOR_CONFIG_SHA='170ee364c413b2c8fae1e0efad6c90714915f11fa27b3eaaa53d4f9aa0f89c29'
 HISTORICAL_G24_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g24'+GS,'g24'+TS}
 G24_PREDECESSOR_HERE=ROOT/(SP+'g24pair-source-v1')
-G24_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g24pair.production.json'
+G24_PREDECESSOR_CONFIG=ETC/(NP+'g24pair.production.json')
 G24_PREDECESSOR_SOURCE_SHA='8a157a7eab0dbc92a531242c6a66db0b0f905a7e0c1fcd8a5a083e252d481bbd'
 G24_PREDECESSOR_CONFIG_SHA='a2d8c120cddc75a616e29b969de87253e83056cd4b145aa4e2de142b1ec15b2e'
 HISTORICAL_G25_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g25'+GS,'g25'+TS}
 G25_PREDECESSOR_HERE=ROOT/(SP+'g25pair-source-v1')
-G25_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g25pair.production.json'
+G25_PREDECESSOR_CONFIG=ETC/(NP+'g25pair.production.json')
 G25_PREDECESSOR_SOURCE_SHA='839ae0874caed047ee558e0b642577170cad4ea6fd3b61a8d54da3dd68fd8edf'
 G25_PREDECESSOR_CONFIG_SHA='6e37ae892580c3162250b16b0ce3a79e080466af15f03ee6c7f8b0f1b9b48fed'
 HISTORICAL_G26_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g26'+GS,'g26'+TS}
 G26_PREDECESSOR_HERE=ROOT/(SP+'g26pair-source-v1')
-G26_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g26pair.production.json'
+G26_PREDECESSOR_CONFIG=ETC/(NP+'g26pair.production.json')
 G26_PREDECESSOR_SOURCE_SHA='d24ec252ce913ff9d3a7e93f2de0d0ed8de97bc315ee96ed3a297a846c92562b'
 G26_PREDECESSOR_CONFIG_SHA='c252c81f1773fdc5ac20a97749d06c893b00a0b7dcef49802dd3cd52deb77573'
 HISTORICAL_G27_FIELDS=frozenset(FIELDS)
 FIELDS=FIELDS|{'g27'+GS,'g27'+TS}
 G27_PREDECESSOR_HERE=ROOT/(SP+'g27pair-source-v2')
-G27_PREDECESSOR_CONFIG=ETC/'network-recovery.r13-g27pair.source-v2.production.json'
+G27_PREDECESSOR_CONFIG=ETC/(NP+'g27pair.source-v2.production.json')
 G27_PREDECESSOR_SOURCE_SHA='783c325a1627990ac69409ade52bb6dbbf514b0e3e9e6af9a380a07061cc6baa'
 G27_PREDECESSOR_CONFIG_SHA='76000e81d7219b5ca71f960d3f7ba021c44dc0e79f99a4518ba5a164ca68a23f'
+HISTORICAL_G28_FIELDS=frozenset(FIELDS)
+FIELDS=FIELDS|{'g28'+GS,'g28'+TS}
+G28_PREDECESSOR_HERE=ROOT/(SP+'g28pair-source-v1')
+G28_PREDECESSOR_CONFIG=ETC/(NP+'g28pair.production.json')
+G28_PREDECESSOR_SOURCE_SHA='4708626cd09abe58364cfed76e1a89d2a623f550de1f75a72e1d2deb4cdada3c'
+G28_PREDECESSOR_CONFIG_SHA='717d1b35bae8037203a2a1ca0614cdbcc5ca1158463b24c6a5ce09aae11d6840'
 def require(ok,guard):
  if not ok:
   raise RuntimeError(guard)
 def require_bound():
- require(PROPOSAL_BOUND is True and type(HEAD_NEW_CORE_DIGEST)is str and re.fullmatch('sha256:[a-f0-9]{64}',HEAD_NEW_CORE_DIGEST)is not None and HEAD_NEW_CORE_DIGEST!=HEAD_DIGEST_PLACEHOLDER and type(G28_CONTROLLER_CONFIG_SHA)is str and re.fullmatch('[a-f0-9]{64}',G28_CONTROLLER_CONFIG_SHA)is not None and G28_CONTROLLER_CONFIG_SHA!='0'*64and type(HEAD_CORE_SOURCE)is str and re.fullmatch('[a-f0-9]{40}',HEAD_CORE_SOURCE)is not None and HEAD_CORE_SOURCE!='0'*40and type(G9_PREDECESSOR_CONFIG_SHA)is str and re.fullmatch('[a-f0-9]{64}',G9_PREDECESSOR_CONFIG_SHA)is not None and G9_PREDECESSOR_CONFIG_SHA!='0'*64and CORE_G28==CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST,'G15_CONCRETE_QUALIFIED_BINDING_REQUIRED')
+ require(PROPOSAL_BOUND is True and type(HEAD_NEW_CORE_DIGEST)is str and re.fullmatch('sha256:[a-f0-9]{64}',HEAD_NEW_CORE_DIGEST)is not None and HEAD_NEW_CORE_DIGEST!=HEAD_DIGEST_PLACEHOLDER and type(G29_CONTROLLER_CONFIG_SHA)is str and re.fullmatch('[a-f0-9]{64}',G29_CONTROLLER_CONFIG_SHA)is not None and G29_CONTROLLER_CONFIG_SHA!='0'*64and type(HEAD_CORE_SOURCE)is str and re.fullmatch('[a-f0-9]{40}',HEAD_CORE_SOURCE)is not None and HEAD_CORE_SOURCE!='0'*40and type(G9_PREDECESSOR_CONFIG_SHA)is str and re.fullmatch('[a-f0-9]{64}',G9_PREDECESSOR_CONFIG_SHA)is not None and G9_PREDECESSOR_CONFIG_SHA!='0'*64and CORE_G29==CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST,'G15_CONCRETE_QUALIFIED_BINDING_REQUIRED')
 def sha(raw):
  return hashlib.sha256(raw).hexdigest()
 def wire(value):
@@ -513,7 +523,7 @@ def standing_config(source_sha,controller_unit_sha,hub_unit_sha,cold_unit_sha,gu
  value.update(g23_predecessor_guardian_source_sha256=G23_PREDECESSOR_SOURCE_SHA,g23_predecessor_standing_config_sha256=G23_PREDECESSOR_CONFIG_SHA)
  value.update({'g24'+GS:G24_PREDECESSOR_SOURCE_SHA,'g24'+TS:G24_PREDECESSOR_CONFIG_SHA})
  value.update({'g25'+GS:G25_PREDECESSOR_SOURCE_SHA,'g25'+TS:G25_PREDECESSOR_CONFIG_SHA,'g26'+GS:G26_PREDECESSOR_SOURCE_SHA,'g26'+TS:G26_PREDECESSOR_CONFIG_SHA})
- value.update({'g27'+GS:G27_PREDECESSOR_SOURCE_SHA,'g27'+TS:G27_PREDECESSOR_CONFIG_SHA})
+ value.update({'g27'+GS:G27_PREDECESSOR_SOURCE_SHA,'g27'+TS:G27_PREDECESSOR_CONFIG_SHA,'g28'+GS:G28_PREDECESSOR_SOURCE_SHA,'g28'+TS:G28_PREDECESSOR_CONFIG_SHA})
  validate(value);return value
 def validate(value):
  require_bound()
@@ -522,7 +532,7 @@ def validate(value):
  require(value['predecessor_guardian_source_sha256']==PREDECESSOR_SOURCE_SHA and value['predecessor_standing_config_sha256']==PREDECESSOR_CONFIG_SHA,'EXPLICIT_D211_PREDECESSOR_BINDING')
  require(value['r13'+GS]==R13_PREDECESSOR_SOURCE_SHA,'EXPLICIT_R13_PREDECESSOR_BINDING')
  require(value['pair_predecessor_standing_configs']==pair_predecessor_refs(),'EXPLICIT_PAIR_PREDECESSOR_CHAIN_BINDING')
- require(value['g6'+GS]==G6_PREDECESSOR_SOURCE_SHA and value['g6'+TS]==G6_PREDECESSOR_CONFIG_SHA and value['new_controller_config_sha256']==G28_CONTROLLER_CONFIG_SHA,'EXPLICIT_G6_AUTHORITY_AND_CURRENT_G15_CONTROLLER')
+ require(value['g6'+GS]==G6_PREDECESSOR_SOURCE_SHA and value['g6'+TS]==G6_PREDECESSOR_CONFIG_SHA and value['new_controller_config_sha256']==G29_CONTROLLER_CONFIG_SHA,'EXPLICIT_G6_AUTHORITY_AND_CURRENT_G15_CONTROLLER')
  require(value['g6_boot_v2'+GS]==G6_BOOT_V2_PREDECESSOR_SOURCE_SHA and value['g6_boot_v2'+TS]==G6_BOOT_V2_PREDECESSOR_CONFIG_SHA,'EXPLICIT_G6_BOOT_V2_PREDECESSOR_BINDING')
  require(value['g7'+GS]==G7_PREDECESSOR_SOURCE_SHA and value['g7'+TS]==G7_PREDECESSOR_CONFIG_SHA,'EXPLICIT_G7_PREDECESSOR_BINDING')
  require(value['g8'+GS]==G8_PREDECESSOR_SOURCE_SHA and value['g8'+TS]==G8_PREDECESSOR_CONFIG_SHA,'EXPLICIT_G8_PREDECESSOR_BINDING')
@@ -550,6 +560,7 @@ def validate(value):
  require(value['g25'+GS]==G25_PREDECESSOR_SOURCE_SHA and value['g25'+TS]==G25_PREDECESSOR_CONFIG_SHA,'EXACT_G25_PREFIX')
  require(value['g26'+GS]==G26_PREDECESSOR_SOURCE_SHA and value['g26'+TS]==G26_PREDECESSOR_CONFIG_SHA,'EXACT_G26_PREFIX')
  require(value['g27'+GS]==G27_PREDECESSOR_SOURCE_SHA and value['g27'+TS]==G27_PREDECESSOR_CONFIG_SHA,'EXACT_G27_PREFIX')
+ require(value['g28'+GS]==G28_PREDECESSOR_SOURCE_SHA and value['g28'+TS]==G28_PREDECESSOR_CONFIG_SHA,'EXACT_G28_PREFIX')
 def r13_predecessor_standing(config):
  raw=read(R13_PREDECESSOR_CONFIG,32768,0o600)
  require(sha(raw)==config['r13_predecessor_standing_config_sha256'],'EXACT_INSTALLED_R13_PREDECESSOR_STANDING_CONFIG')
@@ -895,6 +906,8 @@ def g26_predecessor_config(c):
  return _pair_predecessor_config(c,G27_CONTROLLER_CONFIG_SHA,G26_PREDECESSOR_HERE,G26_PREDECESSOR_SOURCE_SHA,G26_PREDECESSOR_CONFIG,G26_PREDECESSOR_CONFIG_SHA,HISTORICAL_G26_FIELDS,G26_CONTROLLER_CONFIG_SHA,('e69484d43261ff04b020551e16a20dd725ea8f054f70a746542d976191ada725','da3a1c350be82850ddf808d3f51badc577381685df41a5f1f685e198f1048adc','2faa4336e600810d80ae3d0639fe67880888fdf7b2427832fd24473707d53e3c'),'g26',('G26_C27_PREFIX','G26_SOURCE','G26_STANDING','G26_WHOLE_PREFIX'))
 def g27_predecessor_config(c):
  return _pair_predecessor_config(c,G28_CONTROLLER_CONFIG_SHA,G27_PREDECESSOR_HERE,G27_PREDECESSOR_SOURCE_SHA,G27_PREDECESSOR_CONFIG,G27_PREDECESSOR_CONFIG_SHA,HISTORICAL_G27_FIELDS,G27_CONTROLLER_CONFIG_SHA,('c68911ab3e39b38373e0171874bc539cd31a97c0fffba8819b677f8ff46bdc63', '1c1479836bd784131191a626d92129ab5811a51489bb4ffb7f8c874c3aa2a3dd', '66ed8fd3426ac226f9143cc5ee0b6e4e314dbdcc1e4cf784eb1ffc210b174c4e'),'g27',('G27_C28_PREFIX','G27_SOURCE','G27_STANDING','G27_WHOLE_PREFIX'))
+def g28_predecessor_config(c):
+ return _pair_predecessor_config(c,G29_CONTROLLER_CONFIG_SHA,G28_PREDECESSOR_HERE,G28_PREDECESSOR_SOURCE_SHA,G28_PREDECESSOR_CONFIG,G28_PREDECESSOR_CONFIG_SHA,HISTORICAL_G28_FIELDS,G28_CONTROLLER_CONFIG_SHA,('daf7e4f8ba7c29d1fda1e6ec4e556bbc516417081baa3acf268eaa384c1a5aef','bb0da0ccb8358465a763f6293608d5369bd3a6e4b42a1d740ca25c42e9f6b601','ff4cb4637e6d496dfb36414587bb9dd29e1d4b52171f46b1eff823a0877c22af'),'g28',('G28_C29_PREFIX','G28_SOURCE','G28_STANDING','G28_WHOLE_PREFIX'))
 class Owner:
  def __init__(self,source_sha):
   require_bound()
@@ -905,7 +918,8 @@ class Owner:
   self.raw_config=read(CONFIG,32768,0o600)
   self.config=loads(self.raw_config)
   validate(self.config)
-  self.g27_predecessor_config=g27_predecessor_config(self.config)
+  self.g28_predecessor_config=g28_predecessor_config(self.config)
+  self.g27_predecessor_config=g27_predecessor_config(self.g28_predecessor_config)
   self.g26_predecessor_config=g26_predecessor_config(self.g27_predecessor_config)
   self.g25_predecessor_config=g25_predecessor_config(self.g26_predecessor_config)
   self.g24_predecessor_config=g24_predecessor_config(self.g25_predecessor_config)
@@ -930,7 +944,7 @@ class Owner:
   g13_predecessor_standing(self.predecessor_config)
   g14_predecessor_standing(self.predecessor_config)
   g15_predecessor_standing(self.predecessor_config)
-  self.authorities=frozenset({(source_sha,sha(self.raw_config)),(G27_PREDECESSOR_SOURCE_SHA,G27_PREDECESSOR_CONFIG_SHA),(G26_PREDECESSOR_SOURCE_SHA,G26_PREDECESSOR_CONFIG_SHA),(G25_PREDECESSOR_SOURCE_SHA,G25_PREDECESSOR_CONFIG_SHA),(G24_PREDECESSOR_SOURCE_SHA,G24_PREDECESSOR_CONFIG_SHA),(G23_PREDECESSOR_SOURCE_SHA,G23_PREDECESSOR_CONFIG_SHA),(G22_PREDECESSOR_SOURCE_SHA,G22_PREDECESSOR_CONFIG_SHA),(G21_PREDECESSOR_SOURCE_SHA,G21_PREDECESSOR_CONFIG_SHA),(G20_PREDECESSOR_SOURCE_SHA,G20_PREDECESSOR_CONFIG_SHA),(G18_PREDECESSOR_SOURCE_SHA,G18_PREDECESSOR_CONFIG_SHA),(G17_PREDECESSOR_SOURCE_SHA,G17_PREDECESSOR_CONFIG_SHA),(G16_PREDECESSOR_SOURCE_SHA,G16_PREDECESSOR_CONFIG_SHA),(PREDECESSOR_SOURCE_SHA,PREDECESSOR_CONFIG_SHA),(R13_PREDECESSOR_SOURCE_SHA,self.config['r13'+TS]),*pair_predecessor_standings(self.predecessor_config),g6_predecessor_standing(self.predecessor_config),g6_boot_v2_predecessor_standing(self.predecessor_config),g7_predecessor_standing(self.predecessor_config),g8_predecessor_standing(self.predecessor_config),g9_predecessor_standing(self.predecessor_config),g10_predecessor_standing(self.predecessor_config),g11_predecessor_standing(self.predecessor_config),g12_predecessor_standing(self.predecessor_config),g13_predecessor_standing(self.predecessor_config),g14_predecessor_standing(self.predecessor_config),g15_predecessor_standing(self.predecessor_config)})
+  self.authorities=frozenset({(source_sha,sha(self.raw_config)),(G28_PREDECESSOR_SOURCE_SHA,G28_PREDECESSOR_CONFIG_SHA),(G27_PREDECESSOR_SOURCE_SHA,G27_PREDECESSOR_CONFIG_SHA),(G26_PREDECESSOR_SOURCE_SHA,G26_PREDECESSOR_CONFIG_SHA),(G25_PREDECESSOR_SOURCE_SHA,G25_PREDECESSOR_CONFIG_SHA),(G24_PREDECESSOR_SOURCE_SHA,G24_PREDECESSOR_CONFIG_SHA),(G23_PREDECESSOR_SOURCE_SHA,G23_PREDECESSOR_CONFIG_SHA),(G22_PREDECESSOR_SOURCE_SHA,G22_PREDECESSOR_CONFIG_SHA),(G21_PREDECESSOR_SOURCE_SHA,G21_PREDECESSOR_CONFIG_SHA),(G20_PREDECESSOR_SOURCE_SHA,G20_PREDECESSOR_CONFIG_SHA),(G18_PREDECESSOR_SOURCE_SHA,G18_PREDECESSOR_CONFIG_SHA),(G17_PREDECESSOR_SOURCE_SHA,G17_PREDECESSOR_CONFIG_SHA),(G16_PREDECESSOR_SOURCE_SHA,G16_PREDECESSOR_CONFIG_SHA),(PREDECESSOR_SOURCE_SHA,PREDECESSOR_CONFIG_SHA),(R13_PREDECESSOR_SOURCE_SHA,self.config['r13'+TS]),*pair_predecessor_standings(self.predecessor_config),g6_predecessor_standing(self.predecessor_config),g6_boot_v2_predecessor_standing(self.predecessor_config),g7_predecessor_standing(self.predecessor_config),g8_predecessor_standing(self.predecessor_config),g9_predecessor_standing(self.predecessor_config),g10_predecessor_standing(self.predecessor_config),g11_predecessor_standing(self.predecessor_config),g12_predecessor_standing(self.predecessor_config),g13_predecessor_standing(self.predecessor_config),g14_predecessor_standing(self.predecessor_config),g15_predecessor_standing(self.predecessor_config)})
   self.B=module(BASE_PATH,BASE_SHA)
   self.C=module(ROOT/'r33-compat-bridge-r2/bridge_contract.py',self.B.BRIDGE_SHA)
   self.n=module(ROOT/'r33-compat-bridge-r2/frozen_native.py',self.B.NATIVE_SHA)
@@ -959,7 +973,7 @@ class Owner:
 
  def static(self):
   require(read(CONFIG,32768,0o600)==self.raw_config,'UNCHANGED_STANDING_ROOT_AUTHORITY')
-  require(g27_predecessor_config(self.config)==self.g27_predecessor_config and g26_predecessor_config(self.g27_predecessor_config)==self.g26_predecessor_config and g25_predecessor_config(self.g26_predecessor_config)==self.g25_predecessor_config and g24_predecessor_config(self.g25_predecessor_config)==self.g24_predecessor_config and g23_predecessor_config(self.g24_predecessor_config)==self.g23_predecessor_config and g22_predecessor_config(self.g23_predecessor_config)==self.g22_predecessor_config and g21_predecessor_config(self.g22_predecessor_config)==self.g21_predecessor_config and g20_predecessor_config(self.g21_predecessor_config)==self.g20_predecessor_config and g19_predecessor_config(self.g20_predecessor_config)==self.immediate_predecessor_config and g18_predecessor_config(self.immediate_predecessor_config)==self.current_predecessor_config and g17_predecessor_config(self.current_predecessor_config)==self.head_predecessor_config and g16_predecessor_config(self.head_predecessor_config)==self.predecessor_config,'UNCHANGED_G23_G22_G21_G20_G19_G18_G17_G16_PREFIX')
+  require(g28_predecessor_config(self.config)==self.g28_predecessor_config and g27_predecessor_config(self.g28_predecessor_config)==self.g27_predecessor_config and g26_predecessor_config(self.g27_predecessor_config)==self.g26_predecessor_config and g25_predecessor_config(self.g26_predecessor_config)==self.g25_predecessor_config and g24_predecessor_config(self.g25_predecessor_config)==self.g24_predecessor_config and g23_predecessor_config(self.g24_predecessor_config)==self.g23_predecessor_config and g22_predecessor_config(self.g23_predecessor_config)==self.g22_predecessor_config and g21_predecessor_config(self.g22_predecessor_config)==self.g21_predecessor_config and g20_predecessor_config(self.g21_predecessor_config)==self.g20_predecessor_config and g19_predecessor_config(self.g20_predecessor_config)==self.immediate_predecessor_config and g18_predecessor_config(self.immediate_predecessor_config)==self.current_predecessor_config and g17_predecessor_config(self.current_predecessor_config)==self.head_predecessor_config and g16_predecessor_config(self.head_predecessor_config)==self.predecessor_config,'UNCHANGED_G23_G22_G21_G20_G19_G18_G17_G16_PREFIX')
   for unit,key in((UNIT,'controller_unit_sha256'),(HUB,'hub_unit_sha256'),(COLD,'cold_unit_sha256'),(GUARDIAN,'guardian_unit_sha256')):
    require(sha(read('/etc/systemd/system/'+unit,32768))==self.config[key],'EXACT_REVIEWED_FUTURE_SERVICE_UNITS')
   require(sha(read('/etc/systemd/system.control/'+UNIT+'.d/50-CPUQuota.conf',4096))==self.C.DROPIN_SHA,'UNCHANGED_CPU100_DROPIN')
