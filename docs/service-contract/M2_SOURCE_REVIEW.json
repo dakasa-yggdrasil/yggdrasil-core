@@ -2600,5 +2600,24 @@
     "current_successor_CI_status": "pending_new_exact_head_no_old_outcome_transfer",
     "local_functional_test_import_SQL_build_or_Native_execution": false,
     "production_schema92_Core_retirement_AB_main_or_completion_claimed": false
+  },
+  "Core_api_worker_original_lifetime_source_review_20261116": {
+    "source_base": "98dea07c16dd2c77dbbb470d917967e3f0378580",
+    "source_only": true,
+    "author_freeze_sha256": "e793b19cb9e0a447a9252a1458947fd90b7bce7cabad3e24b1aec3dff820ca35",
+    "independent_peer_report_sha256": "508976b105299e7bd55956df83ad1e7863de9ba93c8544234110150dd8b36445",
+    "independent_peer_handoff_sha256": "d52824793e9cb084bdb27a64453a07fee24f3c8e1146c36fd921ae194d361a11",
+    "independent_peer_result": "PASS_SOURCE_ONLY",
+    "reviewed_cumulative_source_paths": 40,
+    "generated_current_source_census_sha256": "ba597c964593f6a52eae1b94bb8023aabb5289850125d10b22d656a79db4b462",
+    "generated_current_non_test_Go_sources": 852,
+    "producer": "scripts/ci/service_contract_inventory.py",
+    "producer_scope": "Existing deterministic stdlib Source tokenizer only; no product import, Go, build or functional execution.",
+    "scope": "Original request/workflow/audit joins and explicit api_worker role isolated from protected authority. Exact argv0/role and mandatory shared references; integration-only resolved execution; seven actual process lanes; no clean receipt on failed finalization acknowledgement or join.",
+    "preservation": "INITIAL16 and all prior accepted ADR documents, module dependencies, SQL/migrations/Ops and legacy unit/PG/KinD roots preserved by the independent cumulative source review.",
+    "current_source_CI_result": null,
+    "local_product_tests_builds_imports_run": false,
+    "current_image_runtime_HPA_native_or_production_qualified": false,
+    "required_next": "Actual current signed Source CI including owning compiled checker and strict native KinD role/lifetime root; no prior CI alias."
   }
 }

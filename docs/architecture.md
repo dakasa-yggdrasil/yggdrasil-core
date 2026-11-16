@@ -168,9 +168,59 @@ operator wires up externally.
 
 ## Scale and failure model
 
-yggdrasil-core is horizontally scalable; every request is stateless
-apart from the DB. A typical production deployment runs 2-3 replicas
-behind a service.
+Ordinary API state is held in the DB and Core supports multiple API replicas.
+Original workflow execution and private canary authority still belong to their
+source process. A replica set must preserve routing to that exact authority
+origin; a different process cannot adopt its bearer or replay its operation.
+
+The production HTTP bootstrap owns admitted synchronous and asynchronous
+canonical workflow-run requests. Shutdown seals admission before dependency closers, withdraws
+readiness and joins actual original returns before closing the callback
+listeners. Sealing does not cancel the original parent. A bounded join timeout
+is a failed shutdown, not a completed workflow, a native termination receipt or
+permission to release a finalizer. This owner alone is not a complete
+`process_v2` adoption of every Core background lane or an HPA activation.
+
+Committed `control_plane` manifests participate in the existing periodic
+ConfigMap sweep, so losing a local reactive notification does not lose the
+projection. This materializer does not apply or scale a Deployment. Replica
+ownership, production native lifetime admission, the logical login-limit budget
+and shared session configuration must be preserved before automatic scaling is
+enabled.
+
+`YGGDRASIL_CORE_PROCESS_ROLE` defaults to `authority`. The explicit `api_worker`
+role must execute `/app/yggdrasil-api-worker`, a dedicated symlink to the same
+Core ELF. The role and executable path must agree; predecessor images lack this
+path and cannot silently start an authority by ignoring the new environment. The
+role starts only observability, boot validation, PostgreSQL, a client-only broker
+session, integration-surface repositories and HTTP. It starts no broker consumers,
+runtime monitor, discovery, reconciler, scheduler, reactor, bootstrap, provisioner
+or rotation/cleanup worker. Private capacity/Guest/Host callbacks, authentication
+ceremonies and login, secrets, webhooks and control writes must reach the existing
+authority origin. A misrouted worker refuses them; it does not proxy or remint an
+authority. API workers execute only ordinary integration workflows; the resolved
+execution boundary also refuses nested dispatch and in-process control/product
+steps. Shared sessions/signing keys remain in PostgreSQL; required MFA/HMAC
+material is shared through reviewed Secret references, never generated per worker.
+
+API workers use the same source-qualified schema-two process admission and
+termination implementation as the native lifetime protocol. Their complete
+roster is broker_session, dependencies, listeners, request_audits, requests,
+signal and workflow_originals. Each lane follows actual joins; audit remains
+asynchronous and best effort while its return is joined before dependencies close.
+The authority is not represented by that roster or made HPA eligible. A worker
+requires valid projected admission before business roots, and publishes a native
+termination receipt only after all joins with no panic/failure. Its shutdown
+budget is the existing 30-minute original-work maximum plus 10 seconds for
+dependencies; Kubernetes and consolidator grace must cover that budget. The
+authority retains its 10-second shutdown budget. A timeout remains uncertain.
+
+Placement, exact shared Secret references, the authority-origin routes and one
+owner of API replica count are deployment contracts. Adding an HPA over the
+authority or merely increasing fixed control-plane replicas does not establish
+them. The API workload may use the protected floor and trusted worker pool;
+worker placement cannot move the authority, existing protected workloads or
+stateful volumes implicitly.
 
 DB failure takes the whole control plane down (Postgres is the only
 mandatory dependency). Transport failures are scoped per backend — if

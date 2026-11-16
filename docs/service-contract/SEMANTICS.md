@@ -6,6 +6,40 @@ The checked source census under `source/` records file paths, line locations, fu
 
 The `nativequalification`-only original QEMU fixture exposes fixed Describe and read-only Execute consumers on predeclared qualification queues. It uses a separate connection to the fixed loopback CI broker for those consumers, while the original workflow client keeps its own connection. Startup and shutdown guards close only the dedicated socket on expiry and retain the error; shutdown still waits for the original handlers. The Describe contract and broker tests provide source transport evidence, not native qualification or production authority. The fixture neither declares production queues nor contacts a production broker.
 
+## Protected authority and explicit API workers
+
+The default `authority` role retains the original control-plane startup,
+authentication ceremonies, broker consumers, discovery, schedulers and
+reconcilers. The explicit `api_worker` role is admitted only through the dedicated
+`/app/yggdrasil-api-worker` command and matching role configuration. Docker
+provides that command as a symlink to the same ELF; an older image lacks it.
+This is a source compatibility boundary, not evidence of a deployed worker.
+
+Workers start the closed observability, boot-validation, PostgreSQL, RabbitMQ,
+integration-surface-sync and HTTP addon set. They use shared database sessions
+and active signing-key reads, with mandatory shared KEK/MFA/HMAC references and
+no local key/bootstrap fallback. Their broker connection serves clients without
+registering authority consumers or the authority runtime monitor.
+
+A role gate precedes authentication handlers. Workers refuse login/MFA/OIDC
+ceremonies, protected private callbacks and control/secret/product writes.
+Supported ordinary authenticated reads, canonical workflow dispatch and
+integration surface queries retain their original authorization. The actual
+resolved workflow boundary also refuses control/product/capacity and nested
+dispatch, so a permitted HTTP path cannot import authority-only execution.
+The default-authority HTTP semantics below remain unchanged.
+
+Worker shutdown seals new request/workflow roots and joins their original
+returns while listeners, broker and database dependencies remain available.
+Request audits join after their producers. The existing schema-two process
+protocol binds seven actual lanes: broker session, dependencies, listeners,
+request audits, requests, signal and original workflows. Panic, failed join,
+lost workflow-finalization acknowledgement or deadline cannot certify a clean
+exit. Workers use the 1810-second bound; default authority retains its existing
+ten-second shutdown path. These are Source obligations. Current compiled CI,
+native Pod termination, shared-reference/routing admission and eventual HPA
+usefulness remain separate qualification steps.
+
 ## HTTP ingress and authorization
 
 `http-routes.json` records actual `Handle` and `HandleFunc` declarations, including handler wrappers and expressions for dynamic mount prefixes. `http-intercept-dispatch.json` additionally records branch predicates in the dedicated capacity/Guest/host dispatchers. These branches intercept requests before the ordinary mux; they must not be omitted merely because they do not call `HandleFunc`.

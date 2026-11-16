@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
@@ -65,7 +64,7 @@ func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
 // The audit insert must outlive the handler.
 func (s *Server) recordAudit(r *http.Request, action, kind, resourceID, outcome string, metadata map[string]any) {
 	event := requestAuditEvent(r, action, kind, resourceID, outcome, metadata)
-	safego.SafeGo("audit_emit", func() {
+	s.launchRequestAudit("audit_emit", func() {
 		_ = s.recordAuditSync(event)
 	})
 }

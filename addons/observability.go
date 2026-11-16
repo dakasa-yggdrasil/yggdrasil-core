@@ -3,6 +3,7 @@ package addons
 import (
 	"context"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreprocess"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/monitoring"
 
@@ -14,7 +15,16 @@ func init() {
 }
 
 func bootstrapObservability(_ context.Context, app *runtime.ServiceApp) error {
-	logger := monitoring.NewZapLoggerWithRotation(app.ServiceName)
+	role, err := coreprocess.FromEnvironment()
+	if err != nil {
+		return err
+	}
+	var logger *zap.Logger
+	if role == coreprocess.APIWorker {
+		logger = monitoring.NewWorkerLogger()
+	} else {
+		logger = monitoring.NewZapLoggerWithRotation(app.ServiceName)
+	}
 	monitoring.Logger = logger
 	monitoring.SetLogger(logger)
 

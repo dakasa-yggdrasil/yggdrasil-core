@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +32,7 @@ func newManifest(kind, namespace, name string, version int, spec map[string]any)
 }
 
 func TestManifestMaterializer_Materialize_CreatesConfigMap(t *testing.T) {
+	controlPlaneProjectionAfterLostNotification(t)
 	client := fake.NewSimpleClientset()
 	target := KubeTarget{Name: "local", Client: client, IsLocal: true}
 
@@ -79,6 +82,57 @@ func TestManifestMaterializer_Materialize_CreatesConfigMap(t *testing.T) {
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(cm.Data["manifest.json"]), &parsed); err != nil {
 		t.Fatalf("manifest.json is not valid JSON: %v", err)
+	}
+}
+
+// No reactive notification is delivered. The ordinary sweep must recover the
+// committed control_plane version and remain idempotent on its next pass.
+func controlPlaneProjectionAfterLostNotification(t *testing.T) {
+	t.Helper()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	old := newManifest("control_plane", "dakasa", "yggdrasil", 8, map[string]any{"image": "registry/source@old", "replicas": 1, "extra_env_from": []any{map[string]any{"secretRef": map[string]any{"name": "preserved-auth-reference"}}}})
+	current := old
+	current.Version = 9
+	var spec map[string]any
+	if json.Unmarshal(old.Spec, &spec) != nil {
+		t.Fatal("old control plane unavailable")
+	}
+	spec["image"] = "registry/source@current"
+	current.Spec, _ = json.Marshal(spec)
+	client := fake.NewSimpleClientset()
+	target := KubeTarget{Name: "local", Client: client, IsLocal: true}
+	m := &ManifestMaterializer{}
+	if err := m.Materialize(t.Context(), target, old); err != nil {
+		t.Fatal(err)
+	}
+	for pass := 0; pass < 2; pass++ {
+		for _, kind := range manifestManagedKinds {
+			rows := sqlmock.NewRows([]string{"id", "api_version", "kind", "namespace", "name", "version", "active", "description", "labels", "spec", "checksum", "created_at", "updated_at"})
+			if kind == "control_plane" {
+				rows.AddRow(current.ID, current.APIVersion, current.Kind, current.Metadata.Namespace, current.Metadata.Name, current.Version, true, "", []byte(`{}`), []byte(current.Spec), "source-current", time.Now(), time.Now())
+			}
+			mock.ExpectQuery("FROM public.manifests").WithArgs(kind).WillReturnRows(rows)
+		}
+		result, err := m.Reconcile(t.Context(), target, db)
+		if err != nil || result.Errors != 0 || (pass == 0 && result.Updated != 1) || (pass == 1 && result.Skipped != 1) {
+			t.Fatal("committed projection was lost or replayed", result, err)
+		}
+	}
+	cm, err := client.CoreV1().ConfigMaps("dakasa").Get(t.Context(), manifestConfigMapName(current), metav1.GetOptions{})
+	if err != nil || cm.Annotations[AnnotationVersion] != "9" || cm.Data["manifest.json"] != string(current.Spec) {
+		t.Fatal("whole current projection differs", err)
+	}
+	for _, action := range client.Actions() {
+		if action.GetResource().Resource != "configmaps" {
+			t.Fatal("projection sweep acquired non-ConfigMap mutation", action.GetResource())
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -57,6 +57,8 @@ func TestCapacityNativeKinDHTTP(t *testing.T) {
 	if os.Getenv("REQUIRE_CAPACITY_NATIVE_KIND") != "true" {
 		t.Skip("remote native Core/Kubernetes/PG qualification")
 	}
+	qualifyProductionOriginalOwnerPostgres(t)
+	qualifyCoreAPIWorkerNative(t)
 	for _, scenario := range []struct {
 		name  string
 		mixed bool

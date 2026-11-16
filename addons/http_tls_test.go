@@ -20,6 +20,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreprocess"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 )
 
 func unsetHTTPIdentity(t *testing.T) {
@@ -117,6 +121,8 @@ func httpTLSNativeIdentity(t *testing.T) (*tls.Config, *x509.CertPool) {
 }
 
 func TestHTTPTLSOriginalListenerReadCloseShutdown(t *testing.T) {
+	workerClosedAddonSet(t)
+	productionHTTPOriginalDrain(t)
 	for _, mode := range []string{"absent_preserves_http", "explicit_verified_tls"} {
 		t.Run(mode, func(t *testing.T) {
 			unsetHTTPIdentity(t)
@@ -191,6 +197,113 @@ func TestHTTPTLSOriginalListenerReadCloseShutdown(t *testing.T) {
 			}
 			joined = true
 		})
+	}
+}
+
+func workerClosedAddonSet(t *testing.T) {
+	t.Helper()
+	want := map[string]bool{"observability": true, "boot-validation": true, "postgres": true, "rabbitmq": true, "integration_surface_sync": true, "http": true}
+	mu.RLock()
+	entries := append([]registeredAddon(nil), registry...)
+	mu.RUnlock()
+	selected := map[string]bool{}
+	for _, entry := range entries {
+		if coreprocess.AllowedAddon(coreprocess.APIWorker, entry.name) {
+			selected[entry.name] = true
+			if !want[entry.name] {
+				t.Fatal("background authority addon entered worker", entry.name)
+			}
+		}
+		if !coreprocess.AllowedAddon(coreprocess.Authority, entry.name) {
+			t.Fatal("default authority lost existing addon", entry.name)
+		}
+	}
+	if len(selected) != len(want) || coreprocess.AllowedAddon(coreprocess.APIWorker, "future-unreviewed-addon") {
+		t.Fatal("API startup set is not closed", selected)
+	}
+	for name := range want {
+		if !selected[name] {
+			t.Fatal("required worker startup dependency absent", name)
+		}
+	}
+	previous, present := os.LookupEnv(coreprocess.RoleEnv)
+	defer func() {
+		if present {
+			_ = os.Setenv(coreprocess.RoleEnv, previous)
+		} else {
+			_ = os.Unsetenv(coreprocess.RoleEnv)
+		}
+	}()
+	for _, bad := range []string{"API_WORKER", "api_worker ", "unknown"} {
+		t.Setenv(coreprocess.RoleEnv, bad)
+		// nil runtime makes any bootstrap/resource access a hard failure. An
+		// invalid role must return before even observability/DB/consumer I/O.
+		if err := Apply(t.Context(), nil); err == nil {
+			t.Fatal("invalid process role reached startup")
+		}
+	}
+}
+
+func productionHTTPOriginalDrain(t *testing.T) {
+	t.Helper()
+	owner, err := httpapi.NewOriginalWorkflowOwners(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, finish, err := owner.Begin()
+	if err != nil || parent != t.Context() {
+		t.Fatal("original parent changed", err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var callbacks atomic.Int32
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callbacks.Add(1)
+		w.WriteHeader(http.StatusOK)
+	})}
+	returned := make(chan error, 1)
+	go func() { returned <- server.Serve(listener) }()
+	t.Cleanup(func() { finish(); _ = server.Close(); _ = listener.Close() })
+	app := runtime.New("original-workflow-drain-source")
+	app.RegisterDrainer(owner.Seal)
+	dependentClosed := false
+	app.RegisterCloser(func(context.Context) error { dependentClosed = true; return nil })
+	// Inspect the original owner from the actual closer ordering, rather than
+	// calling Seal only in the test and assuming runtime uses it in production.
+	app.RegisterCloser(func(ctx context.Context) error {
+		if owner.AdmissionOpen() || dependentClosed {
+			t.Fatal("admission/dependency shutdown order changed")
+		}
+		if parent.Err() != nil {
+			t.Fatal("drain canceled original work")
+		}
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		if err := shutdownOwnedHTTPServers(canceled, owner, []*http.Server{server}); !errors.Is(err, context.Canceled) {
+			t.Fatal("pending original return became shutdown success", err)
+		}
+		response, err := http.Get("http://" + listener.Addr().String())
+		if err != nil {
+			t.Fatal("original callback listener closed before return", err)
+		}
+		_, readErr := io.ReadAll(response.Body)
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK || callbacks.Load() != 1 {
+			t.Fatal("original descendant did not return")
+		}
+		finish()
+		finish()
+		return shutdownOwnedHTTPServers(ctx, owner, []*http.Server{server})
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if err := app.Shutdown(ctx); err != nil || !dependentClosed {
+		t.Fatal("actual returns did not join before dependencies", err)
+	}
+	if err := <-returned; !errors.Is(err, http.ErrServerClosed) {
+		t.Fatal("listener owner did not return", err)
 	}
 }
 

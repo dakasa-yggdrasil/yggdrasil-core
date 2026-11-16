@@ -511,6 +511,9 @@ func runWorkflow(
 	spec model.WorkflowManifestSpec,
 	req model.RunWorkflowRequest,
 ) (model.RunWorkflowResponse, error) {
+	if err := requireWorkflowProcessRole(spec); err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
 	ctx = newCapacityInvocationContext(ctx)
 	orderedSteps, err := manifestengine.WorkflowExecutionOrder(spec)
 	if err != nil {

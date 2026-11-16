@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -136,6 +137,8 @@ func TestAsyncIdempotencyRetryNeverReturnsForeignMachineRunID(t *testing.T) {
 }
 
 func TestDispatchAsyncWorkflowRunUsesPanicSafeLauncher(t *testing.T) {
+	productionOriginalOwnerRefusals(t)
+	productionWorkerRoleRefusals(t)
 	t.Setenv("BROKER_URL", "amqp://unit-test")
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -185,6 +188,40 @@ func TestDispatchAsyncWorkflowRunUsesPanicSafeLauncher(t *testing.T) {
 	// the panic-finalization behavior is exercised synchronously below.
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Invoked by the existing async launch root. The real dispatcher must refuse a
+// sealed owner before touching even a nil database, not after leaving a row.
+func productionOriginalOwnerRefusals(t *testing.T) {
+	t.Helper()
+	for _, canceled := range []bool{false, true} {
+		parent, cancel := context.WithCancel(t.Context())
+		owner, err := NewOriginalWorkflowOwners(parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if canceled {
+			cancel()
+		} else {
+			owner.Seal()
+		}
+		server := &Server{rabbitmq: &amqp.Connection{}}
+		WithOriginalWorkflowOwners(owner)(server)
+		recorder := httptest.NewRecorder()
+		server.dispatchAsyncWorkflowRun(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs", nil), model.RunWorkflowRequest{}, workflowRunActor{})
+		if recorder.Code != http.StatusConflict || !strings.Contains(recorder.Body.String(), "workflow.original_owner_closed") {
+			t.Fatal("closed production owner reached persistence or launch", recorder.Code)
+		}
+		ready := httptest.NewRecorder()
+		server.handleReadyz(ready, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+		if ready.Code != http.StatusServiceUnavailable {
+			t.Fatal("closed production owner remained ready")
+		}
+		if err := owner.Join(context.Background()); err != nil {
+			t.Fatal("empty real owner did not join", err)
+		}
+		cancel()
 	}
 }
 

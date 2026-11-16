@@ -58,25 +58,25 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleRequest",
-      "line": 1200
+      "line": 1216
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "mfaEnrollmentExemptPath",
-      "line": 1250
+      "line": 1266
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleAPI",
-      "line": 1277
+      "line": 1293
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/workflow_runs.go",
       "function": "workflowRunMachineCredentialPath",
-      "line": 479
+      "line": 507
     }
   ],
   "schema": "core_source_interface_census_v1",

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreprocess"
 	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -94,6 +95,12 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, finishOriginal, ownerErr := s.beginOriginalGuestAsyncWorkflow()
+	if ownerErr != nil {
+		writeProblemJSON(w, http.StatusConflict, "workflow.original_owner_closed", "original workflow owner unavailable")
+		return
+	}
+	defer finishOriginal()
 	response, err := messagecontroller.RunWorkflow(s.withExecutorActivityActor(s.withCapacityReleaseAuthorization(r.Context(), req, actor, r), actor), s.brokerConnection(), s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
@@ -120,6 +127,20 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
+
+	// Admission precedes even the durable pending insert. A process already
+	// draining cannot leave a new pending row without an original executor.
+	originalParent, finishOriginal, ownerErr := s.beginOriginalGuestAsyncWorkflow()
+	if ownerErr != nil {
+		writeProblemJSON(w, http.StatusConflict, "workflow.original_owner_closed", "original workflow owner unavailable")
+		return
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			finishOriginal()
+		}
+	}()
 
 	boundReq, originalIdempotencyKey := bindWorkflowRunMachineActor(req, actor)
 	req, runID, deduped, err := messagecontroller.PrepareAndInsertWorkflowRunIdempotent(r.Context(), s.db, uuid.New(), boundReq)
@@ -163,13 +184,14 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	originalParent, finishOriginal, ownerErr := s.beginOriginalGuestAsyncWorkflow()
-	if ownerErr != nil {
-		writeProblemJSON(w, http.StatusConflict, "workflow.original_owner_closed", "original workflow owner unavailable")
-		return
-	}
 	launchAsyncWorkflowRun("workflow_run_async", func() {
-		defer finishOriginal()
+		returned := false
+		defer func() {
+			if !returned && s.processRole == coreprocess.APIWorker && s.backgroundFailure != nil {
+				s.backgroundFailure()
+			}
+			finishOriginal()
+		}()
 		bg, cancel := context.WithTimeout(originalParent, 30*time.Minute)
 		defer cancel()
 		defer markAsyncWorkflowRunFailedOnPanic(s.db, runID)
@@ -201,8 +223,14 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 			// already captures the precondition-failed case.
 			messagecontroller.EmitWorkflowRunCompletedEvent(bg, s.db, s.logger, response)
 		}
-		_ = repository.FinalizeWorkflowRun(bg, s.db, runID, status, resultPayload, errMsg, time.Now().UTC())
+		if err := repository.FinalizeWorkflowRun(bg, s.db, runID, status, resultPayload, errMsg, time.Now().UTC()); err != nil && s.processRole == coreprocess.APIWorker && s.backgroundFailure != nil {
+			// A lost durable finalization acknowledgement remains uncertain.
+			// Local goroutine return cannot certify a clean native retirement.
+			s.backgroundFailure()
+		}
+		returned = true
 	})
+	transferred = true
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"run_id":   runID.String(),

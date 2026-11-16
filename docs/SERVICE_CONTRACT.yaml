@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "3e800a737e4262f5ebf450cc6dfe7bad843880e52558cb536b70e6339f66a605"
+      "sha256": "b47c3adf32a288167e2c9df2efb5e8cb2b54e536c3404f696cb35c29906b8296"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "3e800a737e4262f5ebf450cc6dfe7bad843880e52558cb536b70e6339f66a605"
+      "sha256": "b47c3adf32a288167e2c9df2efb5e8cb2b54e536c3404f696cb35c29906b8296"
     },
     {
       "evidence": "go.mod",
@@ -40,7 +40,7 @@
     {
       "evidence": "docs/service-contract/M2_SOURCE_REVIEW.json",
       "id": "independent_source_review",
-      "sha256": "11a5c0025091bde075f1c81cc957e3f01bc23d3ac368ae33cdd761ae21f76051"
+      "sha256": "032ae10f4b15b5e3b04383619911c1d897a89c295f5e39a97cf61f58676ecc30"
     },
     {
       "evidence": "docs/service-contract/REVIEW.json",
@@ -108,7 +108,7 @@
     {
       "evidence": "docs/service-contract/source/http-routes.json",
       "id": "http_mux_registrations",
-      "sha256": "a91d85677da939fb159e06fca54235c776a2a593ddc1fc2ff2f960d24ae48d6c"
+      "sha256": "802b995c68a4944b60e41bfdd4bc92d55f22f2c959bf190016d3aee0cb88e91e"
     },
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
@@ -118,14 +118,14 @@
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "03becc15b446f4c4c61d8aad472d3141b58dde52836f69dea51c66a55a62a76b"
+      "sha256": "9d9f93dbfdb16f57c802a312eec2c35294c92422c8f6339f119f008978e1ed6d"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "dbe549ad10505965f110c6af4d68afd4b7bc049878a53097331be1201bc9e0ca"
+      "sha256": "614c6e4c8005f3e0ea9c724929c71f8045a9488dd4c8c48473f0306bc8eaf660"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "8e45cb6712a36c573fa60a5fd0c7c4ed23fe9767a3f99257faa3b8c1ff6f3cb8"
+    "sha256": "ba597c964593f6a52eae1b94bb8023aabb5289850125d10b22d656a79db4b462"
   },
   "unresolved": []
 }

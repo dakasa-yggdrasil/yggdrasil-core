@@ -2,9 +2,11 @@ package addons
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreprocess"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 )
 
@@ -37,6 +39,18 @@ func Register(name string, run Bootstrap, priority ...int) {
 
 // Apply executes every registered addon bootstrap.
 func Apply(ctx context.Context, app *runtime.ServiceApp) error {
+	role, err := coreprocess.FromEnvironment()
+	if err != nil {
+		return err
+	}
+	if role == coreprocess.APIWorker {
+		if err := coreprocess.ValidateWorkerEnvironment(); err != nil {
+			return err
+		}
+		if _, ok := WorkerLifetime(app); !ok {
+			return fmt.Errorf("API worker native lifetime unavailable")
+		}
+	}
 	mu.RLock()
 	entries := make([]registeredAddon, len(registry))
 	copy(entries, registry)
@@ -50,12 +64,27 @@ func Apply(ctx context.Context, app *runtime.ServiceApp) error {
 	})
 
 	for _, entry := range entries {
+		if !coreprocess.AllowedAddon(role, entry.name) {
+			continue
+		}
 		if err := entry.run(ctx, app); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func WorkerLifetime(app *runtime.ServiceApp) (*coreprocess.Lifetime, bool) {
+	if app == nil {
+		return nil, false
+	}
+	raw, ok := app.Resource(coreprocess.LifetimeResource)
+	if !ok {
+		return nil, false
+	}
+	lifetime, ok := raw.(*coreprocess.Lifetime)
+	return lifetime, ok && lifetime != nil
 }
 
 // Names returns the registered addon names.

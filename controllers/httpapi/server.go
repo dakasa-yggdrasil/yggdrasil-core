@@ -21,6 +21,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreprocess"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
@@ -152,6 +153,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	role, err := coreprocess.FromEnvironment()
+	if err != nil {
+		return nil, err
+	}
+	if role == coreprocess.APIWorker {
+		if err := coreprocess.ValidateWorkerEnvironment(); err != nil {
+			return nil, err
+		}
+	}
 
 	// Audit 2026-05-27 A12 — fail-loud at boot if security-critical env
 	// vars are missing in production. A silent fallback to known-public
@@ -213,6 +223,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	}
 
 	server := &Server{
+		processRole:                role,
 		originalCanaryAuthorities:  capacity.NewOriginalCanaryAuthorityRegistry(),
 		serviceName:                serviceName,
 		db:                         db,
@@ -305,6 +316,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 	for _, opt := range opts {
 		opt(server)
+	}
+	if role == coreprocess.APIWorker && (server.originalGuestAsyncWorkflowOwner == nil || server.requestAuditOwner == nil || server.backgroundFailure == nil) {
+		return nil, fmt.Errorf("API worker original lifetime owners unavailable")
 	}
 
 	// Load the capability-naming allowlist once at boot. Path is
@@ -930,18 +944,20 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// Opt-in OIDC OP. Skipped when no issuer is configured (the default)
 	// so tests and adopters who don't need OIDC keep a slimmer surface.
 	if server.oidcIssuerURL != "" {
-		if err := oidc.MountOIDC(context.Background(), mux, server.db, server.oidcIssuerURL); err != nil {
-			return nil, fmt.Errorf("mount oidc: %w", err)
+		if role != coreprocess.APIWorker {
+			if err := oidc.MountOIDC(context.Background(), mux, server.db, server.oidcIssuerURL); err != nil {
+				return nil, fmt.Errorf("mount oidc: %w", err)
+			}
+			// §13 INTEGRATION_CONTRACT: wire the back-channel logout dispatcher
+			// alongside the OIDC OP so /logout (and admin revoke) propagates
+			// session termination to every registered OIDC client. Storage is
+			// re-built here (cheap — no caches) so the dispatcher owns its own
+			// reference independent of the op.Provider's internal Storage.
+			server.backchannelDispatcher = oidc.NewBackchannelDispatcher(
+				oidc.NewStorage(server.db, server.oidcIssuerURL),
+				server.oidcIssuerURL,
+			)
 		}
-		// §13 INTEGRATION_CONTRACT: wire the back-channel logout dispatcher
-		// alongside the OIDC OP so /logout (and admin revoke) propagates
-		// session termination to every registered OIDC client. Storage is
-		// re-built here (cheap — no caches) so the dispatcher owns its own
-		// reference independent of the op.Provider's internal Storage.
-		server.backchannelDispatcher = oidc.NewBackchannelDispatcher(
-			oidc.NewStorage(server.db, server.oidcIssuerURL),
-			server.oidcIssuerURL,
-		)
 		// Opt-in: accept OIDC JWTs this OP issued on the console gate, in
 		// addition to opaque session tokens. Inert unless
 		// YGGDRASIL_CONSOLE_JWT_AUDIENCES lists at least one allowed client
@@ -1003,7 +1019,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// downstream handler / middleware in the same request).
 	//
 	// Audit 2026-05-27 A7 (CSRF) + 2026-05-28 F4 (reqcache).
-	return server.withLogging(reqcache.Middleware(server.requireAuthenticatedConsoleAPIs(server.csrfMiddleware(mux)))), nil
+	return server.withLogging(server.withProcessRole(reqcache.Middleware(server.requireAuthenticatedConsoleAPIs(server.csrfMiddleware(mux))))), nil
 }
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
@@ -1428,6 +1444,9 @@ type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, 
 
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
+	processRole                     coreprocess.Role
+	requestAuditOwner               *OriginalWorkflowOwners
+	backgroundFailure               func()
 	originalGuestAsyncWorkflowOwner guestOriginalAsyncWorkflowOwner
 	originalCanaryAuthorities       *capacity.OriginalCanaryAuthorityRegistry
 	capacityMutationPrincipals      []capacityMutationPrincipal
@@ -1616,6 +1635,17 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if !s.originalWorkflowAdmissionOpen() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "not_ready",
+			"reason": "original_workflow_draining",
+		})
+		return
+	}
+	if s.processRole == coreprocess.APIWorker && !s.isBrokerAvailable() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "not_ready", "reason": "worker_broker_unavailable"})
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 

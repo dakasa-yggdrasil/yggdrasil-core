@@ -19,6 +19,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreprocess"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	surfacesvc "github.com/dakasa-yggdrasil/yggdrasil-core/internal/surface"
@@ -32,6 +33,14 @@ func init() {
 }
 
 func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
+	lifetime, worker := WorkerLifetime(app)
+	role, roleErr := coreprocess.FromEnvironment()
+	if roleErr != nil {
+		return roleErr
+	}
+	if role == coreprocess.APIWorker && !worker {
+		return fmt.Errorf("API worker native lifetime unavailable")
+	}
 	issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER"))
 	if strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_CLIENTS_FILE")) != "" && issuer == "" {
 		return fmt.Errorf("oidc confidential client bootstrap requires YGGDRASIL_OIDC_ISSUER")
@@ -57,15 +66,36 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 
 	var opts []httpapi.ServerOption
+	owners, err := httpapi.NewOriginalWorkflowOwners(ctx)
+	if err != nil {
+		return err
+	}
+	opts = append(opts, httpapi.WithOriginalWorkflowOwners(owners))
+	var audits *httpapi.OriginalWorkflowOwners
+	if worker {
+		audits, err = httpapi.NewOriginalWorkflowOwners(ctx)
+		if err != nil {
+			return err
+		}
+		opts = append(opts, httpapi.WithWorkerRequestAuditOwners(audits, lifetime.Fail))
+		if err := lifetime.Track("workflow_originals", owners.Returned()); err != nil {
+			return err
+		}
+		if err := lifetime.Track("request_audits", audits.Returned()); err != nil {
+			return err
+		}
+	}
 	opts = append(opts, httpapi.WithRabbitMQConnectionProvider(func() *amqp.Connection {
 		current, _ := RabbitMQ(app)
 		return current
 	}))
 	// This is an in-process service of the SAME HTTP authorization owner,
 	// never a new caller-controlled route or anonymous dispatch wrapper.
-	opts = append(opts, httpapi.WithCapacityDispatchServiceReceiver(func(service *httpapi.CapacityDispatchService) {
-		app.SetResource(capacityDispatchServiceResource, service)
-	}))
+	if !worker {
+		opts = append(opts, httpapi.WithCapacityDispatchServiceReceiver(func(service *httpapi.CapacityDispatchService) {
+			app.SetResource(capacityDispatchServiceResource, service)
+		}))
+	}
 	if engine, ok := Reconciler(app); ok {
 		opts = append(opts, httpapi.WithReconciler(engine))
 	}
@@ -87,14 +117,21 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	// across multi-pod startup races via FOR UPDATE on the singleton
 	// oidc_provider_settings row.
 	if issuer != "" {
-		if ensureErr := ensureConfiguredOIDCClients(ctx, db, logger); ensureErr != nil {
-			return ensureErr
-		}
-		if _, ensureErr := oidc.EnsureSigningKey(ctx, db); ensureErr != nil {
-			return fmt.Errorf("oidc signing key bootstrap: %w", ensureErr)
+		if !worker {
+			if ensureErr := ensureConfiguredOIDCClients(ctx, db, logger); ensureErr != nil {
+				return ensureErr
+			}
+			if _, ensureErr := oidc.EnsureSigningKey(ctx, db); ensureErr != nil {
+				return fmt.Errorf("oidc signing key bootstrap: %w", ensureErr)
+			}
 		}
 		opts = append(opts, httpapi.WithOIDCIssuer(issuer))
 		logger.Info("yggdrasil OIDC provider enabled", zap.String("issuer", issuer))
+	}
+	if worker {
+		if _, err := repository.GetCurrentOIDCSigningKey(ctx, db, oidc.SigningAlgorithm); err != nil {
+			return fmt.Errorf("API worker shared active signing key unavailable")
+		}
 	}
 	surfaceTargets := surfaceTargetsFromEnv(logger)
 	if len(surfaceTargets) > 0 {
@@ -122,28 +159,33 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	if src := httpapi.NewDBSurfaceQueryPermSource(db); src != nil {
 		opts = append(opts, httpapi.WithSurfaceQueryPermSource(src))
 	}
-	discovery := surfacesvc.NewDiscovery(db, surfacesvc.NewClient(nil), logger).
-		WithSource(surfaceTargetSource{db: db, fallback: surfaceTargets}).
-		WithReconciler(surfacesvc.NewPermissionsReconciler(db, logger))
-	discoveryCtx, cancelDiscovery := context.WithCancel(context.Background())
-	go func() {
-		if err := discovery.Run(
-			discoveryCtx,
-			httpDurationFromEnv("YGGDRASIL_SURFACE_DISCOVERY_INTERVAL_SECONDS", 30*time.Second),
-			intFromEnv("YGGDRASIL_SURFACE_DISCOVERY_PARALLELISM", 4),
-		); err != nil {
-			logger.Warn("surface discovery stopped", zap.Error(err))
-		}
-	}()
-	app.RegisterCloser(func(context.Context) error {
-		cancelDiscovery()
-		discovery.Stop()
-		return nil
-	})
-	logger.Info("surface discovery enabled", zap.Int("env_targets", len(surfaceTargets)))
+	if !worker {
+		discovery := surfacesvc.NewDiscovery(db, surfacesvc.NewClient(nil), logger).
+			WithSource(surfaceTargetSource{db: db, fallback: surfaceTargets}).
+			WithReconciler(surfacesvc.NewPermissionsReconciler(db, logger))
+		discoveryCtx, cancelDiscovery := context.WithCancel(context.Background())
+		go func() {
+			if err := discovery.Run(
+				discoveryCtx,
+				httpDurationFromEnv("YGGDRASIL_SURFACE_DISCOVERY_INTERVAL_SECONDS", 30*time.Second),
+				intFromEnv("YGGDRASIL_SURFACE_DISCOVERY_PARALLELISM", 4),
+			); err != nil {
+				logger.Warn("surface discovery stopped", zap.Error(err))
+			}
+		}()
+		app.RegisterCloser(func(context.Context) error {
+			cancelDiscovery()
+			discovery.Stop()
+			return nil
+		})
+		logger.Info("surface discovery enabled", zap.Int("env_targets", len(surfaceTargets)))
+	}
 	handler, err := httpapi.New(app.ServiceName, db, conn, logger, opts...)
 	if err != nil {
 		return fmt.Errorf("build http api: %w", err)
+	}
+	if worker {
+		handler = lifetime.Handler(handler)
 	}
 
 	servers := configuredHTTPServers(addr, secondaryAddr, handler, tlsConfig)
@@ -151,14 +193,20 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	if err != nil {
 		return err
 	}
-	for i, server := range servers {
-		listener := listeners[i]
-		go func() {
-			if serveErr := serveConfiguredHTTP(server, listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-				logger.Fatal("http server stopped unexpectedly", zap.String("addr", server.Addr), zap.Error(serveErr))
-			}
-		}()
-		logger.Info("http api started", zap.String("addr", server.Addr), zap.Bool("tls", server.TLSConfig != nil))
+	if worker {
+		if err := startWorkerHTTPListeners(lifetime, servers, listeners); err != nil {
+			return err
+		}
+	} else {
+		for i, server := range servers {
+			listener := listeners[i]
+			go func() {
+				if serveErr := serveConfiguredHTTP(server, listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+					logger.Fatal("http server stopped unexpectedly", zap.String("addr", server.Addr), zap.Error(serveErr))
+				}
+			}()
+			logger.Info("http api started", zap.String("addr", server.Addr), zap.Bool("tls", server.TLSConfig != nil))
+		}
 	}
 	app.SetResource("http_server", servers[0])
 	app.SetResource("http_addr", addr)
@@ -167,9 +215,48 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 		app.SetResource("http_tls_addr", secondaryAddr)
 	}
 	app.RegisterCloser(func(ctx context.Context) error {
-		return shutdownHTTPServers(ctx, servers)
+		if err := shutdownOwnedHTTPServers(ctx, owners, servers); err != nil {
+			return err
+		}
+		if worker {
+			lifetime.HTTPShutdownReturned()
+			return audits.Join(ctx)
+		}
+		return nil
 	})
+	app.RegisterDrainer(owners.Seal)
+	if worker {
+		app.RegisterDrainer(lifetime.BeginDrain)
+	}
 	return nil
+}
+
+func startWorkerHTTPListeners(lifetime *coreprocess.Lifetime, servers []*http.Server, listeners []net.Listener) error {
+	return lifetime.Start("listeners", func() error {
+		returned := make(chan error, len(servers))
+		for i, server := range servers {
+			listener := listeners[i]
+			go func() { returned <- serveConfiguredHTTP(server, listener) }()
+		}
+		var result error
+		for range servers {
+			if err := <-returned; err != nil && !errors.Is(err, http.ErrServerClosed) {
+				lifetime.Fail()
+				result = errors.Join(result, err)
+			}
+		}
+		return result
+	})
+}
+
+func shutdownOwnedHTTPServers(ctx context.Context, owners *httpapi.OriginalWorkflowOwners, servers []*http.Server) error {
+	// Keep the SAME authenticated callback listeners available until original
+	// descendants have actually returned. A timed-out join closes no listener
+	// and cannot become a successful native termination receipt.
+	if err := owners.Join(ctx); err != nil {
+		return err
+	}
+	return shutdownHTTPServers(ctx, servers)
 }
 
 // A secondary TLS listener uses the SAME handler and private authorization

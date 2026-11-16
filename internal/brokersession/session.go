@@ -52,6 +52,9 @@ type Manager struct {
 	change  func(*Session)
 }
 
+// Done closes only after the actual manager and current session drain return.
+func (m *Manager) Done() <-chan struct{} { return m.done }
+
 // Start adopts an already initialized session, or starts degraded when initial
 // is nil. Factory is invoked serially with cancellable backoff capped at 30s.
 func Start(ctx context.Context, initial *Session, factory Factory, change func(*Session), failed func(error)) *Manager {

@@ -15,6 +15,15 @@ type ServiceApp struct {
 	mu        sync.RWMutex
 	resources map[string]any
 	closers   []Closer
+	drainers  []func()
+}
+
+// RegisterDrainer closes admission before any dependency closer runs. Drainers
+// do not cancel or join work; the owning closer joins it with dependencies live.
+func (a *ServiceApp) RegisterDrainer(fn func()) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.drainers = append(a.drainers, fn)
 }
 
 // New creates a new runtime container for the service.
@@ -53,7 +62,11 @@ func (a *ServiceApp) Shutdown(ctx context.Context) error {
 	a.mu.RLock()
 	closers := make([]Closer, len(a.closers))
 	copy(closers, a.closers)
+	drainers := append([]func(){}, a.drainers...)
 	a.mu.RUnlock()
+	for i := len(drainers) - 1; i >= 0; i-- {
+		drainers[i]()
+	}
 
 	var firstErr error
 	for i := len(closers) - 1; i >= 0; i-- {

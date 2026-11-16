@@ -11,6 +11,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/brokersession"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreprocess"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
@@ -24,6 +25,10 @@ func init() {
 }
 
 func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
+	role, err := coreprocess.FromEnvironment()
+	if err != nil {
+		return err
+	}
 	brokerURL := os.Getenv("BROKER_URL")
 	lockPaused := workflowDispatchLockPaused()
 	if brokerURL == "" {
@@ -82,16 +87,20 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 				_ = transport.Close()
 				<-monitorStopped
 			}}
-		stopConsumers, err = message.RegisterAllConsumersWithContext(sessionCtx, transport, conn, db, logger)
-		if err != nil {
-			// Return partial ownership so the same supervised drain deadline
-			// covers handlers already running during failed registration.
-			return session, fmt.Errorf("register consumers: %w", err)
+		if role != coreprocess.APIWorker {
+			stopConsumers, err = message.RegisterAllConsumersWithContext(sessionCtx, transport, conn, db, logger)
+			if err != nil {
+				// Return partial ownership so the same supervised drain deadline
+				// covers handlers already running during failed registration.
+				return session, fmt.Errorf("register consumers: %w", err)
+			}
 		}
 		if attempt.Err() != nil || conn.IsClosed() {
 			return session, fmt.Errorf("broker session closed during consumer registration")
 		}
-		stopMonitor = message.StartIntegrationRuntimeMonitorWithContext(sessionCtx, conn, db, logger, integrationRuntimeMonitorInterval())
+		if role != coreprocess.APIWorker {
+			stopMonitor = message.StartIntegrationRuntimeMonitorWithContext(sessionCtx, conn, db, logger, integrationRuntimeMonitorInterval())
+		}
 		return session, nil
 	}
 	initial, err := factory(ctx)
@@ -115,6 +124,11 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 		app.SetResource("rpc_transport", transport)
 	}
 	manager := brokersession.Start(ctx, initial, factory, changed, report)
+	if lifetime, ok := WorkerLifetime(app); ok {
+		if err := lifetime.Track("broker_session", manager.Done()); err != nil {
+			return err
+		}
+	}
 	app.SetResource("rabbitmq_session", manager)
 	if initial == nil {
 		changed(nil)

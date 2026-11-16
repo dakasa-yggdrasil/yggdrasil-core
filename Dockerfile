@@ -100,6 +100,7 @@ RUN apk add --no-cache ca-certificates curl \
 WORKDIR /app
 
 COPY --from=build /bin/yggdrasil-core /app/yggdrasil-core
+RUN ln -s yggdrasil-core /app/yggdrasil-api-worker
 COPY --from=build /bin/goose /app/goose
 COPY --from=build /bin/yggdrasil-bootstrap /app/yggdrasil-bootstrap
 COPY --from=build /bin/yggdrasil-bootstrap-admin /app/yggdrasil-bootstrap-admin

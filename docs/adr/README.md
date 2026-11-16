@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**113 decisions.**
+**118 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -159,3 +159,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0117](0117-dispose-an-expired-prepared-only-maintenance-nonce-failure.md) | Dispose an expired prepared-only maintenance nonce failure | Proposed | 2026-11-14 | Core / strict SQL-only unknown-maintenance subtype and immutable prepared PUB provenance |
 | [0118](0118-close-a-witnessed-unenrolled-expansion-with-a-separate-cleanup.md) | Close a witnessed unenrolled expansion with a separate cleanup | Proposed | 2026-11-14 | Core / typed HZN witnessed-unenrolled cleanup, immutable original failure and one owned destroy child |
 | [0119](0119-retain-immutable-guest-contracts-across-member-cohorts.md) | Retain immutable Guest contracts across member cohorts | Proposed | 2026-11-14 | Core / explicit member contract succession and truthful native inventory aggregation |
+| [0120](0120-separate-core-control-authority-from-api-worker-lifetimes.md) | Separate Core control authority from API worker lifetimes | Proposed | 2026-11-16 | yggdrasil-core / process roles and native lifetime adoption |

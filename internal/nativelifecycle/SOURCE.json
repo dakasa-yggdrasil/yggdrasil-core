@@ -1,0 +1,30 @@
+{
+  "source_repository": "github.com/dakasa-yggdrasil/integration-kubernetes",
+  "source_commit": "f14310e53e4a12731a4310da5dc636b9dc1d2c1c",
+  "upstream_repository": "github.com/dakasa-co/dakasa-commons",
+  "upstream_commit": "a26bc0f92a5b1996f7b416f51b753e25428267ca",
+  "role": "Exact already-public source-qualified process_v2 lifetime implementation; no body changes, no fixture main copied",
+  "files": [
+    {
+      "path": "internal/nativelifecycle/group.go",
+      "source_path": ".github/fixtures/native-admission/commons/lifecycle/group.go",
+      "bytes": 6103,
+      "sha256": "447b82fb82fb5cdce8657cde1a5e49a5db697ee84477f5b8a1c2e961a5ce687c",
+      "git_blob": "c7ef064846963da580d56be16bdd14d4075bc46e"
+    },
+    {
+      "path": "internal/nativelifecycle/native_admission.go",
+      "source_path": ".github/fixtures/native-admission/commons/lifecycle/native_admission.go",
+      "bytes": 11819,
+      "sha256": "3f606c500b3bc4b455fcd2b90df0f59a603c1a3ed079e842b3b861630f43442e",
+      "git_blob": "1a21cc11ac082854422c1c2d65308289e3e352b7"
+    },
+    {
+      "path": "internal/nativelifecycle/native_termination.go",
+      "source_path": ".github/fixtures/native-admission/commons/lifecycle/native_termination.go",
+      "bytes": 9639,
+      "sha256": "e0f72674b30ba9af028924fe24e16292c4a9137ed284eda3542bf59f2a72d519",
+      "git_blob": "11254b5e449ec8aeb288b04aaec14fc61e773391"
+    }
+  ]
+}

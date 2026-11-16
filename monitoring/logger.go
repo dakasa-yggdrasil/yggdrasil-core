@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"io"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -18,6 +19,13 @@ var pkgLogger atomic.Pointer[zap.Logger]
 // SetLogger stores the logger for concurrent-safe later retrieval.
 func SetLogger(logger *zap.Logger) {
 	pkgLogger.Store(logger)
+}
+
+// Worker logging is a synchronous write-only sink. It starts no rotation/mill
+// goroutine whose return could be omitted from the process lifetime roster.
+func NewWorkerLogger() *zap.Logger {
+	writer := struct{ io.Writer }{os.Stdout}
+	return zap.New(zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), zapcore.Lock(zapcore.AddSync(writer)), zap.InfoLevel))
 }
 
 // GetLogger returns the package-level logger.

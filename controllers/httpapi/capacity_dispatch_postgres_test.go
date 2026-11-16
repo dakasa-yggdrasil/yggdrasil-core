@@ -130,6 +130,7 @@ func (f dispatchHTTPFixture) enqueue(t *testing.T, p *CapacityDispatchPrepared) 
 }
 
 func TestCapacityDispatchAuthorizationPostgres(t *testing.T) {
+	qualifyProductionOriginalOwnerPostgres(t)
 	t.Run("actual_operator_binding_same_http_kernel", func(t *testing.T) {
 		capacityPolicyPublicationHTTPInterleavings(t)
 		f := dispatchHTTPPostgresFixture(t)

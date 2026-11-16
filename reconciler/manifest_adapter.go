@@ -25,6 +25,10 @@ var manifestManagedKinds = []string{
 	"guardian_policy",
 	"rbac",
 	"surface",
+	// A committed control-plane projection must survive a lost in-memory
+	// notification or process retirement. The ordinary versioned materializer
+	// retries it from the durable catalog without applying a Deployment.
+	"control_plane",
 }
 
 // ManifestMaterializer converts Yggdrasil manifests into Kubernetes ConfigMaps.

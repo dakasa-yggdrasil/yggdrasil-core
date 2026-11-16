@@ -209,6 +209,30 @@ jobs:
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
       - name: Apply production migrations
         run: go run ./scripts/goose up
+      - name: Build the actual production Core Dockerfile from committed HEAD
+        run: |
+          set -euo pipefail
+          # An independent checkout retains the actual VCS object and index
+          # needed by native source authority. Never copy a worktree .git
+          # pointer or use a shared object database outside the build context.
+          source_commit=$(git rev-parse HEAD)
+          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$RUNNER_TEMP/native-core-production"
+          git -C "$RUNNER_TEMP/native-core-production" checkout --detach "$source_commit"
+          test -z "$(git -C "$RUNNER_TEMP/native-core-production" status --porcelain)"
+          docker build --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" -t native-core:head "$RUNNER_TEMP/native-core-production"
+          test "$(docker image inspect native-core:head --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$(git rev-parse HEAD)"
+          kind load docker-image native-core:head --name native-core
+          core_digest=$(docker exec native-core-control-plane ctr -n k8s.io images ls | awk '$1 == "docker.io/library/native-core:head" {print $3}')
+          [[ "$core_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          for node in $(kind get nodes --name native-core); do
+            docker exec "$node" ctr -n k8s.io images tag docker.io/library/native-core:head "docker.io/library/native-core@$core_digest"
+          done
+          gateway=$(docker inspect native-core-control-plane --format '{{ (index .NetworkSettings.Networks "kind").Gateway }}')
+          test -n "$gateway"
+          echo "CORE_API_WORKER_IMAGE=docker.io/library/native-core@$core_digest" >> "$GITHUB_ENV"
+          echo "CORE_API_WORKER_DIGEST=$core_digest" >> "$GITHUB_ENV"
+          echo "CORE_API_WORKER_HOST_GATEWAY=$gateway" >> "$GITHUB_ENV"
+          echo "CORE_API_WORKER_NATIVE_LOG_DIR=$GITHUB_WORKSPACE/native-core-api-lifetime" >> "$GITHUB_ENV"
       - name: Qualify real protected HTTP, PostgreSQL, native main and current Pod receipts
         env:
           REQUIRE_CAPACITY_NATIVE_KIND: "true"
@@ -263,20 +287,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: capacity-native-core-original-census
-          path: native-core-results.json
+          path: |
+            native-core-results.json
+            native-core-api-lifetime
           if-no-files-found: error
-      - name: Build the actual production Core Dockerfile from committed HEAD
-        run: |
-          set -euo pipefail
-          # An independent checkout retains the actual VCS object and index
-          # needed by native source authority. Never copy a worktree .git
-          # pointer or use a shared object database outside the build context.
-          source_commit=$(git rev-parse HEAD)
-          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$RUNNER_TEMP/native-core-production"
-          git -C "$RUNNER_TEMP/native-core-production" checkout --detach "$source_commit"
-          test -z "$(git -C "$RUNNER_TEMP/native-core-production" status --porcelain)"
-          docker build --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" -t native-core:head "$RUNNER_TEMP/native-core-production"
-          test "$(docker image inspect native-core:head --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$(git rev-parse HEAD)"
       - name: Native failure evidence
         if: failure()
         run: kubectl get pods -A -o wide
