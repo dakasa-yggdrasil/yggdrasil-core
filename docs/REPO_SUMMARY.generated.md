@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-15T20:38:22-03:00_
+_Generated from HEAD at: 2026-11-15T23:59:21-03:00_
 
 ## Languages
 
-- `.go`: 1573 files
+- `.go`: 1577 files
 - `.json`: 259 files
 - `.py`: 214 files
-- `.sql`: 110 files
+- `.sql`: 111 files
 - `.yaml`: 11 files
 - `.yml`: 37 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-11-15T20:38:22-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **106**  (db/migrations)
+- DB Migrations: **107**  (db/migrations)
 
 ## Docs
 
@@ -24,11 +24,11 @@ _Generated from HEAD at: 2026-11-15T20:38:22-03:00_
 
 ## Top Directories by File Count
 
-- repository: 413 files (6053.1 KB)
+- repository: 416 files (6100.1 KB)
 - controllers/httpapi: 264 files (2670.7 KB)
-- controllers/message: 205 files (1794.2 KB)
+- controllers/message: 206 files (1802.7 KB)
 - internal/capacity: 132 files (1449.5 KB)
-- db/migrations: 106 files (1521.0 KB)
+- db/migrations: 107 files (1575.6 KB)
 - model: 92 files (487.6 KB)
 - ops/network-guardian/tests: 67 files (1387.2 KB)
 - manifest: 65 files (398.1 KB)
