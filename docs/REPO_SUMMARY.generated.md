@@ -1,12 +1,12 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-15T23:59:21-03:00_
+_Generated from HEAD at: 2026-11-16T00:47:19-03:00_
 
 ## Languages
 
 - `.go`: 1577 files
-- `.json`: 259 files
-- `.py`: 214 files
+- `.json`: 260 files
+- `.py`: 215 files
 - `.sql`: 111 files
 - `.yaml`: 11 files
 - `.yml`: 37 files
@@ -24,17 +24,17 @@ _Generated from HEAD at: 2026-11-15T23:59:21-03:00_
 
 ## Top Directories by File Count
 
-- repository: 416 files (6100.1 KB)
+- repository: 416 files (6101.6 KB)
 - controllers/httpapi: 264 files (2670.7 KB)
 - controllers/message: 206 files (1802.7 KB)
 - internal/capacity: 132 files (1449.5 KB)
 - db/migrations: 107 files (1575.6 KB)
 - model: 92 files (487.6 KB)
-- ops/network-guardian/tests: 67 files (1387.2 KB)
+- ops/network-guardian/tests: 67 files (1395.9 KB)
 - manifest: 65 files (398.1 KB)
 - addons: 51 files (307.6 KB)
 - internal/capacitynativeqemu: 47 files (308.6 KB)
-- ops/network-guardian/rollout: 37 files (2584.1 KB)
+- ops/network-guardian/rollout: 38 files (2604.7 KB)
 - cmd/native-guest-lifecycle-fixture: 29 files (268.5 KB)
 
 ## Heaviest Files
@@ -54,7 +54,7 @@ _Generated from HEAD at: 2026-11-15T23:59:21-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **89**
+- K8s/Config files scanned: **90**
 - Manifests (k8s-ish): **25**
 
 ## Dependencies
