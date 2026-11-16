@@ -113,6 +113,67 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 	}
 	f.job.EnvelopeSHA256 = capacityDispatchSHA(envelope)
 	f.intent.PolicyID, f.intent.PolicyChecksum = f.Policy.ID, f.Policy.Checksum
+	label := func(digest string) string {
+		raw, e := hex.DecodeString(digest)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
+	}
+	inventoryAt := func(target bool, now time.Time) []capacity.GuestContractInventory {
+		prior := capacity.RecoveryFixtureInventory(t, oldSpec, f.private.reg, now)
+		prior.Members[0].Server.Status = "running"
+		inv := capacity.RecoveryFixtureInventory(t, head, f.private.reg, now)
+		member := inv.Members[0]
+		inv.Members = []model.CapacityVMFleetInventoryMember{}
+		inv.MissingSlots = []int{1, 2, 3, 4, 5, 6, 7, 8}
+		if target {
+			member.Slot, member.Protected = 2, false
+			member.DesiredSpec, member.RequestSHA256 = *b.Slots[1].DesiredSpec, b.Slots[1].DesiredSpecSHA256
+			member.Server.ID, member.Server.CreatedAt, member.Server.Name = f.parent.Settlement.ResourceID, f.parent.Settlement.ResourceCreatedAt, member.DesiredSpec.NativeName
+			member.Server.Status = "running"
+			member.Server.Labels = map[string]string{"yggdrasil.io/owner": head.Owner, "yggdrasil.io/scope": label(b.ScopeChecksum), "yggdrasil.io/spec": label(member.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": b.ProfileName, "yggdrasil.io/slot": "2", "yggdrasil.io/intent": f.parent.Grant.GrantID}
+			member.Server.PrimaryIPv4ID = f.parent.Settlement.AuxiliaryResources[0].ID
+			member.Server.IndependentBillableResources, member.Server.AuxiliaryInventoryComplete = true, true
+			inv.Members = []model.CapacityVMFleetInventoryMember{member}
+			inv.MissingSlots = []int{1, 3, 4, 5, 6, 7, 8}
+		}
+		out := []capacity.GuestContractInventory{{ContractSHA256: guestContractDigest(head), Inventory: inv}, {ContractSHA256: guestContractDigest(oldSpec), Inventory: prior}}
+		view, e := capacity.GuestContractView(head, oldSpec)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, _, e = capacity.GuestContractReconcileSnapshot(f.Policy, head, []model.CapacityPolicySpec{head, view}, out, now); e != nil {
+			t.Fatal("declared two-cohort native returns", e)
+		}
+		return out
+	}
+	inventories := func(target bool) []capacity.GuestContractInventory {
+		return inventoryAt(target, time.Now().UTC())
+	}
+	// Declare the same complete logical pre-CREATE view as the real scheduler.
+	// Keep each original observation time, decision clock and lease untouched;
+	// this is before the clone's first COMMIT/admission, never terminal restamping.
+	originalIntent := failedServingWire(t, f.intent)
+	originalAssessment, originalBaseline := f.intent.Assessment.Snapshot, f.intent.BaselineSnapshot
+	preCreateSnapshot := func(observedAt time.Time) model.CapacitySnapshot {
+		view, e := capacity.GuestContractView(head, oldSpec)
+		if e != nil {
+			t.Fatal("declared original snapshot retained contract", e)
+		}
+		snapshot, _, e := capacity.GuestContractReconcileSnapshot(f.Policy, head, []model.CapacityPolicySpec{head, view}, inventoryAt(false, observedAt), observedAt)
+		if e != nil || snapshot.Units != 1 || snapshot.Profile != originalAssessment.Profile || !snapshot.ObservedAt.Equal(observedAt) {
+			t.Fatal("declared original two-cohort pre-CREATE snapshot", e, snapshot)
+		}
+		return snapshot
+	}
+	f.intent.Assessment.Snapshot = preCreateSnapshot(originalAssessment.ObservedAt)
+	f.intent.BaselineSnapshot = preCreateSnapshot(originalBaseline.ObservedAt)
+	preservedIntent := f.intent
+	preservedIntent.Assessment.Snapshot, preservedIntent.BaselineSnapshot = originalAssessment, originalBaseline
+	if !bytes.Equal(originalIntent, failedServingWire(t, preservedIntent)) {
+		t.Fatal("declared cohort identity changed original intent clock or other operands")
+	}
 	tx, err := f.DB.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -145,42 +206,7 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 	if _, err = readCapacityDispatchJob(context.Background(), f.DB, f.job.JobID, false); err != nil {
 		t.Fatal("declared envelope must pass real closed decoder", err)
 	}
-	label := func(digest string) string {
-		raw, e := hex.DecodeString(digest)
-		if e != nil {
-			t.Fatal(e)
-		}
-		return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
-	}
-	inventories := func(target bool) []capacity.GuestContractInventory {
-		now := time.Now().UTC()
-		prior := capacity.RecoveryFixtureInventory(t, oldSpec, f.private.reg, now)
-		prior.Members[0].Server.Status = "running"
-		inv := capacity.RecoveryFixtureInventory(t, head, f.private.reg, now)
-		member := inv.Members[0]
-		inv.Members = []model.CapacityVMFleetInventoryMember{}
-		inv.MissingSlots = []int{1, 2, 3, 4, 5, 6, 7, 8}
-		if target {
-			member.Slot, member.Protected = 2, false
-			member.DesiredSpec, member.RequestSHA256 = *b.Slots[1].DesiredSpec, b.Slots[1].DesiredSpecSHA256
-			member.Server.ID, member.Server.CreatedAt, member.Server.Name = f.parent.Settlement.ResourceID, f.parent.Settlement.ResourceCreatedAt, member.DesiredSpec.NativeName
-			member.Server.Status = "running"
-			member.Server.Labels = map[string]string{"yggdrasil.io/owner": head.Owner, "yggdrasil.io/scope": label(b.ScopeChecksum), "yggdrasil.io/spec": label(member.DesiredSpec.ProfileChecksum), "yggdrasil.io/profile": b.ProfileName, "yggdrasil.io/slot": "2", "yggdrasil.io/intent": f.parent.Grant.GrantID}
-			member.Server.PrimaryIPv4ID = f.parent.Settlement.AuxiliaryResources[0].ID
-			member.Server.IndependentBillableResources, member.Server.AuxiliaryInventoryComplete = true, true
-			inv.Members = []model.CapacityVMFleetInventoryMember{member}
-			inv.MissingSlots = []int{1, 3, 4, 5, 6, 7, 8}
-		}
-		out := []capacity.GuestContractInventory{{ContractSHA256: guestContractDigest(head), Inventory: inv}, {ContractSHA256: guestContractDigest(oldSpec), Inventory: prior}}
-		view, e := capacity.GuestContractView(head, oldSpec)
-		if e != nil {
-			t.Fatal(e)
-		}
-		if _, _, e = capacity.GuestContractReconcileSnapshot(f.Policy, head, []model.CapacityPolicySpec{head, view}, out, now); e != nil {
-			t.Fatal("declared two-cohort native returns", e)
-		}
-		return out
-	}
+
 	if !bytes.Equal(originalS1, failedServingWire(t, []any{f.private.p, f.private.pre, f.private.reg, f.private.receipt})) {
 		t.Fatal("retained original S1 signed DTOs changed during current declaration")
 	}
