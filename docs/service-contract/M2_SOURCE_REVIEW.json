@@ -2643,7 +2643,8 @@
       "failed_source": "61278928b24301dbb7abfdab48f078dabcb08566",
       "job": 133630686633,
       "correction": "checkOrConsume returns blocked: first2 false, third true. Runtime/limiter unchanged; exact successor CI pending.",
-      "successor_CI_result": null
+      "successor_CI_result": null,
+      "evidence_pin_followup_job": 133636575999
     }
   }
 }

@@ -40,7 +40,7 @@
     {
       "evidence": "docs/service-contract/M2_SOURCE_REVIEW.json",
       "id": "independent_source_review",
-      "sha256": "f213278c27003d0a50f75dc2aef6ffdedcfad918d6f1206c4c56c01d255500d0"
+      "sha256": "b7b6472cbab1a683dcb096185d746276d47a54b157fbf01cd0bb06dc687d31f7"
     },
     {
       "evidence": "docs/service-contract/REVIEW.json",
