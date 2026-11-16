@@ -2609,7 +2609,7 @@
     "independent_peer_handoff_sha256": "d52824793e9cb084bdb27a64453a07fee24f3c8e1146c36fd921ae194d361a11",
     "independent_peer_result": "PASS_SOURCE_ONLY",
     "reviewed_cumulative_source_paths": 40,
-    "generated_current_source_census_sha256": "ba597c964593f6a52eae1b94bb8023aabb5289850125d10b22d656a79db4b462",
+    "generated_current_source_census_sha256": "e7b624d7f7eb61b28df81f2f892720b951968d7beb5c2a45e7352e107d5d6f4b",
     "generated_current_non_test_Go_sources": 852,
     "producer": "scripts/ci/service_contract_inventory.py",
     "producer_scope": "Existing deterministic stdlib Source tokenizer only; no product import, Go, build or functional execution.",
@@ -2618,6 +2618,26 @@
     "current_source_CI_result": null,
     "local_product_tests_builds_imports_run": false,
     "current_image_runtime_HPA_native_or_production_qualified": false,
-    "required_next": "Actual current signed Source CI including owning compiled checker and strict native KinD role/lifetime root; no prior CI alias."
+    "required_next": "Actual current signed Source CI including owning compiled checker and strict native KinD role/lifetime root; no prior CI alias.",
+    "correction_after_first_actual_CI": {
+      "failed_source_PUB": "6d99b875124a43111a72f2aa5639e77ab82de53c",
+      "failed_jobs": [
+        133604329360,
+        133604330046,
+        133604329350
+      ],
+      "causes": [
+        "QF1001 equivalent negation style",
+        "ST1005 startup error capitalization",
+        "New closed-owner helpers ran before existing BROKER_URL unit setup",
+        "Real PG/HTTP helper dialed CAPACITY_DISPATCH_BROKER_URL but omitted BROKER_URL binding",
+        "Existing synthetic-floor owner refused below165s remaining under parent6m; compile staging moves before that clock"
+      ],
+      "source_delta": "Equivalent De Morgan condition, lowercase startup error and existing broker setup before helpers; PG helper binds its actual dial URL and restores prior env. CI compile-only staging warms the same recoveryfixture child before parent6m. All guards, selectors and6m/120s/150s/165s/15m unchanged.",
+      "previous_census_sha256": "ba597c964593f6a52eae1b94bb8023aabb5289850125d10b22d656a79db4b462",
+      "independent_source_peer_sha256": "d9d1c7e08003866bc140f1b3383a11737ef85488d2f8433986e90eccbfe3d058",
+      "successor_CI_result": null,
+      "additional_independent_source_peer_sha256": "a371d1772b73bd4ef739c25f44db10145de18ebf6e7b99879a3b5dd1d5a3db3a"
+    }
   }
 }

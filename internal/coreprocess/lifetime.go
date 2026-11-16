@@ -114,7 +114,7 @@ func (l *Lifetime) Handler(next http.Handler) http.Handler {
 		}()
 		if r.URL.Path == lifecycle.NativeAdmissionPath && r.URL.RawPath == "" && r.URL.RawQuery == "" && !r.URL.ForceQuery {
 			l.guard.Handler().ServeHTTP(w, r)
-		} else if !l.guard.RootsOpen() && !(r.Method == http.MethodGet && r.URL.Path == "/healthz") {
+		} else if !l.guard.RootsOpen() && (r.Method != http.MethodGet || r.URL.Path != "/healthz") {
 			http.Error(w, "native admission unavailable", http.StatusServiceUnavailable)
 		} else {
 			next.ServeHTTP(w, r)

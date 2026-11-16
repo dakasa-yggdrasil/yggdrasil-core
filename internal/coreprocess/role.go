@@ -32,7 +32,7 @@ func FromEnvironment() (Role, error) {
 // The new image uses one ELF through this dedicated symlink, not a second build.
 func ValidateExecutable(role Role, argv0 string) error {
 	if (role == APIWorker && argv0 != APIWorkerExecutable) || (argv0 == APIWorkerExecutable && role != APIWorker) {
-		return errors.New("Core worker executable and process role disagree")
+		return errors.New("core worker executable and process role disagree")
 	}
 	return nil
 }

@@ -33,6 +33,15 @@ func qualifyProductionOriginalOwnerPostgres(t *testing.T) {
 	if brokerURL == "" {
 		brokerURL = os.Getenv("BROKER_URL")
 	}
+	previousBrokerURL, brokerWasSet := os.LookupEnv("BROKER_URL")
+	t.Setenv("BROKER_URL", brokerURL)
+	defer func() {
+		if brokerWasSet {
+			_ = os.Setenv("BROKER_URL", previousBrokerURL)
+		} else {
+			_ = os.Unsetenv("BROKER_URL")
+		}
+	}()
 	conn, err := amqp.Dial(brokerURL)
 	if err != nil {
 		t.Fatal("original owner requires actual broker", err)

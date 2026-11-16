@@ -137,9 +137,9 @@ func TestAsyncIdempotencyRetryNeverReturnsForeignMachineRunID(t *testing.T) {
 }
 
 func TestDispatchAsyncWorkflowRunUsesPanicSafeLauncher(t *testing.T) {
+	t.Setenv("BROKER_URL", "amqp://unit-test")
 	productionOriginalOwnerRefusals(t)
 	productionWorkerRoleRefusals(t)
-	t.Setenv("BROKER_URL", "amqp://unit-test")
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)

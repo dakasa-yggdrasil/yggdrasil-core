@@ -723,6 +723,12 @@ jobs:
           test "$(git -C "$capacity_source_dir/clean" rev-parse HEAD)" = "$(git rev-parse HEAD)"
           python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_source_equivalence.py" --source "$GITHUB_WORKSPACE" --clone "$capacity_source_dir/clean" --go "$(command -v go)" --package ./controllers/httpapi
           python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_source_equivalence.py" --source "$GITHUB_WORKSPACE" --clone "$capacity_source_dir/clean" --go "$(command -v go)" --package ./repository
+          # Compile the same mandatory child before the parent test clock starts.
+          # The child still owns its original120s/150s and165s cleanup admission;
+          # the parent6m and job15m budgets remain unchanged.
+          go test -race -c -buildvcs=true -tags recoveryfixture -o "$capacity_source_dir/repository-recoveryfixture.test" ./repository
+          test -s "$capacity_source_dir/repository-recoveryfixture.test"
+          rm -f -- "$capacity_source_dir/repository-recoveryfixture.test"
           core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/capacity"
           capacity_owner_registry="$(mktemp -d /tmp/dk-reg-XXXXXXXX)"
           export CAPACITY_TEST_OWNER_ROOT="$capacity_owner_registry"
