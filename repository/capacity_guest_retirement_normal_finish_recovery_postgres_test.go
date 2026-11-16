@@ -257,7 +257,12 @@ func TestGuestRetirementForwardNormalFinishRecoveryPostgres(t *testing.T) {
 			if err := f.DB.QueryRow(`SELECT r.intent_sha256,(convert_from(n.original_wire,'UTF8')::json->'final_request'->'intent')::text FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_retirement_original_returns n ON n.intent_id=r.id AND n.sequence=1 AND n.kind='production_clock_nonce_v2' WHERE r.id=$1`, f.Request.Intent.RequestID).Scan(&preflightSHA, &finalizedWire); err != nil || preflightSHA == capacity.GuestRetirementSHA(f.Request.Intent) || !reflect.DeepEqual(finalizedWire, failedServingWire(t, f.Request.Intent)) || capacity.BusinessCreationSHA256(finalizedWire) != capacity.GuestRetirementSHA(f.Request.Intent) {
 				t.Fatal("real PG finalized nonce token must preserve exact canonical Go intent, separately from immutable preflight SHA", err)
 			}
-			failedOFF := f.FailedOrdinaryNativeOff()
+			var failedOFF GuestNativePoweroffReturnV2
+			if provider == "hetzner" {
+				failedOFF = f.ContentRefusedOrdinaryNativeOff()
+			} else {
+				failedOFF = f.FailedOrdinaryNativeOff()
+			}
 			// The unchanged partial/failed-caller mode must still reject normal200.
 			if _, err := f.RetirementStore().AdmitGuestRetirementForwardLive(ctx, f.Policy, f.Intent.Generation, f.Intent.FencingToken, f.Intent.LeaseOwner, f.Request.Intent.RequestID); err == nil {
 				t.Fatal("normal200 was relabelled as the old partial-caller failure")
@@ -266,7 +271,14 @@ func TestGuestRetirementForwardNormalFinishRecoveryPostgres(t *testing.T) {
 			before, nativeBefore := f.PreservedOriginals(), normalFinishNativeOriginalSHA(t, f)
 			f.WaitHistoricalBarrier()
 			f.StartSuccessorDispatch()
+			var catalog109 []byte
+			if provider == "hetzner" {
+				catalog109 = normalFinishClosedReturn109Prepare(t, f, ctx, failedOFF)
+			}
 			requested := normalFinishRequestAndClaim(t, f, ctx)
+			if provider == "hetzner" {
+				normalFinishClosedReturn109Claimed(t, f, ctx, catalog109)
+			}
 			var proof map[string]any
 			proofRaw, _ := json.Marshal(requested.NormalFinishRecovery)
 			if json.Unmarshal(proofRaw, &proof) != nil || proof["native_off_read_id"] != failedOFF.Challenge.ReadID {

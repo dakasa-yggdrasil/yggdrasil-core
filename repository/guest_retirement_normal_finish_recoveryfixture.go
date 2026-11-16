@@ -4,7 +4,9 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -51,6 +53,54 @@ func (f *GuestRetirementForwardRecoveryFixture) FailedOrdinaryNativeOff() GuestN
 		f.t.Fatal("closed original OFF pair and no DELETE", rows, deletes, err)
 	}
 	return returned
+}
+
+// ContentRefusedOrdinaryNativeOff supplies an explicit completed RPC with a
+// declared non-OFF plan. The real recorder must retain false failure flags and
+// prune that refused content; this does not infer the production power state.
+func (f *GuestRetirementForwardRecoveryFixture) ContentRefusedOrdinaryNativeOff() GuestNativePoweroffReturnV2 {
+	f.t.Helper()
+	if !f.ordinarySuccess {
+		f.t.Fatal("complete ordinary caller fixture required")
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stop()
+	finish := f.FinishStore()
+	read, err := finish.PrepareGuestNativePoweroffReadV2(ctx, f.Request.Intent.RequestID)
+	if err != nil {
+		f.t.Fatal("actual content-refused original OFF prepare", err)
+	}
+	plan := capacity.RecoveryFixtureNativeOffPlan(f.t, f.Spec, f.Pre, f.Receipt.Enrollment.Statement.Tuple)
+	if f.Spec.Profiles[0].Provider == "aws" {
+		plan.DesiredSpec.Capability = "observe_ec2_instance"
+		plan.RequestSHA256 = f.Spec.MutationBindings[0].Slots[f.Pre.Slot-1].DesiredSpecSHA256
+	}
+	plan.Server.Status = "running"
+	at := time.Now().UTC()
+	returned := GuestNativePoweroffReturnV2{Schema: "original_core_guest_native_poweroff_read_return_v2", Challenge: read, Status: "observed", Plan: &plan, StartedAtCore: at, OriginalReturnedAtCore: at}
+	if err = finish.RecordGuestNativePoweroffV2(ctx, returned); !errors.Is(err, ErrCapacityConflict) {
+		f.t.Fatal("real content refusal must retain its closed return", err)
+	}
+	var raw, join []byte
+	var same bool
+	if err = f.DB.QueryRow(`SELECT original_wire,original_native_join_wire,original_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_guest_original_native_poweroff_reads WHERE intent_id=$1 AND original_record->>'schema'='original_core_guest_native_poweroff_read_return_v2'`, f.Request.Intent.RequestID).Scan(&raw, &join, &same); err != nil {
+		f.t.Fatal("actual retained content-refused original", err)
+	}
+	var stored GuestNativePoweroffReturnV2
+	want := returned
+	want.Plan = nil
+	if !same || capacity.DecodeGuestLifecycle(raw, &stored) != nil || !reflect.DeepEqual(stored, want) || stored.CallFailed || stored.OriginalContextFailed || stored.Status != "observed" || stored.Plan != nil || !reflect.DeepEqual(join, failedServingWire(f.t, read)) {
+		f.t.Fatal("recorder changed flags, challenge or custody instead of pruning refused Plan")
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields["plan"] != nil || string(fields["call_failed"]) != "false" || string(fields["original_context_failed"]) != "false" {
+		f.t.Fatal("explicit false flags and absent Plan required in actual original bytes")
+	}
+	var rows, deletes int
+	if err = f.DB.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_guest_original_native_poweroff_reads WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_vm_retirement_delete_bindings WHERE intent_id=$1)`, f.Request.Intent.RequestID).Scan(&rows, &deletes); err != nil || rows != 2 || deletes != 0 {
+		f.t.Fatal("exact original pair and zero DELETE", rows, deletes, err)
+	}
+	return stored
 }
 
 // NormalFinishFailedWorkflowResult is the actual seven-step normal-retire /

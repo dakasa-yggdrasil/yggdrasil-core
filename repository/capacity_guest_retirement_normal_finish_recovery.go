@@ -355,11 +355,21 @@ func normalFinishClosedOffFailureTx(ctx context.Context, tx *sql.Tx, x retiremen
 	if cl != nil {
 		return prepared, "", "", returnedAt, cl
 	}
-	i := x.original.Request.Intent
-	if n != 2 || len(returnWire) == 0 || prepared.Schema != "original_core_guest_native_poweroff_read_challenge_v2" || !validCapacityExecutor(prepared.ReadID) || prepared.IntentID != i.RequestID || prepared.IntentSHA256 != capacity.GuestRetirementSHA(i) || prepared.OriginalCallerSHA256 != x.evidence.CallerSHA256 || prepared.MutationBindingSHA256 != capacity.GuestRetirementSHA(x.binding) || prepared.AdapterSourceCommit != x.binding.OriginalProviderSourceCommit || prepared.Tuple != i.Tuple || prepared.IssuedAtCore.IsZero() || !prepared.OriginalDeadlineCore.After(prepared.IssuedAtCore) || prepared.OriginalDeadlineCore.Sub(prepared.IssuedAtCore) > 5*time.Second || returned.Schema != "original_core_guest_native_poweroff_read_return_v2" || !reflect.DeepEqual(returned.Challenge, prepared) || !returned.CallFailed || returned.OriginalContextFailed || !returned.OriginalReturnedAtCore.Before(prepared.OriginalDeadlineCore) || returned.Plan != nil || (returned.Status != "" && returned.Status != "observed") || returned.StartedAtCore.Before(prepared.IssuedAtCore) || returned.OriginalReturnedAtCore.Before(returned.StartedAtCore) || returned.OriginalReturnedAtCore.After(returnedAt) || returnedAt.Before(preparedAt) || returnedAt.After(x.now) {
+	if n != 2 || len(returnWire) == 0 || !normalFinishClosedOffFailureContent(x, prepared, returned, preparedAt, returnedAt) {
 		return prepared, "", "", returnedAt, ErrCapacityConflict
 	}
 	return prepared, preparedSHA, returnedSHA, returnedAt, nil
+}
+
+// Closed failed-read custody is not native-OFF qualification. A timely actual
+// observed return may have its refused Plan pruned by the original recorder.
+// Both branches still require the closed decoder and every original join.
+func normalFinishClosedOffFailureContent(x retirementForwardSnapshot, prepared GuestNativePoweroffReadV2, returned GuestNativePoweroffReturnV2, preparedAt, returnedAt time.Time) bool {
+	i := x.original.Request.Intent
+	if prepared.Schema != "original_core_guest_native_poweroff_read_challenge_v2" || !validCapacityExecutor(prepared.ReadID) || prepared.IntentID != i.RequestID || prepared.IntentSHA256 != capacity.GuestRetirementSHA(i) || prepared.OriginalCallerSHA256 != x.evidence.CallerSHA256 || prepared.MutationBindingSHA256 != capacity.GuestRetirementSHA(x.binding) || prepared.AdapterSourceCommit != x.binding.OriginalProviderSourceCommit || prepared.Tuple != i.Tuple || prepared.IssuedAtCore.IsZero() || !prepared.OriginalDeadlineCore.After(prepared.IssuedAtCore) || prepared.OriginalDeadlineCore.Sub(prepared.IssuedAtCore) > 5*time.Second || returned.Schema != "original_core_guest_native_poweroff_read_return_v2" || !reflect.DeepEqual(returned.Challenge, prepared) || (!returned.CallFailed && returned.Status != "observed") || returned.OriginalContextFailed || !returned.OriginalReturnedAtCore.Before(prepared.OriginalDeadlineCore) || returned.Plan != nil || (returned.Status != "" && returned.Status != "observed") || returned.StartedAtCore.Before(prepared.IssuedAtCore) || returned.OriginalReturnedAtCore.Before(returned.StartedAtCore) || returned.OriginalReturnedAtCore.After(returnedAt) || returnedAt.Before(preparedAt) || returnedAt.After(x.now) {
+		return false
+	}
+	return true
 }
 
 func (s CapacityStore) normalFinishFailedRunTx(ctx context.Context, tx *sql.Tx, x retirementForwardSnapshot, id string) ([]byte, error) {

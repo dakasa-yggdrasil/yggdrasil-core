@@ -36,7 +36,7 @@ PROPOSAL_BOUND=False
 G8_CONFIG = ETC / 'controller.r13-netlink-g8pair.production.json'
 G12_CONFIG = ETC / 'controller.r13-netlink-g12pair.production.json'
 G6_CONFIG = ETC / 'controller.r13-netlink-g6pair.production.json'
-GUARDIAN_SOURCE=Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g30pair-source-v1/network_guardian.py')
+GUARDIAN_SOURCE=Path('/opt/dakasa/capacity-network/network-boot-recovery-r13-g31pair-source-v1/network_guardian.py')
 # The package supplies the exact reviewed successor Guardian source hash.
 FIELDS = {'schema', 'execute', 'source_files_sha256', 'eks_endpoint', 'eks_public_ca_base64', 'core_service_uid',
           'core_container_images', 'root_review_attestation'}
@@ -124,15 +124,18 @@ G26_CORE_IMAGE_PAIRS=[{'image':CORE_G25,'image_id':CORE_G25},{'image':CORE_G26,'
 CORE_G27=CORE_IMAGE_REF+'sha256:346cc922d68520cf3222f3cad6a0a1d5f659f5bfb6388c24040cba88831e8c9b'
 G27_CONFIG_SHA='b91aee44a2df82d6173112f0e35deeac5acf0bbd218365d4167fe6c9216092fb'
 G29_CONFIG_SHA='152f408e45923956cb71f256fa071fb923806c61cfd57c1632db43a4d1aa656f'
-G30_CONFIG_SHA=None
+G30_CONFIG_SHA='d01c7b9d1409130d7245e94d7a71e4454bb84cfc9fca5103a070871115349b4c'
+G31_CONFIG_SHA=None
 G27_CORE_IMAGE_PAIRS=[{'image':CORE_G26,'image_id':CORE_G26},{'image':CORE_G27,'image_id':CORE_G27}]
 CORE_G28=CORE_IMAGE_REF+'sha256:df8c70eba4f65ac7ce18d03c3b1f1c98dcd757bc540853df85f6cebf195a3a70'
 G28_CONFIG_SHA='7b1b71c5b4c9692401f876eb6583d1315880099edb95775005aff39263f3e43b'
 G28_CORE_IMAGE_PAIRS=[{'image':CORE_G27,'image_id':CORE_G27},{'image':CORE_G28,'image_id':CORE_G28}]
 CORE_G29=CORE_IMAGE_REF+'sha256:3b7f7ef920df48d02a37d7a2dd18438f5e01c64d0b2f8f935b72a3c2069878cb'
 G29_CORE_IMAGE_PAIRS=[{'image':CORE_G28,'image_id':CORE_G28},{'image':CORE_G29,'image_id':CORE_G29}]
-CORE_G30=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
+CORE_G30=CORE_IMAGE_REF+'sha256:95a2b3aa872c1c8788dd58630ac8af68d4df2021636f3a11e3b7040475dc523a'
 G30_CORE_IMAGE_PAIRS=[{'image':CORE_G29,'image_id':CORE_G29},{'image':CORE_G30,'image_id':CORE_G30}]
+CORE_G31=CORE_IMAGE_REF+HEAD_NEW_CORE_DIGEST if type(HEAD_NEW_CORE_DIGEST)is str else None
+G31_CORE_IMAGE_PAIRS=[{'image':CORE_G30,'image_id':CORE_G30},{'image':CORE_G31,'image_id':CORE_G31}]
 G18_CONFIG_SHA = 'd8ed4b268c112fc396860b57f57b36090dcc8b63f768a3a47b291984aa6eab1a'
 G18_CONFIG = ETC / 'controller.r13-netlink-g18pair.production.json'
 G13_CONFIG = ETC / 'controller.r13-netlink-g13pair.production.json'
@@ -169,7 +172,8 @@ PAIR_CHAIN = (
     ('g27pair', G27_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g27pair.production.json'), G27_CONFIG_SHA),
     ('g28pair', G28_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g28pair.production.json'), G28_CONFIG_SHA),
     ('g29pair', G29_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g29pair.production.json'), G29_CONFIG_SHA),
-    ('g30pair', G30_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g30pair.production.json'), None),
+    ('g30pair', G30_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g30pair.production.json'), G30_CONFIG_SHA),
+    ('g31pair', G31_CORE_IMAGE_PAIRS, Path('/etc/dakasa/capacity-network/controller.r13-netlink-g31pair.production.json'), None),
 )
 # kube_native.approved_core_images (runtime-r13-prod, 9fae13d7...), verbatim rules.
 KN_REPOSITORY = r'(?:ghcr\.io/dakasa-yggdrasil/yggdrasil-core|153828470928\.dkr\.ecr\.us-east-1\.amazonaws\.com/ghcr/dakasa-yggdrasil/yggdrasil-core)'
@@ -255,8 +259,8 @@ def require_bound():
     require(PROPOSAL_BOUND is True and type(HEAD_NEW_CORE_DIGEST) is str
             and re.fullmatch('sha256:[a-f0-9]{64}', HEAD_NEW_CORE_DIGEST) is not None
             and HEAD_NEW_CORE_DIGEST != HEAD_DIGEST_PLACEHOLDER
-            and type(G30_CONFIG_SHA) is str and re.fullmatch('[a-f0-9]{64}', G30_CONFIG_SHA) is not None
-            and G30_CONFIG_SHA != '0' * 64 and CORE_G30 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
+            and type(G31_CONFIG_SHA) is str and re.fullmatch('[a-f0-9]{64}', G31_CONFIG_SHA) is not None
+            and G31_CONFIG_SHA != '0' * 64 and CORE_G31 == CORE_IMAGE_REF + HEAD_NEW_CORE_DIGEST,
             'G15_RELEASE_AND_ROOT_CONFIG_NOT_BOUND')
 
 
@@ -309,7 +313,7 @@ def derive(r42_raw, chain_prefix_raws, attestation):
     require(len(raw) <= 32768 and strict_loads(raw) == new, 'BOUNDED_CANONICAL_HEAD_CONFIG')
     require(sorted(k for k in FIELDS if new[k] != previous[k]) == ['core_container_images', 'root_review_attestation'],
             'HEAD_DELTA_EXACTLY_PAIR_AND_REVIEW')
-    require(sha(raw) == G30_CONFIG_SHA, 'EXACT_ROOT_REVIEWED_G15_CONFIG')
+    require(sha(raw) == G31_CONFIG_SHA, 'EXACT_ROOT_REVIEWED_G15_CONFIG')
     return raw
 
 
