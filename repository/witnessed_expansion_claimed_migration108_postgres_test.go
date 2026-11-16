@@ -5,6 +5,7 @@ package repository
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -15,6 +16,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 )
 
@@ -261,8 +263,9 @@ func witnessedExpansion108WaitLease(t *testing.T, ctx context.Context, current m
 }
 
 // Actual event INSERTs execute the production108 trigger in a rolled-back
-// transaction. Adversarial old rows are explicitly declared with replication
-// triggers disabled only for setup, then enabled before the attempted INSERT.
+// transaction. The no-ACK setup is refused earlier by the existing active-scope
+// index, even with replication triggers disabled. Other adversarial old rows
+// re-enable those triggers before the attempted INSERT.
 func witnessedExpansion108ClaimSQLNegatives(t *testing.T, f *witnessedCleanup106Fixture, a WitnessedUnenrolledExpansionCleanup, current model.CapacityIntent, newJob CapacityDispatchJob) {
 	t.Helper()
 	_, events, err := (CapacityStore{DB: f.DB}).ReadWitnessedUnenrolledExpansionCleanup(context.Background(), a.GrantID)
@@ -270,6 +273,17 @@ func witnessedExpansion108ClaimSQLNegatives(t *testing.T, f *witnessedCleanup106
 		t.Fatal("M108 pure claimed prefix", err)
 	}
 	old := events[len(events)-1]
+	frame := func(tx *sql.Tx) []byte {
+		t.Helper()
+		var raw []byte
+		if e := tx.QueryRow(`SELECT jsonb_build_object(
+ 'jobs',(SELECT jsonb_agg(to_jsonb(j) ORDER BY j.id) FROM capacity_dispatch_jobs j WHERE j.run_id IN($1::uuid,$2::uuid)),
+ 'events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY e.sequence) FROM capacity_witnessed_unenrolled_expansion_cleanup_events e WHERE e.cleanup_id=$3::uuid),
+ 'intent',(SELECT to_jsonb(i) FROM capacity_intents i WHERE i.namespace=$4 AND i.environment=$5 AND i.domain=$6 AND i.dimension=$7))::text`, old.RunID, newJob.RunID, a.ID, a.Namespace, a.Environment, a.Domain, a.Dimension).Scan(&raw); e != nil {
+			t.Fatal("M108 no-ACK whole original frame", e)
+		}
+		return raw
+	}
 	faults := []string{"", "live_lease", "no_ACK", "not_failed", "wrong_current_owner", "same_run", "child_by_ID", "foreign_child_link", "inventory_prepared", "inventory_returned", "issued", "possible_send"}
 	for _, fault := range faults {
 		tx, e := beginWitnessedExpansionTx(context.Background(), f.DB)
@@ -297,7 +311,28 @@ func witnessedExpansion108ClaimSQLNegatives(t *testing.T, f *witnessedCleanup106
 			case "live_lease":
 				_, e = tx.Exec(`UPDATE capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, a.Namespace, candidate.LeaseExpiresAt.Format(time.RFC3339Nano))
 			case "no_ACK":
+				before := frame(tx)
 				_, e = tx.Exec(`UPDATE capacity_dispatch_jobs SET finalization_ack_at=NULL WHERE run_id=$1::uuid`, old.RunID)
+				var pg *pq.Error
+				if !errors.As(e, &pg) || pg.Code != "23505" || pg.Constraint != "capacity_witnessed_expansion_active_scope106_idx" {
+					t.Fatal("M108 no-ACK setup must hit the existing active-scope index", e)
+				}
+				if e = tx.Rollback(); e != nil {
+					t.Fatal(e)
+				}
+				check, e := beginWitnessedExpansionTx(context.Background(), f.DB)
+				if e != nil {
+					t.Fatal(e)
+				}
+				defer check.Rollback()
+				after := frame(check)
+				if e = check.Rollback(); e != nil {
+					t.Fatal(e)
+				}
+				if !bytes.Equal(before, after) {
+					t.Fatal("M108 no-ACK refusal changed old/new jobs, events or intent")
+				}
+				continue // No valid second active owner exists for a candidate INSERT.
 			case "not_failed":
 				_, e = tx.Exec(`UPDATE workflow_runs SET status='succeeded' WHERE id=$1::uuid`, old.RunID)
 			case "wrong_current_owner":
