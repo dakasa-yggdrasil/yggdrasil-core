@@ -333,7 +333,7 @@ def core_overlap():
     pods = native(KUBE + ['-n', 'dakasa', 'get', 'pods', '-l', 'app=yggdrasil', '-o', 'json'], 12)
     C.need(dep.returncode == pods.returncode == 0, 'CORE_READONLY_CENSUS_ZERO')
     d, ps = C.loads(dep.stdout), C.loads(pods.stdout)['items']
-    C.need(C.OLD_DIGEST == 'df8c70eba4f65ac7ce18d03c3b1f1c98dcd757bc540853df85f6cebf195a3a70', 'EXACT_CURRENT_R13_OVERLAP_DIGEST')
+    C.need(C.OLD_DIGEST == '3b7f7ef920df48d02a37d7a2dd18438f5e01c64d0b2f8f935b72a3c2069878cb', 'EXACT_CURRENT_R13_OVERLAP_DIGEST')
     image = C.IMAGE_PREFIX + C.OLD_DIGEST
     C.need(d['metadata']['uid'] == C.OLD_CORE_UID and d['metadata'].get('annotations', {}).get('dakasa.io/core-source-commit') == C.OLD_CORE_SOURCE
            and d['metadata']['generation'] == C.OLD_CORE_GENERATION and not d['metadata'].get('deletionTimestamp')

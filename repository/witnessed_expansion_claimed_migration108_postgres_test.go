@@ -175,6 +175,7 @@ func witnessedExpansion108Postgres(t *testing.T, original *witnessedCleanup106Fi
 		t.Fatal("M108 refused Down changed whole catalog/history")
 	}
 	put("M108-CLAIMED-ONLY-CROSS-CONTRACT-TERMINAL.PUBLIC.json", failedServingWire(t, map[string]any{"schema": "witnessed_expansion108_real_postgres_claimed_cross_contract_fixture_v1", "fixture_only": true, "original_single300_second_producer_reused": true, "natural_lease_expiry_no_clock_rewrite": true, "three_distinct_canonical_claims": true, "two_real_failed_owner_ACKs": true, "old_claim_rows_and_failed_CREATE_originals_immutable": true, "current_onlyS2_retained_onlyS1_native_DTOs": true, "genuine_new_owner_S1_publish_read_before_and_after": true, "new_current_inventory_read_before_single_child": true, "one_ordinary_child_no_compensation": true, "possible_send_is_once": true, "paid_IP_pending_then_complete_absence": true, "target_absent_refresh_preserves_originalS1": true, "typed_original_disposed_ACK_NULL": true, "whole107_to108_catalog_one_function_only": true, "unused_Down_restores107_and_used_Down_refused": true, "native_provider_or_Guest_execution_claimed": false, "clean_cycle_credit": false}))
+	witnessedExpansionTerminalCohortReturn(t, ctx, f, inventories, a, terminal, oldJob, put)
 }
 
 func witnessedExpansion108Catalog(t *testing.T, before, after []byte) {

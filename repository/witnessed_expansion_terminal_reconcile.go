@@ -249,7 +249,7 @@ func (s CapacityStore) TryClaimWitnessedExpansionTerminalReconcile(ctx context.C
 	if err = capacity.ValidateAssessment(p, assessment, now); err != nil {
 		return s, old, false, err
 	}
-	snapshot, err := capacity.GuestReconcileSnapshot(policy, p, s.guestReconcile.inventory, now)
+	snapshot, err := s.guestContractSnapshotTx(ctx, tx, policy, p, now)
 	if err != nil || !reflect.DeepEqual(snapshot, assessment.Snapshot) || !sameCapacityResourceIdentity(old.Assessment.Snapshot, snapshot) || snapshot.Units != a.SurvivorCount {
 		return s, old, false, ErrCapacityConflict
 	}

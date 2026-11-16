@@ -21,14 +21,14 @@ GUARD = 'dakasa-capacity-network-guardian.service'
 COLD = 'dakasa-capacity-network-cold-transport.service'
 HUB = 'dakasa-capacity-network-hub.service'
 UNITS = (CTRL, GUARD, COLD, HUB)
-OLD_CORE_SOURCE='72858ab311f2c32e22236a901cbd6daca95f376e'
+OLD_CORE_SOURCE='cdb43caa837d06222e2ef49f69bad274a888e1e8'
 OLD_CORE_UID = 'a58ab8c2-da48-46c1-ae62-a650141eeb86'
-OLD_CORE_GENERATION=292
-OLD_CORE_POD_UID='a943d250-4758-4f8c-b63e-64229102ce86'
-OLD_CORE_CONTAINER_ID='containerd://aff2be52ca41bf81f1a3e77ed1d3d701ca875cd63723d111c7393ed3b9572c63'
+OLD_CORE_GENERATION=293
+OLD_CORE_POD_UID='4567c917-bbd3-43d4-8347-bdc98aab67c5'
+OLD_CORE_CONTAINER_ID='containerd://912b28f5623960fa8ffd071afba09a0a781fa000b7844afeacfeae4b3fc77d70'
 PROPOSAL_BOUND=False
 SOURCE_R=None
-OLD_DIGEST='df8c70eba4f65ac7ce18d03c3b1f1c98dcd757bc540853df85f6cebf195a3a70'
+OLD_DIGEST='3b7f7ef920df48d02a37d7a2dd18438f5e01c64d0b2f8f935b72a3c2069878cb'
 NEW_DIGEST=None
 IMAGE_PREFIX = '153828470928.dkr.ecr.us-east-1.amazonaws.com/ghcr/dakasa-yggdrasil/yggdrasil-core@sha256:'
 G6_CONFIG_SHA = '8b74f1de7e49e44b4ad140b59767e441cc6adaf6c0689d684ecdc301bcee6c5e'
@@ -64,29 +64,30 @@ G25_CONFIG_SHA='ef7ce803f456b2646e2c4ac4cf6df5cfcd972a47f9c26e4c8ca5b8d06ff17916
 G26_CONFIG_SHA='facd470457386fcff88e1f60b2aa0776e5354cb11ef59ccd770a2c2f4c33e83a'
 G27_CONFIG_SHA='b91aee44a2df82d6173112f0e35deeac5acf0bbd218365d4167fe6c9216092fb'
 G28_CONFIG_SHA='7b1b71c5b4c9692401f876eb6583d1315880099edb95775005aff39263f3e43b'
-G29_CONFIG_SHA=None
-HEAD_CONFIG_SHA=G29_CONFIG_SHA
+G29_CONFIG_SHA='152f408e45923956cb71f256fa071fb923806c61cfd57c1632db43a4d1aa656f'
+G30_CONFIG_SHA=None
+HEAD_CONFIG_SHA=G30_CONFIG_SHA
 G7_SOURCE_SHA = '2379e9cb0fcf36faf7dfe58e930d0eb6ae97ba4d177db6610a23583d0a00a8aa'
 G7_STANDING_SHA = 'dd7d449ea8fdba60a43d6badb138ea9496e1342572f90633e62d7b87d9b44866'
 G10_SOURCE_SHA = '4283341a25e1a9c344cdf564f06604f560c14a7dc7e3738039f17cb9ee3c9bb7'
 G14_SOURCE_SHA = 'f2a791b3244b7542501b596423b98d881aaba5adf52e8117bb44ec196fa93e1e'
 G15_SOURCE_SHA = '88afcd71d53b7f0f7f79bf1f8f0c4a31436e60cb9874c1ece77bfe3e835cc7b3'
-ACTUAL_PREDECESSOR_SOURCE_SHA='4708626cd09abe58364cfed76e1a89d2a623f550de1f75a72e1d2deb4cdada3c'
+ACTUAL_PREDECESSOR_SOURCE_SHA='0312bb7db666ccbdd9e4c8dde0e8409415266ebb76f38f975904bb04891f61f9'
 G10_STANDING_SHA = '71647d59c2ea21c5d0dafd38d266e34d0f360c3aaf50bf5a628947a244e879ce'
 G14_STANDING_SHA = 'e2c0ad81f395cbdd1d84224d393bf78e80ea5e1ed55cb1dbf37ab1d21bd6c950'
 G15_STANDING_SHA = 'db5267b302e2d928aa89ee3ab29310a7d15ea3f814c050a461a13a852a345d77'
-ACTUAL_PREDECESSOR_STANDING_SHA='717d1b35bae8037203a2a1ca0614cdbcc5ca1158463b24c6a5ce09aae11d6840'
-ACTUAL_PREDECESSOR_CONFIG_SHA=G28_CONFIG_SHA
+ACTUAL_PREDECESSOR_STANDING_SHA='42825dcdf2de64d6a525eab2853df9432fbf36be7dc555b6a5f9b9a361f78215'
+ACTUAL_PREDECESSOR_CONFIG_SHA=G29_CONFIG_SHA
 G6_SOURCE_SHA = '6c2cc19f1f962d9d8eaec0cd5e6f813bf49004f8ff6fef9c9fe9f8f0310d8f1b'
 G6_STANDING_SHA = 'be5b25495056bd25e1512827b5ccbe7236f84928b4d20515f5000383771dcc79'
 F315_SOURCE_SHA = 'f3152cc6d8c5d7edee2e5349db17fac4b8650a18423dfc207c04fcc116955e6d'
 F315_STANDING_SHA = 'faa6b2cb3132ce2e0ee4304bd833d7f0f999850244014d355f1c33ed176ebb83'
-OLD_SOURCE=ROOT/'network-boot-recovery-r13-g28pair-source-v1'
-NEW_SOURCE=ROOT/'network-boot-recovery-r13-g29pair-source-v1'
-OLD_STANDING=ETC/'network-recovery.r13-g28pair.production.json'
-NEW_STANDING=ETC/'network-recovery.r13-g29pair.production.json'
-OLD_CONFIG=ETC/'controller.r13-netlink-g28pair.production.json'
-NEW_CONFIG=ETC/'controller.r13-netlink-g29pair.production.json'
+OLD_SOURCE=ROOT/'network-boot-recovery-r13-g29pair-source-v1'
+NEW_SOURCE=ROOT/'network-boot-recovery-r13-g30pair-source-v1'
+OLD_STANDING=ETC/'network-recovery.r13-g29pair.production.json'
+NEW_STANDING=ETC/'network-recovery.r13-g30pair.production.json'
+OLD_CONFIG=ETC/'controller.r13-netlink-g29pair.production.json'
+NEW_CONFIG=ETC/'controller.r13-netlink-g30pair.production.json'
 RUNTIME = ROOT / 'source-r13-netlink-v1'
 LEDGER = Path('/var/lib/dakasa-capacity-network-recovery')
 STATE = Path('/var/lib/dakasa-core-rollout/g15pair')
@@ -94,7 +95,7 @@ MAINTENANCE = Path('/run/dakasa-capacity-network/guardian-maintenance.lock')
 DROPIN = Path('/etc/systemd/system.control') / (CTRL + '.d/50-CPUQuota.conf')
 # The existing CPU quota override is deliberately retained.
 DROPIN_SHA = '2acd3272d2ee396203c519bc353c089be5871c3b70d79eff9e27f8ef70f14994'
-OLD_UNIT_SHAS={'dakasa-capacity-network.service': 'daf7e4f8ba7c29d1fda1e6ec4e556bbc516417081baa3acf268eaa384c1a5aef', 'dakasa-capacity-network-cold-transport.service': 'bb0da0ccb8358465a763f6293608d5369bd3a6e4b42a1d740ca25c42e9f6b601', 'dakasa-capacity-network-guardian.service': 'ff4cb4637e6d496dfb36414587bb9dd29e1d4b52171f46b1eff823a0877c22af', 'dakasa-capacity-network-hub.service': '4ae45486e7b25c5c3f525409a5714568c22d16f72c4e6d8afad9bc3b3576ebfe'}
+OLD_UNIT_SHAS={'dakasa-capacity-network.service': '74cb2dd33b0d54e001105a8825e76ff91edc0c2dd58608654c69cdcebed1a794', 'dakasa-capacity-network-cold-transport.service': '450450a449cd54f0fcdc6083e472a096eaf024ea511b47074f1592f30d546ff4', 'dakasa-capacity-network-guardian.service': 'd2fbc626a81fa1b38d0be676ce4f5cddf517e4cbc0342ae4f959edd5543898af', 'dakasa-capacity-network-hub.service': '4ae45486e7b25c5c3f525409a5714568c22d16f72c4e6d8afad9bc3b3576ebfe'}
 MODULES = ('network_guardian.py', 'coverage.py', 'journal_contract.py', 'proof_cache.py',
            'current15_bounded_reader.py', 'current15_bounded_tail_contract.py',
            'initial_boot_Cold_read_adoption.py', 'qualification_initializer.py')
@@ -147,7 +148,8 @@ ANCESTORS.update(g24_predecessor_guardian_source_sha256='8a157a7eab0dbc92a531242
 ANCESTORS.update(g25_predecessor_guardian_source_sha256='839ae0874caed047ee558e0b642577170cad4ea6fd3b61a8d54da3dd68fd8edf',g25_predecessor_standing_config_sha256='6e37ae892580c3162250b16b0ce3a79e080466af15f03ee6c7f8b0f1b9b48fed')
 ANCESTORS.update(g26_predecessor_guardian_source_sha256='d24ec252ce913ff9d3a7e93f2de0d0ed8de97bc315ee96ed3a297a846c92562b',g26_predecessor_standing_config_sha256='c252c81f1773fdc5ac20a97749d06c893b00a0b7dcef49802dd3cd52deb77573')
 ANCESTORS.update(g27_predecessor_guardian_source_sha256='783c325a1627990ac69409ade52bb6dbbf514b0e3e9e6af9a380a07061cc6baa',g27_predecessor_standing_config_sha256='76000e81d7219b5ca71f960d3f7ba021c44dc0e79f99a4518ba5a164ca68a23f')
-ANCESTORS.update(g28_predecessor_guardian_source_sha256=ACTUAL_PREDECESSOR_SOURCE_SHA,g28_predecessor_standing_config_sha256=ACTUAL_PREDECESSOR_STANDING_SHA)
+ANCESTORS.update(g28_predecessor_guardian_source_sha256='4708626cd09abe58364cfed76e1a89d2a623f550de1f75a72e1d2deb4cdada3c',g28_predecessor_standing_config_sha256='717d1b35bae8037203a2a1ca0614cdbcc5ca1158463b24c6a5ce09aae11d6840')
+ANCESTORS.update(g29_predecessor_guardian_source_sha256=ACTUAL_PREDECESSOR_SOURCE_SHA,g29_predecessor_standing_config_sha256=ACTUAL_PREDECESSOR_STANDING_SHA)
 DERIVATION_SCHEMA = 'r13_g15pair_guardian_standing_config_derivation_v1'
 PACKAGE_SCHEMA = 'guardian_g15pair_operational_package_v1'
 STAGED_SCHEMA = 'guardian_g15pair_staged_v1'
@@ -322,18 +324,18 @@ def validate_standing_output(value, expected, units_source):
          and value['standing_config_written'] is True and value['review_text_printed'] is False and value['private_files_read'] is False
          and digest(value['standing_config_sha256']), 'EXACT_G15_DERIVATION_RESULT')
     need(type(expected) is dict and set(expected) == {'source_sha256', 'unit_sha256', 'controller_prefix_sha256', 'ancestry_input_sha256'}, 'CLOSED_EXPECTED_DERIVATION')
-    inputs = {'successor_guardian_source_sha256': expected['source_sha256'], 'head_generation': 'g29pair', 'head_core_digest': 'sha256:' + NEW_DIGEST,
+    inputs = {'successor_guardian_source_sha256': expected['source_sha256'], 'head_generation': 'g30pair', 'head_core_digest': 'sha256:' + NEW_DIGEST,
               'head_controller_config_sha256': HEAD_CONFIG_SHA, 'historical_g6_controller_config_sha256': G6_CONFIG_SHA,
               'pair_predecessor_standing_config_sha256': PREFIX_STANDINGS, **ANCESTORS,
-              'pair_chain_controller_config_sha256': {**expected['controller_prefix_sha256'], 'g29pair': HEAD_CONFIG_SHA},
+              'pair_chain_controller_config_sha256': {**expected['controller_prefix_sha256'], 'g30pair': HEAD_CONFIG_SHA},
               **expected['unit_sha256'], **expected['ancestry_input_sha256']}
-    need(set(expected['unit_sha256']) == set(UNITS) and set(expected['controller_prefix_sha256']) == {'base', 'f5pair', 'g2pair', 'g3pair', 'g4pair', 'g5pair', 'g6pair', 'g7pair', 'g8pair', 'g9pair', 'g10pair', 'g11pair', 'g12pair', 'g13pair', 'g14pair', 'g15pair', 'g16pair', 'g17pair', 'g18pair', 'g19pair', 'g20pair', 'g21pair', 'g22pair', 'g23pair', 'g24pair', 'g25pair', 'g26pair', 'g27pair', 'g28pair'}
+    need(set(expected['unit_sha256']) == set(UNITS) and set(expected['controller_prefix_sha256']) == {'base', 'f5pair', 'g2pair', 'g3pair', 'g4pair', 'g5pair', 'g6pair', 'g7pair', 'g8pair', 'g9pair', 'g10pair', 'g11pair', 'g12pair', 'g13pair', 'g14pair', 'g15pair', 'g16pair', 'g17pair', 'g18pair', 'g19pair', 'g20pair', 'g21pair', 'g22pair', 'g23pair', 'g24pair', 'g25pair', 'g26pair', 'g27pair', 'g28pair', 'g29pair'}
          and expected['controller_prefix_sha256']['g6pair'] == G6_CONFIG_SHA
          and expected['controller_prefix_sha256']['g7pair'] == G7_CONFIG_SHA
          and expected['controller_prefix_sha256']['g8pair'] == G8_CONFIG_SHA
          and expected['controller_prefix_sha256']['g9pair'] == G9_CONFIG_SHA
          and expected['controller_prefix_sha256']['g10pair'] == G10_CONFIG_SHA
-         and expected['controller_prefix_sha256']['g11pair'] == G11_CONFIG_SHA and expected['controller_prefix_sha256']['g12pair'] == G12_CONFIG_SHA and expected['controller_prefix_sha256']['g13pair'] == G13_CONFIG_SHA and expected['controller_prefix_sha256']['g14pair'] == G14_CONFIG_SHA and expected['controller_prefix_sha256']['g15pair'] == G15_CONFIG_SHA and expected['controller_prefix_sha256']['g16pair'] == G16_CONFIG_SHA and expected['controller_prefix_sha256']['g17pair'] == G17_CONFIG_SHA and expected['controller_prefix_sha256']['g18pair'] == G18_CONFIG_SHA and expected['controller_prefix_sha256']['g19pair'] == G19_CONFIG_SHA and expected['controller_prefix_sha256']['g20pair'] == G20_CONFIG_SHA and expected['controller_prefix_sha256']['g21pair'] == G21_CONFIG_SHA and expected['controller_prefix_sha256']['g22pair'] == G22_CONFIG_SHA and expected['controller_prefix_sha256']['g23pair'] == G23_CONFIG_SHA and expected['controller_prefix_sha256']['g24pair'] == G24_CONFIG_SHA and expected['controller_prefix_sha256']['g25pair'] == G25_CONFIG_SHA and expected['controller_prefix_sha256']['g26pair'] == G26_CONFIG_SHA and expected['controller_prefix_sha256']['g27pair'] == G27_CONFIG_SHA and expected['controller_prefix_sha256']['g28pair'] == G28_CONFIG_SHA, 'EXACT_PREFIX_AND_FOUR_UNITS')
+         and expected['controller_prefix_sha256']['g11pair'] == G11_CONFIG_SHA and expected['controller_prefix_sha256']['g12pair'] == G12_CONFIG_SHA and expected['controller_prefix_sha256']['g13pair'] == G13_CONFIG_SHA and expected['controller_prefix_sha256']['g14pair'] == G14_CONFIG_SHA and expected['controller_prefix_sha256']['g15pair'] == G15_CONFIG_SHA and expected['controller_prefix_sha256']['g16pair'] == G16_CONFIG_SHA and expected['controller_prefix_sha256']['g17pair'] == G17_CONFIG_SHA and expected['controller_prefix_sha256']['g18pair'] == G18_CONFIG_SHA and expected['controller_prefix_sha256']['g19pair'] == G19_CONFIG_SHA and expected['controller_prefix_sha256']['g20pair'] == G20_CONFIG_SHA and expected['controller_prefix_sha256']['g21pair'] == G21_CONFIG_SHA and expected['controller_prefix_sha256']['g22pair'] == G22_CONFIG_SHA and expected['controller_prefix_sha256']['g23pair'] == G23_CONFIG_SHA and expected['controller_prefix_sha256']['g24pair'] == G24_CONFIG_SHA and expected['controller_prefix_sha256']['g25pair'] == G25_CONFIG_SHA and expected['controller_prefix_sha256']['g26pair'] == G26_CONFIG_SHA and expected['controller_prefix_sha256']['g27pair'] == G27_CONFIG_SHA and expected['controller_prefix_sha256']['g28pair'] == G28_CONFIG_SHA and expected['controller_prefix_sha256']['g29pair'] == G29_CONFIG_SHA, 'EXACT_PREFIX_AND_FOUR_UNITS')
     need(set(expected['ancestry_input_sha256']) == {'predecessor_standing_config_sha256', 'r13_predecessor_standing_config_sha256', 'r42_controller_config_sha256', 'r13_base_controller_config_sha256', 'hub_source_sha256', 'hub_boot_config_sha256', 'hub_unit_sha256'}, 'CLOSED_ORIGINAL_ANCESTRY_INPUTS')
     need(expected['unit_sha256'][HUB] == expected['ancestry_input_sha256']['hub_unit_sha256']
          and expected['controller_prefix_sha256']['base'] == expected['ancestry_input_sha256']['r13_base_controller_config_sha256'], 'SAME_HUB_UNIT_AND_R13_BASE_ACROSS_OUTPUT_AXES')
