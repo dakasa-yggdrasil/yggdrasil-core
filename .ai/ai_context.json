@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-16T08:44:04-03:00",
+  "generated_at": "2026-11-16T17:48:20-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1579,
-    ".json": 262,
+    ".go": 1590,
+    ".json": 263,
     ".py": 217,
     ".sql": 112,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "7249d8d911398e712fac0ffe662e120ea29faafd",
+    "commit": "5578fb42a6de1140e3cb87800b0041a3880a20de",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "c1e24dd334d5f6b0fed62ee573eae972d4cf615a281f36085d05b5e95aa31bd8"
+        "sha256": "8f1ac5d2c87f8e8a8195158105a1237b78e4953f349c88674c1bfc2e339a2797"
       },
       {
         "path": "AGENTS.md",
@@ -40,7 +40,7 @@
       },
       {
         "path": "Dockerfile",
-        "sha256": "6352cdfe93d649169ac5b32f8a2e1b0c70d307850c38f168a1ce862be90660ea"
+        "sha256": "66d283d2b3bc001e38953066984fea774e2a366c7c4810c8cfa697e46d400e43"
       },
       {
         "path": "Dockerfile.dev",
@@ -70,13 +70,13 @@
     },
     {
       "path": "controllers/httpapi",
-      "files": 264,
-      "kb": 2670
+      "files": 269,
+      "kb": 2713
     },
     {
       "path": "controllers/message",
-      "files": 206,
-      "kb": 1802
+      "files": 207,
+      "kb": 1804
     },
     {
       "path": "internal/capacity",
@@ -106,7 +106,7 @@
     {
       "path": "addons",
       "files": 51,
-      "kb": 307
+      "kb": 315
     },
     {
       "path": "internal/capacitynativeqemu",
