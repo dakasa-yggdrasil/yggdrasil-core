@@ -25,6 +25,7 @@ import (
 // the provider and Guest replies are fixtures, never production execution.
 func witnessedExpansion108Postgres(t *testing.T, original *witnessedCleanup106Fixture, migrations string, put func(string, []byte)) {
 	t.Helper()
+	defer witnessedExpansion108PreserveOriginal(t, original)()
 	f, inventories := witnessedExpansion108CrossContractFixture(t, original, migrations)
 	defer f.DB.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)

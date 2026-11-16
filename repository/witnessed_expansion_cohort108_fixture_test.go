@@ -81,9 +81,13 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 	if f.private.p.MutationBindings[0].IntegrationInstanceID != oldInstance || f.private.pre.PolicyID != oldPolicy.ID.String() {
 		t.Fatal("original S1 fixture view changed")
 	}
-	if json.Unmarshal(failedServingWire(t, original.parent), &f.parent) != nil {
-		t.Fatal("declared S2 original clone")
+	// Decode into a zero value: unmarshalling into the shallow clone would
+	// reuse its inherited Settlement/SDK pointers and mutate the producer.
+	var parent capacityMutationRecord
+	if json.Unmarshal(failedServingWire(t, original.parent), &parent) != nil || parent.Settlement == nil || parent.Settlement.OriginalProviderCreateReturn == nil || parent.Settlement == original.parent.Settlement || parent.Settlement.OriginalProviderCreateReturn == original.parent.Settlement.OriginalProviderCreateReturn {
+		t.Fatal("declared S2 original must own independent settlement and SDK DTOs")
 	}
+	f.parent = parent
 	f.parent.Binding, f.parent.PolicyID, f.parent.PolicyChecksum = *b, f.Policy.ID, f.Policy.Checksum
 	f.parent.Grant.IntegrationInstanceID, f.parent.Grant.ScopeChecksum = b.IntegrationInstanceID, b.ScopeChecksum
 	f.parent.Grant.RequestSHA256 = b.Slots[1].DesiredSpecSHA256
@@ -181,4 +185,22 @@ func witnessedExpansion108CrossContractFixture(t *testing.T, original *witnessed
 		t.Fatal("retained original S1 signed DTOs changed during current declaration")
 	}
 	return f, inventories
+}
+
+// Scope this comparison to the M108 tail, before the existing M106 native
+// regression legitimately updates its own original fixture. Connections and
+// store capabilities are deliberately excluded from the typed DTO snapshot.
+func witnessedExpansion108PreserveOriginal(t *testing.T, f *witnessedCleanup106Fixture) func() {
+	t.Helper()
+	typed := func() []byte {
+		return failedServingWire(t, []any{f.Policy, f.Workflow, f.Spec, f.job, f.pre, f.witness, f.registration, f.receipt, f.installation, f.parent, f.intent, f.base, f.private.p, f.private.policy, f.private.workflow, f.private.steps, f.private.pre, f.private.reg, f.private.receipt, f.private.installed, f.private.intent})
+	}
+	before := typed()
+	rows := failedServingWire(t, witnessedCleanup106Rows(t, f.DB))
+	return func() {
+		t.Helper()
+		if !bytes.Equal(before, typed()) || !bytes.Equal(rows, failedServingWire(t, witnessedCleanup106Rows(t, f.DB))) {
+			t.Fatal("M108 changed the original producer typed DTOs or whole database rows")
+		}
+	}
 }
