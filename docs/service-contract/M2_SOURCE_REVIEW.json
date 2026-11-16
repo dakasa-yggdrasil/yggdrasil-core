@@ -2638,6 +2638,12 @@
       "independent_source_peer_sha256": "d9d1c7e08003866bc140f1b3383a11737ef85488d2f8433986e90eccbfe3d058",
       "successor_CI_result": null,
       "additional_independent_source_peer_sha256": "a371d1772b73bd4ef739c25f44db10145de18ebf6e7b99879a3b5dd1d5a3db3a"
+    },
+    "limiter_fixture_followup": {
+      "failed_source": "61278928b24301dbb7abfdab48f078dabcb08566",
+      "job": 133630686633,
+      "correction": "checkOrConsume returns blocked: first2 false, third true. Runtime/limiter unchanged; exact successor CI pending.",
+      "successor_CI_result": null
     }
   }
 }

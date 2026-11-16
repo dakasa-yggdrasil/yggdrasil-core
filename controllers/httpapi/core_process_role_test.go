@@ -70,13 +70,13 @@ func productionWorkerRoleRefusals(t *testing.T) {
 		t.Fatal("private authority credential escaped through shared-session route")
 	}
 	for i := 0; i < 2; i++ {
-		allowed, _ := limiter.checkOrConsume("same-source")
-		if !allowed {
+		blocked, _ := limiter.checkOrConsume("same-source")
+		if blocked {
 			t.Fatal("misrouted worker requests consumed the authority login budget")
 		}
 	}
-	allowed, _ := limiter.checkOrConsume("same-source")
-	if allowed {
+	blocked, _ := limiter.checkOrConsume("same-source")
+	if !blocked {
 		t.Fatal("test login budget not exhausted")
 	}
 	for _, route := range []struct{ method, path string }{{http.MethodGet, "/api/v1/auth/session"}, {http.MethodGet, "/api/v1/manifests"}, {http.MethodPost, "/api/v1/workflow-runs?process_role=authority"}, {http.MethodPost, "/api/v1/integrations/declared/surface-query"}} {
