@@ -3,12 +3,14 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -589,6 +591,40 @@ func (f *GuestRetirementForwardRecoveryFixture) startDispatch() {
 	f.Store.OriginalRunID = e.RunID
 }
 
+// The fractional original keeps its unchanged four-second parent. Its declared
+// in-memory response completes a real bounded read/close without the shared
+// fixture's artificial 54ms latency or any future/restamped event time.
+func forwardFractionalAuthorityHTTP(t *testing.T, ctx context.Context, observation model.CapacityGuestRetirementObservationV2) capacity.GuestOriginalHTTPReturn {
+	t.Helper()
+	wire := failedServingWire(t, observation)
+	returned := capacity.GuestOriginalHTTPReturn{StartedAt: time.Now().UTC()}
+	returned.DoStartedAt = time.Now().UTC()
+	body := io.NopCloser(bytes.NewReader(wire))
+	returned.Status = 200
+	returned.DoReturnedAt = time.Now().UTC()
+	var readErr error
+	returned.Body, readErr = io.ReadAll(io.LimitReader(body, capacity.GuestBootstrapLimit+1))
+	returned.ReadReturnedAt = time.Now().UTC()
+	returned.ReceivedBodyBytes = len(returned.Body)
+	returned.ResponseSHA256 = capacity.BusinessCreationSHA256(returned.Body)
+	returned.ReadFailed = readErr != nil || len(returned.Body) > capacity.GuestBootstrapLimit
+	returned.ResponseBodyScope = capacity.GuestOriginalBodyCompleteRead
+	if returned.ReadFailed {
+		returned.ResponseBodyScope = capacity.GuestOriginalBodyIncompleteRead
+	}
+	returned.CloseFailed = body.Close() != nil
+	returned.CloseReturnedAt = time.Now().UTC()
+	if len(returned.Body) > capacity.GuestBootstrapLimit {
+		returned.Body = returned.Body[:capacity.GuestBootstrapLimit]
+	}
+	returned.RetainedPrefixBytes = len(returned.Body)
+	returned.RetainedPrefixSHA256 = capacity.BusinessCreationSHA256(returned.Body)
+	returned.DriverReturnedAt = time.Now().UTC()
+	deadline, present := ctx.Deadline()
+	returned.OriginalContextFailed = ctx.Err() != nil || !present || !returned.DriverReturnedAt.Before(deadline)
+	return returned
+}
+
 func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 	t := f.t
 	deadline := time.Now().Add(30 * time.Second)
@@ -628,9 +664,14 @@ func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 			t.Fatal("real authority reserve", e)
 		}
 		if observed != nil {
-			ret := failedServingHTTP(t, *observed, time.Now().UTC())
-			if d := time.Until(ret.DriverReturnedAt) + time.Millisecond; d > 0 {
-				time.Sleep(d)
+			var ret capacity.GuestOriginalHTTPReturn
+			if f.fractionalOriginal {
+				ret = forwardFractionalAuthorityHTTP(t, ctx, *observed)
+			} else {
+				ret = failedServingHTTP(t, *observed, time.Now().UTC())
+				if d := time.Until(ret.DriverReturnedAt) + time.Millisecond; d > 0 {
+					time.Sleep(d)
+				}
 			}
 			if e = store.RecordGuestAuthorityTransportV2(ctx, read, ret); e != nil {
 				t.Fatal("real authority transport", e)
