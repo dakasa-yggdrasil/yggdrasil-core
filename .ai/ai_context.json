@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-16T02:12:58-03:00",
+  "generated_at": "2026-11-16T04:48:23-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1577,
-    ".json": 260,
-    ".py": 215,
+    ".go": 1578,
+    ".json": 261,
+    ".py": 216,
     ".sql": 111,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "dfd9184d1340a2aa60e00997caf3cd2061e0970e",
+    "commit": "2545d6f4ab90b81557e76338b0f0931191bd1d63",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "6d8506c88df69567217e785a4e782f5b71163cfdac86c9345a85be2c249fb708"
+        "sha256": "837edf5b6df4f4dd3d7ef99e64223f3e0c203e21b88a3f58234c8a6c353a0a02"
       },
       {
         "path": "AGENTS.md",
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 416,
-      "kb": 6108
+      "files": 417,
+      "kb": 6120
     },
     {
       "path": "controllers/httpapi",
@@ -96,7 +96,7 @@
     {
       "path": "ops/network-guardian/tests",
       "files": 67,
-      "kb": 1395
+      "kb": 1404
     },
     {
       "path": "manifest",
@@ -115,8 +115,8 @@
     },
     {
       "path": "ops/network-guardian/rollout",
-      "files": 38,
-      "kb": 2604
+      "files": 39,
+      "kb": 2625
     },
     {
       "path": "cmd/native-guest-lifecycle-fixture",
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 90,
+    "config_files": 91,
     "k8s_manifests": 25
   }
 }
