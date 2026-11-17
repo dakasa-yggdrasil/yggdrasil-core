@@ -1020,7 +1020,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Apply production migrations through schema109
+      - name: Apply production migrations through schema110
         shell: bash
         run: |
           set -euo pipefail
@@ -1036,9 +1036,47 @@ jobs:
           import json, os
           from pathlib import Path
           actual=json.loads((Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/database.json').read_text())
-          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':109}:
+          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':110}:
               raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
           PYCHECK
+      - name: Qualify schema109 to110 complete event identities with unchanged C7 Goose behavior
+        shell: bash
+        env:
+          REQUIRE_EVENT_AGGREGATE110_POSTGRES: "true"
+          EVENT_SCHEMA110_EVIDENCE_DIR: ${{ runner.temp }}/scheduler-skip/event-aggregate110
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/event-aggregate110"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./repository -run '^TestEventAggregateIDTextMigration110Postgres$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PY110'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['EVENT_SCHEMA110_EVIDENCE_DIR'])
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          name='TestEventAggregateIDTextMigration110Postgres'
+          pkg='github.com/dakasa-yggdrasil/yggdrasil-core/repository'
+          if any(e.get('Package')!=pkg or e.get('Action') in ('skip','fail') for e in events):
+              raise SystemExit('Schema110 failure, skip or foreign package')
+          for action in ('run','pass'):
+              tests=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if tests != [name]:
+                  raise SystemExit('Schema110 exact owning root did not complete once')
+          if sum(e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+              raise SystemExit('Schema110 package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events):
+              raise SystemExit('Schema110 data race retained')
+          for filename,kind in [('BEFORE109-PRESERVATION-VIEW.json','character varying(128)'),('AFTER110-PRESERVATION-VIEW.json','text')]:
+              if json.loads((root/filename).read_text())['actual_aggregate_id_type']!=kind:
+                  raise SystemExit('Schema110 actual before/after evidence missing or wrong')
+          (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'roots':1,'failures':0,'skips':0,'production_effects':False},sort_keys=True)+'\n')
+          PY110
       - name: Qualify exact skip calendar, bounded search and original PG dispatch
         shell: bash
         run: |
