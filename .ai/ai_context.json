@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-16T18:52:33-03:00",
+  "generated_at": "2026-11-17T08:44:11-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1590,
+    ".go": 1591,
     ".json": 263,
     ".py": 217,
-    ".sql": 112,
+    ".sql": 113,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "be0e65b8087b4f6ca5dc8773dd7651a3d1b040dc",
+    "commit": "32809c4eabdfdfc5c5659c6fa48e97a6b2f47d40",
     "dirty": true,
     "files": [
       {
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 418,
-      "kb": 6136
+      "files": 419,
+      "kb": 6148
     },
     {
       "path": "controllers/httpapi",
@@ -85,8 +85,8 @@
     },
     {
       "path": "db/migrations",
-      "files": 108,
-      "kb": 1606
+      "files": 109,
+      "kb": 1608
     },
     {
       "path": "model",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 108,
+    "migrations": 109,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
