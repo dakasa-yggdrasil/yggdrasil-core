@@ -3,17 +3,22 @@ package httpapi
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacityfixturetest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
@@ -152,6 +157,127 @@ func TestCapacityMutationExactJSON(t *testing.T) {
 		if err := decodeCapacityMutationJSON(httptest.NewRecorder(), r, &value); err == nil {
 			t.Fatal("unbounded/ambiguous callback accepted")
 		}
+	}
+}
+
+// The missing-grant lookup is intentional: TLS must reach the existing exact
+// repository authorization, while plaintext must stop before that first lookup.
+// Successful one-use legacy redemption remains covered by the PostgreSQL HTTP case.
+func TestCapacityMutationNativeRedeemTLS(t *testing.T) {
+	for _, test := range []struct {
+		name, capability, protocol, source, column string
+		binding, requiresTLS                       bool
+	}{
+		{"original_release", capacity.DestroyNativePodProtection, capacity.NativeReleaseResultProtocol, strings.Repeat("c", 40), "command_record", true, true},
+		{"original_abort", capacity.DestroyNativeUnregisteredProtection, capacity.NativePreRegistrationAbortProtocol, strings.Repeat("c", 40), "id", true, true},
+		{"protocol_without_source", capacity.DestroyNativePodProtection, capacity.NativeReleaseResultProtocol, "", "command_record", true, true},
+		{"source_without_protocol", capacity.DestroyNativePodProtection, "", strings.Repeat("c", 40), "command_record", true, true},
+		{"legacy", capacity.EnsureBoundHPAEnvelope, "", "", "command_record", false, false},
+		{"legacy_empty_binding", capacity.EnsureBoundHPAEnvelope, "", "", "command_record", true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			t.Setenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED", "true")
+			machineToken, authorityToken := "native-tls-machine", strings.Repeat("a", 64)
+			instance := uuid.NewString()
+			principals := capacityMutationTestPrincipal(t, machineToken, instance)
+			principals[0].capabilities = map[string]bool{test.capability: true}
+			server := &Server{db: db, capacityMutationPrincipals: principals}
+			handler := server.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				t.Error("native permission escaped machine surface")
+			}))
+			payload := map[string]string{"authority_token": authorityToken, "integration_instance_id": instance, "integration_type_id": uuid.NewString(), "capability": test.capability, "request_sha256": strings.Repeat("b", 64)}
+			if test.binding {
+				payload["release_protocol"], payload["adapter_source_commit"] = test.protocol, test.source
+			}
+			body, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plaintext := []struct {
+				name    string
+				headers http.Header
+			}{
+				{"direct", nil},
+				{"forged_forwarding", http.Header{"X-Forwarded-Proto": {"https"}, "Forwarded": {"for=192.0.2.1;proto=https"}}},
+			}
+			lookups := 1 // Only the real TLS request may look up an original-return grant.
+			if !test.requiresTLS {
+				lookups += len(plaintext)
+			}
+			for i := 0; i < lookups; i++ {
+				mock.ExpectQuery(regexp.QuoteMeta("SELECT " + test.column + " FROM public.capacity_native_commands WHERE authority_token_sha256=$1")).
+					WithArgs(fmt.Sprintf("%x", sha256.Sum256([]byte(authorityToken)))).
+					WillReturnError(sql.ErrNoRows)
+			}
+			check := func(t *testing.T, status int, raw []byte, want int) {
+				t.Helper()
+				if status != want || strings.Contains(string(raw), authorityToken) || strings.Contains(string(raw), machineToken) {
+					t.Fatalf("native transport status=%d want=%d body=%s", status, want, raw)
+				}
+			}
+			for _, transport := range plaintext {
+				t.Run(transport.name, func(t *testing.T) {
+					req := httptest.NewRequest(http.MethodPost, capacityMutationBasePath+"/native/redeem", strings.NewReader(string(body)))
+					if req.TLS != nil {
+						t.Fatal("plaintext regression requires an actual non-TLS request")
+					}
+					for key, values := range transport.headers {
+						req.Header[key] = values
+					}
+					req.Header.Set("Authorization", "Bearer "+machineToken)
+					req.AddCookie(&http.Cookie{Name: authSessionCookieName(), Value: "human-cookie"})
+					out := httptest.NewRecorder()
+					handler.ServeHTTP(out, req)
+					want := http.StatusForbidden // Missing legacy grants still use repository authorization.
+					if test.requiresTLS {
+						want = http.StatusBadRequest
+						if !strings.Contains(out.Body.String(), "over TLS") {
+							t.Fatal("original-return authority did not stop at the TLS guard", out.Body.String())
+						}
+					}
+					check(t, out.Code, out.Body.Bytes(), want)
+				})
+			}
+			tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.TLS == nil {
+					t.Error("TLS positive case did not negotiate TLS")
+				}
+				handler.ServeHTTP(w, r)
+			}))
+			defer tlsServer.Close()
+			for _, credential := range []string{"", machineToken} {
+				req, err := http.NewRequest(http.MethodPost, tlsServer.URL+capacityMutationBasePath+"/native/redeem", strings.NewReader(string(body)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if credential != "" {
+					req.Header.Set("Authorization", "Bearer "+credential)
+				}
+				req.AddCookie(&http.Cookie{Name: authSessionCookieName(), Value: "human-cookie"})
+				response, err := tlsServer.Client().Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw, readErr := io.ReadAll(response.Body)
+				closeErr := response.Body.Close()
+				if readErr != nil || closeErr != nil {
+					t.Fatal(readErr, closeErr)
+				}
+				want := http.StatusUnauthorized
+				if credential != "" {
+					want = http.StatusForbidden // The expected missing-grant lookup must be consumed.
+				}
+				check(t, response.StatusCode, raw, want)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal("TLS/legacy request did not reach the existing repository authorization", err)
+			}
+		})
 	}
 }
 

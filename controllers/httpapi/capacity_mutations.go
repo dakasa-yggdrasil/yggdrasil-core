@@ -214,6 +214,12 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 			return
 		}
+		// Original-return permissions must use the same transport as /native/result
+		// before redemption can consume their one-use authority.
+		if (payload.ReleaseProtocol != "" || payload.AdapterSourceCommit != "") && r.TLS == nil {
+			writeProblemJSON(w, 400, "capacity.mutation_invalid", "a closed original native authority request over TLS is required")
+			return
+		}
 		var response model.CapacityNativeAuthorityPermit
 		var err error
 		if payload.Capability == capacity.DestroyNativeUnregisteredProtection {
