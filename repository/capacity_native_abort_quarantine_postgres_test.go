@@ -173,7 +173,7 @@ func TestCapacityNativeAbortQuarantinePreservesOriginalPostgres(t *testing.T) {
 		t.Fatal("separate immutable receipt custody missing", err)
 	}
 	var receipt model.CapacityNativeAbortQuarantine
-	if capacity.DecodeNativeCapacity(raw, &receipt) != nil || receipt.Binding != f.bindingQ || receipt.History != (model.CapacityNativeAbortZeroHistory{CommandIdentities: 2, HotCommands: 1, ArchivedCommands: 1}) || receipt.CommandRecordSHA256 == "" || receipt.ParentRecordSHA256 == "" || receipt.ResultSeedSHA256 == "" {
+	if capacity.DecodeNativeCapacity(json.RawMessage(raw), &receipt) != nil || receipt.Binding != f.bindingQ || receipt.History != (model.CapacityNativeAbortZeroHistory{CommandIdentities: 2, HotCommands: 1, ArchivedCommands: 1}) || receipt.CommandRecordSHA256 == "" || receipt.ParentRecordSHA256 == "" || receipt.ResultSeedSHA256 == "" {
 		t.Fatal("receipt omitted exact original binding/history/private custody digests")
 	}
 	for _, query := range []string{`UPDATE public.capacity_native_abort_quarantines SET record_sha256=repeat('0',64) WHERE command_id=$1`, `DELETE FROM public.capacity_native_abort_quarantines WHERE command_id=$1`} {
@@ -449,7 +449,7 @@ func TestCapacityNativeAbortQuarantineOtherUIDProgressPostgres(t *testing.T) {
 			t.Fatal("immutable quarantine receipt unavailable")
 		}
 		var q model.CapacityNativeAbortQuarantine
-		if capacity.DecodeNativeCapacity(raw, &q) != nil {
+		if capacity.DecodeNativeCapacity(json.RawMessage(raw), &q) != nil {
 			t.Fatal("immutable receipt invalid")
 		}
 		staleAt := q.Observation.Observation.ObservedAt.Add(time.Duration(f.p.MaxEvidenceAgeSeconds+1) * time.Second)
