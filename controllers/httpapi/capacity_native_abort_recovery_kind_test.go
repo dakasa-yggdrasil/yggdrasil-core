@@ -93,7 +93,7 @@ func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
 	core := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler := route.Load()
 		if handler == nil {
-			http.Error(w, "initializing", 503)
+			http.Error(w, "initializing", http.StatusServiceUnavailable)
 			return
 		}
 		out := httptest.NewRecorder()
