@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -648,5 +647,5 @@ func abortQuarantinePGWaitUID(t *testing.T, db *sql.DB, uid string, want int) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal(fmt.Sprintf("original global UID lock waiters did not reach %d", want))
+	t.Fatalf("original global UID lock waiters did not reach %d", want)
 }
