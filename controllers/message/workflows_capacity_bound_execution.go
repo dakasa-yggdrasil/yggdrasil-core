@@ -123,6 +123,13 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	// never acquire new send permission merely because a lease/generation moved.
 	for _, command := range commands {
 		if command.Operation == capacity.DestroyNativeUnregisteredProtection && command.State != "confirmed" {
+			quarantined, e := store.NativeAbortCommandQuarantined(ctx, policy, command.CommandID)
+			if e != nil {
+				return intent, e
+			}
+			if quarantined {
+				continue // The raw uncertain ledger remains retained; no send for this UID.
+			}
 			return intent, fmt.Errorf("original pre-registration abort outcome unresolved; no ordinary recovery send permitted")
 		}
 		if command.State == "confirmed" || command.State == "refused_no_redemption" || command.State == "rejected_no_effect" {

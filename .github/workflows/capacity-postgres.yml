@@ -1020,7 +1020,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Apply production migrations through schema110
+      - name: Apply production migrations through schema111
         shell: bash
         run: |
           set -euo pipefail
@@ -1031,12 +1031,12 @@ jobs:
           set -e
           printf '%s\n' "$migration_exit" > "$evidence/migrations.exit"
           test "$migration_exit" -eq 0 || exit "$migration_exit"
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "SELECT jsonb_build_object('postgres_major',current_setting('server_version_num')::integer/10000,'schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied))" > "$evidence/database.json" 2> "$evidence/database.stderr"
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "SELECT jsonb_build_object('postgres_major',current_setting('server_version_num')::integer/10000,'schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'schema110_applied',EXISTS(SELECT 1 FROM public.goose_db_version WHERE version_id=110 AND is_applied),'quarantine_table_present',to_regclass('public.capacity_native_abort_quarantines') IS NOT NULL)" > "$evidence/database.json" 2> "$evidence/database.stderr"
           python3 - <<'PYCHECK'
           import json, os
           from pathlib import Path
           actual=json.loads((Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/database.json').read_text())
-          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':110}:
+          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':111,'schema110_applied':True,'quarantine_table_present':True}:
               raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
           PYCHECK
       - name: Qualify schema109 to110 complete event identities with unchanged C7 Goose behavior
@@ -1180,6 +1180,37 @@ jobs:
           if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('unredeemed recovery race retained')
           (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_recovery_or_capacity_claim':True},sort_keys=True)+'\n')
           PYRECOVERY
+      - name: Qualify explicit uncertain-abort quarantine and backend TLS on PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-abort-quarantine"
+          mkdir -m 700 "$evidence"
+          set +e
+          # The new independent lane includes a genuine >60s evidence-age wait;
+          # no existing test/operation timeout or production clock is changed.
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=4m ./repository ./internal/capacity ./controllers/httpapi ./manifest -run '^(TestCapacityNativeAbortQuarantine.*Postgres|TestNativeAbortQuarantine(ClosedAbsence|ClosedInput|WorkflowRegistration)|TestCapacityMutationNativeRedeemTLS)$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYQUARANTINE'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-abort-quarantine'
+          expected=set(["TestCapacityMutationNativeRedeemTLS","TestCapacityMutationNativeRedeemTLS/legacy","TestCapacityMutationNativeRedeemTLS/legacy/direct","TestCapacityMutationNativeRedeemTLS/legacy/forged_forwarding","TestCapacityMutationNativeRedeemTLS/legacy_empty_binding","TestCapacityMutationNativeRedeemTLS/legacy_empty_binding/direct","TestCapacityMutationNativeRedeemTLS/legacy_empty_binding/forged_forwarding","TestCapacityMutationNativeRedeemTLS/original_abort","TestCapacityMutationNativeRedeemTLS/original_abort/direct","TestCapacityMutationNativeRedeemTLS/original_abort/forged_forwarding","TestCapacityMutationNativeRedeemTLS/original_release","TestCapacityMutationNativeRedeemTLS/original_release/direct","TestCapacityMutationNativeRedeemTLS/original_release/forged_forwarding","TestCapacityMutationNativeRedeemTLS/protocol_without_source","TestCapacityMutationNativeRedeemTLS/protocol_without_source/direct","TestCapacityMutationNativeRedeemTLS/protocol_without_source/forged_forwarding","TestCapacityMutationNativeRedeemTLS/source_without_protocol","TestCapacityMutationNativeRedeemTLS/source_without_protocol/direct","TestCapacityMutationNativeRedeemTLS/source_without_protocol/forged_forwarding","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/changed_child_request","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/changed_child_state","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/duplicate_parent_hot","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_archived_lifetime","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_hot_lifetime","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_identity","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_legacy_checkpoint","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/missing_child","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/moved_child_scope","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/unknown_child_field","TestCapacityNativeAbortQuarantineDuplicatePostgres","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/admission_only","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/async","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/dynamic_binding","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/execution_disabled","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/extra_metadata","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/extra_step","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/extra_step_field","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/missing_metadata","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/nonmanual","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/old_observation","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/other_operation","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/present_unprotected","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/protected","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/ready","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/receipt_digest","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/retry","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/same_name_replacement","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/timeout","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/wrong_operator","TestCapacityNativeAbortQuarantineLocksPostgres","TestCapacityNativeAbortQuarantineLocksPostgres/classification_waits_for_original_result_seed_writer","TestCapacityNativeAbortQuarantineLocksPostgres/registration_serializes_on_original_global_uid","TestCapacityNativeAbortQuarantineOtherUIDProgressPostgres","TestCapacityNativeAbortQuarantineOtherUIDProgressPostgres/permanent_receipt_survives_source_evidence_age","TestCapacityNativeAbortQuarantinePreservesOriginalPostgres","TestCapacityNativeAbortQuarantineReceiptDigestPostgres","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/foreign_binding","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/unknown_receipt_field","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/wrong_digest","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/wrong_history","TestCapacityNativeAbortQuarantineResultArrivalPostgres","TestCapacityNativeAbortQuarantineResultArrivalPostgres/caller_ack_alone_invalidates_exclusion","TestCapacityNativeAbortQuarantineResultArrivalPostgres/late_durable_adapter_result_invalidates_exclusion","TestCapacityNativeAbortQuarantineResultArrivalPostgres/real_original_adapter_result_before_classification","TestNativeAbortQuarantineClosedAbsence","TestNativeAbortQuarantineClosedAbsence/empty_confirmation","TestNativeAbortQuarantineClosedAbsence/exact_absence","TestNativeAbortQuarantineClosedAbsence/fake_lane","TestNativeAbortQuarantineClosedAbsence/parent_is_child","TestNativeAbortQuarantineClosedAbsence/present_unprotected","TestNativeAbortQuarantineClosedAbsence/private_metadata","TestNativeAbortQuarantineClosedAbsence/ready_claim","TestNativeAbortQuarantineClosedAbsence/same_name_foreign_uid","TestNativeAbortQuarantineClosedAbsence/sdk_receipt","TestNativeAbortQuarantineClosedAbsence/stale","TestNativeAbortQuarantineClosedAbsence/wrong_policy","TestNativeAbortQuarantineClosedInput","TestNativeAbortQuarantineWorkflowRegistration","TestNativeAbortQuarantineWorkflowRegistration/advertised_builtin","TestNativeAbortQuarantineWorkflowRegistration/arbitrary_builtin"])
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ['repository','internal/capacity','controllers/httpapi','manifest']}
+          if any(e.get('Package') not in packages or e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('quarantine package/failure/skip refused')
+          for action in ['run','pass']:
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected): raise SystemExit('quarantine exact case census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1: raise SystemExit('quarantine package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('quarantine race retained')
+          (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_quarantine_or_scope_release':True},sort_keys=True)+'\n')
+          PYQUARANTINE
       - name: Qualify exact skip calendar, bounded search and original PG dispatch
         shell: bash
         run: |

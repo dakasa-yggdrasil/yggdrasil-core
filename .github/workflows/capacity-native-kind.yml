@@ -342,6 +342,40 @@ jobs:
           name: capacity-native-abort-recovery-original-census
           path: abort-recovery-native-results.json
           if-no-files-found: error
+      - name: Qualify verified backend TLS and separate uncertain-abort quarantine
+        env:
+          REQUIRE_CAPACITY_NATIVE_KIND: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^(TestCapacityNativeAbortReencryptedFrontendKinDHTTP|TestCapacityNativeAbortQuarantineKinDHTTP)$' | tee abort-quarantine-native-results.json
+      - name: Require every original-return transport and administrative-quarantine case
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PYQUARANTINE'
+          import json
+          rows=[json.loads(line) for line in open('abort-quarantine-native-results.json') if line.strip()]
+          roots=['TestCapacityNativeAbortReencryptedFrontendKinDHTTP','TestCapacityNativeAbortQuarantineKinDHTTP']
+          required=set(roots)
+          for root in roots:
+              required.update(root+'/'+name for name in ('original_closed_refusal_before_redemption','authenticated_http_refusals','new_proof_closed_receiver_refusals'))
+              required.update(root+'/authenticated_http_refusals/'+name for name in ('anonymous','foreign_grant','wrong_digest','closed_callback_schema'))
+              required.update(root+'/new_proof_closed_receiver_refusals/'+name for name in ('unknown_field','wrong_schema'))
+          required.add(roots[0]+'/original_main_http_finalizer_cas_and_retained_pair')
+          required.add(roots[1]+'/real_original_result_unknown_then_human_quarantine')
+          for action in ('run','pass'):
+              actual=[e['Test'] for e in rows if e.get('Test') and e.get('Action')==action]
+              if set(actual)!=required or len(actual)!=len(required): raise SystemExit('actual transport/quarantine census incomplete')
+          if any(e.get('Action') in ('skip','fail') for e in rows): raise SystemExit('actual transport/quarantine failure or skip')
+          PYQUARANTINE
+      - name: Retain transport and uncertain-abort quarantine originals
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-native-transport-quarantine-original-census
+          path: abort-quarantine-native-results.json
+          if-no-files-found: error
       - name: Native failure evidence
         if: failure()
         run: kubectl get pods -A -o wide

@@ -70,11 +70,11 @@ func (s CapacityStore) issueNativeCommand(ctx context.Context, policy model.Mani
 		if err := validateNativeCommandRequest(ctx, tx, p, current, operation, phase, subject, request); err != nil {
 			return err
 		}
-		var pending int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','uncertain')`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending); err != nil {
+		pending, err := nativeActiveUnsettledTx(ctx, tx, policy, p, subject)
+		if err != nil {
 			return err
 		}
-		if pending != 0 {
+		if pending.ActiveUnsettled != 0 {
 			return ErrCapacityConflict
 		}
 		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {

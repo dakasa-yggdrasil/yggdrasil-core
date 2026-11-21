@@ -388,7 +388,7 @@
       "build_constraint": "default",
       "file": "controllers/message/workflows.go",
       "function": "package",
-      "line": 25,
+      "line": 26,
       "name": "queueWorkflowDispatch",
       "value": "yggdrasil-core.workflow.dispatch"
     },
@@ -396,7 +396,7 @@
       "build_constraint": "default",
       "file": "controllers/message/workflows.go",
       "function": "package",
-      "line": 26,
+      "line": 27,
       "name": "queueWorkflowRun",
       "value": "yggdrasil-core.workflow.run"
     },

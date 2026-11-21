@@ -88,14 +88,15 @@ func (s CapacityStore) RegisterNativeLifetime(ctx context.Context, policy model.
 		if p.HPAExecutionBinding == nil || p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode || capacity.NativeProcessAdmission(p, response, now) != nil || response.Admission.State != "waiting_projection" || response.Admission.Challenge != nil || current.Generation < 1 {
 			return ErrCapacityConflict
 		}
-		var pending, retained, active int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','uncertain')`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending); err != nil {
+		var retained, active int
+		pending, err := nativeActiveUnsettledTx(ctx, tx, policy, p, response.Observation.PodUID)
+		if err != nil {
 			return err
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE checkpoint_record->>'state'<>'released') FROM public.capacity_native_lifetimes WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&retained, &active); err != nil {
 			return err
 		}
-		if pending != 0 || retained >= maxNativeRetainedLifetimes || active >= maxNativeActiveLifetimes {
+		if pending.ActiveUnsettled != 0 || retained >= maxNativeRetainedLifetimes || active >= maxNativeActiveLifetimes {
 			return ErrCapacityConflict
 		}
 		var archived int
@@ -158,11 +159,11 @@ func (s CapacityStore) CompleteNativeReservationDecision(ctx context.Context, po
 		if p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode {
 			return ErrCapacityConflict
 		}
-		var pending int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','uncertain')`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending); err != nil {
+		pending, err := nativeActiveUnsettledTx(ctx, tx, policy, p, "")
+		if err != nil {
 			return err
 		}
-		if pending != 0 {
+		if pending.ActiveUnsettled != 0 {
 			return ErrCapacityConflict
 		}
 		phase := "hold"

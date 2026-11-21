@@ -42,6 +42,15 @@ const abortRecoveryKindFinalizer = "yggdrasil.io/capacity-native-termination"
 // real compiled adapter main, real authenticated Core callbacks, managed-secret
 // resolution, and an original Kubernetes finalizer CAS. No return is fabricated.
 func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
+	runCapacityNativeAbortKindHTTP(t, false, false)
+}
+func TestCapacityNativeAbortReencryptedFrontendKinDHTTP(t *testing.T) {
+	runCapacityNativeAbortKindHTTP(t, true, false)
+}
+func TestCapacityNativeAbortQuarantineKinDHTTP(t *testing.T) {
+	runCapacityNativeAbortKindHTTP(t, true, true)
+}
+func runCapacityNativeAbortKindHTTP(t *testing.T, frontend, quarantine bool) {
 	if os.Getenv("REQUIRE_CAPACITY_NATIVE_KIND") != "true" {
 		t.Skip("remote original abort recovery qualification")
 	}
@@ -82,7 +91,7 @@ func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
 			_, _ = db.ExecContext(context.Background(), "DELETE FROM public."+table+" WHERE namespace=$1", realm)
 		}
 	}()
-	pod, rs, dp := abortRecoveryKindBirth(t, ctx, realm)
+	pod, rs, dp := abortRecoveryKindBirthWithForeignFinalizer(t, ctx, realm, !quarantine)
 	meta := pod["metadata"].(map[string]any)
 	podName, podUID := meta["name"].(string), meta["uid"].(string)
 	workloadUID := dp["metadata"].(map[string]any)["uid"].(string)
@@ -90,7 +99,8 @@ func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
 	abortRecoveryKindFinalizerPolicy(t, ctx, realm, pod, actorConfig)
 	var route atomic.Pointer[http.Handler]
 	var successfulRedeems, successfulResults, successfulEvents atomic.Int32
-	core := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var plaintextResultRequests, plaintextResult400 atomic.Int32
+	coreBackend := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler := route.Load()
 		if handler == nil {
 			http.Error(w, "initializing", http.StatusServiceUnavailable)
@@ -114,7 +124,52 @@ func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
 		w.WriteHeader(out.Code)
 		_, _ = w.Write(out.Body.Bytes())
 	}))
-	defer core.Close()
+	defer coreBackend.Close()
+	core := coreBackend
+	if frontend {
+		target, _ := url.Parse(coreBackend.URL)
+		verified := httputil.NewSingleHostReverseProxy(target)
+		// This is a real terminating frontend followed by separately verified TLS
+		// to Core. No forwarded header is treated as a TLS backend connection.
+		backendTransport, ok := coreBackend.Client().Transport.(*http.Transport)
+		if !ok || backendTransport.TLSClientConfig == nil || backendTransport.TLSClientConfig.InsecureSkipVerify || backendTransport.TLSClientConfig.RootCAs == nil {
+			t.Fatal("frontend requires verified backend TLS")
+		}
+		verified.Transport = backendTransport.Clone()
+		plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := route.Load()
+			if handler == nil {
+				http.Error(w, "initializing", http.StatusServiceUnavailable)
+				return
+			}
+			out := httptest.NewRecorder()
+			(*handler).ServeHTTP(out, r)
+			if r.URL.Path == capacityMutationBasePath+"/native/result" {
+				plaintextResultRequests.Add(1)
+				if out.Code == http.StatusBadRequest && strings.Contains(out.Body.String(), "capacity.mutation_invalid") && strings.Contains(out.Body.String(), "over TLS") {
+					plaintextResult400.Add(1)
+				}
+			}
+			for key, values := range out.Header() {
+				w.Header()[key] = values
+			}
+			w.WriteHeader(out.Code)
+			_, _ = w.Write(out.Body.Bytes())
+		}))
+		defer plain.Close()
+		plainTarget, _ := url.Parse(plain.URL)
+		misroutedResult := httputil.NewSingleHostReverseProxy(plainTarget)
+		core = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if quarantine && r.URL.Path == capacityMutationBasePath+"/native/result" {
+				// Fault injection is only backend transport: the real result handler
+				// returns its actual plaintext 400. Redemption and native PUT stay real.
+				misroutedResult.ServeHTTP(w, r)
+				return
+			}
+			verified.ServeHTTP(w, r)
+		}))
+		defer core.Close()
+	}
 	machineToken, eventToken, foreignToken := uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString(), uuid.NewString()+uuid.NewString()
 	port, health := nativeKindFreePort(t), nativeKindFreePort(t)
 	logFile, e := os.Create(filepath.Join(t.TempDir(), "paired-adapter-private.log"))
@@ -221,7 +276,7 @@ func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
 	abortRecoveryKindExpire(t, ctx, db, realm)
 	observed = read()
 	human := uuid.NewString()
-	create("rbac", "named-human", map[string]any{"roles": []any{map[string]any{"name": "operator", "rules": []any{map[string]any{"effect": "allow", "resources": []string{"workflow:" + realm + ":original-human", "workflow:" + realm + ":recovery-human"}, "actions": []string{"run"}}}}}, "bindings": []any{map[string]any{"name": "ci-named-human", "subjects": []any{map[string]string{"type": "collaborator", "id": human}}, "roles": []string{"operator"}}}})
+	create("rbac", "named-human", map[string]any{"roles": []any{map[string]any{"name": "operator", "rules": []any{map[string]any{"effect": "allow", "resources": []string{"workflow:" + realm + ":original-human", "workflow:" + realm + ":recovery-human", "workflow:" + realm + ":quarantine-human"}, "actions": []string{"run"}}}}}, "bindings": []any{map[string]any{"name": "ci-named-human", "subjects": []any{map[string]string{"type": "collaborator", "id": human}}, "roles": []string{"operator"}}}})
 	b := model.CapacityNativeAbortBinding{Schema: capacity.NativePreRegistrationAbortSchema, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, Generation: intent.Generation, Adapter: binding, AdapterPrincipalID: principalID, AdapterSourceCommit: source, OperatorID: human, BindingName: scope.BindingName, Namespace: realm, PodName: podName, PodUID: podUID, WorkloadUID: workloadUID, ReplicaSetUID: observed.Observation.ReplicaSetUID, ContainerName: scope.ContainerName, ImageDigest: scope.ImageDigest, PodSpecSHA256: observed.Observation.PodSpecSHA256, Confirmation: "ABORT ONLY EXACT CI ORIGINAL"}
 	oldWF := create("workflow", "original-human", abortRecoveryKindWorkflow(realm, "capacity.abort_native_birth", b, b.Confirmation))
 	store.AdmissionOnly, store.WorkflowID, store.ExecutorID, store.ExecutorPowerOperator = false, oldWF.ID, uuid.NewString(), human
@@ -336,8 +391,8 @@ func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
 		_, _ = db.ExecContext(context.Background(), `DELETE FROM public.collaborators WHERE id=$1`, human)
 	}()
 	humanServer := &Server{db: db, rabbitmq: conn, logger: zap.NewNop()}
-	dispatch := func() (int, model.RunWorkflowResponse) {
-		body, err := json.Marshal(model.RunWorkflowRequest{Workflow: model.ManifestSelector{ManifestID: wf.ID.String()}, Inputs: map[string]any{"confirmation": recovery.Native.Confirmation}})
+	dispatchWorkflow := func(selected model.Manifest, confirmation string) (int, model.RunWorkflowResponse) {
+		body, err := json.Marshal(model.RunWorkflowRequest{Workflow: model.ManifestSelector{ManifestID: selected.ID.String()}, Inputs: map[string]any{"confirmation": confirmation}})
 		if err != nil {
 			t.Fatal("fixed synchronous request unavailable")
 		}
@@ -351,12 +406,53 @@ func TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP(t *testing.T) {
 		}
 		return recorder.Code, response
 	}
+	dispatch := func() (int, model.RunWorkflowResponse) { return dispatchWorkflow(wf, recovery.Native.Confirmation) }
+	if quarantine {
+		t.Run("real_original_result_unknown_then_human_quarantine", func(t *testing.T) {
+			status, response := dispatch()
+			if status != http.StatusCreated || response.Status != "failed" || puts.Load() != 1 || successfulPUTs.Load() != 1 || successfulRedeems.Load() != 1 || successfulResults.Load() != 0 || successfulEvents.Load() != 0 || plaintextResultRequests.Load() != 1 || plaintextResult400.Load() != 1 {
+				t.Fatal("real misrouted result did not retain original uncertainty and exact plaintext-handler400")
+			}
+			var childRaw, seedBefore, identityBefore []byte
+			if db.QueryRowContext(ctx, `SELECT command_record FROM public.capacity_native_commands WHERE namespace=$1 AND sequence=2`, realm).Scan(&childRaw) != nil {
+				t.Fatal("original uncertain child unavailable")
+			}
+			var child model.CapacityNativeCommand
+			if capacity.DecodeNativeCapacity(json.RawMessage(childRaw), &child) != nil || child.State != "uncertain" || child.AttemptID == uuid.Nil || child.RedeemedBy != principalID || len(child.OriginalResult) != 0 || child.CallerReturnObservedAt != nil {
+				t.Fatal("original child outcome was invented")
+			}
+			if db.QueryRowContext(ctx, `SELECT row_to_json(r) FROM public.capacity_native_release_results r WHERE command_id=$1`, child.CommandID).Scan(&seedBefore) != nil || db.QueryRowContext(ctx, `SELECT row_to_json(i) FROM public.capacity_native_command_identities i WHERE id=$1`, child.CommandID).Scan(&identityBefore) != nil {
+				t.Fatal("original result seed or identity missing")
+			}
+			nativeKindAwait(t, ctx, func() bool { return read().Observation.State == "absent" })
+			abortRecoveryKindExpire(t, ctx, db, realm)
+			q := model.CapacityNativeAbortQuarantineBinding{Schema: capacity.NativeAbortQuarantineSchema, Confirmation: "QUARANTINE ORIGINAL UNCERTAIN ONLY", Native: recovery.Native, ParentCommandID: parent.CommandID.String(), CommandID: child.CommandID.String(), ExpectedIntentFencingToken: child.FencingToken}
+			quarantineWF := create("workflow", "quarantine-human", abortRecoveryKindWorkflow(realm, capacity.QuarantineUncertainNativeBirth, q, q.Confirmation))
+			status, response = dispatchWorkflow(quarantineWF, q.Confirmation)
+			if status != http.StatusCreated || response.Status != "succeeded" || len(response.Steps) != 1 || response.Steps[0].Attempts != 1 || response.Steps[0].Metadata["raw_uncertain_preserved"] != true || response.Steps[0].Metadata["physical_capacity_released"] != false || response.Steps[0].Metadata["sdk_lane_witness"] != false {
+				t.Fatal("actual human controller quarantine did not preserve uncertainty")
+			}
+			counts, e := store.NativeUnsettledCounts(ctx, policy)
+			if e != nil || counts.RawUnsettled != 1 || counts.ActiveUnsettled != 0 || counts.Quarantined != 1 {
+				t.Fatal("public raw/active/quarantine counts conceal original outcome")
+			}
+			var after, seedAfter, identityAfter []byte
+			if db.QueryRowContext(ctx, `SELECT command_record FROM public.capacity_native_commands WHERE id=$1`, child.CommandID).Scan(&after) != nil || db.QueryRowContext(ctx, `SELECT row_to_json(r) FROM public.capacity_native_release_results r WHERE command_id=$1`, child.CommandID).Scan(&seedAfter) != nil || db.QueryRowContext(ctx, `SELECT row_to_json(i) FROM public.capacity_native_command_identities i WHERE id=$1`, child.CommandID).Scan(&identityAfter) != nil || !bytes.Equal(nativeKindCanonicalJSON(t, childRaw), nativeKindCanonicalJSON(t, after)) || !bytes.Equal(nativeKindCanonicalJSON(t, seedBefore), nativeKindCanonicalJSON(t, seedAfter)) || !bytes.Equal(nativeKindCanonicalJSON(t, identityBefore), nativeKindCanonicalJSON(t, identityAfter)) {
+				t.Fatal("quarantine rewrote original command/result/identity custody")
+			}
+			_, repeat := dispatchWorkflow(quarantineWF, q.Confirmation)
+			if repeat.Status != "failed" || puts.Load() != 1 || successfulRedeems.Load() != 1 || successfulResults.Load() != 0 || successfulEvents.Load() != 0 || plaintextResultRequests.Load() != 1 || plaintextResult400.Load() != 1 {
+				t.Fatal("administrative replay acquired native authority or another receipt")
+			}
+		})
+		return
+	}
 	t.Run("original_main_http_finalizer_cas_and_retained_pair", func(t *testing.T) {
 		status, response := dispatch()
 		if status != http.StatusCreated || response.Status != "succeeded" || response.Workflow.ID != wf.ID || len(response.Steps) != 1 || response.Steps[0].Status != "succeeded" || response.Steps[0].Attempts != 1 || response.Steps[0].Metadata["parent_command_id"] != parent.CommandID.String() || response.Steps[0].Metadata["disposition"] != "abort_before_admission_unredeemed_recovery" {
 			t.Fatal("actual original HTTP workflow controller did not complete")
 		}
-		if puts.Load() != 1 || successfulPUTs.Load() != 1 || successfulRedeems.Load() != 1 || successfulResults.Load() != 1 || successfulEvents.Load() != 1 {
+		if puts.Load() != 1 || successfulPUTs.Load() != 1 || successfulRedeems.Load() != 1 || successfulResults.Load() != 1 || successfulEvents.Load() != 1 || plaintextResultRequests.Load() != 0 {
 			t.Fatal("actual original native one-send/HTTP custody count differs")
 		}
 		actual := nativeKindGet(t, ctx, "-n", realm, "get", "pod", podName, "-o", "json")
@@ -445,6 +541,9 @@ func abortRecoveryKindExpire(t *testing.T, ctx context.Context, db *sql.DB, real
 }
 
 func abortRecoveryKindBirth(t *testing.T, ctx context.Context, realm string) (map[string]any, map[string]any, map[string]any) {
+	return abortRecoveryKindBirthWithForeignFinalizer(t, ctx, realm, true)
+}
+func abortRecoveryKindBirthWithForeignFinalizer(t *testing.T, ctx context.Context, realm string, foreign bool) (map[string]any, map[string]any, map[string]any) {
 	t.Helper()
 	image, digest := os.Getenv("NATIVE_FIXTURE_IMAGE"), os.Getenv("NATIVE_FIXTURE_DIGEST")
 	nativeKindApply(t, ctx, map[string]any{"apiVersion": "v1", "kind": "Secret", "metadata": map[string]any{"namespace": realm, "name": "admission-fixture"}, "stringData": map[string]string{"key": uuid.NewString() + uuid.NewString()}})
@@ -456,7 +555,11 @@ func abortRecoveryKindBirth(t *testing.T, ctx context.Context, realm string) (ma
 	dp := nativeKindGet(t, ctx, "-n", realm, "get", "deployment", "api", "-o", "json")
 	uid := dp["metadata"].(map[string]any)["uid"].(string)
 	projection := []map[string]any{{"path": "uid", "fieldRef": map[string]string{"fieldPath": "metadata.uid"}}, {"path": "namespace", "fieldRef": map[string]string{"fieldPath": "metadata.namespace"}}, {"path": "name", "fieldRef": map[string]string{"fieldPath": "metadata.name"}}, {"path": "challenge", "fieldRef": map[string]string{"fieldPath": "metadata.annotations['yggdrasil.io/capacity-drain-challenge']"}}}
-	template := map[string]any{"metadata": map[string]any{"labels": map[string]string{"app": "abort-original"}, "annotations": map[string]string{"yggdrasil.io/capacity-native-deployment-uid": uid}, "finalizers": []string{abortRecoveryKindFinalizer, "other.example/keep"}}, "spec": map[string]any{"restartPolicy": "Always", "terminationGracePeriodSeconds": 1, "securityContext": map[string]int{"fsGroup": 65532}, "readinessGates": []map[string]string{{"conditionType": "yggdrasil.io/capacity-native-admitted"}}, "containers": []map[string]any{{"name": "api", "image": image, "imagePullPolicy": "Never", "terminationMessagePath": "/dev/termination-log", "terminationMessagePolicy": "File", "env": []map[string]any{{"name": "NATIVE_ADMISSION_ENABLED", "value": "true"}, {"name": "NATIVE_ADMISSION_KEY", "valueFrom": map[string]any{"secretKeyRef": map[string]string{"name": "admission-fixture", "key": "key"}}}, {"name": "NATIVE_TERMINATION_PROJECTION_DIR", "value": "/native"}, {"name": "NATIVE_TERMINATION_IMAGE_DIGEST", "value": digest}, {"name": "NATIVE_FIXTURE_MODE", "value": "normal"}}, "volumeMounts": []map[string]any{{"name": "native", "mountPath": "/native", "readOnly": true}, {"name": "state", "mountPath": "/state"}}}}, "volumes": []map[string]any{{"name": "state", "emptyDir": map[string]any{}}, {"name": "native", "downwardAPI": map[string]any{"items": projection}}}}}
+	finalizers := []string{abortRecoveryKindFinalizer}
+	if foreign {
+		finalizers = append(finalizers, "other.example/keep")
+	}
+	template := map[string]any{"metadata": map[string]any{"labels": map[string]string{"app": "abort-original"}, "annotations": map[string]string{"yggdrasil.io/capacity-native-deployment-uid": uid}, "finalizers": finalizers}, "spec": map[string]any{"restartPolicy": "Always", "terminationGracePeriodSeconds": 1, "securityContext": map[string]int{"fsGroup": 65532}, "readinessGates": []map[string]string{{"conditionType": "yggdrasil.io/capacity-native-admitted"}}, "containers": []map[string]any{{"name": "api", "image": image, "imagePullPolicy": "Never", "terminationMessagePath": "/dev/termination-log", "terminationMessagePolicy": "File", "env": []map[string]any{{"name": "NATIVE_ADMISSION_ENABLED", "value": "true"}, {"name": "NATIVE_ADMISSION_KEY", "valueFrom": map[string]any{"secretKeyRef": map[string]string{"name": "admission-fixture", "key": "key"}}}, {"name": "NATIVE_TERMINATION_PROJECTION_DIR", "value": "/native"}, {"name": "NATIVE_TERMINATION_IMAGE_DIGEST", "value": digest}, {"name": "NATIVE_FIXTURE_MODE", "value": "normal"}}, "volumeMounts": []map[string]any{{"name": "native", "mountPath": "/native", "readOnly": true}, {"name": "state", "mountPath": "/state"}}}}, "volumes": []map[string]any{{"name": "state", "emptyDir": map[string]any{}}, {"name": "native", "downwardAPI": map[string]any{"items": projection}}}}}
 	patch, _ := json.Marshal([]map[string]any{{"op": "test", "path": "/metadata/uid", "value": uid}, {"op": "test", "path": "/spec", "value": dp["spec"]}, {"op": "replace", "path": "/spec/template", "value": template}, {"op": "replace", "path": "/spec/replicas", "value": 1}})
 	nativeKindCommand(t, ctx, "-n", realm, "patch", "deployment", "api", "--type=json", "-p", string(patch))
 	var pod map[string]any
@@ -587,7 +690,7 @@ func abortRecoveryKindFinalizerPolicy(t *testing.T, ctx context.Context, realm s
 	podName := meta["name"].(string)
 	policyName := realm + "-finalizer"
 	actor := "system:serviceaccount:" + realm + ":native-abort"
-	expression := "!oldObject.metadata.finalizers.exists(f,f == '" + abortRecoveryKindFinalizer + "') || object.metadata.finalizers.exists(f,f == '" + abortRecoveryKindFinalizer + "') || (request.userInfo.username == '" + actor + "' && object.spec == oldObject.spec && object.metadata.uid == oldObject.metadata.uid && object.metadata.labels == oldObject.metadata.labels && object.metadata.annotations == oldObject.metadata.annotations && object.metadata.finalizers == oldObject.metadata.finalizers.filter(f,f != '" + abortRecoveryKindFinalizer + "'))"
+	expression := "!oldObject.metadata.finalizers.exists(f,f == '" + abortRecoveryKindFinalizer + "') || (has(object.metadata.finalizers) && object.metadata.finalizers.exists(f,f == '" + abortRecoveryKindFinalizer + "')) || (request.userInfo.username == '" + actor + "' && object.spec == oldObject.spec && object.metadata.uid == oldObject.metadata.uid && object.metadata.labels == oldObject.metadata.labels && object.metadata.annotations == oldObject.metadata.annotations && (has(object.metadata.finalizers) ? object.metadata.finalizers : []) == oldObject.metadata.finalizers.filter(f,f != '" + abortRecoveryKindFinalizer + "'))"
 	nativeKindApply(t, ctx, map[string]any{"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy", "metadata": map[string]string{"name": policyName}, "spec": map[string]any{"failurePolicy": "Fail", "matchConstraints": map[string]any{"resourceRules": []map[string]any{{"apiGroups": []string{""}, "apiVersions": []string{"v1"}, "operations": []string{"UPDATE"}, "resources": []string{"pods"}}}}, "matchConditions": []map[string]string{{"name": "original", "expression": "object.metadata.namespace == '" + realm + "' && object.metadata.name == '" + podName + "'"}}, "validations": []map[string]string{{"expression": expression, "message": "exact abort actor and finalizer-only native delta required", "reason": "Forbidden"}}}})
 	nativeKindApply(t, ctx, map[string]any{"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicyBinding", "metadata": map[string]string{"name": policyName}, "spec": map[string]any{"policyName": policyName, "validationActions": []string{"Deny"}}})
 	t.Cleanup(func() {

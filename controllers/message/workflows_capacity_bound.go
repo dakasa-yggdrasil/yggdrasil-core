@@ -251,6 +251,13 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	if err != nil || json.Unmarshal(raw, &result.Metadata) != nil {
 		return fail()
 	}
+	if result.Operation == "capacity.execute_bound" && p.HPAExecutionBinding != nil && p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+		counts, e := (repository.CapacityStore{DB: db}).NativeUnsettledCounts(ctx, policy)
+		if e != nil {
+			return fail(e)
+		}
+		result.Metadata["native_unsettled"] = counts
+	}
 	if capacityDispatchFence(ctx) != nil {
 		return fail()
 	}
