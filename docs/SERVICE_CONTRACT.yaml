@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "b47c3adf32a288167e2c9df2efb5e8cb2b54e536c3404f696cb35c29906b8296"
+      "sha256": "ad52aa3141331a8da06addbe048b38360d76056333ff8bb7960d6b86e2e9479e"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "b47c3adf32a288167e2c9df2efb5e8cb2b54e536c3404f696cb35c29906b8296"
+      "sha256": "ad52aa3141331a8da06addbe048b38360d76056333ff8bb7960d6b86e2e9479e"
     },
     {
       "evidence": "go.mod",
@@ -113,7 +113,7 @@
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "24a5d91cfc64bd850bc22002fe43193e20f2d2e178f4816396192e46d04bb892"
+      "sha256": "f42e980a6b5740f21be1ab1b89ee8ecd3e26a1a97f90ac657659b87296dd6245"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "e7b624d7f7eb61b28df81f2f892720b951968d7beb5c2a45e7352e107d5d6f4b"
+    "sha256": "66332d80d18385246eb9e7f1e8c83a0825e54db0bcc84dc0c8417626d2b39875"
   },
   "unresolved": []
 }
