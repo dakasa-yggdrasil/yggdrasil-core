@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-21T11:36:55-03:00",
+  "generated_at": "2026-11-21T13:50:13-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1607,
+    ".go": 1614,
     ".json": 263,
     ".py": 217,
-    ".sql": 113,
+    ".sql": 114,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "760718ce5ba5d29c160638e92f056ce6e97b3c01",
+    "commit": "d1bc18cc65ab432862e2059e0a3e1a0acba06ffc",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "beffd201e0f7b4463f8846227e9d1e60f6ac5b755ac3e62669b56ca0330c2080"
+        "sha256": "de523e2269cc6fb1683ee5f4562197018ca994220c5800aa74a09c5c649e1008"
       },
       {
         "path": "AGENTS.md",
@@ -65,43 +65,43 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 423,
-      "kb": 6277
+      "files": 425,
+      "kb": 6327
     },
     {
       "path": "controllers/httpapi",
       "files": 270,
-      "kb": 2757
+      "kb": 2770
     },
     {
       "path": "controllers/message",
-      "files": 211,
-      "kb": 1830
+      "files": 212,
+      "kb": 1837
     },
     {
       "path": "internal/capacity",
-      "files": 136,
-      "kb": 1467
+      "files": 138,
+      "kb": 1472
     },
     {
       "path": "db/migrations",
-      "files": 109,
-      "kb": 1608
+      "files": 110,
+      "kb": 1609
     },
     {
       "path": "model",
-      "files": 94,
-      "kb": 494
+      "files": 95,
+      "kb": 496
+    },
+    {
+      "path": "manifest",
+      "files": 67,
+      "kb": 401
     },
     {
       "path": "ops/network-guardian/tests",
       "files": 67,
       "kb": 1413
-    },
-    {
-      "path": "manifest",
-      "files": 66,
-      "kb": 399
     },
     {
       "path": "addons",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 109,
+    "migrations": 110,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
