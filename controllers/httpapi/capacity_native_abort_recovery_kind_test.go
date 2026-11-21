@@ -540,9 +540,6 @@ func abortRecoveryKindExpire(t *testing.T, ctx context.Context, db *sql.DB, real
 	})
 }
 
-func abortRecoveryKindBirth(t *testing.T, ctx context.Context, realm string) (map[string]any, map[string]any, map[string]any) {
-	return abortRecoveryKindBirthWithForeignFinalizer(t, ctx, realm, true)
-}
 func abortRecoveryKindBirthWithForeignFinalizer(t *testing.T, ctx context.Context, realm string, foreign bool) (map[string]any, map[string]any, map[string]any) {
 	t.Helper()
 	image, digest := os.Getenv("NATIVE_FIXTURE_IMAGE"), os.Getenv("NATIVE_FIXTURE_DIGEST")
