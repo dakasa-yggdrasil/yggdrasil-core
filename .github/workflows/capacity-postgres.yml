@@ -1084,7 +1084,7 @@ jobs:
           evidence="$RUNNER_TEMP/scheduler-skip/native-pre-registration-abort"
           mkdir -m 700 "$evidence"
           set +e
-          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./repository ./internal/capacity -run '^(TestCapacityNativePreRegistrationAbort.*Postgres|TestNativePreRegistrationAbort(SeparateProof|ClosedWireAndRemoval))$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./repository ./internal/capacity ./controllers/message -run '^(TestCapacityNativePreRegistrationAbortPrivateWire|TestCapacityNativePreRegistrationAbort.*Postgres|TestNativePreRegistrationAbort(SeparateProof|ClosedWireAndRemoval))$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
           pipeline_status=("${PIPESTATUS[@]}")
           set -e
           printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
@@ -1118,9 +1118,13 @@ jobs:
               'archived_command','scope_pending','running','successful_exit','restart','replacement',
               'spec_drift','challenge','protect_owner','birth_identity','sdk_receipt','missing_termination',
               'wrong_policy','expired_evidence')}
+          private_abort = 'TestCapacityNativePreRegistrationAbortPrivateWire'
+          expected_abort |= {private_abort} | {private_abort+'/'+name for name in (
+              'issued_exact_private_wire','forged_public_step_refused','read_scrubs_forged_credential',
+              'write_requires_issued_credential','unsupported_operation_refused','read_rejects_issued_credential')}
           expected = expected_abort
           events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
-          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ('repository','internal/capacity')}
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ('repository','internal/capacity','controllers/message')}
           if any(e.get('Package') not in packages or e.get('Action') in ('skip','fail') for e in events):
               raise SystemExit('Native abort Source package/failure/skip refused')
           for action in ('run','pass'):

@@ -17,6 +17,34 @@ import (
 
 const capacityAbortNativeBirthOperation = "capacity.abort_native_birth"
 
+type capacityNativeAbortStepInput struct {
+	Binding      model.CapacityNativeAbortBinding `json:"binding"`
+	Confirmation string                           `json:"confirmation"`
+}
+
+// Only the private caller's freshly issued credential crosses this boundary.
+// Caller/request credentials are stripped before the internal reinjection.
+func nativeAbortPrivateInput(operation string, fixed any, issuedToken string) (map[string]any, error) {
+	fields, err := boundPrivateMap(fixed)
+	if err != nil {
+		return nil, err
+	}
+	switch operation {
+	case capacity.ObserveNativeUnregisteredTerminal:
+		if issuedToken != "" {
+			return nil, errCapacityBoundAssessment
+		}
+	case capacity.DestroyNativeUnregisteredProtection:
+		if issuedToken == "" {
+			return nil, errCapacityBoundAssessment
+		}
+		fields["authority_token"] = issuedToken
+	default:
+		return nil, errCapacityBoundAssessment
+	}
+	return fields, nil
+}
+
 // Separate protected human operation. No ordinary policy field, controller
 // input or adapter response enables this administrative disposition.
 func executeCapacityPreRegistrationAbortStep(parent context.Context, conn *amqp.Connection, db *sql.DB, ref model.ManifestReference, result model.WorkflowRunStepResult, input map[string]any) model.WorkflowRunStepResult {
@@ -27,10 +55,7 @@ func executeCapacityPreRegistrationAbortStep(parent context.Context, conn *amqp.
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
-	var in struct {
-		Binding      model.CapacityNativeAbortBinding `json:"binding"`
-		Confirmation string                           `json:"confirmation"`
-	}
+	var in capacityNativeAbortStepInput
 	human, _ := parent.Value(executorPowerOperatorKey{}).(string)
 	if db == nil || result.Operation != capacityAbortNativeBirthOperation || capacity.DecodeNativeCapacity(input, &in) != nil || human == "" || human != in.Binding.OperatorID || in.Confirmation != in.Binding.Confirmation || os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") != "true" {
 		return fail(errCapacityBoundAssessment)
@@ -71,7 +96,7 @@ func executeCapacityPreRegistrationAbortStep(parent context.Context, conn *amqp.
 	if err != nil {
 		return fail(err)
 	}
-	invoke := func(op string, fixed any, out any, original *bool) (string, error) {
+	invoke := func(op string, fixed any, out any, original *bool, issuedToken string) (string, error) {
 		if e := capacityDispatchFence(ctx); e != nil {
 			return "", e
 		}
@@ -83,10 +108,11 @@ func executeCapacityPreRegistrationAbortStep(parent context.Context, conn *amqp.
 		if original != nil {
 			owned.originalReturn = func(joined bool) { *original = joined }
 		}
-		fields, e := boundPrivateMap(fixed)
+		fields, e := nativeAbortPrivateInput(op, fixed, issuedToken)
 		if e != nil {
 			return "", e
 		}
+		defer delete(fields, "authority_token")
 		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fields}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityBoundAssessment, requireExplicitResponse: true, nativeHTTP: &owned})
 		if e != nil {
 			return "", capacityDispatchCause(ctx, e)
@@ -107,7 +133,7 @@ func executeCapacityPreRegistrationAbortStep(parent context.Context, conn *amqp.
 	}
 	observeReq := model.AdapterObserveCapacityPodUnregisteredTerminalRequest{BindingName: in.Binding.BindingName, PodName: in.Binding.PodName, ExpectedPodUID: in.Binding.PodUID}
 	var observed model.AdapterCapacityPodUnregisteredTerminalResponse
-	status, err := invoke(capacity.ObserveNativeUnregisteredTerminal, observeReq, &observed, nil)
+	status, err := invoke(capacity.ObserveNativeUnregisteredTerminal, observeReq, &observed, nil, "")
 	if err != nil || status != "observed" || observed.Operation != capacity.ObserveNativeUnregisteredTerminal || capacity.ValidateNativeAbortObservation(p, in.Binding, observed.Observation, time.Now().UTC(), true) != nil {
 		return fail(errCapacityBoundAssessment)
 	}
@@ -119,17 +145,15 @@ func executeCapacityPreRegistrationAbortStep(parent context.Context, conn *amqp.
 	if capacity.DecodeNativeCapacity(command.Request, &request) != nil {
 		return fail(errCapacityBoundAssessment)
 	}
-	request.AuthorityToken = token
 	var response model.AdapterCapacityPodUnregisteredTerminalResponse
 	joined := false
-	status, err = invoke(capacity.DestroyNativeUnregisteredProtection, request, &response, &joined)
-	request.AuthorityToken, token = "", ""
+	status, err = invoke(capacity.DestroyNativeUnregisteredProtection, request, &response, &joined, token)
 	if err != nil || !joined || status != "aborted_before_admission" || response.Status != status || response.Operation != capacity.DestroyNativeUnregisteredProtection || response.Metadata["command_id"] != command.CommandID.String() || response.Metadata["mutation_event_retained"] != true {
 		_ = store.MarkNativeCommandUncertain(ctx, command.CommandID)
 		return fail(errCapacityBoundAssessment)
 	}
 	var fresh model.AdapterCapacityPodUnregisteredTerminalResponse
-	status, err = invoke(capacity.ObserveNativeUnregisteredTerminal, observeReq, &fresh, nil)
+	status, err = invoke(capacity.ObserveNativeUnregisteredTerminal, observeReq, &fresh, nil, "")
 	if err != nil || status != "observed" {
 		_ = store.MarkNativeCommandUncertain(ctx, command.CommandID)
 		return fail(errCapacityBoundAssessment)
