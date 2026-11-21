@@ -343,11 +343,19 @@ func (s CapacityStore) LoadNativePreRegistrationAbort(ctx context.Context, polic
 	if s.DB == nil {
 		return c, false, ErrCapacityConflict
 	}
-	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelReadCommitted})
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return c, false, err
 	}
 	defer tx.Rollback()
+	recovery, err := nativeAbortRecoveryPresent(ctx, tx, uid)
+	if err != nil {
+		return c, true, err
+	}
+	if recovery {
+		c, _, err = nativeAbortRecoveryPair(ctx, tx, policy, p, uid, false)
+		return c, true, err
+	}
 	var count int
 	var idText sql.NullString
 	if err = tx.QueryRowContext(ctx, `SELECT count(*),min(id::text) FROM public.capacity_native_command_identities WHERE subject_uid=$1 AND operation=$2`, uid, capacity.DestroyNativeUnregisteredProtection).Scan(&count, &idText); err != nil {
@@ -412,6 +420,11 @@ func (s CapacityStore) RedeemNativePreRegistrationAbort(ctx context.Context, pri
 	if s.DB.QueryRowContext(ctx, `SELECT id FROM public.capacity_native_commands WHERE authority_token_sha256=$1`, hash).Scan(&id) != nil {
 		return permit, ErrCapacityMutationAuthorization
 	}
+	if recovery, err := nativeAbortRecoverySelected(ctx, s.DB, id); err != nil {
+		return permit, err
+	} else if recovery {
+		return s.redeemNativePreRegistrationAbortRecovery(ctx, principal, r)
+	}
 	policy, initial, b, err := s.nativeAbortInitial(ctx, id)
 	if err != nil {
 		return permit, err
@@ -456,6 +469,11 @@ func nativeAbortResultComplete(r model.CapacityNativeReleaseResult) bool {
 func (s CapacityStore) RecordNativePreRegistrationAbortResult(ctx context.Context, principal string, r model.CapacityNativeReleaseResult) error {
 	if !nativeAbortResultComplete(r) {
 		return ErrCapacityMutationAuthorization
+	}
+	if recovery, err := nativeAbortRecoverySelected(ctx, s.DB, r.CommandID); err != nil {
+		return err
+	} else if recovery {
+		return s.recordNativePreRegistrationAbortResultRecovery(ctx, principal, r)
 	}
 	policy, initial, b, err := s.nativeAbortInitial(ctx, r.CommandID)
 	if err != nil {
@@ -513,6 +531,11 @@ func (s CapacityStore) ConfirmNativePreRegistrationAbort(ctx context.Context, po
 	if !callerJoined {
 		return ErrCapacityConflict
 	}
+	if recovery, err := nativeAbortRecoverySelected(ctx, s.DB, id); err != nil {
+		return err
+	} else if recovery {
+		return s.confirmNativePreRegistrationAbortRecovery(ctx, policy, intent, id, response, callerJoined)
+	}
 	_, initial, b, err := s.nativeAbortInitial(ctx, id)
 	if err != nil {
 		return err
@@ -557,6 +580,11 @@ func (s CapacityStore) ConfirmNativePreRegistrationAbort(ctx context.Context, po
 	return err
 }
 func (s CapacityStore) ArchiveNativePreRegistrationAbort(ctx context.Context, policy model.Manifest, intent model.CapacityIntent, id uuid.UUID) error {
+	if recovery, err := nativeAbortRecoverySelected(ctx, s.DB, id); err != nil {
+		return err
+	} else if recovery {
+		return s.archiveNativePreRegistrationAbortRecovery(ctx, policy, intent, id)
+	}
 	_, _, b, err := s.nativeAbortInitial(ctx, id)
 	if err != nil {
 		return err

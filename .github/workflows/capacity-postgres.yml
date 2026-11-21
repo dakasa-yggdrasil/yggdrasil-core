@@ -1138,6 +1138,48 @@ jobs:
               raise SystemExit('Native abort Source race warning retained')
           (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'native_execution_or_useful_capacity_qualification':False},sort_keys=True)+'\n')
           PYABORT
+      - name: Qualify one-parent unredeemed native abort recovery on actual PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-abort-unredeemed-recovery"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./repository ./internal/capacity ./controllers/message ./manifest -run '^(TestCapacityNativeAbortUnredeemedRecovery.*Postgres|TestNativeAbortUnredeemedRecovery(Proof|ClosedWire|WorkflowRegistration)|TestCapacityNativeAbortUnredeemedRecoveryPrivateWire)$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYRECOVERY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-abort-unredeemed-recovery'
+          pg='TestCapacityNativeAbortUnredeemedRecoveryPostgres'
+          refusals='TestCapacityNativeAbortUnredeemedRecoveryRefusalsPostgres'
+          custody='TestCapacityNativeAbortUnredeemedRecoveryPairCustodyPostgres'
+          pure='TestNativeAbortUnredeemedRecoveryProof'
+          wire='TestCapacityNativeAbortUnredeemedRecoveryPrivateWire'
+          expected={pg,refusals,custody,pure,wire,'TestNativeAbortUnredeemedRecoveryClosedWire','TestCapacityNativeAbortUnredeemedRecoveryRollbackPostgres','TestCapacityNativeAbortUnredeemedRecoverySelectionPostgres'}
+          expected.update(pg+'/'+name for name in ['exact_parent_archive_fresh_child_dual_return_old8_unchanged','reservation_only_leaves_uncertain_parent','duplicate_issue_and_late_parent_redemption','unknown_child_hold_no_third_authority'])
+          expected.update(refusals+'/'+name for name in ['wrong_human','wrong_workflow','wrong_fence','active_old_lease','attempt','result_row','foreign_recovery_decision','readback','private_custody','hot_token_column','hot_subject_column','hot_generation_column','foreign_uid','direct_orphan_hot','expired_new_lease','canceled','native_rv','native_receipt'])
+          expected.update(custody+'/'+name for name in ['child_body_missing','child_request_changed','duplicate_parent_hot','child_archive_digest','forged_confirmed_without_result','foreign_identity'])
+          expected.update(pure+'/'+name for name in ['exact','hidden_parent','parent_hot','extra_archive','prior_lifetime','pending_scope','unexpired_parent','foreign_parent','fake_effect','third_sequence','old_fence','wrong_policy','sdk_receipt','mixed_v1','stale_witness'])
+          expected.update(wire+'/'+name for name in ['complete_history_and_issued_credential_only','closed_public_input'])
+          registration='TestNativeAbortUnredeemedRecoveryWorkflowRegistration'
+          expected.add(registration)
+          expected.update(registration+'/'+name for name in ['exact_sync_literal','unknown_operation','integration_target_refused'])
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ['repository','internal/capacity','controllers/message','manifest']}
+          if any(e.get('Package') not in packages or e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('unredeemed recovery package/failure/skip refused')
+          for action in ['run','pass']:
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected): raise SystemExit('unredeemed recovery exact case census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1: raise SystemExit('unredeemed recovery package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('unredeemed recovery race retained')
+          (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_recovery_or_capacity_claim':True},sort_keys=True)+'\n')
+          PYRECOVERY
       - name: Qualify exact skip calendar, bounded search and original PG dispatch
         shell: bash
         run: |
