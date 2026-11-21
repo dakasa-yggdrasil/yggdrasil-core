@@ -541,7 +541,7 @@ func (s CapacityStore) ConfirmNativePreRegistrationAbort(ctx context.Context, po
 			return err
 		}
 		var r model.CapacityNativeReleaseResult
-		if !ack.Valid || capacity.DecodeNativeCapacity(result, &r) != nil || digest != nativeCanonicalArchiveSHA(result) || r.ReturnNonce != "" || r.CommandID != c.CommandID || r.AttemptID != c.AttemptID || r.Protocol != c.ReleaseProtocol || r.Capability != c.Operation || r.IntegrationInstanceID != c.Adapter.IntegrationInstanceID || r.IntegrationTypeID != c.Adapter.IntegrationTypeID || r.AdapterSourceCommit != c.AdapterSourceCommit || r.RequestSHA256 != c.RequestSHA256 || r.Outcome != "applied" || r.OriginalStatus != 200 || !r.OneSend || !r.DoReturned || !r.ReadReturned || !r.CloseReturned {
+		if !ack.Valid || capacity.DecodeNativeCapacity(json.RawMessage(result), &r) != nil || digest != nativeCanonicalArchiveSHA(result) || r.ReturnNonce != "" || r.CommandID != c.CommandID || r.AttemptID != c.AttemptID || r.Protocol != c.ReleaseProtocol || r.Capability != c.Operation || r.IntegrationInstanceID != c.Adapter.IntegrationInstanceID || r.IntegrationTypeID != c.Adapter.IntegrationTypeID || r.AdapterSourceCommit != c.AdapterSourceCommit || r.RequestSHA256 != c.RequestSHA256 || r.Outcome != "applied" || r.OriginalStatus != 200 || !r.OneSend || !r.DoReturned || !r.ReadReturned || !r.CloseReturned {
 			return ErrCapacityConflict
 		}
 		readback, err := json.Marshal(response)

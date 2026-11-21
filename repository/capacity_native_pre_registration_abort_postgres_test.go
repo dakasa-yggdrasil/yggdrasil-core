@@ -258,6 +258,17 @@ func TestCapacityNativePreRegistrationAbortPostgres(t *testing.T) {
 				state := strings.Split(kind, "-")[1]
 				exec(`INSERT INTO public.capacity_native_commands(id,namespace,environment,domain,dimension,generation,operation,phase,sequence,subject_uid,state,authority_token_sha256,command_record)VALUES($1,$2,$3,$4,$5,1,$6,'envelope',1,$7,$8,$9,'{}')`, id, f.policy.Metadata.Namespace, f.p.Environment, f.p.Domain, f.p.Dimension, capacity.EnsureBoundHPAEnvelope, f.p.AssessmentBinding.Snapshot.HPAUID, state, hash)
 			}
+			// The lifetime blocker deliberately seeds a foreign existing row.
+			// Compare the entire prior target-row set, rather than requiring zero.
+			lifetimeSnapshot := func() []byte {
+				t.Helper()
+				var raw []byte
+				if err := f.db.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.namespace,x.environment,x.domain,x.dimension),'[]'::jsonb) FROM public.capacity_native_lifetimes x WHERE pod_uid=$1`, uid).Scan(&raw); err != nil {
+					t.Fatal(err)
+				}
+				return raw
+			}
+			beforeLifetimes := lifetimeSnapshot()
 			if _, _, err := f.store.IssueNativePreRegistrationAbort(ctx, f.policy, f.intent, f.binding, f.observation); err == nil {
 				t.Fatal("global/other-scope/terminal/orphan evidence ignored")
 			}
@@ -265,7 +276,9 @@ func TestCapacityNativePreRegistrationAbortPostgres(t *testing.T) {
 			if f.db.QueryRow(`SELECT count(*) FROM public.capacity_native_command_identities WHERE operation=$1 AND subject_uid=$2`, capacity.DestroyNativeUnregisteredProtection, uid).Scan(&n) != nil || n != 0 {
 				t.Fatal("refused transaction left new abort identity")
 			}
-			abortPGNoCheckpoint(t, f)
+			if string(beforeLifetimes) != string(lifetimeSnapshot()) {
+				t.Fatal("refused abort changed or fabricated a target lifetime")
+			}
 		})
 	}
 	for _, kind := range []string{"human", "retry", "condition", "family", "foreign-binding", "template-binding", "inactive-workflow", "stale-fence", "foreign-principal", "foreign-source", "foreign-token-digest", "proof-tamper", "rejected-original", "expired-redemption", "expired-callback"} {
@@ -440,6 +453,7 @@ func TestCapacityNativePreRegistrationAbortCrossScopePostgres(t *testing.T) {
 			two.binding.PodUID = uid
 			two.observation.PodUID = uid
 			two.boot.Observation.PodUID = uid
+			two.boot.Admission.PodUID = uid
 			workflow := abortPGCreate(t, two.db, two.policy.Metadata.Namespace, "workflow", "abort-human", abortPGWorkflow(two.binding))
 			two.store.WorkflowID = workflow.ID
 			blocker, err := one.db.BeginTx(ctx, nil)
