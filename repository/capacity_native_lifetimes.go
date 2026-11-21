@@ -105,6 +105,9 @@ func (s CapacityStore) RegisterNativeLifetime(ctx context.Context, policy model.
 		if err := lockNativeBoundOwner(ctx, tx, policy, p, response.Observation.PodUID); err != nil {
 			return err
 		}
+		if err := guardNativePreRegistrationAbortTx(ctx, tx, response.Observation.PodUID); err != nil {
+			return err
+		}
 		pod := response.Observation
 		challenge, err := capacity.NativeProcessChallenge(p, current, pod, response.Admission, now)
 		if err != nil {

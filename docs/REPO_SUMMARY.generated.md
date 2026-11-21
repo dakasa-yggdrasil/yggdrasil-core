@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-17T08:44:11-03:00_
+_Generated from HEAD at: 2026-11-21T11:36:55-03:00_
 
 ## Languages
 
-- `.go`: 1591 files
+- `.go`: 1607 files
 - `.json`: 263 files
 - `.py`: 217 files
 - `.sql`: 113 files
@@ -24,14 +24,14 @@ _Generated from HEAD at: 2026-11-17T08:44:11-03:00_
 
 ## Top Directories by File Count
 
-- repository: 419 files (6148.6 KB)
-- controllers/httpapi: 269 files (2713.3 KB)
-- controllers/message: 207 files (1804.0 KB)
-- internal/capacity: 132 files (1449.5 KB)
+- repository: 423 files (6277.9 KB)
+- controllers/httpapi: 270 files (2757.6 KB)
+- controllers/message: 211 files (1831.0 KB)
+- internal/capacity: 136 files (1467.0 KB)
 - db/migrations: 109 files (1608.0 KB)
-- model: 92 files (487.6 KB)
+- model: 94 files (494.5 KB)
 - ops/network-guardian/tests: 67 files (1413.4 KB)
-- manifest: 65 files (398.1 KB)
+- manifest: 66 files (399.9 KB)
 - addons: 51 files (315.5 KB)
 - internal/capacitynativeqemu: 47 files (308.6 KB)
 - ops/network-guardian/rollout: 40 files (2647.0 KB)

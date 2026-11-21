@@ -194,7 +194,12 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 			return
 		}
-		if err = store.RecordNativeReleaseResult(ctx, p.base.principalID, payload); err != nil {
+		if payload.Capability == capacity.DestroyNativeUnregisteredProtection {
+			err = store.RecordNativePreRegistrationAbortResult(ctx, p.base.principalID, payload)
+		} else {
+			err = store.RecordNativeReleaseResult(ctx, p.base.principalID, payload)
+		}
+		if err != nil {
 			mutationHTTPError(w, err)
 			return
 		}
@@ -209,7 +214,13 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 			return
 		}
-		response, err := store.RedeemNativeCommand(ctx, p.base.principalID, payload)
+		var response model.CapacityNativeAuthorityPermit
+		var err error
+		if payload.Capability == capacity.DestroyNativeUnregisteredProtection {
+			response, err = store.RedeemNativePreRegistrationAbort(ctx, p.base.principalID, payload)
+		} else {
+			response, err = store.RedeemNativeCommand(ctx, p.base.principalID, payload)
+		}
 		if err != nil {
 			mutationHTTPError(w, err)
 			return

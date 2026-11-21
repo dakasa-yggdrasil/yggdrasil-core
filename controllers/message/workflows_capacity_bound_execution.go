@@ -122,6 +122,9 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	// Old redeemed outcomes permit native GET and durable readback only. They
 	// never acquire new send permission merely because a lease/generation moved.
 	for _, command := range commands {
+		if command.Operation == capacity.DestroyNativeUnregisteredProtection && command.State != "confirmed" {
+			return intent, fmt.Errorf("original pre-registration abort outcome unresolved; no ordinary recovery send permitted")
+		}
 		if command.State == "confirmed" || command.State == "refused_no_redemption" || command.State == "rejected_no_effect" {
 			continue
 		}
@@ -347,6 +350,30 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			}
 		}
 		if !exists {
+			// A distinct administrative abort is a permanent admission deny,
+			// never a released lifetime or an invented SDK lane witness.
+			aborted, present, e := store.LoadNativePreRegistrationAbort(ctx, policy, pod.PodUID)
+			if e != nil {
+				return intent, e
+			}
+			if present {
+				var request model.AdapterDestroyCapacityPodUnregisteredProtectionRequest
+				if aborted.State != "confirmed" || capacity.DecodeNativeCapacity(aborted.Request, &request) != nil || request.ExpectedPodUID != pod.PodUID || capacity.ValidateNativeAbortBinding(policy, p, request.Proof.Binding) != nil {
+					return intent, errCapacityBoundAssessment
+				}
+				var target model.AdapterCapacityPodUnregisteredTerminalResponse
+				b := request.Proof.Binding
+				fixed, e := boundPrivateMap(model.AdapterObserveCapacityPodUnregisteredTerminalRequest{BindingName: b.BindingName, PodName: b.PodName, ExpectedPodUID: b.PodUID})
+				if e != nil {
+					return intent, e
+				}
+				status, e := call(b.Adapter, capacity.ObserveNativeUnregisteredTerminal, fixed, &target)
+				if e != nil || status != "observed" || target.Operation != capacity.ObserveNativeUnregisteredTerminal || capacity.ValidateNativeAbortObservation(p, b, target.Observation, time.Now().UTC(), false) != nil || target.Observation.Protected {
+					return intent, errCapacityBoundAssessment
+				}
+				releasedStillListed = true
+				continue
+			}
 			boot, e := observeAdmission(pod)
 			if e != nil {
 				return intent, e

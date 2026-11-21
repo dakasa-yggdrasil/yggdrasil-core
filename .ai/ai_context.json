@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-17T08:44:11-03:00",
+  "generated_at": "2026-11-21T11:36:55-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1591,
+    ".go": 1607,
     ".json": 263,
     ".py": 217,
     ".sql": 113,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "32809c4eabdfdfc5c5659c6fa48e97a6b2f47d40",
+    "commit": "760718ce5ba5d29c160638e92f056ce6e97b3c01",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "ad7d0919724ed6f342c2be28163fd5cc91102844f829e517635526d402dca450"
+        "sha256": "beffd201e0f7b4463f8846227e9d1e60f6ac5b755ac3e62669b56ca0330c2080"
       },
       {
         "path": "AGENTS.md",
@@ -32,7 +32,7 @@
       },
       {
         "path": "README.md",
-        "sha256": "29e4944f4739970f4fd3986568405f6aa1c8fac44e5e1eb917d48e6f25122c5c"
+        "sha256": "977924728a86b1853fc0fdbff734e7cbeca0bc056246eb01b7263a62fdca6dcd"
       },
       {
         "path": "Taskfile.yml",
@@ -65,23 +65,23 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 419,
-      "kb": 6148
+      "files": 423,
+      "kb": 6277
     },
     {
       "path": "controllers/httpapi",
-      "files": 269,
-      "kb": 2713
+      "files": 270,
+      "kb": 2757
     },
     {
       "path": "controllers/message",
-      "files": 207,
-      "kb": 1804
+      "files": 211,
+      "kb": 1830
     },
     {
       "path": "internal/capacity",
-      "files": 132,
-      "kb": 1449
+      "files": 136,
+      "kb": 1467
     },
     {
       "path": "db/migrations",
@@ -90,8 +90,8 @@
     },
     {
       "path": "model",
-      "files": 92,
-      "kb": 487
+      "files": 94,
+      "kb": 494
     },
     {
       "path": "ops/network-guardian/tests",
@@ -100,8 +100,8 @@
     },
     {
       "path": "manifest",
-      "files": 65,
-      "kb": 398
+      "files": 66,
+      "kb": 399
     },
     {
       "path": "addons",

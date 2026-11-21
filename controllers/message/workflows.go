@@ -683,6 +683,12 @@ func executeWorkflowStep(
 			if guestOriginalOperation(result.Operation) {
 				return executeCapacityGuestWorkflowStep(withOriginalGuestWorkflowTransport(ctx, conn), db, workflowRef, step, result, renderedInput)
 			}
+			if result.Operation == capacityRecoverUnredeemedNativeBirthOperation {
+				return executeCapacityPreRegistrationAbortRecoveryStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
+			if result.Operation == capacityAbortNativeBirthOperation {
+				return executeCapacityPreRegistrationAbortStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
 			if capacityBoundOperation(result.Operation) {
 				return executeCapacityBoundWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)
 			}

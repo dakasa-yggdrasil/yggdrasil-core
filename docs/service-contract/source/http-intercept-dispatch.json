@@ -53,42 +53,42 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 202,
+      "line": 207,
       "predicate": "r.Method == http.MethodPost && route == capacityMutationBasePath+\"/native/redeem\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 218,
+      "line": 229,
       "predicate": "r.Method == http.MethodPost && route == capacityMutationBasePath+\"/redeem\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 234,
+      "line": 245,
       "predicate": "r.Method == http.MethodPost && route == capacityMutationBasePath+\"/settle\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 260,
+      "line": 271,
       "predicate": "r.Method == http.MethodGet && strings.HasPrefix(route, capacityMutationBasePath+\"/\")"
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "mutationHTTPError",
-      "line": 297,
+      "line": 308,
       "predicate": "errors.Is(err, repository.ErrCapacityMutationAuthorization), errors.Is(err, sql.ErrNoRows)"
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "mutationHTTPError",
-      "line": 299,
+      "line": 310,
       "predicate": "errors.Is(err, repository.ErrCapacityConflict), errors.Is(err, repository.ErrCapacityLease), errors.Is(err, repository.ErrCapacityDisabled)"
     }
   ],

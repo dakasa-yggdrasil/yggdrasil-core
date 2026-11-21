@@ -262,7 +262,7 @@ func capacityBoundCatalogOperation(ts model.IntegrationTypeManifestSpec, operati
 	if capacityNativeCatalogOperation(ts, operation) {
 		return true
 	}
-	if operation != capacity.EnsureBoundHPAEnvelope && operation != capacity.EnsureNativePodDrain && operation != capacity.DestroyNativePodProtection {
+	if operation != capacity.EnsureBoundHPAEnvelope && operation != capacity.EnsureNativePodDrain && operation != capacity.DestroyNativePodProtection && operation != capacity.DestroyNativeUnregisteredProtection {
 		return false
 	}
 	for _, capability := range ts.Capabilities {
