@@ -23,6 +23,9 @@ func nativeAbortHex(value string, size int) bool {
 }
 
 func ValidateNativeAbortBinding(policy model.Manifest, p model.CapacityPolicySpec, b model.CapacityNativeAbortBinding) error {
+	if b.ReviewedQuarantines != nil {
+		return fmt.Errorf("legacy native abort cannot review quarantines")
+	}
 	if b.Schema != NativePreRegistrationAbortSchema || b.PolicyID != policy.ID.String() || b.PolicyChecksum != policy.Checksum || b.Generation < 1 || p.AssessmentBinding == nil || p.HPAExecutionBinding == nil || p.HPAExecutionBinding.Mode != HPALifetimeExecutionMode || p.HPAExecutionBinding.AdmissionMode != "process_v2" || b.Namespace != p.AssessmentBinding.Snapshot.Namespace || b.WorkloadUID != p.AssessmentBinding.Snapshot.WorkloadUID || b.ContainerName != p.HPAExecutionBinding.ContainerName || b.ImageDigest != p.HPAExecutionBinding.ImageDigest || b.BindingName != p.HPAExecutionBinding.PodTerminationBinding || !NativeProcessNonce(b.PodUID) || !NativeProcessNonce(b.ReplicaSetUID) || !NativeProcessNonce(b.OperatorID) || b.PodName == "" || strings.TrimSpace(b.PodName) != b.PodName || !nativeAbortHex(b.PodSpecSHA256, 32) || !nativeAbortHex(b.AdapterSourceCommit, 20) || !NativeProcessNonce(b.Adapter.IntegrationInstanceID) || !NativeProcessNonce(b.Adapter.IntegrationTypeID) || !nativeAbortHex(b.Adapter.InstanceChecksum, 32) || !nativeAbortHex(b.Adapter.TypeChecksum, 32) || b.AdapterPrincipalID == "" || len(b.AdapterPrincipalID) > 128 || strings.ContainsAny(b.AdapterPrincipalID, "\r\n\t") || b.Confirmation == "" || len(b.Confirmation) > 128 || strings.ContainsAny(b.Confirmation, "\r\n\t") {
 		return fmt.Errorf("fixed native pre-registration abort binding required")
 	}
@@ -39,6 +42,9 @@ func ValidateNativeAbortObservation(p model.CapacityPolicySpec, b model.Capacity
 }
 
 func ValidateNativeAbortProof(policy model.Manifest, p model.CapacityPolicySpec, proof model.CapacityNativeAbortProof, now time.Time) error {
+	if proof.ReviewedQuarantineCounts != nil {
+		return fmt.Errorf("legacy native abort cannot exclude quarantines")
+	}
 	if ValidateNativeAbortBinding(policy, p, proof.Binding) != nil || proof.Schema != NativePreRegistrationAbortSchema || proof.FencingToken < 1 || proof.AuthoredAt.IsZero() || !Fresh(proof.AuthoredAt, now, p.MaxEvidenceAgeSeconds) || proof.AuthoredAt.Before(proof.Observation.ObservedAt) || proof.ScopeUnsettledCommands != 0 || proof.ZeroHistory != (model.CapacityNativeAbortZeroHistory{}) || ValidateNativeAbortObservation(p, proof.Binding, proof.Observation, now, true) != nil {
 		return fmt.Errorf("server-owned native pre-registration abort proof required")
 	}

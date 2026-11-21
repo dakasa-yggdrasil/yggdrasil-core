@@ -365,7 +365,7 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			}
 			if present {
 				var request model.AdapterDestroyCapacityPodUnregisteredProtectionRequest
-				if aborted.State != "confirmed" || capacity.DecodeNativeCapacity(aborted.Request, &request) != nil || request.ExpectedPodUID != pod.PodUID || capacity.ValidateNativeAbortBinding(policy, p, request.Proof.Binding) != nil {
+				if aborted.State != "confirmed" || capacity.DecodeNativeCapacity(aborted.Request, &request) != nil || request.ExpectedPodUID != pod.PodUID || capacity.ValidateNativeManualAbortBinding(policy, p, request.Proof.Binding) != nil {
 					return intent, errCapacityBoundAssessment
 				}
 				var target model.AdapterCapacityPodUnregisteredTerminalResponse

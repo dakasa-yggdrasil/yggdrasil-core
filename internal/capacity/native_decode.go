@@ -98,6 +98,9 @@ func nativeCapacityClosedJSON(raw []byte, typ reflect.Type) error {
 	if err != nil {
 		return err
 	}
+	if err := nativeAbortClosedLegacyMembers(typ, members); err != nil {
+		return err
+	}
 	for name, value := range members {
 		if err := nativeCapacityClosedJSON(value, fields[name]); err != nil {
 			return err

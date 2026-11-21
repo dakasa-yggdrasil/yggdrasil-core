@@ -89,7 +89,7 @@ func executeCapacityPreRegistrationAbortStep(parent context.Context, conn *amqp.
 		return fail(errCapacityBoundAssessment)
 	}
 	p, err := manifest.ParseCapacityPolicySpec(policy.Spec)
-	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || capacity.ValidateNativeAbortBinding(policy, p, in.Binding) != nil {
+	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || capacity.ValidateNativeManualAbortBinding(policy, p, in.Binding) != nil {
 		return fail(errCapacityBoundAssessment)
 	}
 	a, err := resolveCapacityObservationAdapterWithResolver(ctx, conn, db, in.Binding.Adapter, []string{capacity.ObserveNativeUnregisteredTerminal, capacity.DestroyNativeUnregisteredProtection}, resolveIntegrationInstance)

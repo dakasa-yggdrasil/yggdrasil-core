@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"time"
 
@@ -90,7 +91,7 @@ func nativeAbortWorkflow(ctx context.Context, tx *sql.Tx, id uuid.UUID, policy m
 		return ErrCapacityMutationAuthorization
 	}
 	var literal model.CapacityNativeAbortBinding
-	if capacity.DecodeNativeCapacity(with["binding"], &literal) != nil || literal != b {
+	if capacity.DecodeNativeCapacity(with["binding"], &literal) != nil || !reflect.DeepEqual(literal, b) {
 		return ErrCapacityMutationAuthorization
 	}
 	var confirmation string
@@ -109,7 +110,7 @@ func (s CapacityStore) nativeAbortTransaction(ctx context.Context, policy model.
 	if err != nil {
 		return current, err
 	}
-	if s.DB == nil || !s.ExecutionEnabled || !p.ExecutionEnabled || s.AdmissionOnly || len(p.MutationBindings) != 0 || !validCapacityExecutor(s.ExecutorID) || capacity.ValidateNativeAbortBinding(policy, p, b) != nil || (human && (s.ExecutorPowerOperator == "" || s.ExecutorPowerOperator != b.OperatorID)) {
+	if s.DB == nil || !s.ExecutionEnabled || !p.ExecutionEnabled || s.AdmissionOnly || len(p.MutationBindings) != 0 || !validCapacityExecutor(s.ExecutorID) || capacity.ValidateNativeManualAbortBinding(policy, p, b) != nil || (human && (s.ExecutorPowerOperator == "" || s.ExecutorPowerOperator != b.OperatorID)) {
 		return current, ErrCapacityMutationAuthorization
 	}
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -235,8 +236,15 @@ func (s CapacityStore) IssueNativePreRegistrationAbort(ctx context.Context, poli
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN('issued','redeemed','uncertain')`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unsettled); err != nil {
 			return err
 		}
-		proof := model.CapacityNativeAbortProof{Schema: capacity.NativePreRegistrationAbortSchema, Binding: b, Observation: o, ZeroHistory: z, ScopeUnsettledCommands: unsettled, FencingToken: current.FencingToken, AuthoredAt: now}
-		if capacity.ValidateNativeAbortProof(policy, p, proof, now) != nil {
+		proof := model.CapacityNativeAbortProof{Schema: b.Schema, Binding: b, Observation: o, ZeroHistory: z, ScopeUnsettledCommands: unsettled, FencingToken: current.FencingToken, AuthoredAt: now}
+		if b.Schema == capacity.NativePreRegistrationAbortReviewedQuarantineSchema {
+			counts, e := nativeReviewedAbortQuarantinesTx(ctx, tx, policy, p, b, false)
+			if e != nil {
+				return e
+			}
+			proof.ReviewedQuarantineCounts = &counts
+		}
+		if capacity.ValidateNativeManualAbortProof(policy, p, proof, now) != nil {
 			return ErrCapacityConflict
 		}
 		no := false
@@ -245,7 +253,7 @@ func (s CapacityStore) IssueNativePreRegistrationAbort(ctx context.Context, poli
 		if err != nil || len(raw) > 32768 {
 			return ErrCapacityConflict
 		}
-		c = model.CapacityNativeCommand{CommandID: uuid.New(), PolicyID: policy.ID, PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID, Namespace: current.Namespace, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension, IntentGeneration: current.Generation, FencingToken: current.FencingToken, LeaseOwner: current.LeaseOwner, ExecutorID: s.ExecutorID, Adapter: b.Adapter, AdapterPrincipalID: b.AdapterPrincipalID, Operation: capacity.DestroyNativeUnregisteredProtection, Phase: capacity.NativePreRegistrationAbortPhase, Sequence: 1, Request: raw, RequestSHA256: nativeArchiveSHA(raw), State: "issued", AuthorityTokenSHA256: nativeArchiveSHA([]byte(token)), CreatedAt: now, ExpiresAt: *current.LeaseExpiresAt, UpdatedAt: now, OriginPolicy: append(json.RawMessage(nil), policy.Spec...), OriginPolicySHA256: nativeCanonicalArchiveSHA(policy.Spec), ReleaseProtocol: capacity.NativePreRegistrationAbortProtocol, AdapterSourceCommit: b.AdapterSourceCommit}
+		c = model.CapacityNativeCommand{CommandID: uuid.New(), PolicyID: policy.ID, PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID, Namespace: current.Namespace, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension, IntentGeneration: current.Generation, FencingToken: current.FencingToken, LeaseOwner: current.LeaseOwner, ExecutorID: s.ExecutorID, Adapter: b.Adapter, AdapterPrincipalID: b.AdapterPrincipalID, Operation: capacity.DestroyNativeUnregisteredProtection, Phase: capacity.NativePreRegistrationAbortPhase, Sequence: 1, Request: raw, RequestSHA256: nativeArchiveSHA(raw), State: "issued", AuthorityTokenSHA256: nativeArchiveSHA([]byte(token)), CreatedAt: now, ExpiresAt: *current.LeaseExpiresAt, UpdatedAt: now, OriginPolicy: append(json.RawMessage(nil), policy.Spec...), OriginPolicySHA256: nativeCanonicalArchiveSHA(policy.Spec), ReleaseProtocol: capacity.NativeManualAbortProtocol(b.Schema), AdapterSourceCommit: b.AdapterSourceCommit}
 		if deadline, ok := ctx.Deadline(); ok && deadline.Before(c.ExpiresAt) {
 			c.ExpiresAt = deadline
 		}
@@ -301,7 +309,7 @@ func nativeAbortStored(ctx context.Context, tx *sql.Tx, policy model.Manifest, p
 		return c, req, ErrCapacityConflict
 	}
 	canonical, err := nativeAbortCanonical(req)
-	if err != nil || c.CommandID != id || c.PolicyID != policy.ID || c.PolicyChecksum != policy.Checksum || c.Namespace != policy.Metadata.Namespace || c.Environment != p.Environment || c.Domain != p.Domain || c.Dimension != p.Dimension || c.Operation != capacity.DestroyNativeUnregisteredProtection || c.Phase != capacity.NativePreRegistrationAbortPhase || c.Sequence != 1 || req.ExpectedPodUID != req.Proof.Binding.PodUID || req.ExpectedPodResourceVersion != req.Proof.Observation.PodResourceVersion || req.DryRun == nil || *req.DryRun || req.AuthorityToken != "" || !c.CreatedAt.Equal(req.Proof.AuthoredAt) || !c.ExpiresAt.After(c.CreatedAt) || c.IntentGeneration != req.Proof.Binding.Generation || c.FencingToken != req.Proof.FencingToken || c.Adapter != req.Proof.Binding.Adapter || c.AdapterPrincipalID != req.Proof.Binding.AdapterPrincipalID || c.AdapterSourceCommit != req.Proof.Binding.AdapterSourceCommit || c.ReleaseProtocol != capacity.NativePreRegistrationAbortProtocol || c.AdmissionOnly || c.RequestSHA256 != nativeArchiveSHA(canonical) || c.OriginPolicySHA256 != nativeCanonicalArchiveSHA(c.OriginPolicy) || c.OriginPolicySHA256 != nativeCanonicalArchiveSHA(policy.Spec) || capacity.ValidateNativeAbortProof(policy, p, req.Proof, req.Proof.AuthoredAt) != nil || ns != c.Namespace || env != c.Environment || domain != c.Domain || dim != c.Dimension || generation != c.IntentGeneration || op != c.Operation || subject != req.ExpectedPodUID || phase != c.Phase || sequence != c.Sequence || tokenSHA != c.AuthorityTokenSHA256 || requestSHA != c.RequestSHA256 {
+	if err != nil || c.CommandID != id || c.PolicyID != policy.ID || c.PolicyChecksum != policy.Checksum || c.Namespace != policy.Metadata.Namespace || c.Environment != p.Environment || c.Domain != p.Domain || c.Dimension != p.Dimension || c.Operation != capacity.DestroyNativeUnregisteredProtection || c.Phase != capacity.NativePreRegistrationAbortPhase || c.Sequence != 1 || req.ExpectedPodUID != req.Proof.Binding.PodUID || req.ExpectedPodResourceVersion != req.Proof.Observation.PodResourceVersion || req.DryRun == nil || *req.DryRun || req.AuthorityToken != "" || !c.CreatedAt.Equal(req.Proof.AuthoredAt) || !c.ExpiresAt.After(c.CreatedAt) || c.IntentGeneration != req.Proof.Binding.Generation || c.FencingToken != req.Proof.FencingToken || c.Adapter != req.Proof.Binding.Adapter || c.AdapterPrincipalID != req.Proof.Binding.AdapterPrincipalID || c.AdapterSourceCommit != req.Proof.Binding.AdapterSourceCommit || c.ReleaseProtocol != capacity.NativeManualAbortProtocol(req.Proof.Schema) || c.AdmissionOnly || c.RequestSHA256 != nativeArchiveSHA(canonical) || c.OriginPolicySHA256 != nativeCanonicalArchiveSHA(c.OriginPolicy) || c.OriginPolicySHA256 != nativeCanonicalArchiveSHA(policy.Spec) || capacity.ValidateNativeManualAbortProof(policy, p, req.Proof, req.Proof.AuthoredAt) != nil || ns != c.Namespace || env != c.Environment || domain != c.Domain || dim != c.Dimension || generation != c.IntentGeneration || op != c.Operation || subject != req.ExpectedPodUID || phase != c.Phase || sequence != c.Sequence || tokenSHA != c.AuthorityTokenSHA256 || requestSHA != c.RequestSHA256 {
 		return c, req, ErrCapacityConflict
 	}
 	if c.State == "confirmed" && nativeAbortConfirmed(ctx, tx, p, c, req.Proof.Binding) != nil {
@@ -445,6 +453,11 @@ func (s CapacityStore) RedeemNativePreRegistrationAbort(ctx context.Context, pri
 		if err = nativeAbortCurrent(c, *current, now); err != nil {
 			return err
 		}
+		if b.Schema == capacity.NativePreRegistrationAbortReviewedQuarantineSchema {
+			if err = nativeReviewedAbortRedemptionTx(ctx, tx, policy, p, b, c); err != nil {
+				return err
+			}
+		}
 		c.State, c.RedeemedBy, c.AttemptID, c.UpdatedAt = "redeemed", principal, uuid.New(), now
 		nonce, err := retainNativeReleaseRedemption(ctx, tx, c)
 		if err != nil {
@@ -464,7 +477,7 @@ func (s CapacityStore) RedeemNativePreRegistrationAbort(ctx context.Context, pri
 func nativeAbortResultComplete(r model.CapacityNativeReleaseResult) bool {
 	nonce, e := hex.DecodeString(r.ReturnNonce)
 	defer clear(nonce)
-	return e == nil && len(nonce) == 32 && r.Protocol == capacity.NativePreRegistrationAbortProtocol && r.Capability == capacity.DestroyNativeUnregisteredProtection && r.CommandID != uuid.Nil && r.AttemptID != uuid.Nil && len(r.RequestSHA256) == 64 && len(r.OriginalResponseSHA256) == 64 && len(r.AdapterSourceCommit) == 40 && r.OneSend && r.DoReturned && r.ReadReturned && r.CloseReturned && ((r.Outcome == "applied" && r.OriginalStatus == 200) || (r.Outcome == "rejected_no_effect" && r.OriginalStatus == 409))
+	return e == nil && len(nonce) == 32 && (r.Protocol == capacity.NativePreRegistrationAbortProtocol || r.Protocol == capacity.NativePreRegistrationAbortReviewedQuarantineProtocol) && r.Capability == capacity.DestroyNativeUnregisteredProtection && r.CommandID != uuid.Nil && r.AttemptID != uuid.Nil && len(r.RequestSHA256) == 64 && len(r.OriginalResponseSHA256) == 64 && len(r.AdapterSourceCommit) == 40 && r.OneSend && r.DoReturned && r.ReadReturned && r.CloseReturned && ((r.Outcome == "applied" && r.OriginalStatus == 200) || (r.Outcome == "rejected_no_effect" && r.OriginalStatus == 409))
 }
 func (s CapacityStore) RecordNativePreRegistrationAbortResult(ctx context.Context, principal string, r model.CapacityNativeReleaseResult) error {
 	if !nativeAbortResultComplete(r) {

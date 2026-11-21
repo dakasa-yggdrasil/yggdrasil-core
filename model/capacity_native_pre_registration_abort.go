@@ -5,24 +5,25 @@ import "time"
 // CapacityNativeAbortBinding is an operator-reviewed literal in a separate
 // human-only workflow. It never retargets the original capacity policy.
 type CapacityNativeAbortBinding struct {
-	Schema              string                            `json:"schema"`
-	PolicyID            string                            `json:"policy_id"`
-	PolicyChecksum      string                            `json:"policy_checksum"`
-	Generation          int64                             `json:"generation"`
-	Adapter             CapacityObservationAdapterBinding `json:"adapter"`
-	AdapterPrincipalID  string                            `json:"adapter_principal_id"`
-	AdapterSourceCommit string                            `json:"adapter_source_commit"`
-	OperatorID          string                            `json:"operator_id"`
-	BindingName         string                            `json:"binding_name"`
-	Namespace           string                            `json:"namespace"`
-	PodName             string                            `json:"pod_name"`
-	PodUID              string                            `json:"pod_uid"`
-	WorkloadUID         string                            `json:"workload_uid"`
-	ReplicaSetUID       string                            `json:"replica_set_uid"`
-	ContainerName       string                            `json:"container_name"`
-	ImageDigest         string                            `json:"image_digest"`
-	PodSpecSHA256       string                            `json:"pod_spec_sha256"`
-	Confirmation        string                            `json:"confirmation"`
+	Schema              string                               `json:"schema"`
+	PolicyID            string                               `json:"policy_id"`
+	PolicyChecksum      string                               `json:"policy_checksum"`
+	Generation          int64                                `json:"generation"`
+	Adapter             CapacityObservationAdapterBinding    `json:"adapter"`
+	AdapterPrincipalID  string                               `json:"adapter_principal_id"`
+	AdapterSourceCommit string                               `json:"adapter_source_commit"`
+	OperatorID          string                               `json:"operator_id"`
+	BindingName         string                               `json:"binding_name"`
+	Namespace           string                               `json:"namespace"`
+	PodName             string                               `json:"pod_name"`
+	PodUID              string                               `json:"pod_uid"`
+	WorkloadUID         string                               `json:"workload_uid"`
+	ReplicaSetUID       string                               `json:"replica_set_uid"`
+	ContainerName       string                               `json:"container_name"`
+	ImageDigest         string                               `json:"image_digest"`
+	PodSpecSHA256       string                               `json:"pod_spec_sha256"`
+	Confirmation        string                               `json:"confirmation"`
+	ReviewedQuarantines *CapacityNativeAbortQuarantineReview `json:"reviewed_quarantines,omitempty"`
 }
 
 // This is native terminal metadata, not an SDK receipt or a lane witness.
@@ -61,13 +62,26 @@ type CapacityNativeAbortZeroHistory struct {
 }
 
 type CapacityNativeAbortProof struct {
-	Schema                 string                                `json:"schema"`
-	Binding                CapacityNativeAbortBinding            `json:"binding"`
-	Observation            NativePreRegistrationAbortObservation `json:"observation"`
-	ZeroHistory            CapacityNativeAbortZeroHistory        `json:"zero_history"`
-	ScopeUnsettledCommands int64                                 `json:"scope_unsettled_commands"`
-	FencingToken           int64                                 `json:"fencing_token"`
-	AuthoredAt             time.Time                             `json:"authored_at"`
+	Schema                   string                                `json:"schema"`
+	Binding                  CapacityNativeAbortBinding            `json:"binding"`
+	Observation              NativePreRegistrationAbortObservation `json:"observation"`
+	ZeroHistory              CapacityNativeAbortZeroHistory        `json:"zero_history"`
+	ScopeUnsettledCommands   int64                                 `json:"scope_unsettled_commands"`
+	FencingToken             int64                                 `json:"fencing_token"`
+	AuthoredAt               time.Time                             `json:"authored_at"`
+	ReviewedQuarantineCounts *CapacityNativeUnsettledCounts        `json:"reviewed_quarantine_counts,omitempty"`
+}
+
+// References identify the complete reviewed administrative receipt, not an
+// assertion that its original uncertain command returned or was settled.
+type CapacityNativeAbortQuarantineReference struct {
+	CommandID    string `json:"command_id"`
+	SubjectUID   string `json:"subject_uid"`
+	RecordSHA256 string `json:"record_sha256"`
+}
+
+type CapacityNativeAbortQuarantineReview struct {
+	Receipts []CapacityNativeAbortQuarantineReference `json:"receipts"`
 }
 
 // The canonical request is retained under its immutable command-identity

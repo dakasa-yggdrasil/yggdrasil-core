@@ -1211,6 +1211,35 @@ jobs:
           if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('quarantine race retained')
           (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_quarantine_or_scope_release':True},sort_keys=True)+'\n')
           PYQUARANTINE
+      - name: Qualify explicit different-target reviewed-quarantine abort on PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-abort-reviewed-quarantine"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=3m ./repository ./internal/capacity -run '^(TestCapacityNativeAbortReviewedQuarantine.*Postgres|TestNativeAbortReviewedQuarantine(Proof|LegacyClosed))$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYREVIEWED'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-abort-reviewed-quarantine'
+          expected=set(["TestNativeAbortReviewedQuarantineProof", "TestNativeAbortReviewedQuarantineProof/exact", "TestNativeAbortReviewedQuarantineProof/missing_review", "TestNativeAbortReviewedQuarantineProof/empty_review", "TestNativeAbortReviewedQuarantineProof/same_target", "TestNativeAbortReviewedQuarantineProof/wrong_receipt_digest", "TestNativeAbortReviewedQuarantineProof/duplicate_command", "TestNativeAbortReviewedQuarantineProof/duplicate_subject", "TestNativeAbortReviewedQuarantineProof/unordered", "TestNativeAbortReviewedQuarantineProof/wrong_count", "TestNativeAbortReviewedQuarantineProof/fake_raw_zero", "TestNativeAbortReviewedQuarantineProof/active_unknown", "TestNativeAbortReviewedQuarantineProof/missing_counts", "TestNativeAbortReviewedQuarantineProof/wrong_schema", "TestNativeAbortReviewedQuarantineProof/target_lifetime", "TestNativeAbortReviewedQuarantineProof/target_archive", "TestNativeAbortReviewedQuarantineProof/target_legacy", "TestNativeAbortReviewedQuarantineProof/target_identity", "TestNativeAbortReviewedQuarantineProof/target_hot", "TestNativeAbortReviewedQuarantineProof/target_command_archive", "TestNativeAbortReviewedQuarantineProof/running", "TestNativeAbortReviewedQuarantineProof/restarted", "TestNativeAbortReviewedQuarantineProof/admitted", "TestNativeAbortReviewedQuarantineProof/challenge", "TestNativeAbortReviewedQuarantineProof/receipt", "TestNativeAbortReviewedQuarantineProof/stale", "TestNativeAbortReviewedQuarantineLegacyClosed", "TestNativeAbortReviewedQuarantineLegacyClosed/binding_null", "TestNativeAbortReviewedQuarantineLegacyClosed/binding_review", "TestNativeAbortReviewedQuarantineLegacyClosed/proof_null", "TestNativeAbortReviewedQuarantineLegacyClosed/proof_counts", "TestCapacityNativeAbortReviewedQuarantineOriginalPostgres", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres", "TestCapacityNativeAbortReviewedQuarantineOriginalWriterLockPostgres", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/legacy_raw_one", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/missing_review", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/wrong_digest", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/wrong_subject", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/missing_receipt", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/extra_reference", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/same_target", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/wrong_human", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_lifetime", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_archive", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_legacy", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_identity", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_hot", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_command_archive", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/scope_active", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/late_ack", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/missing_child", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/changed_child_request", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/scope_active", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/target_history", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/extra_receipt", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/own_sql_state", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/own_sql_scope"])
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ['repository','internal/capacity']}
+          if any(e.get('Package') not in packages or e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('reviewed-quarantine package/failure/skip refused')
+          for action in ['run','pass']:
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected): raise SystemExit('reviewed-quarantine exact case census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1: raise SystemExit('reviewed-quarantine package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('reviewed-quarantine race retained')
+          (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_activation_or_original_settlement':True},sort_keys=True)+'\n')
+          PYREVIEWED
       - name: Qualify exact skip calendar, bounded search and original PG dispatch
         shell: bash
         run: |
