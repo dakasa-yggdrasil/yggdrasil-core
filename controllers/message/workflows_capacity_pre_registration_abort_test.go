@@ -67,7 +67,7 @@ func TestCapacityNativePreRegistrationAbortPrivateWire(t *testing.T) {
 		im := model.Manifest{ID: uuid.New(), Kind: "integration_instance", Version: 1, Metadata: model.ManifestMetadata{Namespace: "fixture", Name: "abort"}}
 		tm := model.Manifest{ID: uuid.New(), Kind: "integration_type", Version: 1, Metadata: model.ManifestMetadata{Namespace: "fixture", Name: "kubernetes-abort"}}
 		is := model.IntegrationInstanceManifestSpec{Config: map[string]any{"base_url": server.URL}}
-		ts := model.IntegrationTypeManifestSpec{Provider: "kubernetes", Capabilities: []string{"execute"}, Adapter: model.IntegrationAdapterSpec{Transport: "http_json", Endpoints: model.IntegrationAdapterRoute{Execute: "/rpc/execute"}}}
+		ts := model.IntegrationTypeManifestSpec{Provider: "kubernetes", Capabilities: []string{"execute"}, ResourceTypes: []model.IntegrationResourceType{}, Adapter: model.IntegrationAdapterSpec{Transport: "http_json", Endpoints: model.IntegrationAdapterRoute{Execute: "/rpc/execute"}}}
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		defer cancel()
 		joined := false
