@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-17T08:44:11-03:00",
+  "generated_at": "2026-11-21T07:36:04-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1591,
+    ".go": 1597,
     ".json": 263,
     ".py": 217,
     ".sql": 113,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "32809c4eabdfdfc5c5659c6fa48e97a6b2f47d40",
+    "commit": "f942552162096c0a1c180f81ae4569b0c8554887",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "ad7d0919724ed6f342c2be28163fd5cc91102844f829e517635526d402dca450"
+        "sha256": "4230f4d51b2bcb82f4b69987a9c0a66140ee3be3e7818b762e21950ebbdf277b"
       },
       {
         "path": "AGENTS.md",
@@ -32,7 +32,7 @@
       },
       {
         "path": "README.md",
-        "sha256": "29e4944f4739970f4fd3986568405f6aa1c8fac44e5e1eb917d48e6f25122c5c"
+        "sha256": "977924728a86b1853fc0fdbff734e7cbeca0bc056246eb01b7263a62fdca6dcd"
       },
       {
         "path": "Taskfile.yml",
@@ -65,23 +65,23 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 419,
-      "kb": 6148
+      "files": 421,
+      "kb": 6207
     },
     {
       "path": "controllers/httpapi",
       "files": 269,
-      "kb": 2713
+      "kb": 2714
     },
     {
       "path": "controllers/message",
-      "files": 207,
-      "kb": 1804
+      "files": 208,
+      "kb": 1813
     },
     {
       "path": "internal/capacity",
-      "files": 132,
-      "kb": 1449
+      "files": 134,
+      "kb": 1460
     },
     {
       "path": "db/migrations",
@@ -90,8 +90,8 @@
     },
     {
       "path": "model",
-      "files": 92,
-      "kb": 487
+      "files": 93,
+      "kb": 491
     },
     {
       "path": "ops/network-guardian/tests",
