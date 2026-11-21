@@ -64,6 +64,9 @@ func (s CapacityStore) issueNativeCommand(ctx context.Context, policy model.Mani
 		if err := lockNativeBoundOwner(ctx, tx, policy, p, subject); err != nil {
 			return err
 		}
+		if err := guardNativePreRegistrationAbortTx(ctx, tx, subject); err != nil {
+			return err
+		}
 		if err := validateNativeCommandRequest(ctx, tx, p, current, operation, phase, subject, request); err != nil {
 			return err
 		}

@@ -535,3 +535,8 @@ provider or business success. The API requires an authenticated current GodMode
 operator and session CSRF protection. The separate PostgreSQL 16/17 Source cohort
 checks the full receipt/CAS contract, retained originals, schema91 and the original
 R4 SQL migration-view no-op; native compatibility and adoption remain separate.
+
+
+### Failed native birth before registration
+
+The separate protected `capacity.abort_native_birth` workflow operation disposes only a fixed, failed/deleting native birth under a server-owned global-zero-history proof and permanent command-identity deny fence. It never creates an SDK lifetime or lane witness and never weakens successful drain/release. The original policy and admitted processes are preserved; a separately reviewed adapter binding and fresh execution fence are mandatory. Unknown originals remain held. See [ADR-0121](docs/adr/0121-dispose-native-failed-births-before-registration-separately.md).

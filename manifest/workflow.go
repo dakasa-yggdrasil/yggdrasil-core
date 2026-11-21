@@ -68,6 +68,7 @@ var (
 		"capacity.assess_bound",
 		"capacity.execute_bound",
 		"capacity.admit_bound",
+		"capacity.abort_native_birth",
 		"capacity.provision_original_guest",
 		"capacity.plan_original_guest",
 		"capacity.complete_original_guest",
