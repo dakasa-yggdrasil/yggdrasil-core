@@ -196,6 +196,15 @@ func TestCapacityNativePreRegistrationAbortPostgres(t *testing.T) {
 		if _, err = f.db.Exec(`DELETE FROM public.capacity_native_command_identities WHERE id=$1`, c.CommandID); err == nil {
 			t.Fatal("identity tombstone deleted")
 		}
+		if _, err = f.db.Exec(`DELETE FROM public.capacity_native_release_results WHERE command_id=$1`, c.CommandID); err == nil {
+			t.Fatal("acknowledged original return row deleted")
+		}
+		if _, err = f.db.Exec(`UPDATE public.capacity_native_release_results SET caller_ack_at=NULL WHERE command_id=$1`, c.CommandID); err == nil {
+			t.Fatal("acknowledged original caller join cleared")
+		}
+		if got, present, err = f.store.LoadNativePreRegistrationAbort(ctx, f.policy, f.binding.PodUID); err != nil || !present || got.State != "confirmed" {
+			t.Fatal("immutable custody changed after refused SQL mutations", err)
+		}
 		abortPGNoCheckpoint(t, f)
 	})
 	t.Run("unknown_original_and_identity_only_never_reissue_or_register", func(t *testing.T) {
@@ -529,52 +538,70 @@ func TestCapacityNativePreRegistrationAbortConfirmedCustodyPostgres(t *testing.T
 		t.Run(kind, func(t *testing.T) {
 			f := abortPGSetup(t, false)
 			c, token := abortPGIssue(t, f)
-			permit, err := f.store.RedeemNativePreRegistrationAbort(ctx, f.binding.AdapterPrincipalID, abortPGRedeem(f, c, token))
-			if err != nil {
-				t.Fatal(err)
+			permit := model.CapacityNativeAuthorityPermit{AttemptID: uuid.New()}
+			if kind != "missing-result-row" {
+				var err error
+				permit, err = f.store.RedeemNativePreRegistrationAbort(ctx, f.binding.AdapterPrincipalID, abortPGRedeem(f, c, token))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = f.store.RecordNativePreRegistrationAbortResult(ctx, f.binding.AdapterPrincipalID, abortPGResult(f, c, permit)); err != nil {
+					t.Fatal(err)
+				}
+				if kind != "missing-caller-join" {
+					if err = f.store.ConfirmNativePreRegistrationAbort(ctx, f.policy, f.intent, c.CommandID, abortPGRemoval(f), true); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
-			if err = f.store.RecordNativePreRegistrationAbortResult(ctx, f.binding.AdapterPrincipalID, abortPGResult(f, c, permit)); err != nil {
-				t.Fatal(err)
-			}
-			if err = f.store.ConfirmNativePreRegistrationAbort(ctx, f.policy, f.intent, c.CommandID, abortPGRemoval(f), true); err != nil {
-				t.Fatal(err)
-			}
-			if kind == "wrong-archive-digest" {
+			switch kind {
+			case "missing-result-row", "missing-caller-join":
+				// A forged mutable HOT flag cannot invent the absent original row
+				// or caller join. Never disable the real immutable ACK triggers.
+				r := abortPGResult(f, c, permit)
+				r.ReturnNonce = ""
+				result, err := json.Marshal(r)
+				if err != nil {
+					t.Fatal(err)
+				}
+				readback, err := json.Marshal(abortPGRemoval(f))
+				if err != nil {
+					t.Fatal(err)
+				}
+				now := time.Now().UTC()
+				c.State, c.AttemptID, c.RedeemedBy = "confirmed", permit.AttemptID, f.binding.AdapterPrincipalID
+				c.NativeReadback, c.OriginalResult, c.OriginalResultSHA256, c.CallerReturnObservedAt = readback, result, nativeCanonicalArchiveSHA(result), &now
+				body, err := json.Marshal(c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = f.db.Exec(`UPDATE public.capacity_native_commands SET state='confirmed',command_record=$2 WHERE id=$1`, c.CommandID, body); err != nil {
+					t.Fatal(err)
+				}
+			case "wrong-archive-digest":
 				var body []byte
 				if f.db.QueryRow(`SELECT command_record FROM public.capacity_native_commands WHERE id=$1`, c.CommandID).Scan(&body) != nil {
 					t.Fatal("confirmed fixture body missing")
 				}
-				if _, err = f.db.Exec(`INSERT INTO public.capacity_native_command_archive(id,record_sha256,command_record)VALUES($1,$2,$3)`, c.CommandID, strings.Repeat("0", 64), body); err != nil {
+				if _, err := f.db.Exec(`INSERT INTO public.capacity_native_command_archive(id,record_sha256,command_record)VALUES($1,$2,$3)`, c.CommandID, strings.Repeat("0", 64), body); err != nil {
 					t.Fatal(err)
 				}
-				if _, err = f.db.Exec(`DELETE FROM public.capacity_native_commands WHERE id=$1`, c.CommandID); err != nil {
+				if _, err := f.db.Exec(`DELETE FROM public.capacity_native_commands WHERE id=$1`, c.CommandID); err != nil {
 					t.Fatal(err)
 				}
-			} else if kind == "missing-result-row" {
-				if err = f.store.ArchiveNativePreRegistrationAbort(ctx, f.policy, f.intent, c.CommandID); err != nil {
-					t.Fatal(err)
-				}
-				if _, err = f.db.Exec(`DELETE FROM public.capacity_native_release_results WHERE command_id=$1`, c.CommandID); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				var query string
-				switch kind {
-				case "missing-caller-join":
-					query = `UPDATE public.capacity_native_release_results SET caller_ack_at=NULL WHERE command_id=$1`
-				case "wrong-native-readback":
-					query = `UPDATE public.capacity_native_commands SET command_record=jsonb_set(command_record,'{native_readback,observation,protected}','true') WHERE id=$1`
-				case "wrong-original-result":
+			case "wrong-native-readback", "wrong-original-result":
+				query := `UPDATE public.capacity_native_commands SET command_record=jsonb_set(command_record,'{native_readback,observation,protected}','true') WHERE id=$1`
+				if kind == "wrong-original-result" {
 					query = `UPDATE public.capacity_native_commands SET command_record=jsonb_set(command_record,'{original_result,one_send}','false') WHERE id=$1`
 				}
-				if _, err = f.db.Exec(query, c.CommandID); err != nil {
+				if _, err := f.db.Exec(query, c.CommandID); err != nil {
 					t.Fatal(err)
 				}
 			}
 			if _, present, err := f.store.LoadNativePreRegistrationAbort(ctx, f.policy, f.binding.PodUID); !present || err == nil {
 				t.Fatal("unproven confirmed body accepted as settled")
 			}
-			if _, err = f.ordinary.RegisterNativeLifetime(ctx, f.policy, f.intent, f.boot); err == nil {
+			if _, err := f.ordinary.RegisterNativeLifetime(ctx, f.policy, f.intent, f.boot); err == nil {
 				t.Fatal("confirmed custody loss cleared permanent deny")
 			}
 		})
