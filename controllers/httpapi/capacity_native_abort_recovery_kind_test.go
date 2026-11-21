@@ -699,7 +699,23 @@ func abortRecoveryKindFinalizerPolicy(t *testing.T, ctx context.Context, realm s
 		if probe["metadata"].(map[string]any)["uid"] != meta["uid"] {
 			t.Fatal("original native target replaced before admission proof")
 		}
-		probe["metadata"].(map[string]any)["finalizers"] = []string{"other.example/keep"}
+		finalizers, ok := probe["metadata"].(map[string]any)["finalizers"].([]any)
+		if !ok {
+			t.Fatal("original native finalizer preimage unavailable")
+		}
+		remaining := make([]any, 0, len(finalizers))
+		hadNative := false
+		for _, finalizer := range finalizers {
+			if finalizer == abortRecoveryKindFinalizer {
+				hadNative = true
+				continue
+			}
+			remaining = append(remaining, finalizer)
+		}
+		if !hadNative {
+			t.Fatal("original native finalizer absent before admission proof")
+		}
+		probe["metadata"].(map[string]any)["finalizers"] = remaining
 		body, _ := json.Marshal(probe)
 		request := exec.CommandContext(ctx, "kubectl", "replace", "--dry-run=server", "-f", "-")
 		request.Stdin = bytes.NewReader(body)
