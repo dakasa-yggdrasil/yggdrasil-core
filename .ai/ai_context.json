@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-21T21:17:41-03:00",
+  "generated_at": "2026-11-22T00:53:52-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1618,
+    ".go": 1622,
     ".json": 263,
     ".py": 217,
     ".sql": 114,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "4beed3b1050a797e7ab9c44e587e79ecd04fa286",
+    "commit": "5bfa63a44778888a3a81536182707618834f70e2",
     "dirty": true,
     "files": [
       {
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 427,
-      "kb": 6345
+      "files": 428,
+      "kb": 6357
     },
     {
       "path": "controllers/httpapi",
@@ -75,13 +75,13 @@
     },
     {
       "path": "controllers/message",
-      "files": 212,
-      "kb": 1838
+      "files": 214,
+      "kb": 1850
     },
     {
       "path": "internal/capacity",
-      "files": 140,
-      "kb": 1481
+      "files": 141,
+      "kb": 1496
     },
     {
       "path": "db/migrations",
