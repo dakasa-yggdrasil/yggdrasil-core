@@ -84,12 +84,7 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		return inventoryView{Pods: out.Pods, Native: &out}, nil
 	}
 	observePod := func(cp model.CapacityNativePodCheckpoint) (model.AdapterCapacityPodTerminationResponse, error) {
-		var out model.AdapterCapacityPodTerminationResponse
-		req, e := boundPodObservationRequest(p, cp)
-		if e == nil {
-			e = read(capacity.ObserveNativePodTermination, req, &out)
-		}
-		return out, e
+		return observeBoundPodTermination(p, cp, read)
 	}
 	observeAdmission := func(pod model.NativeTerminationObservation) (model.AdapterCapacityPodAdmissionResponse, error) {
 		var out model.AdapterCapacityPodAdmissionResponse
@@ -269,15 +264,15 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		if e = store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, observed); e != nil {
 			return e
 		}
-		cp.State, cp.PodResourceVersion = "confirmed", observed.Observation.PodResourceVersion
-		base, e := boundPodObservationRequest(p, cp)
+		cp, e = reloadConfirmedBoundPod(ctx, store, policy, p, intent, cp)
 		if e != nil {
 			return e
 		}
-		no := false
-		req := model.AdapterDestroyCapacityPodDrainProtectionRequest{AdapterObserveCapacityPodTerminationRequest: base, ExpectedPodResourceVersion: cp.PodResourceVersion, DryRun: &no}
+		req, e := boundPodReleaseRequest(p, cp, time.Now().UTC())
+		if e != nil {
+			return e
+		}
 		return execute(capacity.DestroyNativePodProtection, cp.PodUID, req, func(value any) (any, error) {
-			request := value.(model.AdapterDestroyCapacityPodDrainProtectionRequest)
 			actual, e := observePod(cp)
 			if e != nil || capacity.NativePodWitness(p, cp, actual.Observation, time.Now().UTC()) != nil {
 				return nil, errCapacityBoundAssessment
@@ -285,8 +280,11 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			if e = store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, actual); e != nil {
 				return nil, e
 			}
-			request.ExpectedPodResourceVersion = actual.Observation.PodResourceVersion
-			return request, nil
+			cp, e = reloadConfirmedBoundPod(ctx, store, policy, p, intent, cp)
+			if e != nil {
+				return nil, e
+			}
+			return boundPodReleaseRequest(p, cp, time.Now().UTC())
 		}, func() (any, error) { return observePod(cp) })
 	}
 	// First reconcile all controller-selected retirements, including origins

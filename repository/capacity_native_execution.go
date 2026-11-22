@@ -342,7 +342,7 @@ func validateNativeCommandRequest(ctx context.Context, tx *sql.Tx, p model.Capac
 	var challenge model.NativePodTerminationChallenge
 	if phase == "release" {
 		var req model.AdapterDestroyCapacityPodDrainProtectionRequest
-		if capacity.DecodeNativeCapacity(raw, &req) != nil || checkpoint.State != "confirmed" || req.PodName != checkpoint.PodName || req.ExpectedPodUID != subject || req.ExpectedPodGeneration != checkpoint.PodGeneration || req.ExpectedContainerID != checkpoint.ContainerID || !req.ExpectedContainerStartedAt.Equal(checkpoint.ContainerStartedAt) || req.ExpectedRestartCount != checkpoint.RestartCount || req.BindingName != p.HPAExecutionBinding.PodTerminationBinding || req.ExpectedPodResourceVersion != checkpoint.PodResourceVersion || req.DryRun == nil || *req.DryRun {
+		if capacity.DecodeNativeCapacity(raw, &req) != nil || checkpoint.State != "confirmed" || capacity.ValidateNativePodReleaseRequest(p, checkpoint, req, time.Now().UTC()) != nil {
 			return ErrCapacityConflict
 		}
 		challenge = req.Challenge

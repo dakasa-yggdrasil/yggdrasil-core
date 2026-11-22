@@ -121,7 +121,8 @@ func (s CapacityStore) ArchiveNativeTerminalHistory(ctx context.Context, policy 
 				}
 				if command.Phase == "release" && command.State == "confirmed" {
 					var released model.AdapterCapacityPodTerminationResponse
-					if command.Operation != capacity.DestroyNativePodProtection || capacity.DecodeNativeCapacity(command.NativeReadback, &released) != nil || released.Operation != capacity.ObserveNativePodTermination || released.Status != "observed" || capacity.NativePodReleaseTarget(origin, cp, released.Observation, command.UpdatedAt) != nil {
+					var request model.AdapterDestroyCapacityPodDrainProtectionRequest
+					if command.Operation != capacity.DestroyNativePodProtection || capacity.DecodeNativeCapacity(command.Request, &request) != nil || capacity.ValidateNativePodReleaseRequest(origin, cp, request, command.CreatedAt) != nil || capacity.DecodeNativeCapacity(command.NativeReadback, &released) != nil || released.Operation != capacity.ObserveNativePodTermination || released.Status != "observed" || capacity.NativePodReleaseTarget(origin, cp, released.Observation, command.UpdatedAt) != nil {
 						return ErrCapacityConflict
 					}
 					releases++
@@ -240,7 +241,8 @@ func (s CapacityStore) ArchivedNativeLifetime(ctx context.Context, policy model.
 			continue
 		}
 		var released model.AdapterCapacityPodTerminationResponse
-		if command.Operation != capacity.DestroyNativePodProtection || capacity.DecodeNativeCapacity(command.NativeReadback, &released) != nil || released.Operation != capacity.ObserveNativePodTermination || released.Status != "observed" || capacity.NativePodReleaseTarget(origin, cp, released.Observation, command.UpdatedAt) != nil {
+		var request model.AdapterDestroyCapacityPodDrainProtectionRequest
+		if command.Operation != capacity.DestroyNativePodProtection || capacity.DecodeNativeCapacity(command.Request, &request) != nil || capacity.ValidateNativePodReleaseRequest(origin, cp, request, command.CreatedAt) != nil || capacity.DecodeNativeCapacity(command.NativeReadback, &released) != nil || released.Operation != capacity.ObserveNativePodTermination || released.Status != "observed" || capacity.NativePodReleaseTarget(origin, cp, released.Observation, command.UpdatedAt) != nil {
 			return zero, false, ErrCapacityConflict
 		}
 		var archivedCommand []byte
