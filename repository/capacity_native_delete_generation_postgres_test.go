@@ -15,7 +15,8 @@ import (
 // release against the independently witnessed Kubernetes DELETE generation 2.
 // This is a CI test; it does not substitute for native API/KinD qualification.
 func TestCapacityNativeFirstDeleteGenerationPostgres(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
 	recovery := &model.CapacityNativeReleaseRecoveryBinding{Protocol: capacity.NativeReleaseResultProtocol, AdapterSourceCommit: strings.Repeat("a", 40)}
 	db, store, policy, p, intent := nativeLifetimePostgresFixture(t, recovery)
 	boot := nativeLifetimeBoot(p)
