@@ -194,7 +194,12 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 			return
 		}
-		if err = store.RecordNativeReleaseResult(ctx, p.base.principalID, payload); err != nil {
+		if payload.Capability == capacity.DestroyNativeUnregisteredProtection {
+			err = store.RecordNativePreRegistrationAbortResult(ctx, p.base.principalID, payload)
+		} else {
+			err = store.RecordNativeReleaseResult(ctx, p.base.principalID, payload)
+		}
+		if err != nil {
 			mutationHTTPError(w, err)
 			return
 		}
@@ -209,7 +214,19 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 			return
 		}
-		response, err := store.RedeemNativeCommand(ctx, p.base.principalID, payload)
+		// Original-return permissions must use the same transport as /native/result
+		// before redemption can consume their one-use authority.
+		if (payload.ReleaseProtocol != "" || payload.AdapterSourceCommit != "") && r.TLS == nil {
+			writeProblemJSON(w, 400, "capacity.mutation_invalid", "a closed original native authority request over TLS is required")
+			return
+		}
+		var response model.CapacityNativeAuthorityPermit
+		var err error
+		if payload.Capability == capacity.DestroyNativeUnregisteredProtection {
+			response, err = store.RedeemNativePreRegistrationAbort(ctx, p.base.principalID, payload)
+		} else {
+			response, err = store.RedeemNativeCommand(ctx, p.base.principalID, payload)
+		}
 		if err != nil {
 			mutationHTTPError(w, err)
 			return

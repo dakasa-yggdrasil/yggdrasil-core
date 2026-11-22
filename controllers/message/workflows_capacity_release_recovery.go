@@ -81,7 +81,7 @@ func capacityReleaseRecoveryFrame(p model.CapacityPolicySpec, cp model.CapacityN
 			if pod.PodUID != cp.PodUID {
 				continue
 			}
-			if capacity.NativePodMatchesCheckpoint(p, cp, pod, now) != nil {
+			if capacity.NativePodInventoryMatchesWitness(p, cp, pod, witness, now) != nil {
 				return refuse(errCapacityBoundAssessment)
 			}
 			found, sameVersion = true, pod.PodResourceVersion == witness.Observation.PodResourceVersion
@@ -135,13 +135,14 @@ func runCapacityReleaseRecovery(ctx context.Context, store repository.CapacitySt
 		if err = store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, witness); err != nil {
 			return err
 		}
-		cp.State, cp.PodResourceVersion = "confirmed", witness.Observation.PodResourceVersion
-		base, err := boundPodObservationRequest(p, cp)
+		cp, err = reloadConfirmedBoundPod(ctx, store, policy, p, intent, cp)
 		if err != nil {
 			return err
 		}
-		no := false
-		req := model.AdapterDestroyCapacityPodDrainProtectionRequest{AdapterObserveCapacityPodTerminationRequest: base, ExpectedPodResourceVersion: cp.PodResourceVersion, DryRun: &no}
+		req, err := boundPodReleaseRequest(p, cp, time.Now().UTC())
+		if err != nil {
+			return err
+		}
 		input, err := boundPrivateMap(req)
 		if err != nil {
 			return err

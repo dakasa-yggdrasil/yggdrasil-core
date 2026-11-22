@@ -2371,7 +2371,8 @@
             "enum": [
               "ensure_capacity_envelope_bound",
               "ensure_capacity_pod_drain",
-              "destroy_capacity_pod_drain_protection"
+              "destroy_capacity_pod_drain_protection",
+              "destroy_capacity_pod_unregistered_protection"
             ]
           },
           "request_sha256": {
@@ -2385,9 +2386,10 @@
           "release_protocol": {
             "type": "string",
             "enum": [
-              "native_release_result_v1"
+              "native_release_result_v1",
+              "native_pre_registration_abort_original_v1"
             ],
-            "description": "Present only, together with adapter_source_commit and return_nonce, for a release-bound destroy_capacity_pod_drain_protection permit."
+            "description": "Present with adapter_source_commit and return_nonce for an original-return-bound successful-drain release or distinct pre-registration-abort permit."
           },
           "adapter_source_commit": {
             "type": "string",
@@ -2483,7 +2485,8 @@
             "enum": [
               "ensure_capacity_envelope_bound",
               "ensure_capacity_pod_drain",
-              "destroy_capacity_pod_drain_protection"
+              "destroy_capacity_pod_drain_protection",
+              "destroy_capacity_pod_unregistered_protection"
             ]
           },
           "request_sha256": {
@@ -2493,9 +2496,10 @@
           "release_protocol": {
             "type": "string",
             "enum": [
-              "native_release_result_v1"
+              "native_release_result_v1",
+              "native_pre_registration_abort_original_v1"
             ],
-            "description": "Present only, together with adapter_source_commit, when the command was issued under the operator-approved release recovery binding; absent by default."
+            "description": "Present with adapter_source_commit for an operator-approved successful-drain release or the separate server-authored pre-registration-abort command; absent only for the legacy protocol."
           },
           "adapter_source_commit": {
             "type": "string",
@@ -2529,7 +2533,8 @@
           "protocol": {
             "type": "string",
             "enum": [
-              "native_release_result_v1"
+              "native_release_result_v1",
+              "native_pre_registration_abort_original_v1"
             ]
           },
           "command_id": {
@@ -2551,7 +2556,8 @@
           "capability": {
             "type": "string",
             "enum": [
-              "destroy_capacity_pod_drain_protection"
+              "destroy_capacity_pod_drain_protection",
+              "destroy_capacity_pod_unregistered_protection"
             ]
           },
           "request_sha256": {

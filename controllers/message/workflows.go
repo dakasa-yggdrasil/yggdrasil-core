@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
@@ -682,6 +683,15 @@ func executeWorkflowStep(
 			}
 			if guestOriginalOperation(result.Operation) {
 				return executeCapacityGuestWorkflowStep(withOriginalGuestWorkflowTransport(ctx, conn), db, workflowRef, step, result, renderedInput)
+			}
+			if result.Operation == capacity.QuarantineUncertainNativeBirth {
+				return executeCapacityNativeAbortQuarantineStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
+			if result.Operation == capacityRecoverUnredeemedNativeBirthOperation {
+				return executeCapacityPreRegistrationAbortRecoveryStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
+			if result.Operation == capacityAbortNativeBirthOperation {
+				return executeCapacityPreRegistrationAbortStep(ctx, conn, db, workflowRef, result, renderedInput)
 			}
 			if capacityBoundOperation(result.Operation) {
 				return executeCapacityBoundWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)

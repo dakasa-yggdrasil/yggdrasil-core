@@ -84,12 +84,7 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		return inventoryView{Pods: out.Pods, Native: &out}, nil
 	}
 	observePod := func(cp model.CapacityNativePodCheckpoint) (model.AdapterCapacityPodTerminationResponse, error) {
-		var out model.AdapterCapacityPodTerminationResponse
-		req, e := boundPodObservationRequest(p, cp)
-		if e == nil {
-			e = read(capacity.ObserveNativePodTermination, req, &out)
-		}
-		return out, e
+		return observeBoundPodTermination(p, cp, read)
 	}
 	observeAdmission := func(pod model.NativeTerminationObservation) (model.AdapterCapacityPodAdmissionResponse, error) {
 		var out model.AdapterCapacityPodAdmissionResponse
@@ -122,6 +117,16 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	// Old redeemed outcomes permit native GET and durable readback only. They
 	// never acquire new send permission merely because a lease/generation moved.
 	for _, command := range commands {
+		if command.Operation == capacity.DestroyNativeUnregisteredProtection && command.State != "confirmed" {
+			quarantined, e := store.NativeAbortCommandQuarantined(ctx, policy, command.CommandID)
+			if e != nil {
+				return intent, e
+			}
+			if quarantined {
+				continue // The raw uncertain ledger remains retained; no send for this UID.
+			}
+			return intent, fmt.Errorf("original pre-registration abort outcome unresolved; no ordinary recovery send permitted")
+		}
 		if command.State == "confirmed" || command.State == "refused_no_redemption" || command.State == "rejected_no_effect" {
 			continue
 		}
@@ -259,15 +264,15 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		if e = store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, observed); e != nil {
 			return e
 		}
-		cp.State, cp.PodResourceVersion = "confirmed", observed.Observation.PodResourceVersion
-		base, e := boundPodObservationRequest(p, cp)
+		cp, e = reloadConfirmedBoundPod(ctx, store, policy, p, intent, cp)
 		if e != nil {
 			return e
 		}
-		no := false
-		req := model.AdapterDestroyCapacityPodDrainProtectionRequest{AdapterObserveCapacityPodTerminationRequest: base, ExpectedPodResourceVersion: cp.PodResourceVersion, DryRun: &no}
+		req, e := boundPodReleaseRequest(p, cp, time.Now().UTC())
+		if e != nil {
+			return e
+		}
 		return execute(capacity.DestroyNativePodProtection, cp.PodUID, req, func(value any) (any, error) {
-			request := value.(model.AdapterDestroyCapacityPodDrainProtectionRequest)
 			actual, e := observePod(cp)
 			if e != nil || capacity.NativePodWitness(p, cp, actual.Observation, time.Now().UTC()) != nil {
 				return nil, errCapacityBoundAssessment
@@ -275,8 +280,11 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			if e = store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, actual); e != nil {
 				return nil, e
 			}
-			request.ExpectedPodResourceVersion = actual.Observation.PodResourceVersion
-			return request, nil
+			cp, e = reloadConfirmedBoundPod(ctx, store, policy, p, intent, cp)
+			if e != nil {
+				return nil, e
+			}
+			return boundPodReleaseRequest(p, cp, time.Now().UTC())
 		}, func() (any, error) { return observePod(cp) })
 	}
 	// First reconcile all controller-selected retirements, including origins
@@ -347,6 +355,30 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			}
 		}
 		if !exists {
+			// A distinct administrative abort is a permanent admission deny,
+			// never a released lifetime or an invented SDK lane witness.
+			aborted, present, e := store.LoadNativePreRegistrationAbort(ctx, policy, pod.PodUID)
+			if e != nil {
+				return intent, e
+			}
+			if present {
+				var request model.AdapterDestroyCapacityPodUnregisteredProtectionRequest
+				if aborted.State != "confirmed" || capacity.DecodeNativeCapacity(aborted.Request, &request) != nil || request.ExpectedPodUID != pod.PodUID || capacity.ValidateNativeManualAbortBinding(policy, p, request.Proof.Binding) != nil {
+					return intent, errCapacityBoundAssessment
+				}
+				var target model.AdapterCapacityPodUnregisteredTerminalResponse
+				b := request.Proof.Binding
+				fixed, e := boundPrivateMap(model.AdapterObserveCapacityPodUnregisteredTerminalRequest{BindingName: b.BindingName, PodName: b.PodName, ExpectedPodUID: b.PodUID})
+				if e != nil {
+					return intent, e
+				}
+				status, e := call(b.Adapter, capacity.ObserveNativeUnregisteredTerminal, fixed, &target)
+				if e != nil || status != "observed" || target.Operation != capacity.ObserveNativeUnregisteredTerminal || capacity.ValidateNativeAbortObservation(p, b, target.Observation, time.Now().UTC(), false) != nil || target.Observation.Protected {
+					return intent, errCapacityBoundAssessment
+				}
+				releasedStillListed = true
+				continue
+			}
 			boot, e := observeAdmission(pod)
 			if e != nil {
 				return intent, e

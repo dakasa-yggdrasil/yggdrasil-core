@@ -213,7 +213,7 @@ func (s CapacityStore) validateNativeReleaseRecoveryAdmission(ctx context.Contex
 	found := false
 	for _, pod := range a.Inventory.Pods {
 		if pod.PodUID == subject {
-			found = pod.PodName == cp.PodName && pod.WorkloadUID == cp.WorkloadUID && pod.PodResourceVersion == req.ExpectedPodResourceVersion
+			found = capacity.NativePodInventoryMatchesWitness(p, cp, pod, a.Witness, now) == nil && pod.PodResourceVersion == req.ExpectedPodResourceVersion
 		}
 	}
 	if !found {

@@ -13,19 +13,19 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "b47c3adf32a288167e2c9df2efb5e8cb2b54e536c3404f696cb35c29906b8296"
+      "sha256": "ed7f645c46d079ce6e95e599524daa08c00b6ab37664e585e5002f164e06237f"
     }
   ],
   "consumes": [
     {
       "evidence": "docs/service-contract/source/rpc-consumers.json",
       "id": "logical_rpc_consumers",
-      "sha256": "40fdd21fa0e42be48ff0a022ab704a25b0b906fb659fd21f767edd0caa807b10"
+      "sha256": "61a00b02b2089b9085ec105d8e5e282724efaa4fabd8986a24a0eff3a7e0a62d"
     },
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "b47c3adf32a288167e2c9df2efb5e8cb2b54e536c3404f696cb35c29906b8296"
+      "sha256": "ed7f645c46d079ce6e95e599524daa08c00b6ab37664e585e5002f164e06237f"
     },
     {
       "evidence": "go.mod",
@@ -113,7 +113,7 @@
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "24a5d91cfc64bd850bc22002fe43193e20f2d2e178f4816396192e46d04bb892"
+      "sha256": "a0037bc151b4d471d09ca13546b369c432e92af4c09e8ff7af395901372abd91"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
@@ -125,7 +125,7 @@
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "614c6e4c8005f3e0ea9c724929c71f8045a9488dd4c8c48473f0306bc8eaf660"
+      "sha256": "95fa32f10b427c41b094dc0f1967aadd5cc2ae0b48d3c0bbb7df3eb1cc461a1e"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -135,7 +135,7 @@
     {
       "evidence": "docs/service-contract/source/event-and-queue-constants.json",
       "id": "event_and_queue_constants",
-      "sha256": "41938430b08975319d249822bcec9630d47354cc9885d8b4089da298c842bf14"
+      "sha256": "e25bb8ca5ae8087232cea8b75f78214d07a13c5134fb0e0dafa361a84e247314"
     }
   ],
   "profile": "public-go-module-v1",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "e7b624d7f7eb61b28df81f2f892720b951968d7beb5c2a45e7352e107d5d6f4b"
+    "sha256": "2656248c4b0b8bbe42765b348b6881045eb538f28087be3b7b44a672aab2b273"
   },
   "unresolved": []
 }

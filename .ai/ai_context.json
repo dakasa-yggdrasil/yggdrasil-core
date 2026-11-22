@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-17T08:44:11-03:00",
+  "generated_at": "2026-11-22T01:21:06-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1591,
+    ".go": 1622,
     ".json": 263,
     ".py": 217,
-    ".sql": 113,
+    ".sql": 114,
     ".yaml": 11,
     ".yml": 37
   },
   "provenance": {
-    "commit": "32809c4eabdfdfc5c5659c6fa48e97a6b2f47d40",
+    "commit": "20a9e00b0b6a2f2da58177dffaf53123e58743fc",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "ad7d0919724ed6f342c2be28163fd5cc91102844f829e517635526d402dca450"
+        "sha256": "f1546403821ad23b29bcbf2ede60e624537ff84864399c4671fd01497f3b55aa"
       },
       {
         "path": "AGENTS.md",
@@ -32,7 +32,7 @@
       },
       {
         "path": "README.md",
-        "sha256": "29e4944f4739970f4fd3986568405f6aa1c8fac44e5e1eb917d48e6f25122c5c"
+        "sha256": "977924728a86b1853fc0fdbff734e7cbeca0bc056246eb01b7263a62fdca6dcd"
       },
       {
         "path": "Taskfile.yml",
@@ -65,43 +65,43 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 419,
-      "kb": 6148
+      "files": 428,
+      "kb": 6357
     },
     {
       "path": "controllers/httpapi",
-      "files": 269,
-      "kb": 2713
+      "files": 270,
+      "kb": 2770
     },
     {
       "path": "controllers/message",
-      "files": 207,
-      "kb": 1804
+      "files": 214,
+      "kb": 1850
     },
     {
       "path": "internal/capacity",
-      "files": 132,
-      "kb": 1449
+      "files": 141,
+      "kb": 1496
     },
     {
       "path": "db/migrations",
-      "files": 109,
-      "kb": 1608
+      "files": 110,
+      "kb": 1609
     },
     {
       "path": "model",
-      "files": 92,
-      "kb": 487
+      "files": 95,
+      "kb": 497
+    },
+    {
+      "path": "manifest",
+      "files": 67,
+      "kb": 401
     },
     {
       "path": "ops/network-guardian/tests",
       "files": 67,
       "kb": 1413
-    },
-    {
-      "path": "manifest",
-      "files": 65,
-      "kb": 398
     },
     {
       "path": "addons",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 109,
+    "migrations": 110,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {

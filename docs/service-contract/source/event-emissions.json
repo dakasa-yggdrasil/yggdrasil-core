@@ -511,7 +511,7 @@
       "callee": "EmitEvent",
       "file": "controllers/message/workflows.go",
       "function": "emitWorkflowRunCompletedEvent",
-      "line": 306,
+      "line": 307,
       "type_expressions": [
         "\"workflow.run.completed\""
       ]

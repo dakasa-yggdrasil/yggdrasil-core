@@ -50,6 +50,8 @@ jobs:
       REQUIRE_CAPACITY_POSTGRES: "true"
       # Replaced by the real reviewed Kube SOURCE after its owning CI.
       CAPACITY_KUBERNETES_SOURCE_COMMIT: f14310e53e4a12731a4310da5dc636b9dc1d2c1c
+      # Bound by Root only after the new paired adapter is independently reviewed/published.
+      CAPACITY_ABORT_RECOVERY_ADAPTER_SOURCE_COMMIT: c9cd10a126b626415c38038145974c3f20ce8895
     steps:
       - uses: actions/checkout@v4
         with:
@@ -290,6 +292,89 @@ jobs:
           path: |
             native-core-results.json
             native-core-api-lifetime
+          if-no-files-found: error
+
+      # This separate paired receiver never replaces the old f143 checkout,
+      # producer fixtures, 114-case census, or its original command/budget.
+      - name: Read the separately qualified abort recovery adapter Source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-kubernetes
+          ref: ${{ env.CAPACITY_ABORT_RECOVERY_ADAPTER_SOURCE_COMMIT }}
+          path: .ci-abort-recovery-kubernetes
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Compile the actual paired abort recovery adapter main
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CAPACITY_ABORT_RECOVERY_ADAPTER_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "Paired abort recovery Source is HOLD"; exit 1; }
+          test "$(git -C .ci-abort-recovery-kubernetes rev-parse HEAD)" = "$CAPACITY_ABORT_RECOVERY_ADAPTER_SOURCE_COMMIT"
+          (cd .ci-abort-recovery-kubernetes && go build -race -ldflags "-X github.com/dakasa-yggdrasil/integration-kubernetes/internal/adapter.NativeSourceCommit=$CAPACITY_ABORT_RECOVERY_ADAPTER_SOURCE_COMMIT" -o "$RUNNER_TEMP/abort-recovery-kubernetes-main" .)
+          echo "CAPACITY_ABORT_RECOVERY_ADAPTER_BINARY=$RUNNER_TEMP/abort-recovery-kubernetes-main" >> "$GITHUB_ENV"
+      - name: Qualify genuine expired unredeemed abort recovery through Core and native main
+        env:
+          REQUIRE_CAPACITY_NATIVE_KIND: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP$' | tee abort-recovery-native-results.json
+      - name: Require every actual abort recovery native boundary case
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('abort-recovery-native-results.json') if line.strip()]
+          root='TestCapacityNativeAbortUnredeemedRecoveryKinDHTTP'
+          required={root}
+          required.update(root+'/'+name for name in ('original_closed_refusal_before_redemption','authenticated_http_refusals','new_proof_closed_receiver_refusals','original_main_http_finalizer_cas_and_retained_pair'))
+          required.update(root+'/authenticated_http_refusals/'+name for name in ('anonymous','foreign_grant','wrong_digest','closed_callback_schema'))
+          required.update(root+'/new_proof_closed_receiver_refusals/'+name for name in ('unknown_field','wrong_schema'))
+          for case in required:
+              if sum(e.get('Test')==case and e.get('Action')=='run' for e in rows)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in rows)!=1: raise SystemExit('actual abort recovery native census incomplete: '+case)
+          if any(e.get('Test') in required and e.get('Action') in ('skip','fail') for e in rows): raise SystemExit('actual abort recovery native census failed or skipped')
+          PY
+      - name: Retain original abort recovery native GoJSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-native-abort-recovery-original-census
+          path: abort-recovery-native-results.json
+          if-no-files-found: error
+      - name: Qualify verified backend TLS and separate uncertain-abort quarantine
+        env:
+          REQUIRE_CAPACITY_NATIVE_KIND: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -count=1 -timeout=4m -json ./controllers/httpapi -run '^(TestCapacityNativeAbortReencryptedFrontendKinDHTTP|TestCapacityNativeAbortQuarantineKinDHTTP)$' | tee abort-quarantine-native-results.json
+      - name: Require every original-return transport and administrative-quarantine case
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PYQUARANTINE'
+          import json
+          rows=[json.loads(line) for line in open('abort-quarantine-native-results.json') if line.strip()]
+          roots=['TestCapacityNativeAbortReencryptedFrontendKinDHTTP','TestCapacityNativeAbortQuarantineKinDHTTP']
+          required=set(roots)
+          for root in roots:
+              required.update(root+'/'+name for name in ('original_closed_refusal_before_redemption','authenticated_http_refusals','new_proof_closed_receiver_refusals'))
+              required.update(root+'/authenticated_http_refusals/'+name for name in ('anonymous','foreign_grant','wrong_digest','closed_callback_schema'))
+              required.update(root+'/new_proof_closed_receiver_refusals/'+name for name in ('unknown_field','wrong_schema'))
+          required.add(roots[0]+'/original_main_http_finalizer_cas_and_retained_pair')
+          required.add(roots[1]+'/real_original_result_unknown_then_human_quarantine')
+          for action in ('run','pass'):
+              actual=[e['Test'] for e in rows if e.get('Test') and e.get('Action')==action]
+              if set(actual)!=required or len(actual)!=len(required): raise SystemExit('actual transport/quarantine census incomplete')
+          if any(e.get('Action') in ('skip','fail') for e in rows): raise SystemExit('actual transport/quarantine failure or skip')
+          PYQUARANTINE
+      - name: Retain transport and uncertain-abort quarantine originals
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-native-transport-quarantine-original-census
+          path: abort-quarantine-native-results.json
           if-no-files-found: error
       - name: Native failure evidence
         if: failure()

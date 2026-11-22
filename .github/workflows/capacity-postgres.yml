@@ -968,7 +968,7 @@ jobs:
   scheduler-skip-kernel:
     name: Scheduler skip Source kernel (PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -1020,7 +1020,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Apply production migrations through schema110
+      - name: Apply production migrations through schema111
         shell: bash
         run: |
           set -euo pipefail
@@ -1031,12 +1031,12 @@ jobs:
           set -e
           printf '%s\n' "$migration_exit" > "$evidence/migrations.exit"
           test "$migration_exit" -eq 0 || exit "$migration_exit"
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "SELECT jsonb_build_object('postgres_major',current_setting('server_version_num')::integer/10000,'schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied))" > "$evidence/database.json" 2> "$evidence/database.stderr"
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "SELECT jsonb_build_object('postgres_major',current_setting('server_version_num')::integer/10000,'schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'schema110_applied',EXISTS(SELECT 1 FROM public.goose_db_version WHERE version_id=110 AND is_applied),'quarantine_table_present',to_regclass('public.capacity_native_abort_quarantines') IS NOT NULL)" > "$evidence/database.json" 2> "$evidence/database.stderr"
           python3 - <<'PYCHECK'
           import json, os
           from pathlib import Path
           actual=json.loads((Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/database.json').read_text())
-          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':110}:
+          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':111,'schema110_applied':True,'quarantine_table_present':True}:
               raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
           PYCHECK
       - name: Qualify schema109 to110 complete event identities with unchanged C7 Goose behavior
@@ -1077,6 +1077,229 @@ jobs:
                   raise SystemExit('Schema110 actual before/after evidence missing or wrong')
           (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'roots':1,'failures':0,'skips':0,'production_effects':False},sort_keys=True)+'\n')
           PY110
+      - name: Qualify distinct pre-registration abort custody and races on actual PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-pre-registration-abort"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./repository ./internal/capacity ./controllers/message -run '^(TestCapacityNativePreRegistrationAbortPrivateWire|TestCapacityNativePreRegistrationAbort.*Postgres|TestNativePreRegistrationAbort(SeparateProof|ClosedWireAndRemoval))$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYABORT'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-pre-registration-abort'
+          abort_root = 'TestCapacityNativePreRegistrationAbortPostgres'
+          expected_abort = {abort_root} | {abort_root+'/'+name for name in (
+              'real_original_nonce_join_archive_and_old8_unchanged',
+              'unknown_original_and_identity_only_never_reissue_or_register',
+              'actual-PG-lock-race-registration-wins', 'actual-PG-lock-race-abort-wins')}
+          expected_abort |= {abort_root+'/global-zero-'+name for name in (
+              'lifetime','lifetime-archive','legacy','identity','hot-orphan','command-archive',
+              'scope-issued-HPA','scope-redeemed-HPA','scope-uncertain-HPA')}
+          expected_abort |= {abort_root+'/closed-'+name for name in (
+              'human','retry','condition','family','foreign-binding','template-binding','inactive-workflow',
+              'stale-fence','foreign-principal','foreign-source','foreign-token-digest','proof-tamper',
+              'rejected-original','expired-redemption','expired-callback')}
+          custody_abort = 'TestCapacityNativePreRegistrationAbortConfirmedCustodyPostgres'
+          expected_abort |= {custody_abort} | {custody_abort+'/'+name for name in (
+              'missing-result-row','missing-caller-join','wrong-native-readback','wrong-original-result','wrong-archive-digest')}
+          cross_abort = 'TestCapacityNativePreRegistrationAbortCrossScopePostgres'
+          expected_abort |= {cross_abort, cross_abort+'/registration-wins-globalUID', cross_abort+'/abort-wins-globalUID'}
+          pure_abort = 'TestNativePreRegistrationAbortSeparateProof'
+          expected_abort |= {pure_abort, 'TestNativePreRegistrationAbortClosedWireAndRemoval'}
+          expected_abort |= {pure_abort+'/'+name for name in (
+              'exact','prior_lifetime','prior_archive','prior_legacy','prior_identity','orphan_hot',
+              'archived_command','scope_pending','running','successful_exit','restart','replacement',
+              'spec_drift','challenge','protect_owner','birth_identity','sdk_receipt','missing_termination',
+              'wrong_policy','expired_evidence')}
+          private_abort = 'TestCapacityNativePreRegistrationAbortPrivateWire'
+          expected_abort |= {private_abort} | {private_abort+'/'+name for name in (
+              'issued_exact_private_wire','forged_public_step_refused','read_scrubs_forged_credential',
+              'write_requires_issued_credential','unsupported_operation_refused','read_rejects_issued_credential')}
+          expected = expected_abort
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ('repository','internal/capacity','controllers/message')}
+          if any(e.get('Package') not in packages or e.get('Action') in ('skip','fail') for e in events):
+              raise SystemExit('Native abort Source package/failure/skip refused')
+          for action in ('run','pass'):
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected):
+                  raise SystemExit('Native abort original exact case census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+                  raise SystemExit('Native abort original package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events):
+              raise SystemExit('Native abort Source race warning retained')
+          (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'native_execution_or_useful_capacity_qualification':False},sort_keys=True)+'\n')
+          PYABORT
+      - name: Qualify one-parent unredeemed native abort recovery on actual PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-abort-unredeemed-recovery"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./repository ./internal/capacity ./controllers/message ./manifest -run '^(TestCapacityNativeAbortUnredeemedRecovery.*Postgres|TestNativeAbortUnredeemedRecovery(Proof|ClosedWire|WorkflowRegistration)|TestCapacityNativeAbortUnredeemedRecoveryPrivateWire)$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYRECOVERY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-abort-unredeemed-recovery'
+          pg='TestCapacityNativeAbortUnredeemedRecoveryPostgres'
+          refusals='TestCapacityNativeAbortUnredeemedRecoveryRefusalsPostgres'
+          custody='TestCapacityNativeAbortUnredeemedRecoveryPairCustodyPostgres'
+          pure='TestNativeAbortUnredeemedRecoveryProof'
+          wire='TestCapacityNativeAbortUnredeemedRecoveryPrivateWire'
+          expected={pg,refusals,custody,pure,wire,'TestNativeAbortUnredeemedRecoveryClosedWire','TestCapacityNativeAbortUnredeemedRecoveryRollbackPostgres','TestCapacityNativeAbortUnredeemedRecoverySelectionPostgres'}
+          expected.update(pg+'/'+name for name in ['exact_parent_archive_fresh_child_dual_return_old8_unchanged','reservation_only_leaves_uncertain_parent','duplicate_issue_and_late_parent_redemption','unknown_child_hold_no_third_authority'])
+          expected.update(refusals+'/'+name for name in ['wrong_human','wrong_workflow','wrong_fence','active_old_lease','attempt','result_row','foreign_recovery_decision','readback','private_custody','hot_token_column','hot_subject_column','hot_generation_column','foreign_uid','direct_orphan_hot','expired_new_lease','canceled','native_rv','native_receipt'])
+          expected.update(custody+'/'+name for name in ['child_body_missing','child_request_changed','duplicate_parent_hot','child_archive_digest','forged_confirmed_without_result','foreign_identity'])
+          expected.update(pure+'/'+name for name in ['exact','hidden_parent','parent_hot','extra_archive','prior_lifetime','pending_scope','unexpired_parent','foreign_parent','fake_effect','third_sequence','old_fence','wrong_policy','sdk_receipt','mixed_v1','stale_witness'])
+          expected.update(wire+'/'+name for name in ['complete_history_and_issued_credential_only','closed_public_input'])
+          registration='TestNativeAbortUnredeemedRecoveryWorkflowRegistration'
+          expected.add(registration)
+          expected.update(registration+'/'+name for name in ['exact_sync_literal','unknown_operation','integration_target_refused'])
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ['repository','internal/capacity','controllers/message','manifest']}
+          if any(e.get('Package') not in packages or e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('unredeemed recovery package/failure/skip refused')
+          for action in ['run','pass']:
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected): raise SystemExit('unredeemed recovery exact case census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1: raise SystemExit('unredeemed recovery package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('unredeemed recovery race retained')
+          (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_recovery_or_capacity_claim':True},sort_keys=True)+'\n')
+          PYRECOVERY
+      - name: Qualify explicit uncertain-abort quarantine and backend TLS on PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-abort-quarantine"
+          mkdir -m 700 "$evidence"
+          set +e
+          # The new independent lane includes a genuine >60s evidence-age wait;
+          # no existing test/operation timeout or production clock is changed.
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=4m ./repository ./internal/capacity ./controllers/httpapi ./manifest -run '^(TestCapacityNativeAbortQuarantine.*Postgres|TestNativeAbortQuarantine(ClosedAbsence|ClosedInput|WorkflowRegistration)|TestCapacityMutationNativeRedeemTLS)$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYQUARANTINE'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-abort-quarantine'
+          expected=set(["TestCapacityMutationNativeRedeemTLS","TestCapacityMutationNativeRedeemTLS/legacy","TestCapacityMutationNativeRedeemTLS/legacy/direct","TestCapacityMutationNativeRedeemTLS/legacy/forged_forwarding","TestCapacityMutationNativeRedeemTLS/legacy_empty_binding","TestCapacityMutationNativeRedeemTLS/legacy_empty_binding/direct","TestCapacityMutationNativeRedeemTLS/legacy_empty_binding/forged_forwarding","TestCapacityMutationNativeRedeemTLS/original_abort","TestCapacityMutationNativeRedeemTLS/original_abort/direct","TestCapacityMutationNativeRedeemTLS/original_abort/forged_forwarding","TestCapacityMutationNativeRedeemTLS/original_release","TestCapacityMutationNativeRedeemTLS/original_release/direct","TestCapacityMutationNativeRedeemTLS/original_release/forged_forwarding","TestCapacityMutationNativeRedeemTLS/protocol_without_source","TestCapacityMutationNativeRedeemTLS/protocol_without_source/direct","TestCapacityMutationNativeRedeemTLS/protocol_without_source/forged_forwarding","TestCapacityMutationNativeRedeemTLS/source_without_protocol","TestCapacityMutationNativeRedeemTLS/source_without_protocol/direct","TestCapacityMutationNativeRedeemTLS/source_without_protocol/forged_forwarding","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/changed_child_request","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/changed_child_state","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/duplicate_parent_hot","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_archived_lifetime","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_hot_lifetime","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_identity","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/foreign_legacy_checkpoint","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/missing_child","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/moved_child_scope","TestCapacityNativeAbortQuarantineCustodyRevalidationPostgres/unknown_child_field","TestCapacityNativeAbortQuarantineDuplicatePostgres","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/admission_only","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/async","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/dynamic_binding","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/execution_disabled","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/extra_metadata","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/extra_step","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/extra_step_field","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/missing_metadata","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/nonmanual","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/old_observation","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/other_operation","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/present_unprotected","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/protected","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/ready","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/receipt_digest","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/retry","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/same_name_replacement","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/timeout","TestCapacityNativeAbortQuarantineHumanBoundaryPostgres/wrong_operator","TestCapacityNativeAbortQuarantineLocksPostgres","TestCapacityNativeAbortQuarantineLocksPostgres/classification_waits_for_original_result_seed_writer","TestCapacityNativeAbortQuarantineLocksPostgres/registration_serializes_on_original_global_uid","TestCapacityNativeAbortQuarantineOtherUIDProgressPostgres","TestCapacityNativeAbortQuarantineOtherUIDProgressPostgres/permanent_receipt_survives_source_evidence_age","TestCapacityNativeAbortQuarantinePreservesOriginalPostgres","TestCapacityNativeAbortQuarantineReceiptDigestPostgres","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/foreign_binding","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/unknown_receipt_field","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/wrong_digest","TestCapacityNativeAbortQuarantineReceiptDigestPostgres/wrong_history","TestCapacityNativeAbortQuarantineResultArrivalPostgres","TestCapacityNativeAbortQuarantineResultArrivalPostgres/caller_ack_alone_invalidates_exclusion","TestCapacityNativeAbortQuarantineResultArrivalPostgres/late_durable_adapter_result_invalidates_exclusion","TestCapacityNativeAbortQuarantineResultArrivalPostgres/real_original_adapter_result_before_classification","TestNativeAbortQuarantineClosedAbsence","TestNativeAbortQuarantineClosedAbsence/empty_confirmation","TestNativeAbortQuarantineClosedAbsence/exact_absence","TestNativeAbortQuarantineClosedAbsence/fake_lane","TestNativeAbortQuarantineClosedAbsence/parent_is_child","TestNativeAbortQuarantineClosedAbsence/present_unprotected","TestNativeAbortQuarantineClosedAbsence/private_metadata","TestNativeAbortQuarantineClosedAbsence/ready_claim","TestNativeAbortQuarantineClosedAbsence/same_name_foreign_uid","TestNativeAbortQuarantineClosedAbsence/sdk_receipt","TestNativeAbortQuarantineClosedAbsence/stale","TestNativeAbortQuarantineClosedAbsence/wrong_policy","TestNativeAbortQuarantineClosedInput","TestNativeAbortQuarantineWorkflowRegistration","TestNativeAbortQuarantineWorkflowRegistration/advertised_builtin","TestNativeAbortQuarantineWorkflowRegistration/arbitrary_builtin"])
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ['repository','internal/capacity','controllers/httpapi','manifest']}
+          if any(e.get('Package') not in packages or e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('quarantine package/failure/skip refused')
+          for action in ['run','pass']:
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected): raise SystemExit('quarantine exact case census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1: raise SystemExit('quarantine package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('quarantine race retained')
+          (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_quarantine_or_scope_release':True},sort_keys=True)+'\n')
+          PYQUARANTINE
+      - name: Qualify explicit different-target reviewed-quarantine abort on PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-abort-reviewed-quarantine"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=3m ./repository ./internal/capacity -run '^(TestCapacityNativeAbortReviewedQuarantine.*Postgres|TestNativeAbortReviewedQuarantine(Proof|LegacyClosed))$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYREVIEWED'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-abort-reviewed-quarantine'
+          expected=set(["TestNativeAbortReviewedQuarantineProof", "TestNativeAbortReviewedQuarantineProof/exact", "TestNativeAbortReviewedQuarantineProof/missing_review", "TestNativeAbortReviewedQuarantineProof/empty_review", "TestNativeAbortReviewedQuarantineProof/same_target", "TestNativeAbortReviewedQuarantineProof/wrong_receipt_digest", "TestNativeAbortReviewedQuarantineProof/duplicate_command", "TestNativeAbortReviewedQuarantineProof/duplicate_subject", "TestNativeAbortReviewedQuarantineProof/unordered", "TestNativeAbortReviewedQuarantineProof/wrong_count", "TestNativeAbortReviewedQuarantineProof/fake_raw_zero", "TestNativeAbortReviewedQuarantineProof/active_unknown", "TestNativeAbortReviewedQuarantineProof/missing_counts", "TestNativeAbortReviewedQuarantineProof/wrong_schema", "TestNativeAbortReviewedQuarantineProof/target_lifetime", "TestNativeAbortReviewedQuarantineProof/target_archive", "TestNativeAbortReviewedQuarantineProof/target_legacy", "TestNativeAbortReviewedQuarantineProof/target_identity", "TestNativeAbortReviewedQuarantineProof/target_hot", "TestNativeAbortReviewedQuarantineProof/target_command_archive", "TestNativeAbortReviewedQuarantineProof/running", "TestNativeAbortReviewedQuarantineProof/restarted", "TestNativeAbortReviewedQuarantineProof/admitted", "TestNativeAbortReviewedQuarantineProof/challenge", "TestNativeAbortReviewedQuarantineProof/receipt", "TestNativeAbortReviewedQuarantineProof/stale", "TestNativeAbortReviewedQuarantineLegacyClosed", "TestNativeAbortReviewedQuarantineLegacyClosed/binding_null", "TestNativeAbortReviewedQuarantineLegacyClosed/binding_review", "TestNativeAbortReviewedQuarantineLegacyClosed/proof_null", "TestNativeAbortReviewedQuarantineLegacyClosed/proof_counts", "TestCapacityNativeAbortReviewedQuarantineOriginalPostgres", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres", "TestCapacityNativeAbortReviewedQuarantineOriginalWriterLockPostgres", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/legacy_raw_one", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/missing_review", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/wrong_digest", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/wrong_subject", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/missing_receipt", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/extra_reference", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/same_target", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/wrong_human", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_lifetime", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_archive", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_legacy", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_identity", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_hot", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/target_command_archive", "TestCapacityNativeAbortReviewedQuarantineIssueRefusalPostgres/scope_active", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/late_ack", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/missing_child", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/changed_child_request", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/scope_active", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/target_history", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/extra_receipt", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/own_sql_state", "TestCapacityNativeAbortReviewedQuarantineRedeemRevalidationPostgres/own_sql_scope"])
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ['repository','internal/capacity']}
+          if any(e.get('Package') not in packages or e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('reviewed-quarantine package/failure/skip refused')
+          for action in ['run','pass']:
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected): raise SystemExit('reviewed-quarantine exact case census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1: raise SystemExit('reviewed-quarantine package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events): raise SystemExit('reviewed-quarantine race retained')
+          (root/'census.json').write_text(json.dumps({'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'nodes':len(expected),'failures':0,'skips':0,'no_production_activation_or_original_settlement':True},sort_keys=True)+'\n')
+          PYREVIEWED
+      - name: Qualify first native DELETE generation without rewriting the birth origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-delete-generation"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./repository ./internal/capacity ./controllers/message -run '^(TestCapacityNativeFirstDeleteGenerationPostgres|TestNativeFirstDeleteGenerationRequiresFullCurrentWitness|TestNativeDeleteGenerationReadbackRequiresDurableWitness|TestNativeReleaseAuthorityUsesFreshActualWitnessGeneration|TestBoundPodDeleteGenerationReadIsBoundedAndRequiresWitness|TestBoundReleaseUsesFreshPersistedTerminationGeneration|TestReleaseRecoveryInventoryUsesIndependentlyWitnessedDeleteGeneration)$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          printf '%s\n' "${pipeline_status[0]}" > "$evidence/go-test.exit"
+          printf '%s\n' "${pipeline_status[1]}" > "$evidence/tee.exit"
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYDELETE'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-delete-generation'
+          cases={
+              'TestCapacityNativeFirstDeleteGenerationPostgres':(),
+              'TestNativeFirstDeleteGenerationRequiresFullCurrentWitness':(
+                  'first_delete','same_generation','zero_generation_unchanged','zero_generation_incremented',
+                  'second_increment','generation_reversed','running','unknown','not_deleting','zero_deletion',
+                  'missing_receipt','missing_protection','old_container','restarted','wrong_start','wrong_image',
+                  'wrong_uid','wrong_process','wrong_nonce','wrong_challenge','incomplete_lanes','failed_lane',
+                  'nonzero_exit','nonzero_signal','missing_finish','stale','future','legacy_mode'),
+              'TestNativeDeleteGenerationReadbackRequiresDurableWitness':(
+                  'exact','archived_origin','birth_generation_readback','extra_generation','missing_witness',
+                  'missing_confirmation','wrong_witness_version','wrong_witness_operation','wrong_witness_status',
+                  'invalid_witness','stale_at_confirmation','live_readback','not_deleting','wrong_id','restarted',
+                  'wrong_start','stale_readback'),
+              'TestNativeReleaseAuthorityUsesFreshActualWitnessGeneration':(
+                  'exact','birth_generation','extra_generation','wrong_container','wrong_start','restarted',
+                  'wrong_binding','wrong_version','wrong_challenge','dry_run','missing_dry_run','missing_witness','stale_witness'),
+              'TestBoundPodDeleteGenerationReadIsBoundedAndRequiresWitness':(
+                  'first_delete','birth_read_succeeds','running','unknown','not_deleting','missing_receipt',
+                  'wrong_challenge','wrong_generation','wrong_container','restarted','stale','fallback_read_failure',
+                  'zero_birth','overflow_birth','unprotected_without_witness','unprotected_confirmed',
+                  'absent_without_witness','absent_confirmed'),
+              'TestBoundReleaseUsesFreshPersistedTerminationGeneration':(
+                  'actual_delete_generation','missing_witness','missing_confirmation','stale_witness',
+                  'wrong_version','wrong_generation','released_checkpoint'),
+              'TestReleaseRecoveryInventoryUsesIndependentlyWitnessedDeleteGeneration':(
+                  'exact_unknown_inventory','birth_generation','second_increment','replacement','incomplete')}
+          expected=set(cases)|{parent+'/'+child for parent,children in cases.items() for child in children}
+          assert len(cases)==7 and len(expected)==95
+          events=[json.loads(line) for line in (root/'original.jsonl').read_text().splitlines() if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in ['repository','internal/capacity','controllers/message']}
+          if any(e.get('Package') not in packages or e.get('Action') in ['skip','fail'] for e in events):
+              raise SystemExit('DELETE generation failure, skip or foreign package refused')
+          for action in ['run','pass']:
+              actual=[e['Test'] for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected):
+                  raise SystemExit('DELETE generation exact7-root/88-child census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+                  raise SystemExit('DELETE generation package did not complete once')
+          if 'WARNING: DATA RACE' in (root/'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output','') for e in events):
+              raise SystemExit('DELETE generation race warning retained')
+          (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'roots':len(cases),'nodes':len(expected),'failures':0,'skips':0,'native_api_qualification':False,'birth_generation_rewritten':False},sort_keys=True)+'\n')
+          PYDELETE
       - name: Qualify exact skip calendar, bounded search and original PG dispatch
         shell: bash
         run: |
