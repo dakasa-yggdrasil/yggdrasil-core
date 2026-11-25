@@ -132,6 +132,11 @@ func migratedOriginPGSetup(t *testing.T, withQuarantine ...bool) migratedOriginP
 	if err = json.Unmarshal(originalBody, &cp); err != nil {
 		t.Fatal(err)
 	}
+	// RawMessage has no omitempty: the actual admitted DB row preserves null,
+	// not a zero-length slice. Do not normalize this immutable original.
+	if !bytes.Equal(cp.NativeTerminationReceipt, []byte("null")) {
+		t.Fatal("fixture did not retain the actual absent JSON null receipt")
+	}
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(origin.Spec, &p) != nil {
 		t.Fatal("origin")
@@ -290,7 +295,7 @@ func TestCapacityNativeMigratedOriginRetirementPostgres(t *testing.T) {
 		t.Fatal("record")
 	}
 	var cp model.CapacityNativePodCheckpoint
-	if json.Unmarshal(r.Checkpoint, &cp) != nil || cp.State != "admitted" || cp.ConfirmedAt != nil || len(cp.NativeTerminationReceipt) != 0 || len(r.Commands) != 2 {
+	if json.Unmarshal(r.Checkpoint, &cp) != nil || cp.State != "admitted" || cp.ConfirmedAt != nil || !nativeAbortRecoveryAbsent(cp.NativeTerminationReceipt) || len(r.Commands) != 2 {
 		t.Fatal("administrative receipt invented a native SDK completion")
 	}
 	for _, q := range []string{`UPDATE public.capacity_native_migrated_origin_retirements SET record_sha256=repeat('0',64) WHERE subject_uid=$1`, `DELETE FROM public.capacity_native_migrated_origin_retirements WHERE subject_uid=$1`} {
@@ -330,7 +335,7 @@ func TestCapacityNativeMigratedOriginRetirementPostgres(t *testing.T) {
 }
 
 func TestCapacityNativeMigratedOriginRefusalsPostgres(t *testing.T) {
-	for _, name := range []string{"missing_zero", "nonzero_source", "old_uid_present", "incomplete_source", "source_not_fenced", "stale_source", "same_namespace_realm", "stale_target", "target_graph_changed", "target_workload_version_changed", "incomplete_candidates", "wrong_operator", "wrong_fence", "live_lease", "uncertain_subject", "lost_origin", "changed_checkpoint", "current_spec_tamper", "changed_current_scope"} {
+	for _, name := range []string{"missing_zero", "nonzero_source", "old_uid_present", "incomplete_source", "source_not_fenced", "stale_source", "same_namespace_realm", "stale_target", "target_graph_changed", "target_workload_version_changed", "incomplete_candidates", "wrong_operator", "wrong_fence", "live_lease", "uncertain_subject", "lost_origin", "changed_checkpoint", "termination_receipt_present", "current_spec_tamper", "changed_current_scope"} {
 		t.Run(name, func(t *testing.T) {
 			f := migratedOriginPGSetup(t)
 			ctx := context.Background()
@@ -382,6 +387,18 @@ func TestCapacityNativeMigratedOriginRefusalsPostgres(t *testing.T) {
 					t.Fatal(err)
 				}
 				before = migratedOriginPGSnapshot(t, f)
+			case "termination_receipt_present":
+				if _, err := f.db.Exec(`UPDATE public.capacity_native_lifetimes SET checkpoint_record=jsonb_set(checkpoint_record,'{native_termination_receipt}','{}') WHERE pod_uid=$1`, f.b.PodUID); err != nil {
+					t.Fatal(err)
+				}
+				var body []byte
+				if err := f.db.QueryRow(`SELECT checkpoint_record FROM public.capacity_native_lifetimes WHERE pod_uid=$1`, f.b.PodUID).Scan(&body); err != nil {
+					t.Fatal(err)
+				}
+				// Bind the exact changed body so this cannot pass just because
+				// its digest or the literal workflow is stale.
+				f.b.CheckpointSHA256 = nativeCanonicalArchiveSHA(body)
+				before = migratedOriginPGSnapshot(t, f)
 			case "current_spec_tamper":
 				if _, err := f.db.Exec(`UPDATE public.manifests SET spec=jsonb_set(spec,'{assessment_binding,snapshot,workload_uid}',to_jsonb($2::text)) WHERE id=$1`, f.current.ID, uuid.NewString()); err != nil {
 					t.Fatal(err)
@@ -395,8 +412,12 @@ func TestCapacityNativeMigratedOriginRefusalsPostgres(t *testing.T) {
 			// being exercised rather than a stale manifest-binding mismatch.
 			wf := abortPGCreate(t, f.db, f.current.Metadata.Namespace, "workflow", "retire-migrated-human", migratedOriginPGWorkflow(f.b))
 			f.store.WorkflowID = wf.ID
-			if err := f.store.RetireMigratedNativeOrigin(ctx, f.current, f.b, f.e); err == nil {
+			err := f.store.RetireMigratedNativeOrigin(ctx, f.current, f.b, f.e)
+			if err == nil {
 				t.Fatal("incomplete/mismatched administrative evidence accepted")
+			}
+			if name == "termination_receipt_present" && !strings.Contains(err.Error(), "migrated-origin checkpoint-origin") {
+				t.Fatal("non-null receipt did not reach the checkpoint absence guard", err)
 			}
 			var count int
 			if err := f.db.QueryRow(`SELECT count(*) FROM public.capacity_native_migrated_origin_retirements WHERE subject_uid=$1`, f.b.PodUID).Scan(&count); err != nil || count != 0 {

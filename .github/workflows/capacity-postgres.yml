@@ -1228,9 +1228,9 @@ jobs:
           import json, os
           from pathlib import Path
           root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-migrated-origin-retirement'
-          cases=json.loads('{"TestCapacityNativeMigratedOriginRetirementPostgres":[],"TestCapacityNativeMigratedOriginRefusalsPostgres":["missing_zero","nonzero_source","old_uid_present","incomplete_source","source_not_fenced","stale_source","same_namespace_realm","stale_target","target_graph_changed","target_workload_version_changed","incomplete_candidates","wrong_operator","wrong_fence","live_lease","uncertain_subject","lost_origin","changed_checkpoint","current_spec_tamper","changed_current_scope"],"TestCapacityNativeMigratedOriginConcurrencyPostgres":[],"TestCapacityNativeMigratedOriginQuarantineCoexistencePostgres":[],"TestCapacityNativeMigratedOriginCorruptReceiptPostgres":[],"TestCapacityNativeMigratedOriginMigration112Postgres":[],"TestCapacityMigratedOriginProtectedHumanBoundary":["machine","different_operator","different_confirmation","caller_target_receipt","case_alias","other_operation"],"TestCapacityMigratedOriginLiteralWorkflowBoundary":["async","timer","retry","binding_template","other_binding","condition","caller_selected_adapter","literal_confirmation","extra_step"],"TestNativeMigratedOriginWorkflowRegistration":["advertised_builtin","arbitrary_builtin"]}')
+          cases=json.loads('{"TestCapacityNativeMigratedOriginRetirementPostgres":[],"TestCapacityNativeMigratedOriginRefusalsPostgres":["missing_zero","nonzero_source","old_uid_present","incomplete_source","source_not_fenced","stale_source","same_namespace_realm","stale_target","target_graph_changed","target_workload_version_changed","incomplete_candidates","wrong_operator","wrong_fence","live_lease","uncertain_subject","lost_origin","changed_checkpoint","termination_receipt_present","current_spec_tamper","changed_current_scope"],"TestCapacityNativeMigratedOriginConcurrencyPostgres":[],"TestCapacityNativeMigratedOriginQuarantineCoexistencePostgres":[],"TestCapacityNativeMigratedOriginCorruptReceiptPostgres":[],"TestCapacityNativeMigratedOriginMigration112Postgres":[],"TestCapacityMigratedOriginProtectedHumanBoundary":["machine","different_operator","different_confirmation","caller_target_receipt","case_alias","other_operation"],"TestCapacityMigratedOriginLiteralWorkflowBoundary":["async","timer","retry","binding_template","other_binding","condition","caller_selected_adapter","literal_confirmation","extra_step"],"TestNativeMigratedOriginWorkflowRegistration":["advertised_builtin","arbitrary_builtin"]}')
           expected=set(cases)|{parent+'/'+child for parent,children in cases.items()for child in children}
-          assert len(cases)==9 and len(expected)==45
+          assert len(cases)==9 and len(expected)==46
           events=[json.loads(line)for line in(root/'original.jsonl').read_text().splitlines()if line.strip()]
           packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in('repository','controllers/message','manifest')}
           if any(e.get('Package')not in packages or e.get('Action')in('skip','fail')for e in events):
@@ -1238,13 +1238,13 @@ jobs:
           for action in('run','pass'):
               actual=[e['Test']for e in events if e.get('Action')==action and e.get('Test')]
               if set(actual)!=expected or len(actual)!=len(expected):
-                  raise SystemExit('Migrated-origin exact nine-root/45-node census incomplete')
+                  raise SystemExit('Migrated-origin exact nine-root/46-node census incomplete')
           for package in packages:
               if sum(e.get('Package')==package and e.get('Action')=='start'and not e.get('Test')for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass'and not e.get('Test')for e in events)!=1:
                   raise SystemExit('Migrated-origin original package did not complete once')
           if 'WARNING: DATA RACE'in(root/'go-test.stderr').read_text()or any('WARNING: DATA RACE'in e.get('Output','')for e in events):
               raise SystemExit('Migrated-origin Source race warning retained')
-          (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'roots':9,'nodes':45,'failures':0,'skips':0,'SDK_join_or_native_release_qualification':False,'original_records_and_quarantine_preserved':True},sort_keys=True)+'\n')
+          (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'roots':9,'nodes':46,'failures':0,'skips':0,'SDK_join_or_native_release_qualification':False,'original_records_and_quarantine_preserved':True},sort_keys=True)+'\n')
           PYMIGRATED
       - name: Qualify explicit different-target reviewed-quarantine abort on PostgreSQL
         shell: bash
