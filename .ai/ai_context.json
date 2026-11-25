@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-25T20:11:58-03:00",
+  "generated_at": "2026-11-25T20:18:26-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1640,
@@ -11,7 +11,7 @@
     ".yml": 37
   },
   "provenance": {
-    "commit": "fe712c6ee4dba13008c2e8a165b9cb89e3f8e5c3",
+    "commit": "38505b2aa7330787b6f078a7d5c6fc49ca7ba832",
     "dirty": true,
     "files": [
       {
@@ -76,7 +76,7 @@
     {
       "path": "controllers/message",
       "files": 218,
-      "kb": 1890
+      "kb": 1891
     },
     {
       "path": "internal/capacity",
