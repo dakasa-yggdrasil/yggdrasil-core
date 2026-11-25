@@ -98,6 +98,9 @@ func executeCapacityUnredeemedProtectRecoveryStep(parent context.Context, conn *
 		if e = capacityDispatchFence(ctx); e != nil {
 			return e
 		}
+		if (op == capacity.ObserveNativePodAdmission || op == capacity.ObserveNativePodTermination) && r.Status != "observed" {
+			return errCapacityBoundAssessment
+		}
 		return capacity.DecodeNativeCapacity(r.Output, out)
 	}
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)

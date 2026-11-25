@@ -180,7 +180,11 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 			if f.mode.Load().(string) == "foreign_nonce" {
 				boot.Admission.ProcessNonce = uuid.NewString()
 			}
-			_ = json.NewEncoder(w).Encode(model.AdapterExecuteIntegrationResponse{Operation: req.Operation, Capability: req.Capability, Status: "observed", Output: boot})
+			outer := "observed"
+			if f.mode.Load().(string) == "outer_failed" {
+				outer = "failed"
+			}
+			_ = json.NewEncoder(w).Encode(model.AdapterExecuteIntegrationResponse{Operation: req.Operation, Capability: req.Capability, Status: outer, Output: boot})
 		case capacity.EnsureNativePodDrain:
 			f.ensures.Add(1)
 			fields := make(map[string]any, len(req.Input))
@@ -230,7 +234,11 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 			f.afterReads.Add(1)
 			pod := f.boot.Observation
 			pod.PodResourceVersion, pod.ObservedAt = "31", time.Now().UTC()
-			_ = json.NewEncoder(w).Encode(model.AdapterExecuteIntegrationResponse{Operation: req.Operation, Capability: req.Capability, Status: "observed", Output: model.AdapterCapacityPodTerminationResponse{Operation: req.Operation, Status: "observed", Observation: pod}})
+			outer := "observed"
+			if f.mode.Load().(string) == "after_failed" {
+				outer = "failed"
+			}
+			_ = json.NewEncoder(w).Encode(model.AdapterExecuteIntegrationResponse{Operation: req.Operation, Capability: req.Capability, Status: outer, Output: model.AdapterCapacityPodTerminationResponse{Operation: req.Operation, Status: "observed", Observation: pod}})
 		default:
 			t.Error("unexpected native operation", req.Operation)
 			w.WriteHeader(400)
@@ -369,7 +377,7 @@ func TestCapacityUnredeemedProtectRecoveryHandlerPostgres(t *testing.T) {
 		}
 		f.assertOriginals(t)
 	})
-	for _, mode := range []string{"machine", "stale", "foreign_nonce", "caller_boot"} {
+	for _, mode := range []string{"machine", "stale", "foreign_nonce", "caller_boot", "outer_failed"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newProtectRecoveryControllerFixture(t)
 			f.mode.Store(mode)
@@ -392,4 +400,17 @@ func TestCapacityUnredeemedProtectRecoveryHandlerPostgres(t *testing.T) {
 			}
 		})
 	}
+	t.Run("after_failed_retains_uncertain_child", func(t *testing.T) {
+		f := newProtectRecoveryControllerFixture(t)
+		f.mode.Store("after_failed")
+		result := f.run(t, true, nil)
+		if result.Status != "failed" || f.ensures.Load() != 1 || f.redemptions.Load() != 1 || f.afterReads.Load() != 1 {
+			t.Fatal("failed outer read credited or resent", result)
+		}
+		var state string
+		if err := f.db.QueryRow(`SELECT state FROM public.capacity_native_commands WHERE subject_uid=$1 AND generation>$2`, f.binding.PodUID, f.binding.ExpectedIntentGeneration).Scan(&state); err != nil || state != "uncertain" {
+			t.Fatal("unknown result not retained", state, err)
+		}
+		f.assertOriginals(t)
+	})
 }

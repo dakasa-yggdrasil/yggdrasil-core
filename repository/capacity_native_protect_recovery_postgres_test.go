@@ -268,7 +268,7 @@ func TestCapacityNativeProtectRecoveryRefusalsPostgres(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "fifth_identity_without_body":
-				if _, err := f.db.Exec(`INSERT INTO public.capacity_native_command_identities(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,authority_token_sha256,request_sha256) SELECT $2,namespace,environment,domain,dimension,generation+1,operation,subject_uid,phase,1,repeat('e',64),request_sha256 FROM public.capacity_native_command_identities WHERE id=$1`, f.b.Commands[0].CommandID, uuid.New()); err != nil {
+				if _, err := f.db.Exec(`INSERT INTO public.capacity_native_command_identities(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,authority_token_sha256,request_sha256) SELECT $2,namespace,environment,domain,dimension,generation+1,operation,subject_uid,phase,1,$3,request_sha256 FROM public.capacity_native_command_identities WHERE id=$1`, f.b.Commands[0].CommandID, uuid.New(), nativeArchiveSHA([]byte(uuid.NewString()))); err != nil {
 					t.Fatal(err)
 				}
 			case "redeemed_original", "unknown_original", "native_readback":
@@ -292,7 +292,7 @@ func TestCapacityNativeProtectRecoveryRefusalsPostgres(t *testing.T) {
 				f.b.Commands[0].RecordSHA256 = nativeCanonicalArchiveSHA(raw)
 			case "orphan_archive_reference":
 				id := uuid.New()
-				if _, err := f.db.Exec(`INSERT INTO public.capacity_native_command_identities(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,authority_token_sha256,request_sha256) SELECT $2,namespace,environment,domain,dimension,generation,operation,$3,phase,1,repeat('d',64),request_sha256 FROM public.capacity_native_command_identities WHERE id=$1`, f.b.Commands[0].CommandID, id, uuid.NewString()); err != nil {
+				if _, err := f.db.Exec(`INSERT INTO public.capacity_native_command_identities(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,authority_token_sha256,request_sha256) SELECT $2,namespace,environment,domain,dimension,generation,operation,$3,phase,1,$4,request_sha256 FROM public.capacity_native_command_identities WHERE id=$1`, f.b.Commands[0].CommandID, id, uuid.NewString(), nativeArchiveSHA([]byte(uuid.NewString()))); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := f.db.Exec(`INSERT INTO public.capacity_native_command_archive(id,record_sha256,command_record)VALUES($1,$2,$3)`, id, nativeCanonicalArchiveSHA(f.originals[0]), f.originals[0]); err != nil {
