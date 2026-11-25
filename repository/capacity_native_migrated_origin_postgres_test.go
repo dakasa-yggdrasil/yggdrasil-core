@@ -183,6 +183,29 @@ func migratedOriginPGSetup(t *testing.T, withQuarantine ...bool) migratedOriginP
 	admin.ExecutorPowerOperator = operator
 	f := migratedOriginPG{db: db, store: admin, origin: origin, current: current, op: op, p: p, intent: intent, b: b, e: migratedOriginPGEvidence(p, b.TargetNamespaceUID)}
 	f.quarantine = q
+	// Require the same untouched golden fixture to satisfy the read validators
+	// before any negative mutation. These checks do not insert a receipt.
+	if err := capacity.ValidateMigratedNativeOriginBinding(current, p, b); err != nil {
+		t.Fatal("golden fixture binding", err)
+	}
+	if err := capacity.ValidateMigratedSourceFence(b, p, time.Now().UTC()); err != nil {
+		t.Fatal("golden fixture Source evidence", err)
+	}
+	if err := capacity.ValidateMigratedNativeTarget(p, b, f.e, time.Now().UTC()); err != nil {
+		t.Fatal("golden fixture Target evidence", err)
+	}
+	tx, readErr := db.BeginTx(ctx, nil)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	original, originalPolicy, readErr := migratedOriginPolicy(ctx, tx, current, p, b)
+	if readErr == nil {
+		_, _, readErr = migratedOriginBodies(ctx, tx, original, originalPolicy, b)
+	}
+	tx.Rollback()
+	if readErr != nil {
+		t.Fatal("golden fixture immutable custody", readErr)
+	}
 	// Teardown alone uses a privileged CI transaction to remove this fixture's
 	// immutable receipt before the shared fixture deletes its manifest namespace.
 	// All assertions exercise normal enabled triggers; this never runs in product.
