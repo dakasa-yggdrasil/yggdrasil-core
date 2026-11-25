@@ -267,7 +267,12 @@ func TestCapacityNativeMigratedOriginRetirementPostgres(t *testing.T) {
 	f := migratedOriginPGSetup(t)
 	ctx := context.Background()
 	before := migratedOriginPGSnapshot(t, f)
-	if _, _, err := f.store.NativeLedger(ctx, f.current, f.intent); !errors.Is(err, ErrCapacityConflict) {
+	// This read supplies the current policy identity without changing the
+	// retained original intent. Otherwise the entry guard rejects the old
+	// operand before the foreign-checkpoint validator is ever exercised.
+	currentRead := f.intent
+	currentRead.PolicyID, currentRead.PolicyChecksum = f.current.ID, f.current.Checksum
+	if _, _, err := f.store.NativeLedger(ctx, f.current, currentRead); !errors.Is(err, ErrCapacityConflict) {
 		t.Fatal("foreign admitted checkpoint was ignored without an administrative receipt", err)
 	}
 	if err := f.store.RetireMigratedNativeOrigin(ctx, f.current, f.b, f.e); err != nil {
@@ -277,7 +282,10 @@ func TestCapacityNativeMigratedOriginRetirementPostgres(t *testing.T) {
 	if ok, err := f.store.MigratedNativeOriginRetired(ctx, f.current, f.b.PodUID); err != nil || !ok {
 		t.Fatal("stored administrative custody did not validate", err)
 	}
-	commands, cps, err := f.store.NativeLedger(ctx, f.current, f.intent)
+	if _, _, err := f.store.NativeLedger(ctx, f.current, f.intent); !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("retirement bypassed the unchanged current-policy intent guard", err)
+	}
+	commands, cps, err := f.store.NativeLedger(ctx, f.current, currentRead)
 	if err != nil || len(commands) != 2 || len(cps) != 0 {
 		t.Fatal("ordinary ledger did not separate retired origin from active Target", err)
 	}
@@ -331,6 +339,12 @@ func TestCapacityNativeMigratedOriginRetirementPostgres(t *testing.T) {
 	registered, err := admission.RegisterNativeLifetime(ctx, f.current, next, boot)
 	if err != nil || registered.PodUID == f.b.PodUID {
 		t.Fatal("ordinary distinct Target registration remained blocked", err)
+	}
+	// The actual ordinary admission producer above, rather than the read-only
+	// operand view, must also yield a current intent usable by its consumer.
+	_, cps, err = admission.NativeLedger(ctx, f.current, next)
+	if err != nil || len(cps) != 1 || cps[0].PodUID != registered.PodUID {
+		t.Fatal("ordinary Target admission intent could not reload its own lifetime", err)
 	}
 }
 
@@ -467,7 +481,9 @@ func TestCapacityNativeMigratedOriginQuarantineCoexistencePostgres(t *testing.T)
 	if got, err := f.store.NativeUnsettledCounts(ctx, f.current); err != nil || got != want {
 		t.Fatal("retirement changed original uncertainty classification", got, err)
 	}
-	commands, cps, err := f.store.NativeLedger(ctx, f.current, f.intent)
+	currentRead := f.intent
+	currentRead.PolicyID, currentRead.PolicyChecksum = f.current.ID, f.current.Checksum
+	commands, cps, err := f.store.NativeLedger(ctx, f.current, currentRead)
 	if err != nil || len(commands) != 3 || len(cps) != 0 {
 		t.Fatal("legacy uncertainty and retired lifetime were not kept distinct", err)
 	}
