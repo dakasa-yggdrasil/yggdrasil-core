@@ -143,7 +143,7 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 		Normalization:    model.IntegrationNormalizationSpec{ExternalIDPath: "id", FallbackResourcePrefix: "thirdparty.kubernetes.object"},
 	}
 	for _, op := range operations {
-		typeSpec.ActionCatalog = append(typeSpec.ActionCatalog, model.IntegrationActionDefinition{Name: op, ResourceTypes: []string{"object"}, Idempotent: true})
+		typeSpec.ActionCatalog = append(typeSpec.ActionCatalog, model.IntegrationActionDefinition{Name: op, ResourceTypes: []string{"object"}, Idempotent: op != capacity.EnsureNativePodDrain})
 	}
 	if err := manifest.ValidateIntegrationTypeSpec(typeSpec); err != nil {
 		t.Fatal(err)
@@ -391,6 +391,9 @@ func TestCapacityUnredeemedProtectRecoveryHandlerPostgres(t *testing.T) {
 			}
 			if (mode == "machine" || mode == "caller_boot") && f.bootReads.Load() != 0 {
 				t.Fatal("unauthorized input reached private SDK RPC", mode)
+			}
+			if mode != "machine" && mode != "caller_boot" && f.bootReads.Load() != 1 {
+				t.Fatal("SDK negative did not reach its actual private RPC", mode)
 			}
 			f.assertOriginals(t)
 			var count int

@@ -75,7 +75,7 @@ func protectRecoveryPGSetup(t *testing.T) protectRecoveryPG {
 	}
 	f.b.CheckpointSHA256 = nativeCanonicalArchiveSHA(raw)
 	// Expire only a fixture's mutable lease, not command deadlines/history.
-	if _, err = db.Exec(`UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb((clock_timestamp()-interval '1 second')::text)) WHERE namespace=$1`, policy.Metadata.Namespace); err != nil {
+	if _, err = db.Exec(`UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, policy.Metadata.Namespace, time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)); err != nil {
 		t.Fatal(err)
 	}
 	wf := abortPGCreate(t, db, policy.Metadata.Namespace, "workflow", "recover-protect", protectRecoveryWorkflow(f.b))
@@ -127,7 +127,7 @@ func TestCapacityNativeProtectRecoveryPostgres(t *testing.T) {
 		// A distinct ordinary invocation reacquires the expired mutable lease
 		// through its normal admission producer; it does not impersonate the
 		// human workflow or reuse that executor.
-		if _, err = f.db.Exec(`UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb((clock_timestamp()-interval '1 second')::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace); err != nil {
+		if _, err = f.db.Exec(`UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)); err != nil {
 			t.Fatal(err)
 		}
 		ordinary.ExecutorID = uuid.NewString()
@@ -260,7 +260,7 @@ func TestCapacityNativeProtectRecoveryRefusalsPostgres(t *testing.T) {
 			case "restarted":
 				f.boot.Observation.RestartCount++
 			case "live_lease":
-				if _, err := f.db.Exec(`UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb((clock_timestamp()+interval '1 hour')::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace); err != nil {
+				if _, err := f.db.Exec(`UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)); err != nil {
 					t.Fatal(err)
 				}
 			case "missing_original":
