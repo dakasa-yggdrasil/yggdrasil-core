@@ -114,10 +114,14 @@ func nativeAbortQuarantineValidated(ctx context.Context, tx *sql.Tx, policy mode
 		return false, err
 	}
 	var q model.CapacityNativeAbortQuarantine
-	if capacity.DecodeNativeCapacity(json.RawMessage(raw), &q) != nil || digest != nativeCanonicalArchiveSHA(raw) || q.Schema != capacity.NativeAbortQuarantineSchema || q.Binding.CommandID != id.String() || uid != q.Binding.Native.PodUID || ns != policy.Metadata.Namespace || env != p.Environment || domain != p.Domain || dimension != p.Dimension || capacity.ValidateNativeAbortQuarantineBinding(policy, p, q.Binding) != nil || !capacity.NativeProcessNonce(q.WorkflowID) || !validCapacityExecutor(q.ExecutorID) || q.OperatorID != q.Binding.Native.OperatorID || q.QuarantinedAt.IsZero() || !q.LeaseExpiredAt.Before(q.QuarantinedAt) || q.History != (model.CapacityNativeAbortZeroHistory{CommandIdentities: 2, HotCommands: 1, ArchivedCommands: 1}) || capacity.ValidateNativeAbortQuarantineAbsence(p, q.Binding.Native, q.Observation, q.QuarantinedAt) != nil {
+	if capacity.DecodeNativeCapacity(json.RawMessage(raw), &q) != nil || digest != nativeCanonicalArchiveSHA(raw) || q.Schema != capacity.NativeAbortQuarantineSchema || q.Binding.CommandID != id.String() || uid != q.Binding.Native.PodUID || ns != policy.Metadata.Namespace || env != p.Environment || domain != p.Domain || dimension != p.Dimension {
 		return false, ErrCapacityConflict
 	}
-	_, parentSHA, childSHA, seedSHA, e := nativeAbortQuarantineFacts(ctx, tx, policy, p, q.Binding, q.QuarantinedAt, false)
+	origin, op, err := nativeAbortQuarantineOriginPolicy(ctx, tx, policy, p, q.Binding)
+	if err != nil || capacity.ValidateNativeAbortQuarantineBinding(origin, op, q.Binding) != nil || !capacity.NativeProcessNonce(q.WorkflowID) || !validCapacityExecutor(q.ExecutorID) || q.OperatorID != q.Binding.Native.OperatorID || q.QuarantinedAt.IsZero() || !q.LeaseExpiredAt.Before(q.QuarantinedAt) || q.History != (model.CapacityNativeAbortZeroHistory{CommandIdentities: 2, HotCommands: 1, ArchivedCommands: 1}) || capacity.ValidateNativeAbortQuarantineAbsence(op, q.Binding.Native, q.Observation, q.QuarantinedAt) != nil {
+		return false, ErrCapacityConflict
+	}
+	_, parentSHA, childSHA, seedSHA, e := nativeAbortQuarantineFacts(ctx, tx, origin, op, q.Binding, q.QuarantinedAt, false)
 	if e != nil || parentSHA != q.ParentRecordSHA256 || childSHA != q.CommandRecordSHA256 || seedSHA != q.ResultSeedSHA256 {
 		return false, ErrCapacityConflict
 	}
