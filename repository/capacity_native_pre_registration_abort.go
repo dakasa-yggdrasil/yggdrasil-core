@@ -20,6 +20,9 @@ import (
 // A permanent identity is a deny fence even if its HOT/archive body is missing.
 // Call only after lockNativeBoundOwner, in the existing scope -> UID lock order.
 func guardNativePreRegistrationAbortTx(ctx context.Context, tx *sql.Tx, uid string) error {
+	if err := guardMigratedNativeOriginTx(ctx, tx, uid); err != nil {
+		return err
+	}
 	var n int
 	if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM public.capacity_native_command_identities WHERE subject_uid=$1 AND operation=$2)+(SELECT count(*) FROM public.capacity_native_commands WHERE subject_uid=$1 AND operation=$2)`, uid, capacity.DestroyNativeUnregisteredProtection).Scan(&n); err != nil {
 		return err

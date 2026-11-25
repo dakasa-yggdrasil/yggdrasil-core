@@ -49,6 +49,9 @@ func (s CapacityStore) AcquireNativeLifetimeExecution(ctx context.Context, polic
 func nativeLifetimeCheckpoint(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, uid string) (model.CapacityNativePodCheckpoint, error) {
 	var raw []byte
 	var checkpoint model.CapacityNativePodCheckpoint
+	if err := guardMigratedNativeOriginTx(ctx, tx, uid); err != nil {
+		return checkpoint, err
+	}
 	var err error
 	if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
 		err = tx.QueryRowContext(ctx, `SELECT checkpoint_record FROM public.capacity_native_lifetimes WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND pod_uid=$5 FOR UPDATE`, current.Namespace, p.Environment, p.Domain, p.Dimension, uid).Scan(&raw)
@@ -96,7 +99,12 @@ func (s CapacityStore) RegisterNativeLifetime(ctx context.Context, policy model.
 		if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE checkpoint_record->>'state'<>'released') FROM public.capacity_native_lifetimes WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&retained, &active); err != nil {
 			return err
 		}
-		if pending.ActiveUnsettled != 0 || retained >= maxNativeRetainedLifetimes || active >= maxNativeActiveLifetimes {
+		retired, err := migratedNativeOriginCountTx(ctx, tx, policy, p)
+		if err != nil {
+			return err
+		}
+		active -= retired
+		if active < 0 || pending.ActiveUnsettled != 0 || retained >= maxNativeRetainedLifetimes || active >= maxNativeActiveLifetimes {
 			return ErrCapacityConflict
 		}
 		var archived int
@@ -215,13 +223,40 @@ func nativeLifetimeLedger(ctx context.Context, db *sql.DB, policy model.Manifest
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
-	active := 0
+	all := []model.CapacityNativePodCheckpoint{}
 	for rows.Next() {
 		var raw []byte
 		var record model.CapacityNativePodCheckpoint
 		if rows.Scan(&raw) != nil || json.Unmarshal(raw, &record) != nil {
+			rows.Close()
 			return nil, nil, ErrCapacityConflict
+		}
+		all = append(all, record)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil || len(all) > maxNativeRetainedLifetimes {
+		return nil, nil, ErrCapacityConflict
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback()
+	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
+		return nil, nil, err
+	}
+	if _, err = migratedNativeOriginCountTx(ctx, tx, policy, p); err != nil {
+		return nil, nil, err
+	}
+	active := 0
+	for _, record := range all {
+		retired, err := migratedNativeOriginValidated(ctx, tx, policy, p, record.PodUID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if retired {
+			continue
 		}
 		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.BindingSHA256 != capacity.NativeLifetimeBindingSHA256(p) {
 			if admissionOnly {
@@ -234,10 +269,10 @@ func nativeLifetimeLedger(ctx context.Context, db *sql.DB, policy model.Manifest
 		}
 		checkpoints = append(checkpoints, record)
 	}
-	if len(checkpoints) > maxNativeRetainedLifetimes || active > maxNativeActiveLifetimes {
+	if active > maxNativeActiveLifetimes {
 		return nil, nil, ErrCapacityConflict
 	}
-	return commands, checkpoints, rows.Err()
+	return commands, checkpoints, tx.Commit()
 }
 
 // Every actual baseline lifetime is admitted before the reservation CAS. The

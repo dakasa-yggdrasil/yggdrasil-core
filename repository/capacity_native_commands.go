@@ -263,6 +263,21 @@ func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string
 	if json.Unmarshal(policyRaw, &p) != nil || capacity.ValidatePolicy(p) != nil || p.HPAExecutionBinding == nil || p.AssessmentBinding == nil || !p.ExecutionEnabled || p.HPAExecutionBinding.AdapterPrincipalID != principal || p.AssessmentBinding.Snapshot.Adapter != command.Adapter {
 		return permit, ErrCapacityMutationAuthorization
 	}
+	var subject struct {
+		UID string `json:"expected_pod_uid"`
+	}
+	if json.Unmarshal(command.Request, &subject) != nil {
+		return permit, ErrCapacityConflict
+	}
+	if subject.UID != "" {
+		key, _ := json.Marshal([]string{"capacity-bound-native-uid", subject.UID})
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, string(key)); err != nil {
+			return permit, err
+		}
+		if err := guardMigratedNativeOriginTx(ctx, tx, subject.UID); err != nil {
+			return permit, err
+		}
+	}
 	workflow := nativeCapacityWorkflow(p, command.AdmissionOnly)
 	if err := tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, command.WorkflowID, workflow.Namespace, workflow.Name).Scan(&active); err != nil || !active {
 		return permit, ErrCapacityMutationAuthorization

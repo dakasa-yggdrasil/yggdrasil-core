@@ -684,6 +684,9 @@ func executeWorkflowStep(
 			if guestOriginalOperation(result.Operation) {
 				return executeCapacityGuestWorkflowStep(withOriginalGuestWorkflowTransport(ctx, conn), db, workflowRef, step, result, renderedInput)
 			}
+			if result.Operation == capacity.RetireMigratedNativeOrigin {
+				return executeCapacityMigratedNativeOriginStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
 			if result.Operation == capacity.QuarantineUncertainNativeBirth {
 				return executeCapacityNativeAbortQuarantineStep(ctx, conn, db, workflowRef, result, renderedInput)
 			}
