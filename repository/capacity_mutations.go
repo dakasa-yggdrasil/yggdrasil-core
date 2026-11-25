@@ -116,11 +116,17 @@ func (s CapacityStore) mutationTransactionWithCommitReturn(ctx context.Context, 
 	}
 	policyActive := active
 	workflow := nativeCapacityWorkflow(p, s.AdmissionOnly)
-	if err = tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, s.WorkflowID, workflow.Namespace, workflow.Name).Scan(&active); err != nil {
-		return err
-	}
-	if !active {
-		return ErrCapacityMutationAuthorization
+	if s.protectRecovery != nil {
+		if err = s.nativeProtectRecoverySettlementAuthority(ctx, tx, policy, p); err != nil {
+			return err
+		}
+	} else {
+		if err = tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, s.WorkflowID, workflow.Namespace, workflow.Name).Scan(&active); err != nil {
+			return err
+		}
+		if !active {
+			return ErrCapacityMutationAuthorization
+		}
 	}
 	var now time.Time
 	if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {

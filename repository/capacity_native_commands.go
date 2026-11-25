@@ -279,8 +279,19 @@ func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string
 		}
 	}
 	workflow := nativeCapacityWorkflow(p, command.AdmissionOnly)
-	if err := tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, command.WorkflowID, workflow.Namespace, workflow.Name).Scan(&active); err != nil || !active {
-		return permit, ErrCapacityMutationAuthorization
+	if command.ProtectRecovery != nil {
+		var policyName string
+		if err := tx.QueryRowContext(ctx, `SELECT name FROM public.manifests WHERE id=$1 AND namespace=$2 AND kind='capacity_policy' AND active AND checksum=$3 FOR SHARE`, command.PolicyID, command.Namespace, checksum).Scan(&policyName); err != nil {
+			return permit, ErrCapacityConflict
+		}
+		policy := model.Manifest{ID: command.PolicyID, Kind: "capacity_policy", Checksum: checksum, Spec: policyRaw, Metadata: model.ManifestMetadata{Namespace: command.Namespace, Name: policyName}}
+		if err := nativeProtectRecoveryStored(ctx, tx, policy, p, command); err != nil {
+			return permit, err
+		}
+	} else {
+		if err := tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, command.WorkflowID, workflow.Namespace, workflow.Name).Scan(&active); err != nil || !active {
+			return permit, ErrCapacityMutationAuthorization
+		}
 	}
 	if err := checkMutationIntegration(ctx, tx, nativeObservationMutationBinding(command.Adapter)); err != nil {
 		return permit, err
