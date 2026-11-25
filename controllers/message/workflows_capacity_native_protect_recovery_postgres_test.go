@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -115,7 +114,7 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 	callback := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request model.CapacityNativeAuthorityRedeemRequest
 		if r.Method != http.MethodPost || r.URL.Path != "/redeem" || r.TLS == nil || json.NewDecoder(r.Body).Decode(&request) != nil {
-			http.Error(w, "invalid protocol callback", 400)
+			http.Error(w, "invalid protocol callback", http.StatusBadRequest)
 			return
 		}
 		// The authenticated principal is fixed by this private authority fixture,
@@ -124,7 +123,7 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 		permit, e := store.RedeemNativeCommand(r.Context(), "native-adapter", request)
 		if e != nil {
 			t.Errorf("actual callback redemption refused: %v", e)
-			http.Error(w, "callback refused", 403)
+			http.Error(w, "callback refused", http.StatusForbidden)
 			return
 		}
 		f.redemptions.Add(1)
@@ -164,7 +163,7 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 		}
 		var req model.AdapterExecuteIntegrationRequest
 		if r.Method != http.MethodPost || r.URL.Path != "/execute" || json.NewDecoder(r.Body).Decode(&req) != nil || req.Operation != req.Capability {
-			http.Error(w, "invalid native request", 400)
+			http.Error(w, "invalid native request", http.StatusBadRequest)
 			return
 		}
 		switch req.Operation {
@@ -196,14 +195,14 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 			var actual model.AdapterEnsureCapacityPodDrainRequest
 			if !ok || token == "" || capacity.DecodeNativeCapacity(fields, &actual) != nil || actual.Phase != "protect" || actual.ExpectedPodUID != f.checkpoint.PodUID || actual.ExpectedPodResourceVersion != "30" || actual.ExpectedContainerID != f.checkpoint.ContainerID || actual.ExpectedRestartCount != f.checkpoint.RestartCount {
 				t.Error("ensure escaped the observed immutable lifetime")
-				http.Error(w, "unexpected ensure", 400)
+				http.Error(w, "unexpected ensure", http.StatusBadRequest)
 				return
 			}
 			var challenge model.NativePodTerminationChallenge
 			_ = json.Unmarshal(f.checkpoint.OriginChallengeBytes, &challenge)
 			if !reflect.DeepEqual(actual.Challenge, challenge) {
 				t.Error("recovery replaced the original SDK challenge")
-				http.Error(w, "foreign origin", 400)
+				http.Error(w, "foreign origin", http.StatusBadRequest)
 				return
 			}
 			b := f.spec.AssessmentBinding.Snapshot.Adapter
@@ -212,21 +211,21 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 			call, e := http.NewRequestWithContext(r.Context(), http.MethodPost, callback.URL+"/redeem", bytes.NewReader(body))
 			if e != nil {
 				t.Error(e)
-				w.WriteHeader(500)
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			resp, e := callback.Client().Do(call)
 			if e != nil {
 				t.Error(e)
-				w.WriteHeader(500)
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			raw, e := io.ReadAll(resp.Body)
 			closeErr := resp.Body.Close()
 			var permit model.CapacityNativeAuthorityPermit
-			if resp.StatusCode != 200 || e != nil || closeErr != nil || json.Unmarshal(raw, &permit) != nil || permit.CommandID == uuid.Nil || permit.RequestSHA256 != redeem.RequestSHA256 {
+			if resp.StatusCode != http.StatusOK || e != nil || closeErr != nil || json.Unmarshal(raw, &permit) != nil || permit.CommandID == uuid.Nil || permit.RequestSHA256 != redeem.RequestSHA256 {
 				t.Error("the actual TLS callback was not received", resp.StatusCode, e, closeErr)
-				w.WriteHeader(500)
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(model.AdapterExecuteIntegrationResponse{Operation: req.Operation, Capability: req.Capability, Status: "protected", Output: map[string]any{"status": "protected"}})
@@ -241,7 +240,7 @@ func newProtectRecoveryControllerFixture(t *testing.T) *protectRecoveryControlle
 			_ = json.NewEncoder(w).Encode(model.AdapterExecuteIntegrationResponse{Operation: req.Operation, Capability: req.Capability, Status: outer, Output: model.AdapterCapacityPodTerminationResponse{Operation: req.Operation, Status: "observed", Observation: pod}})
 		default:
 			t.Error("unexpected native operation", req.Operation)
-			w.WriteHeader(400)
+			w.WriteHeader(http.StatusBadRequest)
 		}
 	}))
 	t.Cleanup(adapter.Close)
@@ -396,7 +395,7 @@ func TestCapacityUnredeemedProtectRecoveryHandlerPostgres(t *testing.T) {
 			f.assertOriginals(t)
 			var count int
 			if err := f.db.QueryRow("SELECT count(*) FROM public.capacity_native_command_identities WHERE subject_uid=$1", f.binding.PodUID).Scan(&count); err != nil || count != 4 {
-				t.Fatal(fmt.Sprintf("refusal minted a child: %d %v", count, err))
+				t.Fatalf("refusal minted a child: %d %v", count, err)
 			}
 		})
 	}
