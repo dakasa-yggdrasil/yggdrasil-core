@@ -1039,6 +1039,47 @@ jobs:
           if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':112,'schema110_applied':True,'quarantine_table_present':True,'migrated_retirement_table_present':True}:
               raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
           PYCHECK
+      - name: Qualify one-child unredeemed protect recovery on PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/scheduler-skip/native-protect-recovery"
+          mkdir -m 700 "$evidence"
+          set +e
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=180s ./repository ./internal/capacity ./controllers/message ./manifest -run '^(TestCapacityNativeProtectRecovery.*Postgres|TestNativeProtectRecovery(Binding|FreshSameSDK|WorkflowRegistration)|TestCapacityUnredeemedProtectRecoveryHandlerPostgres)$' 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          test "${pipeline_status[0]}" -eq 0 && test "${pipeline_status[1]}" -eq 0 || exit 1
+          python3 - <<'PYPROTECT'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/native-protect-recovery'
+          cases={
+            'TestCapacityNativeProtectRecoveryPostgres':['one_child_then_normal_admission','unredeemed_child_is_terminal','redeemed_without_readback_holds'],
+            'TestCapacityNativeProtectRecoveryConcurrencyPostgres':[],
+            'TestCapacityNativeProtectRecoveryRefusalsPostgres':['machine','different_human','policy','generation','fence','checkpoint_hash','command_hash','duplicate_id','order','missing_original','redeemed_original','unknown_original','native_readback','changed_cid','changed_start','changed_nonce','empty_rv','stale_sdk','roots_open','restarted','live_lease','fifth_identity_without_body','workflow_async','workflow_retry','workflow_binding_template','orphan_archive_reference','checkpoint_receipt','checkpoint_root_ack'],
+            'TestNativeProtectRecoveryBinding':['schema','policy','checksum','operator','pod','checkpoint','generation','fence','three','five','duplicate','digest','confirmation'],
+            'TestNativeProtectRecoveryFreshSameSDK':['exact','stale','future','cid','start','nonce','roster','rv','uid','image','restart','deleting','roots_open','projection','receipt','finished','exit','planned'],
+            'TestNativeProtectRecoveryWorkflowRegistration':['advertised_builtin','arbitrary_builtin'],
+            'TestCapacityUnredeemedProtectRecoveryHandlerPostgres':['actual_boot_one_ensure_TLS_redemption_and_readback','machine','stale','foreign_nonce','caller_boot','outer_failed','after_failed_retains_uncertain_child'],
+          }
+          expected=set(cases)|{parent+'/'+child for parent,children in cases.items()for child in children}
+          assert len(cases)==7 and len(expected)==78
+          events=[json.loads(line)for line in(root/'original.jsonl').read_text().splitlines()if line.strip()]
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in('repository','internal/capacity','controllers/message','manifest')}
+          if any(e.get('Package')not in packages or e.get('Action')in('skip','fail')for e in events):
+              raise SystemExit('Protect recovery original package/failure/skip refused')
+          for action in('run','pass'):
+              actual=[e['Test']for e in events if e.get('Action')==action and e.get('Test')]
+              if set(actual)!=expected or len(actual)!=len(expected):
+                  raise SystemExit('Protect recovery seven-root/78-node census incomplete')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start'and not e.get('Test')for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass'and not e.get('Test')for e in events)!=1:
+                  raise SystemExit('Protect recovery package did not complete once')
+          if 'WARNING: DATA RACE'in(root/'go-test.stderr').read_text()or any('WARNING: DATA RACE'in e.get('Output','')for e in events):
+              raise SystemExit('Protect recovery Source race warning retained')
+          (root/'census.json').write_text(json.dumps({'source_head':(root.parent/'source-head.txt').read_text().strip(),'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'roots':7,'nodes':78,'failures':0,'skips':0,'native_physical_qualification':False,'ordinary_phase_cap':4,'one_separate_child':True},sort_keys=True)+'\n')
+          PYPROTECT
       - name: Qualify schema109 to110 complete event identities with unchanged C7 Goose behavior
         shell: bash
         env:

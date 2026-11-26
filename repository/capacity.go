@@ -39,6 +39,7 @@ type CapacityStore struct {
 	hostOriginalClaim                   *hostOriginalClaim
 	hostOriginalFactory                 *hostOriginalFactoryScope
 	hostOriginalOrdinary                *hostOriginalOrdinaryFactory
+	protectRecovery                     *model.CapacityNativeCommand
 	guestReconcile                      *guestReconcileSource
 	guestPresendRecovery                *guestPresendRecovery
 	witnessedExpansionOwner             *witnessedExpansionOwner

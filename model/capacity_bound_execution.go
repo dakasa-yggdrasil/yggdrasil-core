@@ -74,6 +74,8 @@ type CapacityNativeCommand struct {
 	OriginalResult         json.RawMessage                   `json:"original_result,omitempty"`
 	OriginalResultSHA256   string                            `json:"original_result_sha256,omitempty"`
 	CallerReturnObservedAt *time.Time                        `json:"caller_return_observed_at,omitempty"`
+
+	ProtectRecovery *CapacityUnredeemedProtectRecoveryProof `json:"protect_recovery,omitempty"`
 }
 
 // This is a private durable target checkpoint, not caller proof. A same-name

@@ -125,7 +125,7 @@
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "95fa32f10b427c41b094dc0f1967aadd5cc2ae0b48d3c0bbb7df3eb1cc461a1e"
+      "sha256": "5a8081b3a7787849419d3e8898495143560fd5f77a2d57023183f4af8662277a"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "15b3f0b30ae79f60cde03d7c1471abf79e905bf4fd3c0b762f1990fd1dd41cb1"
+    "sha256": "f8e110c99723f162ded2142830b0def06b88a7f52216328b86a13ee5bcd98a65"
   },
   "unresolved": []
 }

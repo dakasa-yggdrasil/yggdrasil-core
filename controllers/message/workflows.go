@@ -693,6 +693,9 @@ func executeWorkflowStep(
 			if result.Operation == capacityRecoverUnredeemedNativeBirthOperation {
 				return executeCapacityPreRegistrationAbortRecoveryStep(ctx, conn, db, workflowRef, result, renderedInput)
 			}
+			if result.Operation == capacity.RecoverUnredeemedNativeProtect {
+				return executeCapacityUnredeemedProtectRecoveryStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
 			if result.Operation == capacityAbortNativeBirthOperation {
 				return executeCapacityPreRegistrationAbortStep(ctx, conn, db, workflowRef, result, renderedInput)
 			}

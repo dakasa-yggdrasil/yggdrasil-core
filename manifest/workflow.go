@@ -70,6 +70,7 @@ var (
 		"capacity.admit_bound",
 		"capacity.abort_native_birth",
 		"capacity.recover_unredeemed_native_birth",
+		"capacity.recover_unredeemed_native_protect",
 		"capacity.quarantine_uncertain_native_birth",
 		"capacity.retire_migrated_native_origin",
 		"capacity.provision_original_guest",
