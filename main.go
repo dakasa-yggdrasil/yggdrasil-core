@@ -15,6 +15,10 @@ import (
 )
 
 func main() {
+	os.Exit(dispatchCPUCapacityCommand(os.Args[1:], os.Stdout, os.Stderr, runCore, readFixedCPUCapacityRuntime))
+}
+
+func runCore() {
 	serviceName := "yggdrasil-core"
 	app := runtime.New(serviceName)
 	role, err := coreprocess.FromEnvironment()

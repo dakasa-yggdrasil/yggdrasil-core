@@ -540,3 +540,20 @@ R4 SQL migration-view no-op; native compatibility and adoption remain separate.
 ### Failed native birth before registration
 
 The separate protected `capacity.abort_native_birth` workflow operation disposes only a fixed, failed/deleting native birth under a server-owned global-zero-history proof and permanent command-identity deny fence. It never creates an SDK lifetime or lane witness and never weakens successful drain/release. The original policy and admitted processes are preserved; a separately reviewed adapter binding and fresh execution fence are mandatory. Unknown originals remain held. See [ADR-0121](docs/adr/0121-dispose-native-failed-births-before-registration-separately.md).
+
+### Fixed CPU capacity observation
+
+The `/app/yggdrasil-core --print-cpu-capacity-runtime` command reads only five
+fixed Linux kernel files and exits before constructing the service runtime,
+loading credentials or starting listeners and dependencies. It writes one JSON
+line with exactly `schemaVersion`, `pid1StartTicks`, `sameCgroup`,
+`cpuQuotaMicros`, `cpuPeriodMicros`, `cpuUnlimited`, `memoryMaxBytes` and
+`memoryUnlimited`. This is the existing schema version 1 capacity observation.
+An unlimited kernel value is an explicit `null` bound and `true` unlimited flag.
+
+The reader requires a stable PID1 lifetime and matching root cgroup-v2 membership
+across both observations. Unsupported hierarchies, changed limits and read errors
+return a fixed diagnostic with a nonzero exit code. It accepts no path or value
+arguments and emits no process command, cgroup path or credential. Normal Core
+startup and its API worker lifecycle remain unchanged. A caller still binds the
+result to the actual Pod, container and image before managing CPU capacity.
