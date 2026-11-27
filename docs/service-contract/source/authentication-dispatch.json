@@ -38,6 +38,18 @@
     },
     {
       "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_phases.go",
+      "function": "nativeWorkerPhasePath",
+      "line": 24
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_phases.go",
+      "function": "serveNativeWorkerPhaseRequest",
+      "line": 61
+    },
+    {
+      "build_constraint": "default",
       "file": "controllers/httpapi/contact_phone.go",
       "function": "phoneProfileExemptPath",
       "line": 25
@@ -58,19 +70,19 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleRequest",
-      "line": 1216
+      "line": 1220
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "mfaEnrollmentExemptPath",
-      "line": 1266
+      "line": 1270
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleAPI",
-      "line": 1293
+      "line": 1297
     },
     {
       "build_constraint": "default",

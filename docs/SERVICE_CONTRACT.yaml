@@ -118,14 +118,14 @@
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "9d9f93dbfdb16f57c802a312eec2c35294c92422c8f6339f119f008978e1ed6d"
+      "sha256": "7d9fca85e36c35b2197aa0a8177e96c57be50f296c097c0cbe2b5ecb7d77a8e7"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "6e909c41e1ea72207515f3d45dd69ef115f93b2bd0c6c46bd251928b9c7f8d1c"
+      "sha256": "a4b5ce0bdacdfde98b0dd58b4962d9aaf61676231ce2cba474d234747afcf05f"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "5346ac43c5415cffd442290b4852226bf65da8743f7b4d8efe3a89b435553c20"
+    "sha256": "1ba07c310da5e543dcc13089845a3f0824fcae7f9e5dd81a219ee9944bf7e010"
   },
   "unresolved": []
 }

@@ -1054,6 +1054,10 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			s.serveOriginalCanaryAuthority(w, r)
 			return
 		}
+		if nativeWorkerPhasePath(r.URL.Path) {
+			s.serveNativeWorkerPhaseRequest(w, r, s.capacityMutationCredential(r))
+			return
+		}
 		if principal := s.capacityMutationCredential(r); principal != nil || capacityMutationPath(r.URL.Path) {
 			s.serveCapacityMutationRequest(w, r, principal)
 			return
@@ -1450,6 +1454,8 @@ type Server struct {
 	originalGuestAsyncWorkflowOwner guestOriginalAsyncWorkflowOwner
 	originalCanaryAuthorities       *capacity.OriginalCanaryAuthorityRegistry
 	capacityMutationPrincipals      []capacityMutationPrincipal
+	nativeWorkerRuntime             repository.NativeWorkerRuntime
+	nativeWorkerPhaseRuntime        repository.NativeWorkerPhaseRuntime
 	capacityGuestPrincipals         []capacityGuestPrincipal
 	capacityHostFactoryPrincipals   []hostFactoryPrincipal
 	snapshotHMACSecret              []byte

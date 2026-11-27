@@ -61,3 +61,8 @@ Tests run only in GitHub Actions. The source includes deterministic policy/decod
 Read-only source integration, CI success and rendered plans are reported separately from installed adapters, actual private-network connectivity, accepted useful workers, complete drain/retirement and production switching. This contract makes no arbitrary-traffic or infinite-capacity deadline promise.
 
 See [ADR-0128](../adr/0128-bind-adaptive-capacity-to-fresh-provider-observations.md) and [ADR-0129](../adr/0129-observe-native-worker-pools-independently-of-hpa.md).
+
+The separate opt-in [Native child lifecycle](native-worker-lifecycle.md) records
+UUID attempts under an existing fenced reservation. Its execution identity is
+distinct from these read-only price collectors, and its ledger is not proof of
+an installed or useful worker.

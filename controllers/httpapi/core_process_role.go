@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Server) workerRouteAllowed(r *http.Request) bool {
-	if originalCanaryAuthorityClaim(r) || capacityGuestPath(r.URL.Path) || capacityMutationPath(r.URL.Path) || hostFactoryPath(r.URL.Path) {
+	if originalCanaryAuthorityClaim(r) || capacityGuestPath(r.URL.Path) || capacityMutationPath(r.URL.Path) || nativeWorkerPhasePath(r.URL.Path) || hostFactoryPath(r.URL.Path) {
 		return false
 	}
 	p := r.URL.Path
