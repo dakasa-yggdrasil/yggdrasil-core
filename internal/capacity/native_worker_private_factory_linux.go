@@ -43,7 +43,7 @@ func nativePrivateOpenFile(path string, private bool) (*os.File, error) {
 }
 
 func nativePrivateStable(a, b os.FileInfo) bool {
-	return os.SameFile(a, b) && a.Size() == b.Size() && a.ModTime() == b.ModTime() && a.Mode() == b.Mode()
+	return os.SameFile(a, b) && a.Size() == b.Size() && a.ModTime().Equal(b.ModTime()) && a.Mode() == b.Mode()
 }
 
 func nativePrivateReadFile(path string, limit int64, private bool) ([]byte, error) {
