@@ -160,7 +160,7 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 			owned.originalReturn = func(joined bool) { original.CallerJoined = joined }
 			native = &owned
 		}
-		exactNumbers := op == capacity.ObserveComputeOffer || op == capacity.ObserveNativeWorkerPool
+		exactNumbers := op == capacity.ObserveComputeOffer || op == capacity.ObserveNativeWorkerPool || op == capacity.ObserveNativeWorkerPhase
 		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, exactJSONNumbers: exactNumbers, safeError: errCapacityBoundAssessment, requireExplicitResponse: true, nativeHTTP: native})
 		e = capacityDispatchCause(ctx, e)
 		if err := capacityDispatchFence(ctx); err != nil {

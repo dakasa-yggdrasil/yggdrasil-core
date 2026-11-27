@@ -8,6 +8,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // No input carries prices, adapter choices, registry identity or worker count.
@@ -70,6 +71,9 @@ func marketObservationAdapter(b model.CapacityMarketAdapterBinding) model.Capaci
 }
 
 func capacityMarketAdapterVersion(p model.CapacityPolicySpec, b model.CapacityObservationAdapterBinding) (int, bool) {
+	if p.NativeWorkerLifecycleBinding != nil && p.NativeWorkerLifecycleBinding.PhaseObserver != nil && marketObservationAdapter(p.NativeWorkerLifecycleBinding.PhaseObserver.Adapter) == b {
+		return p.NativeWorkerLifecycleBinding.PhaseObserver.Adapter.Version, true
+	}
 	if p.NativeWorkerPoolBinding != nil && marketObservationAdapter(p.NativeWorkerPoolBinding.Adapter) == b {
 		return p.NativeWorkerPoolBinding.Adapter.Version, true
 	}
@@ -81,6 +85,37 @@ func capacityMarketAdapterVersion(p model.CapacityPolicySpec, b model.CapacityOb
 		}
 	}
 	return 0, false
+}
+
+// This is a protected process-composition port, not a workflow capability.
+// No caller selects an endpoint, credentials, policy, adapter version or price.
+func NewNativeWorkerPhaseReadFunc(db *sql.DB, conn *amqp.Connection) capacity.NativeWorkerPhaseReadFunc {
+	return func(ctx context.Context, b model.CapacityNativeWorkerPhaseReadBinding, providerID, birthSHA string) (model.CapacityNativeWorkerPhaseReadObservation, error) {
+		var out model.CapacityNativeWorkerPhaseReadObservation
+		if db == nil || ctx.Err() != nil || capacityDispatchFence(ctx) != nil {
+			return out, errCapacityBoundAssessment
+		}
+		observed, err := resolveCapacityObservationAdapterWithResolver(ctx, conn, db, marketObservationAdapter(b.Adapter), []string{capacity.ObserveNativeWorkerPhase}, resolveIntegrationInstance)
+		if err != nil || observed.instance.Version != b.Adapter.Version || !capacityNativeCatalogOperation(observed.typeSpec, capacity.ObserveNativeWorkerPhase) {
+			return out, errCapacityBoundAssessment
+		}
+		for _, action := range observed.typeSpec.ActionCatalog {
+			if action.Name == capacity.ObserveNativeWorkerPhase && !action.Idempotent {
+				return out, errCapacityBoundAssessment
+			}
+		}
+		child, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		fixed := map[string]any{"binding_name": b.Name, "provider_id": providerID, "creation_proof_sha256": birthSHA}
+		result, err := executeIntegrationThroughResolvedWithPolicy(child, conn, model.ExecuteIntegrationRequest{Operation: capacity.ObserveNativeWorkerPhase, Capability: capacity.ObserveNativeWorkerPhase, Input: fixed}, observed.instance, observed.instanceSpec, observed.typ, observed.typeSpec, 20*time.Second, integrationExecutionPolicy{detailFreeErrors: true, exactJSONNumbers: true, safeError: errCapacityBoundAssessment, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}})
+		if err != nil || result.Status != "observed" || capacityDispatchFence(ctx) != nil || capacity.DecodeNativeCapacity(result.Output, &out) != nil {
+			return model.CapacityNativeWorkerPhaseReadObservation{}, errCapacityBoundAssessment
+		}
+		if out.Adapter != b.Adapter || out.SourceCommit != b.SourceCommit || out.BindingName != b.Name || out.BindingScopeSHA256 != b.ScopeSHA256 || out.RequestedProviderID != providerID || out.RequestedCreationProofSHA256 != birthSHA {
+			return model.CapacityNativeWorkerPhaseReadObservation{}, errCapacityBoundAssessment
+		}
+		return out, nil
+	}
 }
 
 func observeCapacityWorkerMarket(p model.CapacityPolicySpec, read func(model.CapacityObservationAdapterBinding, string, map[string]any, any) (string, error), now time.Time) (*model.CapacityNativeWorkerPoolObservation, *model.CapacityMarketAssessment, error) {

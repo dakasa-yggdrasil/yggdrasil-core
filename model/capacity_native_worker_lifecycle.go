@@ -14,6 +14,7 @@ type CapacityNativeWorkerLifecycleBinding struct {
 	SourceCommit      string                                     `json:"source_commit"`
 	MaxReadAgeSeconds int                                        `json:"max_read_age_seconds"`
 	Profiles          []CapacityNativeWorkerExecutionProfile     `json:"profiles"`
+	PhaseObserver     *CapacityNativeWorkerPhaseReadBinding      `json:"phase_observer,omitempty"`
 	RegistryWriter    *CapacityNativeWorkerRegistryWriterBinding `json:"registry_writer,omitempty"`
 }
 
