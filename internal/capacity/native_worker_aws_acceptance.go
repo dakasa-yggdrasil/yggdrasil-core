@@ -112,7 +112,7 @@ func decodeNativeAWSXML(raw []byte) (*nativeAWSXML, error) {
 			} else {
 				p := stack[len(stack)-1]
 				for _, prior := range p.children {
-					if strings.EqualFold(prior.name, n.name) && !(prior.name == "item" && n.name == "item" && strings.HasSuffix(p.name, "Set")) {
+					if strings.EqualFold(prior.name, n.name) && (prior.name != "item" || n.name != "item" || !strings.HasSuffix(p.name, "Set")) {
 						return nil, errNativePhysical
 					}
 				}
@@ -220,7 +220,7 @@ func decodeNativeAWSAcceptance(a model.CapacityNativeWorkerAttempt, original mod
 	out.createdAt = out.createdAt.UTC()
 	state := i.value("instanceState", "name")
 	stateCode, codeErr := strconv.Atoi(i.value("instanceState", "code"))
-	if !nativePhysicalRequestID(out.requestID) || wire.RequestID != "" && wire.RequestID != out.requestID || !regexp.MustCompile(`^i-[a-f0-9]{17}$`).MatchString(out.resourceID) || out.accountID != "153828470928" || !regexp.MustCompile(`^ami-[a-f0-9]{17}$`).MatchString(out.imageID) || out.instanceType == "" || out.networkID == "" || out.subnetID == "" || out.zone == "" || out.nativeIPv4 == "" || out.clientToken != a.ID.String() || codeErr != nil || !((state == "pending" && stateCode == 0) || (state == "running" && stateCode == 16)) || (i.child("rootDeviceType") != nil && i.value("rootDeviceType") != "ebs") || i.value("architecture") != "x86_64" {
+	if !nativePhysicalRequestID(out.requestID) || wire.RequestID != "" && wire.RequestID != out.requestID || !regexp.MustCompile(`^i-[a-f0-9]{17}$`).MatchString(out.resourceID) || out.accountID != "153828470928" || !regexp.MustCompile(`^ami-[a-f0-9]{17}$`).MatchString(out.imageID) || out.instanceType == "" || out.networkID == "" || out.subnetID == "" || out.zone == "" || out.nativeIPv4 == "" || out.clientToken != a.ID.String() || codeErr != nil || ((state != "pending" || stateCode != 0) && (state != "running" || stateCode != 16)) || (i.child("rootDeviceType") != nil && i.value("rootDeviceType") != "ebs") || i.value("architecture") != "x86_64" {
 		return out, errNativePhysical
 	}
 	nic := i.one("networkInterfaceSet")
