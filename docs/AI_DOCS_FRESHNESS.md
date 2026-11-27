@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 9d289f3c611ea185175994dee8fa18e227a22521
-verified_diff_sha256: 3a0e1e5f957feacfc3e155bb13d340fd88a93a263091022388ae149179788ab4
+verified_at_commit: 414b63f77c8ef101ce2287eb11317d8b8d328163
+verified_diff_sha256: 5a4fe76050e38a4540e7f212a342c37d8e7594ea127c61044d41cadd0176818a
 reconciler_schema: 1
 
 Reviewed the concrete protected Native factory, canonical System launch mirror,
@@ -31,3 +31,8 @@ The first real executable CI retained its constructor refusal and lint originals
 The owning closed decoder now receives canonical RawMessage object bytes, and
 filesystem timestamp stability uses Time.Equal. All qualification/tests and
 remaining guards are unchanged; the original regression root stays mandatory.
+
+The next CI retained a generic retirement caller conflict before admission. Its
+original cause is still unestablished. Failure-only fixture diagnostics preserve
+the original context and timing facts plus a later read-only database join; they
+do not retry the operation, change the signed deadline or relax any predicate.
