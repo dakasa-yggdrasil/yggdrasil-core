@@ -74,8 +74,8 @@ func TestNativeWorkerPrivateBootstrapHasOneExplicitPrivateSerializationPort(t *t
 				l = []byte("invalid")
 			}
 			got, e := NewCapacityNativeWorkerPrivateBootstrap(c, l, b, now)
-			defer got.Close()
 			if e == nil {
+				got.Close()
 				t.Fatal("invalid private serialization authority accepted")
 			}
 		})
