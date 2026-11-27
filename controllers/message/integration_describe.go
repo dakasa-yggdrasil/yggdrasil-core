@@ -44,6 +44,9 @@ func verifyResolvedIntegrationType(
 	instanceSpec model.IntegrationInstanceManifestSpec,
 	typeSpec model.IntegrationTypeManifestSpec,
 ) error {
+	if err := validateNativeWorkerRPCScope(ctx, instanceManifest, instanceSpec, typeManifest, typeSpec); err != nil {
+		return err
+	}
 	channel := adapterQueueForCapability(typeSpec.Adapter.Queues, "describe")
 	endpoint := adapterEndpointForCapability(typeSpec.Adapter.Endpoints, "describe")
 	stateDetails := integrationDescribeStateDetails(instanceManifest, typeManifest, typeSpec, channel, endpoint)
@@ -62,7 +65,7 @@ func verifyResolvedIntegrationType(
 	}
 
 	cacheKey := integrationDescribeCacheKey(instanceManifest, typeManifest, typeSpec, instanceSpec)
-	if capacityGuestPolicy(ctx) == nil && integrationDescribeRecentlyVerified(cacheKey) {
+	if capacityGuestPolicy(ctx) == nil && nativeWorkerRPC(ctx) == nil && integrationDescribeRecentlyVerified(cacheKey) {
 		return nil
 	}
 
@@ -244,6 +247,19 @@ func checkHTTPJSONTransportConnectivity(
 	instanceSpec model.IntegrationInstanceManifestSpec,
 	typeSpec model.IntegrationTypeManifestSpec,
 ) (string, map[string]any, error) {
+	if scope := nativeWorkerRPC(ctx); scope != nil {
+		base, e := adapterBaseURL(instanceSpec)
+		if e != nil || !scope.client.ScopeValid(scope.adapter, base) || typeSpec.Adapter.Endpoints.Describe != "/rpc/describe" || typeSpec.Adapter.Endpoints.Execute != "/rpc/execute" {
+			return "", nil, errAdapterCallFailed
+		}
+		// Dedicated Native adapters announce RPC routes, while public health
+		// lives on a different listener. Only protected configuration selects
+		// that diagnostic URL; a catalog field cannot redirect its read.
+		if scope.client.Probe(ctx) != nil {
+			return "", nil, errAdapterCallFailed
+		}
+		return "fixed Native public health observed", map[string]any{"diagnostic_only": true}, nil
+	}
 	if guest := capacityGuestPolicy(ctx); guest != nil {
 		baseURL, err := adapterBaseURL(instanceSpec)
 		if err != nil || baseURL != guest.baseURL || typeSpec.Adapter.Endpoints.Describe != "/rpc/describe" || typeSpec.Adapter.Endpoints.Execute != "/rpc/execute" {

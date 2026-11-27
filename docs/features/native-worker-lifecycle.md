@@ -24,6 +24,33 @@ flowchart LR
 
 ## Protected APIs
 
+### Provider RPC authentication
+
+`capacity.NewNativeWorkerRPCClient` loads fixed protected client certificate/key
+and server CA material. Its Source-owned configuration pins the exact adapter
+tuple, profile, binding, scope, compiled SDK Source, HTTPS origin, server leaf
+and separate public health URL. Observer and creator roles cannot share the
+same allowed-capability set. No public manifest or request selects those files.
+
+`message.WithNativeWorkerRPCClient` carries that opaque client through the
+original resolver, health, Describe and execution. Original row/type checksums
+and origin are checked before secret hydration. A fresh execution policy cannot
+erase the separate private context. Protected Describe requires the actual TLS
+server return rather than a generic cached handshake. The independent observer
+can be composed with `NewProtectedNativeWorkerPhysicalReadFunc`.
+
+The server chain, hostname, exact leaf and single actual compiled Source response
+header must agree before SDK decoding. Original requests disable replay,
+redirects and environment proxies. Read and Close both have to complete within
+the original bounded context. A separate unauthenticated fixed health GET carries
+no private client certificate or header and remains diagnostic only. All copies
+of a client share one Close fence and opaque value/pointer/JSON representations.
+See [ADR-0138](../adr/0138-bind-native-provider-rpc-to-protected-mutual-tls-clients.md).
+
+This composition does not install the provider process, runtime/controller or
+network, and it grants no CREATE or DELETE without its separate original Core
+permit. Existing callers with no protected client context keep their contracts.
+
 ### Pre-admission failure recovery
 
 The optional `pre_admission_abort` lifecycle binding names one Source-selected

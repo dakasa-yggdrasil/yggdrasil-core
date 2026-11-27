@@ -456,7 +456,7 @@
       "callee": "EmitEvent",
       "file": "controllers/message/integration_describe.go",
       "function": "emitContractMismatchDetectedIfNew",
-      "line": 929,
+      "line": 945,
       "type_expressions": [
         "repository.EventTypeRuntimeStateContractMismatchDetected"
       ]
