@@ -60,6 +60,12 @@ func (f *GuestRetirementForwardRecoveryFixture) AdmissionDiagnostics() string {
 	if loadErr == nil {
 		i := original.Request.Intent
 		report["request_matches_fixture"] = reflect.DeepEqual(original.Request, f.Request)
+		var possibleSend time.Time
+		callerErr := tx.QueryRowContext(ctx, `SELECT possible_send_at FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1`, i.RequestID).Scan(&possibleSend)
+		stage("caller_attempt", callerErr)
+		if callerErr == nil {
+			report["caller_started_minus_stored_possible_send_ns"] = f.Caller.StartedAt.Sub(possibleSend).Nanoseconds()
+		}
 		rows, rowErr := tx.QueryContext(ctx, `SELECT r.phase,r.ordinal,r.possible_read_at,r.original_deadline,v.original_wire,v.authority_sha256,r.original_deadline<=$2::timestamptz FROM public.capacity_guest_original_authority_reads r LEFT JOIN public.capacity_guest_original_authority_returns v ON v.read_id=r.id WHERE r.intent_id=$1 ORDER BY CASE r.phase WHEN 'before_start' THEN 0 ELSE 1 END,r.ordinal LIMIT 5`, i.RequestID, i.OriginalDeadline.Format(time.RFC3339Nano))
 		authorities := []map[string]any{}
 		if rowErr == nil {
@@ -743,8 +749,10 @@ func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 		retention, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 	}
+	trace := GuestRetirementForwardInspection{Stage: "caller_return_transaction"}
+	retention = context.WithValue(retention, forwardInspectionKey{}, &trace)
 	if err = store.RecordGuestCallerReturnV2(retention, f.Caller); err != nil {
-		t.Fatal("real failed caller retained", err)
+		t.Fatalf("real failed caller retained: %v ctx_err=%v original_remaining=%s last_loader_stage=%s caller_started_minus_issue_ns=%d do_started_minus_started_ns=%d do_returned_minus_do_started_ns=%d driver_returned_minus_do_returned_ns=%d driver_returned_minus_now_ns=%d body_facts_valid=%t later_diagnostics=%s", err, retention.Err(), time.Until(f.Caller.OriginalDeadline), trace.Stage, f.Caller.StartedAt.Sub(f.Request.Intent.IssuedAt).Nanoseconds(), f.Caller.DoStartedAt.Sub(f.Caller.StartedAt).Nanoseconds(), f.Caller.DoReturnedAt.Sub(f.Caller.DoStartedAt).Nanoseconds(), f.Caller.DriverReturnedAt.Sub(f.Caller.DoReturnedAt).Nanoseconds(), time.Until(f.Caller.DriverReturnedAt).Nanoseconds(), GuestOriginalCallerBodyFactsValid(f.Caller), f.AdmissionDiagnostics())
 	}
 }
 
