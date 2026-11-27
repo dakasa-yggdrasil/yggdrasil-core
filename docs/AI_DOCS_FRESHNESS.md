@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 716443f41d8e3f9028881b63b130e347afe8c707
-verified_diff_sha256: cda5c9d6f33589d368beef9776eabd4a66bb5c6b6dcef840116219a8c1d9ed2a
+verified_at_commit: 5cf885b33393e5616a8419a48779f879ecc33b25
+verified_diff_sha256: cc57c7b0eff2b4ceead72388fce12ee30c2f0a10daf76e4e2624a0672b76cd2d
 reconciler_schema: 1
 
 native_worker_writer_scope_review: The permit now carries the SHA256 of the exact complete reviewed writer inventory bytes; issuance, private persistence, resolution and redemption require the same policy pin. Protected callbacks require one canonical compiled adapter Source header before reading the body and compare it to the resolved writer Source before the operation. Added inventory drift/public roundtrip/PG pin preservation and HTTP pre-body refusal cases for CI. The original c4df PostgreSQL16/17 market CI passed all62 roots with no skip; its two lint findings are corrected without changing decoder or birth acceptance. All894 source facts remain within130931 bytes, with current source hashes and dispatch lines regenerated. No local tests/builds, cloud action or runtime adoption occurred; matching new writer protocol and complete successor CI remain required.
