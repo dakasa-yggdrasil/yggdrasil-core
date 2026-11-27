@@ -79,6 +79,9 @@ func ValidateNativeWorkerLifecycleBinding(p model.CapacityPolicySpec) error {
 	if err := ValidateNativeWorkerRegistryWriterBinding(p); err != nil {
 		return err
 	}
+	if err := ValidateNativeWorkerAbortBinding(p); err != nil {
+		return err
+	}
 	return ValidateNativeWorkerPhaseReadBinding(p)
 }
 

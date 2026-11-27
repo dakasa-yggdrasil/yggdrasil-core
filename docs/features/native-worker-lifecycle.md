@@ -24,6 +24,48 @@ flowchart LR
 
 ## Protected APIs
 
+### Pre-admission failure recovery
+
+The optional `pre_admission_abort` lifecycle binding names one Source-selected
+recovery workflow and a finite permit duration. `CapacityNativeWorkerAbortStore`
+defaults off. Its `Begin`, `Read`, `Redeem`, `Receive` and `Reconcile` methods do
+not create or destroy any provider resource themselves.
+
+The policy's normal `execution_enabled` growth flag is independent of this
+explicit cleanup authority. A disabled growth policy grants nothing by itself:
+the cleanup binding, Native store gate, process capacity execution gate, exact
+active recovery workflow and fresh scoped ownership must all permit redemption.
+Disabling the process capacity execution gate also disables cleanup sends.
+
+`Begin` locks the same mutation scope and Attempt row used by admission and
+retains the explicit `aborting` state. A provider-accepted worker need not be
+falsely admitted or drained to become eligible for cleanup. Exposed or unknown
+phase mutations block cleanup; never-redeemed issued phases can be closed
+atomically without inventing an external API refusal. Old creator/bootstrap
+readers cannot re-open a child in this new state.
+
+The protected `ObserveAbort` callback performs fixed reads outside database
+locks. It must distinguish complete absence from unknown/ambiguous Node data.
+An exact empty, cordoned, quarantined Node or a complete no-Node observation
+can qualify a send; missing readiness alone cannot. Complete independent
+provider, Node, registry, peer/IPAM and ancillary charge closure is required
+before releasing quota, money or the overlay address. Expired price or warmup
+evidence does not manufacture cleanup authority or block truthful late reads.
+
+Only a successfully committed `Redeem` returns a private one-send token. `Read`
+does not return that token or a launch. Original opaque returns remain private,
+and late custody preserves an already observed result. Unknown sends do not
+expire into retry permission. The target birth generation/fence and original
+creation count remain immutable throughout cleanup.
+
+This Source slice requires a known sealed physical birth and provides no live
+transport or external cleanup writers. Unknown creation-ACK discovery,
+provider destruction, Node cordon/deletion, registry retirement, network cleanup
+and useful-versus-charged overlap qualification remain explicit prerequisites
+for a complete live lifecycle. See [ADR-0134](../adr/0134-fence-preadmission-worker-cleanup-separately-from-admission.md).
+
+### Creation and physical receiving
+
 `CapacityNativeWorkerStore` composes the existing capacity store with an
 installed `NativeWorkerRuntime`. The callback is Source-owned Go composition,
 not decoded from a workflow/RPC DTO. `Prepare` is pure and runs under the
