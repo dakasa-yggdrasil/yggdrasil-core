@@ -3,42 +3,28 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 427989ad94c3f363cbd57038536adbcd0de9eecb
-verified_diff_sha256: 810ccb6940409c7691f4eec70bf2d7f9ebf9f3a6058516521635595eae666bac
+verified_at_commit: a05547b5680e6880723df38027b351894d098df1
+verified_diff_sha256: fc7d8bad76f09a156e8395efcbf5406f6e99bdb24c52d493f59fda63df9f1d57
 reconciler_schema: 1
 
-Reviewed the complete concrete AWS-only Native runtime, exact copied policy and
-Source pins, transferred factory/client ownership, immutable original archive,
-original launch/Attempt joins and independent physical and phase reader ports.
-All three worker/bootstrap/phase ports install or clear together. Missing or
-failed archive reads retain pending custody; no empty original is manufactured.
+Reviewed the complete HCloud physical qualifier, safe project/action witness,
+strict original custody joins, canonical System physical materialization and
+preservation through Attempt/Birth JSONB. AWS wire and evidence ordering remain
+unchanged. Historical witnesses do not expire into a new creation permission;
+fresh reobservation preserves the original state and birth. Node, network,
+warmup, admission, useful capacity and full cleanup remain separate proofs.
 
-The same real phase reader forwards registration preparation and GET receiving
-under the registry epoch, writer inventory and shared Close fence. Independent
-network/warmup readiness remains absent, so admission and quarantine release
-remain blocked. Expired permits may receive actual GET truth without a new send.
-A phase header is never converted into a zero-member useful-worker roster.
+The reviewed Native runtime and floor-network ancestors are integrated by
+signed merges. Source conflicts were confined to documentation, generated
+evidence and the union of authored CI selectors. Every original test root is
+retained, including seventeen new HCloud roots and the real isolated PostgreSQL
+Record/Birth test. The complete census retains all prior facts and now contains
+924 non-test Go paths. Whole-file service-contract evidence hashes agree.
 
-Seven new mandatory CI roots cover committed PostgreSQL custody, real published
-System factory-handle composition, phase forwarding and refusal, actual TLS
-capability groups, exact factory pins and invalid-option cleanup. The original
-factory root, no-skip/race verdict and finite watchdog remain unchanged. Complete
-Source evidence retains all909 prior paths and adds exactly five production
-files, for914 independently checked source facts.
-
-The signed Source was committed before the released reconciliation plan and
-completed ai-all generation. Only reading, deterministic generators and cheap
-format/diff checks ran locally. Tests/builds/analysis are mandatory in GitHub CI;
-no local test pass, runtime adoption, provider send, paid resource, network
-mutation or Hetzner load is claimed. Root whole V4 review closed both findings.
-
-The first CI job reached the real factory after all115 migrations, then the
-new runtime fixture was refused after1.51s. Original logs are retained; this is
-not a timeout diagnosis. Failure-only assertions expose the same existing policy,
-factory and reader validation seams before the unchanged constructor call.
-No production guard, test acceptance, root or watchdog was relaxed.
-
-The retained diagnostic artifact identifies the exact fixture defect: the AWS
-zone was placed inside a scheme-only provider prefix. Only the fixture changes
-to aws:/// plus the complete zone/resource ProviderID; production validation
-and the original roots and finite deadlines remain unchanged.
+The released installed CLI produced the actual reconciliation plan and completed
+ai-all generation after the signed Source union. Only reading, deterministic
+generation, formatting and diff checks ran locally. Tests, race checks, builds
+and analysis run only in GitHub CI. No local pass, provider call, purchase,
+Hetzner load, runtime installation or production activation is claimed.
+The supplier Native GET Close-error finding remains an explicit activation
+blocker until its separate SDK correction and CI are qualified.
