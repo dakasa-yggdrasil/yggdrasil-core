@@ -7,9 +7,11 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: fbe05c6f1f04210367f45c74a905d70c01bbf454
-verified_diff_sha256: bcf214aa7670432f70b585e380fb7071bc0a842aea3e8cddbf051c48ba6e0304
+verified_at_commit: 9db740ba9a678d21b14bd8b5ad0f9b01cd4eed6f
+verified_diff_sha256: c506bbac2b5b415bef8a3b6823a496fb302cf7ce826c501654ff38158da384fb
 reconciler_schema: 1
+
+native_worker_writer_scope_review: The permit now carries the SHA256 of the exact complete reviewed writer inventory bytes; issuance, private persistence, resolution and redemption require the same policy pin. Protected callbacks require one canonical compiled adapter Source header before reading the body and compare it to the resolved writer Source before the operation. Added inventory drift/public roundtrip/PG pin preservation and HTTP pre-body refusal cases for CI. The original c4df PostgreSQL16/17 market CI passed all62 roots with no skip; its two lint findings are corrected without changing decoder or birth acceptance. All894 source facts remain within130931 bytes, with current source hashes and dispatch lines regenerated. No local tests/builds, cloud action or runtime adoption occurred; matching new writer protocol and complete successor CI remain required.
 
 native_retirement_only_review: Reviewed retirement-only Native planning and fresh claims independently from new-provider pricing. Exact fresh pool/ledger identity, complete surplus evidence, down hold/cooldown and the greater of policy/current-profile minima remain required; new allocation and economic replacement retain current market gates. Independent peer minimum finding closed. The CI PostgreSQL case declares its historical birth fixture explicitly and retains immutable grant history until its isolated database owner is destroyed. Its Claim assertions passed in the initial CI, while the prohibited row cleanup correctly failed and was removed without changing the trigger. The current parent qualification optional-field correction is merged. This does not qualify a real VM/network/admission; no zero-price offer or new allocation reservation is recorded. Source census/public evidence and generated context updated. No local tests/builds or provider actions; CI and separate actual lifecycle execution remain required.
 
