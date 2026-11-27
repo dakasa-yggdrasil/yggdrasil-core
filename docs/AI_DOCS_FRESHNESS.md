@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: f86b2a57f514f24cbb963e2fd0f9de7b28918dde
-verified_diff_sha256: 12b1f61f6e57b7ac4ffb7b1b0441b0ca8371446113034e06cbc852c7f2c5a3f5
+verified_at_commit: 1a3d17269a794cda183d7000b4b6e96500f88fd8
+verified_diff_sha256: d45de0e748bcec88dfd993ed269014ca880a0e83b02ef0fb27810ecca91c846c
 reconciler_schema: 1
 
 Reviewed the concrete protected Native factory, canonical System launch mirror,
