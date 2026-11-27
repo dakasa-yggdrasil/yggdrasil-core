@@ -3,31 +3,24 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 1a3d17269a794cda183d7000b4b6e96500f88fd8
-verified_diff_sha256: d45de0e748bcec88dfd993ed269014ca880a0e83b02ef0fb27810ecca91c846c
+verified_at_commit: 27f85663e45adb7f5e66e09867f819372b469486
+verified_diff_sha256: fa829506c8d39d02a3bfb536eafe92f5662754f0f9c953c3a745dde995bc9798
 reconciler_schema: 1
 
-Reviewed the concrete protected Native factory, canonical System launch mirror,
-pure domain-separated preparation, exact private material and immutable published
-executable pins, fixed-version capability signing, bounded descriptor/process
-custody, opaque value/pointer state and shared Close fence. Independent Source
-reviews closed both concrete process-group and value-format privacy findings.
+Reviewed the exact machine-only Native pre-admission abort callback boundary,
+authentication before any body, closed selectors and original-return wire,
+restoration of immutable private recovery workflow/executor and late custody
+with disabled send gates. The independent whole review found API-worker GET
+access; the process-role guard now refuses the complete prefix for every method,
+with GET/HEAD/OPTIONS regression coverage retained.
 
-CI receives the fixed published System release assets by ID and exact bytes/hash,
-then exercises its real private parent through the factory with an explicit
-no-skip root census. Default pure/Linux roots join the existing CI census.
-Complete evidence retains all 894 existing facts unchanged and adds exactly three
-production files, for 897 facts; all bounds remain unchanged. Public evidence
-contains neither private material nor a hash of a joined private bootstrap blob.
+The existing remote market census includes all four new HTTP and real
+PostgreSQL roots. The deterministic source producer now includes abort dispatch
+cases, retains all 905 prior source paths and adds exactly two production files,
+for 907 complete v2 facts. Complete evidence was committed before the released
+reconciliation plan and completed ai-all generation.
 
-All 14 reviewed Source/evidence paths were committed before the released
-reconciliation plan and completed ai-all generation. Only static parsing,
-format/diff checks, artifact byte inspection and released generators ran locally.
-No tests/builds/vet, local binary execution, cloud actions or production activation
-occurred. Actual CI remains required; protected material, runtime installation,
-network qualification and paid isolated-provider acceptance are still separate.
-
-The first real executable CI retained its constructor refusal and lint originals.
-The owning closed decoder now receives canonical RawMessage object bytes, and
-filesystem timestamp stability uses Time.Equal. All qualification/tests and
-remaining guards are unchanged; the original regression root stays mandatory.
+Only source review, deterministic generators and cheap format/diff checks ran
+locally. Tests, build and analysis are pending and mandatory in GitHub CI.
+No cloud call, runtime/controller installation, network mutation, successful
+provider teardown or production activation is claimed by this callback slice.
