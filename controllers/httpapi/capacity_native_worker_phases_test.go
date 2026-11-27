@@ -2,14 +2,18 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 )
 
@@ -89,6 +93,97 @@ func TestNativeWorkerPhaseRoutesRequireControlAuthority(t *testing.T) {
 			if (&Server{}).workerRouteAllowed(r) {
 				t.Fatal("API worker allowed Native authority callback", method, action)
 			}
+		}
+	}
+}
+
+type nativePhaseWorkerCompositionFixture struct {
+	source       string
+	legacyReads  int
+	prepareCalls int
+}
+
+func (r *nativePhaseWorkerCompositionFixture) SourceCommit() string { return r.source }
+func (r *nativePhaseWorkerCompositionFixture) ObserveAuthority(context.Context, model.Manifest) (*model.CapacityNativeWorkerPoolObservation, error) {
+	r.legacyReads++
+	return nil, errors.New("legacy pool callback is not phase authority")
+}
+func (r *nativePhaseWorkerCompositionFixture) Prepare(a model.CapacityNativeWorkerAttempt) (model.CapacityNativeWorkerLaunch, error) {
+	r.prepareCalls++
+	return model.CapacityNativeWorkerLaunch{AttemptID: a.ID}, nil
+}
+func (*nativePhaseWorkerCompositionFixture) CaptureOriginalReturn(context.Context, model.CapacityNativeWorkerAttempt) (model.CapacityNativeWorkerOriginalReturn, error) {
+	return model.CapacityNativeWorkerOriginalReturn{}, repository.ErrCapacityNativeReturnPending
+}
+func (*nativePhaseWorkerCompositionFixture) Qualify(context.Context, model.CapacityNativeWorkerAttempt, model.CapacityNativeWorkerOriginalReturn) (model.CapacityNativeWorkerObservation, error) {
+	return model.CapacityNativeWorkerObservation{}, repository.ErrCapacityDisabled
+}
+
+func TestProtectedNativePhaseReaderCompositionPreservesIndependentWorkerPort(t *testing.T) {
+	s := &Server{}
+	if s.nativeWorkerRuntime != nil || s.nativeWorkerPhaseRuntime != nil {
+		t.Fatal("phase runtime enabled by default")
+	}
+	worker := &nativePhaseWorkerCompositionFixture{source: strings.Repeat("a", 40)}
+	WithProtectedNativeWorkerPhaseReader(worker, nil)(s)
+	wrapped, ok := s.nativeWorkerRuntime.(nativeWorkerWithPhaseAuthority)
+	if !ok || wrapped.NativeWorkerRuntime != worker || wrapped.reader == nil || wrapped.reader.server != s || wrapped.reader.readiness != nil || s.nativeWorkerPhaseRuntime != wrapped.reader || wrapped.SourceCommit() != worker.source {
+		t.Fatal("protected composition replaced worker source or invented readiness")
+	}
+	a := model.CapacityNativeWorkerAttempt{ID: uuid.New()}
+	if launch, err := wrapped.Prepare(a); err != nil || launch.AttemptID != a.ID || worker.prepareCalls != 1 {
+		t.Fatal("protected reader did not preserve pure worker preparation", err)
+	}
+	if _, err := wrapped.ObservePhaseAuthority(t.Context(), model.Manifest{ID: uuid.New()}); !errors.Is(err, repository.ErrCapacityDisabled) || worker.legacyReads != 0 {
+		t.Fatal("missing protected reader authority fell back to useful-pool callback", err)
+	}
+	WithProtectedNativeWorkerPhaseReader(nil, nil)(s)
+	if s.nativeWorkerRuntime != nil || s.nativeWorkerPhaseRuntime == nil {
+		t.Fatal("read-only composition implicitly installed a provider runtime")
+	}
+}
+
+func TestProtectedNativePhaseReaderResolvesExactStoredPolicyBeforeAdapter(t *testing.T) {
+	for _, mode := range []string{"missing_policy", "wrong_kind", "checksum_changed", "invalid_json", "no_phase_observer"} {
+		t.Run(mode, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			id := uuid.New()
+			kind, checksum, spec := "capacity_policy", "qualified-policy", []byte(`{}`)
+			switch mode {
+			case "wrong_kind":
+				kind = "workflow"
+			case "checksum_changed":
+				checksum = "new-unqualified-policy"
+			case "invalid_json":
+				spec = []byte(`{"native_worker_lifecycle_binding":`)
+			}
+			query := mock.ExpectQuery(`(?s)SELECT.*FROM public.manifests.*WHERE id = \$1`).WithArgs(id)
+			if mode == "missing_policy" {
+				query.WillReturnError(repository.ErrManifestNotFound)
+			} else {
+				now := time.Now().UTC()
+				query.WillReturnRows(sqlmock.NewRows([]string{"id", "api_version", "kind", "namespace", "name", "version", "active", "description", "labels", "spec", "checksum", "created_at", "updated_at"}).AddRow(id, "yggdrasil.io/v1alpha1", kind, "realm", "fixed-pool", 2, true, "", []byte(`{}`), spec, checksum, now, now))
+			}
+			s := &Server{db: db}
+			// Only the exact policy row is expected. A credentials/catalog query
+			// or adapter result cannot rescue an invalid policy/reader binding.
+			reader := &serverNativeWorkerPhaseReader{server: s}
+			if _, err := reader.PreparePhase(t.Context(), model.CapacityNativeWorkerAttempt{PolicyID: id, PolicyChecksum: "qualified-policy"}, "register"); err == nil {
+				t.Fatal("unqualified stored policy reached adapter composition", err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	// A missing process authority is not a virtual pool or successful empty read.
+	for _, reader := range []*serverNativeWorkerPhaseReader{nil, {}, {server: &Server{}}} {
+		if _, err := reader.forPolicy(t.Context(), uuid.New(), ""); !errors.Is(err, repository.ErrCapacityDisabled) {
+			t.Fatal("missing protected store accepted", err)
 		}
 	}
 }

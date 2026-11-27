@@ -138,6 +138,33 @@ Legacy birth joins and historical slot/grant records are unchanged. Only the
 new explicit mode consumes typed child births through its separately bound
 execution adapter. It never forges a legacy mutation proof.
 
+## Independent phase facts and runtime composition
+
+The optional `phase_observer` pins a separate read-only adapter instance,
+compiled Source and exact complete binding-file digest. It cannot reuse a
+pricing, execution or registry-writing instance. Its header-only mode retains
+the actual complete registry while asserting neither a zero-worker snapshot
+nor useful capacity. A selected candidate must join its complete provider ID,
+Node UID and canonical allocated internal IPv4 to the stored physical birth.
+Optional label claims remain claims: absent claims are not invented, and a
+conflicting present claim refuses preparation.
+
+`NativeWorkerPhaseReader` consumes the real source-bound observation through
+the catalog/version-pinned RPC reader. It verifies raw annotation hash, realm,
+registry UID/RV, owner, epoch, heartbeat, allocatable resources and quarantine.
+The read of authority occurs outside transaction locks and is checked again at
+database time. It is a distinct authority-header DTO, never a fabricated
+empty useful-pool observation during a mixed or quarantined transition.
+
+`WithProtectedNativeWorkerPhaseReader` composes this reader with a separately
+qualified worker runtime. A private independent network/warmup callback must
+return fresh evidence bound to the exact attempt, physical lifetime, birth,
+Node and allocated address before admission or quarantine release. Merely
+installing the phase reader does not install that witness or a provider sender.
+Missing readiness fails closed. The normal process defaults remain disabled.
+Historical GET-only reconciliation can retain actual applied state after a
+permit expires without issuing another mutation.
+
 ## Qualification limit
 
 CI runs the normal Goose schema on isolated PostgreSQL 16/17, including UUID/IP

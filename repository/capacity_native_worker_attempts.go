@@ -29,15 +29,22 @@ type NativeWorkerRuntime interface {
 	Qualify(context.Context, model.CapacityNativeWorkerAttempt, model.CapacityNativeWorkerOriginalReturn) (model.CapacityNativeWorkerObservation, error)
 }
 
+// Phase authority is a separate complete header/registry observation. It must
+// never be converted into a fabricated zero-member useful pool snapshot.
+type NativeWorkerPhaseAuthorityRuntime interface {
+	ObservePhaseAuthority(context.Context, model.Manifest) (*model.CapacityNativeWorkerPhaseReadObservation, error)
+}
+
 // A protected capture must wait for its original sender/pipe closure. A pending
 // return is not an empty completed response and must remain receivable later.
 var ErrCapacityNativeReturnPending = errors.New("original Native return is still pending; GET-only receive")
 
 type CapacityNativeWorkerStore struct {
-	Capacity  CapacityStore
-	Runtime   NativeWorkerRuntime
-	Enabled   bool                                       // Separate process gate, default false.
-	authority *model.CapacityNativeWorkerPoolObservation // Private per-call observation.
+	Capacity       CapacityStore
+	Runtime        NativeWorkerRuntime
+	Enabled        bool                                       // Separate process gate, default false.
+	authority      *model.CapacityNativeWorkerPoolObservation // Private per-call observation.
+	phaseAuthority *model.CapacityNativeWorkerPhaseReadObservation
 }
 
 // Authenticate outside transaction locks. A fresh Lease read is necessary but
@@ -51,6 +58,24 @@ func (s CapacityNativeWorkerStore) authenticate(ctx context.Context, policy mode
 	if err != nil || p.NativeWorkerLifecycleBinding == nil {
 		return s, ErrCapacityDisabled
 	}
+	if p.NativeWorkerLifecycleBinding.PhaseObserver != nil {
+		reader, ok := s.Runtime.(NativeWorkerPhaseAuthorityRuntime)
+		if !ok {
+			return s, ErrCapacityDisabled
+		}
+		observed, readErr := reader.ObservePhaseAuthority(ctx, policy)
+		if readErr != nil || observed == nil {
+			return s, ErrCapacityConflict
+		}
+		raw, marshalErr := json.Marshal(observed)
+		var own model.CapacityNativeWorkerPhaseReadObservation
+		if marshalErr != nil || json.Unmarshal(raw, &own) != nil || own.CandidateSelected || capacity.NativeWorkerPhaseHeaderValid(p, own, time.Now().UTC()) != nil {
+			return s, ErrCapacityConflict
+		}
+		s.phaseAuthority, s.authority = &own, nil
+		return s, nil
+	}
+	s.phaseAuthority = nil
 	o, err := s.Runtime.ObserveAuthority(ctx, policy)
 	if err != nil || o == nil {
 		return s, ErrCapacityConflict
@@ -91,11 +116,14 @@ func (s CapacityNativeWorkerStore) current(ctx context.Context, tx *sql.Tx, poli
 		!validCapacityExecutor(s.Capacity.ExecutorID) || s.Capacity.WorkflowID == uuid.Nil {
 		return old, ErrCapacityDisabled
 	}
-	if s.authority == nil {
-		return old, ErrCapacityLease
-	}
-	if err := capacity.ValidateNativeWorkerPoolAuthority(p, s.authority, now); err != nil {
-		return old, ErrCapacityLease
+	if p.NativeWorkerLifecycleBinding.PhaseObserver != nil {
+		if s.phaseAuthority == nil || s.phaseAuthority.CandidateSelected || capacity.NativeWorkerPhaseHeaderValid(p, *s.phaseAuthority, now) != nil {
+			return old, ErrCapacityLease
+		}
+	} else {
+		if s.authority == nil || capacity.ValidateNativeWorkerPoolAuthority(p, s.authority, now) != nil {
+			return old, ErrCapacityLease
+		}
 	}
 	var checksum string
 	var active bool
