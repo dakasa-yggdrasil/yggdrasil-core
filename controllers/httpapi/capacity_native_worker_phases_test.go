@@ -86,6 +86,44 @@ func TestNativeWorkerPhaseOriginalReceiveClosedAndBounded(t *testing.T) {
 	}
 }
 
+func TestNativeWorkerPhaseAdapterSourceIsCanonicalBeforeBody(t *testing.T) {
+	principals := capacityMutationTestPrincipal(t, "ci-native-source-token", uuid.NewString())
+	principals[0].capabilities["ensure_native_worker_pool"] = true
+	s := &Server{capacityMutationPrincipals: principals}
+	want := strings.Repeat("a", 40)
+	for _, tc := range []struct {
+		name   string
+		values []string
+	}{
+		{"absent", nil},
+		{"duplicate", []string{want, want}},
+		{"comma", []string{want + "," + want}},
+		{"uppercase", []string{strings.ToUpper(want)}},
+		{"short", []string{want[:39]}},
+		{"long", []string{want + "0"}},
+		{"space", []string{" " + want}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "https://core.example"+nativeWorkerPhaseBasePath+"receive", nil)
+			r.Body = nativePhaseUnreadableBody{t}
+			r.Header.Set("Authorization", "Bearer ci-native-source-token")
+			for _, value := range tc.values {
+				r.Header.Add(nativeWorkerPhaseAdapterSourceHeader, value)
+			}
+			w := httptest.NewRecorder()
+			s.serveNativeWorkerPhaseRequest(w, r, &principals[0])
+			if w.Code != http.StatusForbidden {
+				t.Fatal("invalid compiled adapter Source reached body or authority", w.Code)
+			}
+		})
+	}
+	r := httptest.NewRequest(http.MethodGet, "https://core.example"+nativeWorkerPhaseBasePath+"read", nil)
+	r.Header.Set(nativeWorkerPhaseAdapterSourceHeader, want)
+	if got, ok := nativeWorkerPhaseAdapterSource(r); !ok || got != want {
+		t.Fatal("single canonical compiled Source was not preserved exactly")
+	}
+}
+
 func TestNativeWorkerPhaseRoutesRequireControlAuthority(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodHead} {
 		for _, action := range []string{"read", "redeem", "receive", "unknown"} {

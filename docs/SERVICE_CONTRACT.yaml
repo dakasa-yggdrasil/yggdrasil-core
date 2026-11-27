@@ -113,12 +113,12 @@
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "92e138f454bb566e00bba3ea43833a1a130b896259c2cb682a24d06c2618247b"
+      "sha256": "fa496febaaa513aa7d4f9ac4d5c09758bd819fd0365cd28606c64a8f977baec9"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "7d9fca85e36c35b2197aa0a8177e96c57be50f296c097c0cbe2b5ecb7d77a8e7"
+      "sha256": "4aefb81bdbb6cc904c5c20a2ad10d3dddfcfdf79cf5963d2c40dd0c37745f9e9"
     }
   ],
   "produces": [
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "74f3703e9bedd087a969806dc4449fc4c7d84f0ff153eb10b9a9b016f02c1d87"
+    "sha256": "62189d51a6b0c9af57067ce0167b554d032a8c4d8a4f513515fe9decc2487d1e"
   },
   "unresolved": []
 }

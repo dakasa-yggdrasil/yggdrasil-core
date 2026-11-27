@@ -77,6 +77,43 @@ func TestNativeWorkerPhasePublicContextCannotExposePrivateReturnOrBearer(t *test
 	}
 }
 
+func TestNativeWorkerPhaseWriterScopePinsTheWholeReviewedInventory(t *testing.T) {
+	file := []byte("{\"schema\":\"native_worker_pool_writer_bindings_v1\",\"bindings\":[]}\n")
+	want := fmt.Sprintf("%x", sha256.Sum256(file))
+	r := nativeWorkerPhaseRecord{Context: model.CapacityNativeWorkerPhasePermit{PermitID: uuid.New(), WriterScopeSHA256: want}, Writer: model.CapacityNativeWorkerRegistryWriterBinding{ScopeSHA256: want, PrincipalID: "ci-writer", BindingName: "ci-pool", SourceCommit: strings.Repeat("a", 40)}}
+	caller := model.CapacityNativeWorkerPhaseCaller{Adapter: r.Writer.Adapter, PrincipalID: r.Writer.PrincipalID, BindingName: r.Writer.BindingName, SourceCommit: r.Writer.SourceCommit}
+	if !phaseCaller(r, caller) {
+		t.Fatal("identical policy and inventory scope was refused")
+	}
+	wire, err := json.Marshal(phaseContext(r))
+	var roundtrip model.CapacityNativeWorkerPhasePermit
+	if err != nil || json.Unmarshal(wire, &roundtrip) != nil || roundtrip.WriterScopeSHA256 != want || !strings.Contains(string(wire), `"writer_scope_sha256":"`+want+`"`) {
+		t.Fatal("public read lost the exact reviewed writer inventory pin")
+	}
+	// Whitespace changes the actual file hash even when parsed bindings would
+	// be identical. Re-encoding only the selected binding cannot satisfy it.
+	changed := fmt.Sprintf("%x", sha256.Sum256(append(append([]byte{}, file...), '\n')))
+	for _, scope := range []string{"", strings.ToUpper(want), changed} {
+		bad := r
+		bad.Context.WriterScopeSHA256 = scope
+		if phaseCaller(bad, caller) {
+			t.Fatal("mismatched inventory context could reach redemption")
+		}
+		// Both persistence boundaries must refuse before accessing any Tx.
+		if err := nativePhaseInsertTx(t.Context(), nil, bad, "ci", time.Now()); err == nil {
+			t.Fatal("mismatched pin was persisted as a new permission")
+		}
+		if err := nativePhaseWriteTx(t.Context(), nil, bad, time.Now()); err == nil {
+			t.Fatal("mismatched pin was persisted during redemption or receiving")
+		}
+	}
+	bad := r
+	bad.Writer.ScopeSHA256, bad.Context.WriterScopeSHA256 = "", ""
+	if phaseCaller(bad, caller) {
+		t.Fatal("two absent pins became authority")
+	}
+}
+
 func nativePhasePreparedFixture() (model.CapacityPolicySpec, model.CapacityNativeWorkerAttempt, model.CapacityNativeWorkerPhasePreparation, time.Time) {
 	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
 	hash := func(s string) string { return strings.Repeat(s, 64) }
@@ -243,6 +280,9 @@ func nativePhaseIssue(t *testing.T, f marketRepositoryFixture, s CapacityNativeW
 	if p.MutationPermitted || p.SettlementToken != "" || p.PhaseState != "issued" {
 		t.Fatal("Issue returned a send bearer before durable Redeem")
 	}
+	if p.WriterScopeSHA256 != f.p.NativeWorkerLifecycleBinding.RegistryWriter.ScopeSHA256 {
+		t.Fatal("Issue did not overwrite preparation with the exact policy writer scope")
+	}
 	return p
 }
 
@@ -279,6 +319,9 @@ func TestNativeWorkerPhasePermitPostgresOneSendCustodyAndScope(t *testing.T) {
 		permit := <-tokens
 		if !permit.MutationPermitted || len(permit.SettlementToken) < 32 {
 			t.Fatal("original successful Redeem lost its private mutation bearer")
+		}
+		if permit.WriterScopeSHA256 != p.WriterScopeSHA256 {
+			t.Fatal("Redeem changed the reviewed writer inventory pin")
 		}
 		if _, err := s.Issue(ctx, f.policy, authority, child.ID, "register"); err == nil {
 			t.Fatal("new phase bypassed redeemed/possibly-sent predecessor")

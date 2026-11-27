@@ -15,7 +15,7 @@ type CapacityNativeWorkerRegistryWriterBinding struct {
 	BindingName      string                       `json:"binding_name"`
 	PrincipalID      string                       `json:"principal_id"`
 	SourceCommit     string                       `json:"source_commit"`
-	ScopeSHA256      string                       `json:"scope_sha256"`
+	ScopeSHA256      string                       `json:"scope_sha256"` // SHA256 of the exact complete reviewed writer inventory bytes.
 	Capability       string                       `json:"capability"`
 	MaxPermitSeconds int                          `json:"max_permit_seconds"`
 }
@@ -48,6 +48,7 @@ type CapacityNativeWorkerPhasePermit struct {
 	PermitID                        uuid.UUID                          `json:"permit_id"`
 	AttemptID                       uuid.UUID                          `json:"attempt_id"`
 	BindingName                     string                             `json:"binding_name"`
+	WriterScopeSHA256               string                             `json:"writer_scope_sha256"`
 	Operation                       string                             `json:"operation"`
 	Action                          string                             `json:"action"`
 	PolicyID                        uuid.UUID                          `json:"policy_id"`

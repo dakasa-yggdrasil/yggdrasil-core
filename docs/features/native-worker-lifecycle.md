@@ -82,6 +82,14 @@ for exactly one `register`, `admit_registry`, or `release_quarantine` CAS.
 The registry precondition hashes the exact original annotation bytes; a hash of
 the whole observer response or reconstructed JSON is not a substitute.
 
+The permit's `writer_scope_sha256` is the policy pin of the complete reviewed
+writer inventory file bytes. The writer must compare its actual loaded file
+hash with that value before redemption and with the original returned grant.
+Matching pool, realm or registry identities alone does not authorize changed
+writer configuration, including a changed quarantine taint key. Core requires
+this pin to agree with its private writer record at issuance, persistence,
+resolution and redemption.
+
 The protected callbacks are `GET /internal/capacity/native-workers/phase-permits/read`
 and `POST` at the same prefix with `redeem` or `receive`. Read/redeem inputs contain
 only the binding and permit UUID. The authenticated machine principal determines
@@ -90,6 +98,12 @@ workflow, adapter version or proof. TLS and exact compiled Core Source are
 mandatory. API workers refuse these authority routes. A human session cannot
 authorize them. Protected process composition must install both runtime ports;
 the lifecycle process gate defaults off.
+
+Every callback requires exactly one canonical 40-character lowercase
+`X-Yggdrasil-Adapter-Source-Commit` header before its body is read. After resolving
+the authenticated issuance identity, Core requires that header to equal the
+separately pinned writer Source. The current unadopted writer needs the matching
+new callback protocol; this addition makes no older-runtime compatibility claim.
 
 Read grants no mutation and exposes no settlement token. A fresh authority read
 and locked current parent, attempt, birth, Node identity and qualification check
