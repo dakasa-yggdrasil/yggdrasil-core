@@ -73,6 +73,7 @@ jobs:
               'repository/capacity_native_worker_phase_authority_test.go',
               'repository/capacity_native_worker_abort_postgres_test.go',
               'repository/capacity_native_worker_abort_commands_postgres_test.go',
+              'repository/capacity_native_worker_runtime_postgres_test.go',
               'internal/capacity/native_worker_lifecycle_test.go',
               'internal/capacity/native_worker_private_factory_test.go',
               'internal/capacity/native_worker_private_factory_linux_test.go',
@@ -81,6 +82,9 @@ jobs:
               'internal/capacity/native_worker_hcloud_physical_test.go',
               'internal/capacity/native_worker_hcloud_guards_test.go',
               'internal/capacity/native_worker_rpc_client_linux_test.go',
+              'internal/capacity/native_worker_rpc_roles_test.go',
+              'internal/capacity/native_worker_rpc_roles_linux_test.go',
+              'internal/capacity/native_worker_private_factory_binding_test.go',
               'internal/capacity/native_worker_aws_acceptance_test.go',
               'controllers/message/workflows_capacity_native_physical_test.go',
               'controllers/message/workflows_capacity_native_hcloud_physical_test.go',
@@ -89,6 +93,7 @@ jobs:
               'controllers/httpapi/capacity_native_worker_phases_test.go',
               'controllers/httpapi/capacity_native_worker_attempts_test.go',
               'controllers/httpapi/capacity_native_worker_abort_test.go',
+              'controllers/httpapi/capacity_native_worker_runtime_test.go',
               'manifest/capacity_market_test.go',
               'controllers/message/rpc_market_numbers_test.go',
               'controllers/message/workflows_capacity_market_test.go',
@@ -147,7 +152,20 @@ jobs:
   private-factory-published-cli:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: market-ci-only
+          POSTGRES_DB: capacity_market
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d capacity_market"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     env:
+      DB_URL: postgres://postgres:market-ci-only@127.0.0.1:5432/capacity_market?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
       GOWORK: "off"
       GOMAXPROCS: "2"
       GOMEMLIMIT: 512MiB
@@ -236,7 +254,7 @@ jobs:
           set -euo pipefail
           output="$RUNNER_TEMP/native-private-factory"
           git rev-parse HEAD > "$output/core-source-head.txt"
-          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./internal/capacity -run '^TestNativePrivateFactoryPublishedSystemCLI$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
+          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository -run '^(TestNativePrivateFactoryPublishedSystemCLI|TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership)$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
       - name: Require the actual executable qualification root without skips
         shell: bash
         run: |
@@ -247,13 +265,13 @@ jobs:
           output = Path(os.environ['RUNNER_TEMP']) / 'native-private-factory'
           events = [json.loads(line) for line in (output / 'original.jsonl').read_text().splitlines() if line.strip()]
           assert not any(event.get('Action') in ('skip', 'fail') for event in events)
-          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity', 'TestNativePrivateFactoryPublishedSystemCLI')}
+          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity', 'TestNativePrivateFactoryPublishedSystemCLI'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership')}
           for action in ('run', 'pass'):
               actual = collections.Counter((event['Package'], event['Test']) for event in events if event.get('Action') == action and event.get('Test') and '/' not in event['Test'])
               assert set(actual) == expected and all(count == 1 for count in actual.values())
           assert 'WARNING: DATA RACE' not in (output / 'go-test.stderr').read_text()
           assert not any('WARNING: DATA RACE' in event.get('Output', '') for event in events)
-          (output / 'root-census.json').write_text(json.dumps({'roots': 1, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
+          (output / 'root-census.json').write_text(json.dumps({'roots': 2, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
           PY_FACTORY_ROOT
       - name: Preserve qualification evidence without private material
         if: always()
