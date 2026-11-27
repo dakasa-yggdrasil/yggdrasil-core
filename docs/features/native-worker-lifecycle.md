@@ -426,3 +426,48 @@ value must be a canonical public IPv4 received from the Source-paired independen
 reader; native private addresses are not Internet endpoints. This fact does not
 qualify reachability or authorize a floor peer. ReobserveACK still returns only
 the sealed physical tuple; the protected raw reader port retains endpoint facts.
+
+## Concrete private AWS runtime composition
+
+`message.NewProtectedNativeWorkerConcreteRuntime` builds the existing catalog/RPC
+readers around Source-owned mTLS handles. The repository runtime binds a copied
+stored policy, its database, real per-profile private factory handles and independent
+physical/phase readers. `WithConcreteNativeWorkerRuntime` installs worker, private-bootstrap and phase
+ports together on the same database, clearing all three before any refused
+replacement; it does not enable
+process gates or install a controller, sender, network writer or readiness
+callback. A missing or unconstructed handle stays disabled.
+
+The public constructor reads Core Source from native build metadata. Preparation
+is a pure delegation to the exact selected factory. Bootstrap rendering uses its
+existing descriptor-pinned System executable and immutable launch checks. After
+successful construction the runtime owns supplied factory/client handles; failed
+construction closes none of the caller's handles. Copies share the Close fence,
+and the database remains caller-owned.
+
+Original capture is an archive read only. Missing rows and read failures return
+the existing pending sentinel, including a concurrent Close; they never invoke
+an actor or convert an absent return into empty completed custody. Before a
+physical GET, qualification rechecks exact archived bytes/private digest, current
+Attempt and immutable launch. AWS acknowledgement qualification is separate from
+sealed reobservation; the latter returns only current physical identity and
+preserves lifecycle state. HCloud preparation/qualification remains refused by
+this runtime until the separately typed qualifier is paired.
+
+The same real phase reader forwards preparation and GET-only receiving under the
+copied policy, pool epoch, writer inventory scope and shared Close fence. Missing
+independent readiness still refuses admission and quarantine release; expired
+permits can receive original GET truth without reopening a mutation.
+The real phase reader supplies a complete authority header. It cannot be cast
+into a fabricated zero-member useful-worker pool. With no independent network
+and warmup evidence this composition grants no admission/readiness substitute.
+The five mTLS capability groups remain separate: provider mutation, provider
+read, Kubernetes writer, pool read and phase read. Kubernetes phase client
+`Profile` and `BindingName` both name the exact protected phase binding; this is
+an identity key rather than a workload-capacity claim.
+
+GitHub CI exercises immutable archive/pending/Close behavior on PostgreSQL 16/17,
+actual local-to-runner mTLS role isolation and real factory-handle composition
+using the existing published System CLI artifact. These are Source tests, not
+provider provisioning, production adoption, network qualification or load proof.
+See ADR0139.

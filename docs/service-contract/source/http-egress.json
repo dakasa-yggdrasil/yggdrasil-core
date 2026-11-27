@@ -258,7 +258,7 @@
       "expression_complete": true,
       "file": "internal/capacity/native_worker_rpc_client.go",
       "function": "original",
-      "line": 268
+      "line": 262
     },
     {
       "argument_expression": "request",
@@ -268,7 +268,7 @@
       "expression_complete": true,
       "file": "internal/capacity/native_worker_rpc_client.go",
       "function": "original",
-      "line": 274
+      "line": 268
     },
     {
       "argument_expression": "ctx, method, origin+path, bytes.NewReader(body)",

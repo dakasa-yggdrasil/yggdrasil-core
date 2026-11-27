@@ -178,3 +178,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
 - [ADR-0137: Qualify Native births with an independent physical reader](0137-qualify-native-births-with-an-independent-physical-reader.md)
 - [ADR-0138: Bind Native provider RPC to protected mutual TLS clients](0138-bind-native-provider-rpc-to-protected-mutual-tls-clients.md)
+- [ADR-0139: Compose Native worker runtime from protected original ports](0139-compose-native-worker-runtime-from-protected-original-ports.md)
