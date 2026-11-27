@@ -59,6 +59,17 @@ func TestNativeWorkerAttemptCommandClosedWire(t *testing.T) {
 	if _, err := decodeNativeWorkerAttemptRequest(raw); err != nil {
 		t.Fatal(err)
 	}
+	long := request
+	long.BindingName = strings.Repeat("b", 256)
+	longWire, _ := json.Marshal(long)
+	if _, err := decodeNativeWorkerAttemptRequest(longWire); err != nil {
+		t.Fatal("valid Source binding length was narrowed by the callback", err)
+	}
+	long.BindingName += "b"
+	longWire, _ = json.Marshal(long)
+	if _, err := decodeNativeWorkerAttemptRequest(longWire); err == nil {
+		t.Fatal("binding beyond Source contract bound accepted")
+	}
 	for _, bad := range [][]byte{append(append([]byte{}, raw...), []byte(` {}`)...), bytes.Replace(raw, []byte(`"binding_name":`), []byte(`"binding_name":"other","binding_name":`), 1), bytes.Replace(raw, []byte(`"binding_name":`), []byte(`"Binding_Name":`), 1), bytes.Replace(raw, []byte(`"binding_name":`), []byte(`"workflow_id":`), 1), []byte(`{"binding_name":"ci-writer","attempt_id":null}`)} {
 		if _, err := decodeNativeWorkerAttemptRequest(bad); err == nil {
 			t.Fatal("ambiguous/extra command authority accepted")

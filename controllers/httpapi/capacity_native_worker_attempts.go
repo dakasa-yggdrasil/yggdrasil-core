@@ -42,7 +42,7 @@ type nativeWorkerAttemptRequest struct {
 func decodeNativeWorkerAttemptRequest(raw []byte) (nativeWorkerAttemptRequest, error) {
 	var out nativeWorkerAttemptRequest
 	fields, err := capacity.NativeCanonicalObject(raw, map[string]bool{"binding_name": true, "attempt_id": true})
-	if err != nil || len(fields) != 2 || json.Unmarshal(raw, &out) != nil || out.AttemptID == uuid.Nil || out.BindingName == "" || len(out.BindingName) > 128 {
+	if err != nil || len(fields) != 2 || json.Unmarshal(raw, &out) != nil || out.AttemptID == uuid.Nil || out.BindingName == "" || len(out.BindingName) > 256 {
 		return out, repository.ErrCapacityConflict
 	}
 	id, _ := json.Marshal(out.AttemptID.String())
@@ -63,7 +63,7 @@ func decodeNativeWorkerAttemptReceive(raw []byte) (model.CapacityNativeWorkerCom
 			return out, repository.ErrCapacityConflict
 		}
 	}
-	if json.Unmarshal(raw, &out) != nil || out.AttemptID == uuid.Nil || out.BindingName == "" || len(out.BindingName) > 128 || len(out.OriginalReturn) > 1<<20 {
+	if json.Unmarshal(raw, &out) != nil || out.AttemptID == uuid.Nil || out.BindingName == "" || len(out.BindingName) > 256 || len(out.OriginalReturn) > 1<<20 {
 		return out, repository.ErrCapacityConflict
 	}
 	id, _ := json.Marshal(out.AttemptID.String())
@@ -145,7 +145,7 @@ func (s *Server) serveNativeWorkerAttemptRequest(w http.ResponseWriter, r *http.
 		mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 		return
 	}
-	if request.AttemptID == uuid.Nil || request.BindingName == "" || len(request.BindingName) > 128 {
+	if request.AttemptID == uuid.Nil || request.BindingName == "" || len(request.BindingName) > 256 {
 		mutationHTTPError(w, repository.ErrCapacityConflict)
 		return
 	}
