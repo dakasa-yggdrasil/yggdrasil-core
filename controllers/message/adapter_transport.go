@@ -26,6 +26,9 @@ var errAdapterCallFailed = errors.New("adapter_call_failed")
 
 type adapterCallPolicy struct {
 	detailFreeErrors bool
+	// Market costs and resource quantities must survive generic RPC maps exactly.
+	// Only protected, source-owned market/pool reads enable this policy.
+	exactJSONNumbers bool
 	// Set only by protected source-owned observers. Ordinary calls retain
 	// their original transport behavior when this private policy is absent.
 	native *nativeAdapterHTTPPolicy

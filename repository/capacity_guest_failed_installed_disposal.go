@@ -176,6 +176,11 @@ func (s CapacityStore) requestFailedInstalledGuestDisposal(ctx context.Context, 
 		return out, err
 	}
 	defer tx.Rollback()
+	// No policy row may be held while waiting for the shared capacity lock:
+	// a queued publisher can otherwise block another owner's later FOR SHARE.
+	if err = lockCapacityMarketTx(ctx, tx, model.CapacityPolicySpec{}); err != nil {
+		return out, err
+	}
 	if _, err = tx.ExecContext(ctx, `SET LOCAL TIME ZONE 'UTC'`); err != nil {
 		return out, err
 	}

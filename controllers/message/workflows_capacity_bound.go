@@ -100,7 +100,7 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	if admissionOnly && p.HPAExecutionBinding != nil {
 		expectedWorkflow = p.HPAExecutionBinding.AdmissionWorkflow
 	}
-	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || p.AssessmentBinding == nil || workflowRef.Kind != "workflow" || workflowRef.Namespace != expectedWorkflow.Namespace || workflowRef.Name != expectedWorkflow.Name {
+	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || (p.AssessmentBinding == nil && p.NativeWorkerPoolBinding == nil) || workflowRef.Kind != "workflow" || workflowRef.Namespace != expectedWorkflow.Namespace || workflowRef.Name != expectedWorkflow.Name {
 		return fail()
 	}
 	if p.HPAExecutionBinding != nil && p.HPAExecutionBinding.ReleaseRecovery != nil {
@@ -137,6 +137,9 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		if err := capacityDispatchFence(ctx); err != nil {
 			return "", err
 		}
+		if expected, market := capacityMarketAdapterVersion(p, binding); market && a.instance.Version != expected {
+			return "", errCapacityBoundAssessment
+		}
 		if !capacityBoundCatalogOperation(a.typeSpec, op) {
 			return "", errCapacityBoundAssessment
 		}
@@ -157,7 +160,8 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 			owned.originalReturn = func(joined bool) { original.CallerJoined = joined }
 			native = &owned
 		}
-		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityBoundAssessment, requireExplicitResponse: true, nativeHTTP: native})
+		exactNumbers := op == capacity.ObserveComputeOffer || op == capacity.ObserveNativeWorkerPool
+		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, exactJSONNumbers: exactNumbers, safeError: errCapacityBoundAssessment, requireExplicitResponse: true, nativeHTTP: native})
 		e = capacityDispatchCause(ctx, e)
 		if err := capacityDispatchFence(ctx); err != nil {
 			return "", err
@@ -172,6 +176,9 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 			return "", capacityDispatchCause(ctx, e)
 		}
 		return r.Status, nil
+	}
+	if p.NativeWorkerPoolBinding != nil {
+		return executeCapacityNativeWorkerBoundStep(ctx, db, policy, p, wf, result, read, fail)
 	}
 	b := p.AssessmentBinding
 	if admissionOnly {

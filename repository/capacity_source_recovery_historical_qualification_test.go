@@ -95,6 +95,7 @@ func TestSourceRecoveryHistoricalPreregistration(t *testing.T) {
 					mock.ExpectRollback()
 				} else {
 					lookup.WillReturnRows(sqlmock.NewRows([]string{"namespace", "environment", "domain", "dimension"}).AddRow("source-recovery-test", "ci", "vm", "members"))
+					mock.ExpectExec(`^SELECT pg_advisory_xact_lock\(hashtextextended\('capacity-market-shared-reservations-v1', 0\)\)$`).WithoutArgs().WillReturnResult(sqlmock.NewResult(0, 1))
 					mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
 					mock.ExpectQuery("SELECT original_wire,binding_wire").WithArgs(preregID).WillReturnRows(sqlmock.NewRows([]string{"original_wire", "binding_wire", "consistent"}).AddRow(wire, binding, mode != "corrupt_record"))
 					if mode != "corrupt_record" && mode != "corrupt_binding" {

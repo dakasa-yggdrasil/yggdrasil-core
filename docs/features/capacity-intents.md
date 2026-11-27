@@ -5,6 +5,8 @@ the generic manifest API and bound to one active logical workflow. No new
 scheduler, privileged self-dispatch path, provider credentials or background
 actuator is introduced. Both execution switches default to disabled.
 
+The optional [protected provider market](capacity-provider-market.md) adds fresh source-bound observations and explicit adaptive envelopes. Native worker execution remains separately gated; all original modes retain the behavior described below.
+
 ## Scope and decisions
 
 The durable key is `(namespace, environment, domain, dimension)`. Another policy

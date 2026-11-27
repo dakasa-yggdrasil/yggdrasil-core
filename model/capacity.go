@@ -33,6 +33,8 @@ type CapacityPolicySpec struct {
 	ExecutionEnabled            bool                                 `json:"execution_enabled"`
 	Signals                     []CapacitySignalRule                 `json:"signals"`
 	Profiles                    []CapacityProfile                    `json:"profiles"`
+	MarketBinding               *CapacityMarketBinding               `json:"market_binding,omitempty"`
+	NativeWorkerPoolBinding     *CapacityNativeWorkerPoolBinding     `json:"native_worker_pool_binding,omitempty"`
 	MutationBindings            []CapacityMutationBinding            `json:"mutation_bindings,omitempty"`
 	AssessmentBinding           *CapacityBoundAssessmentBinding      `json:"assessment_binding,omitempty"`
 	HPAExecutionBinding         *CapacityHPAExecutionBinding         `json:"hpa_execution_binding,omitempty"`
@@ -485,20 +487,25 @@ type CapacitySnapshot struct {
 }
 
 type CapacityAssessment struct {
-	Snapshot CapacitySnapshot   `json:"snapshot"`
-	Evidence []CapacityEvidence `json:"evidence"`
+	Snapshot         CapacitySnapshot                     `json:"snapshot"`
+	Evidence         []CapacityEvidence                   `json:"evidence"`
+	Market           *CapacityMarketAssessment            `json:"market,omitempty"`
+	NativeWorkerPool *CapacityNativeWorkerPoolObservation `json:"native_worker_pool,omitempty"`
 }
 
 type CapacityClockState struct {
-	PolicyFingerprint       string    `json:"policy_fingerprint"`
-	ResourceUID             string    `json:"resource_uid"`
-	WorkloadUID             string    `json:"workload_uid"`
-	WorkloadResourceVersion string    `json:"workload_resource_version"`
-	Profile                 string    `json:"profile"`
-	LastObservedAt          time.Time `json:"last_observed_at"`
-	LastActionAt            time.Time `json:"last_action_at"`
-	UpSince                 time.Time `json:"up_since"`
-	DownSince               time.Time `json:"down_since"`
+	PolicyFingerprint           string     `json:"policy_fingerprint"`
+	ResourceUID                 string     `json:"resource_uid"`
+	WorkloadUID                 string     `json:"workload_uid"`
+	WorkloadResourceVersion     string     `json:"workload_resource_version"`
+	Profile                     string     `json:"profile"`
+	LastObservedAt              time.Time  `json:"last_observed_at"`
+	LastActionAt                time.Time  `json:"last_action_at"`
+	UpSince                     time.Time  `json:"up_since"`
+	DownSince                   time.Time  `json:"down_since"`
+	EconomicCandidate           string     `json:"economic_candidate,omitempty"`
+	EconomicSince               *time.Time `json:"economic_since,omitempty"`
+	NativeWorkerPoolFingerprint string     `json:"native_worker_pool_fingerprint,omitempty"`
 }
 
 type CapacityDecision struct {
@@ -513,6 +520,7 @@ type CapacityDecision struct {
 
 // CapacityIntent is one durable generation per logical domain/dimension.
 type CapacityIntent struct {
+	MarketReservation                     *CapacityMarketReservation                   `json:"market_reservation,omitempty"`
 	WitnessedUnenrolledExpansionCleanupID string                                       `json:"witnessed_unenrolled_expansion_cleanup_id,omitempty"`
 	WitnessedExpansionTerminalReconcile   *CapacityWitnessedExpansionTerminalReconcile `json:"witnessed_expansion_terminal_reconcile,omitempty"`
 	FailedUnwitnessedExpansionCleanupID   string                                       `json:"failed_unwitnessed_expansion_cleanup_id,omitempty"`

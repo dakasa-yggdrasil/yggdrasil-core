@@ -45,6 +45,7 @@ func powerTxExpect(m sqlmock.Sqlmock, policy model.Manifest, p model.CapacityPol
 		workflow = model.ManifestSelector{Namespace: b.AdoptionWorkflow.Namespace, Name: b.AdoptionWorkflow.Name}
 	}
 	m.ExpectBegin()
+	m.ExpectExec(`^SELECT pg_advisory_xact_lock\(hashtextextended\('capacity-market-shared-reservations-v1', 0\)\)$`).WithoutArgs().WillReturnResult(sqlmock.NewResult(0, 1))
 	m.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
 	m.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs("capacity-power-instance/" + b.Resource.InstanceID).WillReturnResult(sqlmock.NewResult(0, 1))
 	m.ExpectQuery(`SELECT checksum,active FROM public.manifests`).WithArgs(policy.ID, policy.Metadata.Namespace, policy.Metadata.Name).WillReturnRows(sqlmock.NewRows([]string{"checksum", "active"}).AddRow(policy.Checksum, true))

@@ -59,6 +59,9 @@ type capacityResourceSlot struct {
 // lockMutationScope uses the same lock as capacity intents. Every mutation path
 // acquires it before row locks. Neither this transaction nor callbacks call WAN.
 func lockMutationScope(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec) error {
+	if err := lockCapacityMarketTx(ctx, tx, p); err != nil {
+		return err
+	}
 	key, _ := json.Marshal([]string{namespace, p.Environment, p.Domain, p.Dimension})
 	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, string(key))
 	return err

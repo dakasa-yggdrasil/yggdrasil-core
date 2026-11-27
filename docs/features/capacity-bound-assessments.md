@@ -113,3 +113,7 @@ transport. It checks reserved-minimum semantics, diagnostic holds, caller-path
 refusal, foreign/missing UID/RV/hash, paused revisions and prohibited VM/migration/
 execution combinations. No missing-producer or required-case skip is accepted.
 This is source integration evidence, not production capacity certification.
+
+## Optional Native worker market path
+
+The separate opt-in [provider market assessment](capacity-provider-market.md) uses exact bound pool/offer collectors and the same durable ledger. It does not reinterpret an HPA response as a machine pool, enable a Native worker executor or alter the original Guest/HPA execution contracts.

@@ -38,6 +38,9 @@ func ValidateAdministrativeCostAssumption(p model.CapacityPolicySpec) error {
 // mode uses only the expiry of an operator's reviewed planning assumption; it
 // must not manufacture long-lived native quote/validation timestamps.
 func profilePlanningDeclarations(p model.CapacityPolicySpec, profile model.CapacityProfile) bool {
+	if p.MarketBinding != nil {
+		return administrativeCostAssumption(p) == nil && profile.QuoteValidUntil.IsZero() && !profile.ValidationValidUntil.IsZero()
+	}
 	if administrativeCostAssumption(p) == nil {
 		return !profile.QuoteValidUntil.IsZero() && !profile.ValidationValidUntil.IsZero()
 	}
@@ -45,6 +48,9 @@ func profilePlanningDeclarations(p model.CapacityPolicySpec, profile model.Capac
 }
 
 func ProfilePlanningCurrent(p model.CapacityPolicySpec, profile model.CapacityProfile, at time.Time) bool {
+	if p.MarketBinding != nil {
+		return profilePlanningDeclarations(p, profile) && profile.ValidationValidUntil.After(at)
+	}
 	if c := administrativeCostAssumption(p); c != nil {
 		return profilePlanningDeclarations(p, profile) && c.ExpiresAt.After(at)
 	}

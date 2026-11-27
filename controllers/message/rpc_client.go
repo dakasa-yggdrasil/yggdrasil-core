@@ -133,6 +133,10 @@ func decodeRPCBodyWithPolicy(body []byte, response any, policy adapterCallPolicy
 }
 
 func decodeRPCBodyDetailFree(body []byte, response any, policy adapterCallPolicy) error {
+	decode := strictJSONUnmarshal
+	if policy.exactJSONNumbers {
+		decode = strictJSONUnmarshalExactNumbers
+	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return policy.sanitizeError(err)
@@ -142,7 +146,7 @@ func decodeRPCBodyDetailFree(body []byte, response any, policy adapterCallPolicy
 	_, hasError := fields["error"]
 	if hasOK || hasData || hasError {
 		var envelope rpcEnvelope
-		if err := strictJSONUnmarshal(body, &envelope); err != nil {
+		if err := decode(body, &envelope); err != nil {
 			return policy.sanitizeError(err)
 		}
 		if envelope.Error != nil || !envelope.OK {
@@ -154,18 +158,34 @@ func decodeRPCBodyDetailFree(body []byte, response any, policy adapterCallPolicy
 		if len(envelope.Data) == 0 || response == nil {
 			return nil
 		}
-		return policy.sanitizeError(strictJSONUnmarshal(envelope.Data, response))
+		return policy.sanitizeError(decode(envelope.Data, response))
 	}
 
 	if response == nil {
 		return nil
 	}
-	return policy.sanitizeError(strictJSONUnmarshal(body, response))
+	return policy.sanitizeError(decode(body, response))
 }
 
 func strictJSONUnmarshal(body []byte, target any) error {
+	return strictJSONUnmarshalNumbers(body, target, false)
+}
+
+func strictJSONUnmarshalExactNumbers(body []byte, target any) error {
+	// Inspect the original bytes before a generic map can erase duplicate keys.
+	var original json.RawMessage
+	if err := capacity.DecodeNativeCapacity(json.RawMessage(body), &original); err != nil {
+		return err
+	}
+	return strictJSONUnmarshalNumbers(body, target, true)
+}
+
+func strictJSONUnmarshalNumbers(body []byte, target any, exact bool) error {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
+	if exact {
+		decoder.UseNumber()
+	}
 	if err := decoder.Decode(target); err != nil {
 		return err
 	}
