@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: f28ee7333f92ba2bc45c7cf2b483ce2ec21a448b
-verified_diff_sha256: 52914baf52dab8eb5503ec936d9b1887c141dd5718ff632241fd866c609fe8cd
+verified_at_commit: 9d289f3c611ea185175994dee8fa18e227a22521
+verified_diff_sha256: 3a0e1e5f957feacfc3e155bb13d340fd88a93a263091022388ae149179788ab4
 reconciler_schema: 1
 
 Reviewed the concrete protected Native factory, canonical System launch mirror,
@@ -26,3 +26,8 @@ format/diff checks, artifact byte inspection and released generators ran locally
 No tests/builds/vet, local binary execution, cloud actions or production activation
 occurred. Actual CI remains required; protected material, runtime installation,
 network qualification and paid isolated-provider acceptance are still separate.
+
+The first real executable CI retained its constructor refusal and lint originals.
+The owning closed decoder now receives canonical RawMessage object bytes, and
+filesystem timestamp stability uses Time.Equal. All qualification/tests and
+remaining guards are unchanged; the original regression root stays mandatory.
