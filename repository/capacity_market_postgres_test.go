@@ -312,6 +312,75 @@ func TestMarketClaimAllowsFreshCollectionAndRegistryHeartbeatVersions(t *testing
 	}
 }
 
+// This isolated CI fixture declares a historical confirmed creation row and a
+// current observer result. It qualifies only their database join and retirement
+// Claim, never a real provider create, network admission or useful worker.
+func declaredMarketWorker(t *testing.T, f marketRepositoryFixture) {
+	t.Helper()
+	now := time.Now().UTC()
+	profile := f.p.MarketBinding.Profiles[0]
+	grantID := uuid.NewString()
+	proof := model.CapacityMutationProof{GrantID: grantID, BindingName: "declared-native", Slot: 1, ResourceID: "222222222", ResourceCreatedAt: now.Format(time.RFC3339Nano), RequestSHA256: strings.Repeat("a", 64), ObservedAt: now, ReceiptRef: "declared-ci/native-birth", OwnerVerified: true, SpecVerified: true}
+	record := capacityMutationRecord{PolicyID: f.policy.ID, Generation: 1, FencingToken: 1, EventProvider: "hcloud", EventResource: "server", Grant: model.CapacityMutationGrant{GrantID: grantID, Capability: "ensure_server", State: "confirmed"}, Binding: model.CapacityMutationBinding{IntegrationInstanceID: profile.Adapter.ManifestID, ProfileName: profile.Profile, EnsureCapability: "ensure_server"}, Proof: &proof}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.db.Exec(`INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,1,'confirmed',$9,$10)`, grantID, f.policy.Metadata.Namespace, f.p.Environment, f.p.Domain, f.p.Dimension, profile.Adapter.ManifestID, strings.Repeat("c", 64), profile.Profile, raw, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := f.db.Exec(`DELETE FROM public.capacity_mutation_grants WHERE id=$1`, grantID); err != nil {
+			t.Error(err)
+		}
+	})
+	proofRaw, _ := json.Marshal(proof)
+	f.pool.Nodes = []model.CapacityNativeWorkerNode{{NodeUID: uuid.NewString(), NodeResourceVersion: "7", ProviderID: "hcloud://222222222", Provider: "hcloud", Profile: profile.Profile, PoolUID: f.pool.PoolUID, RegistrationEpoch: f.pool.OwnerEpoch, RegistrationBindingSHA256: profile.RegistrationBindingSHA, PhysicalSpecSHA256: profile.PhysicalSpecSHA256, CurrentRegistration: true, CapacityPolicyID: f.policy.ID.String(), IntentGeneration: 1, FencingToken: 1, RegistrationReceiptSHA256: fmt.Sprintf("%x", sha256.Sum256(proofRaw)), Ready: true, SchedulingAdmitted: true, AdmissionReceiptSHA256: strings.Repeat("f", 64), AdmissionRegistryUID: f.pool.RegistryRef.UID, AdmissionRegistryResourceVersion: f.pool.OwnerResourceVersion, ReadyObservedAt: now, AllocatableMilliCPU: 1000, AllocatableMemoryBytes: 1 << 30}}
+}
+
+func TestNativeRetirementClaimReobservesWithoutReservingMissingPrices(t *testing.T) {
+	for _, changedPressure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("changed_pressure_%t", changedPressure), func(t *testing.T) {
+			f := marketRepoFixture(t)
+			declaredMarketWorker(t, f)
+			for _, q := range f.market.Profiles {
+				f.market.Unavailable = append(f.market.Unavailable, model.CapacityMarketUnavailableProfile{Profile: q.Profile, Provider: q.Provider, Region: q.Region, Adapter: q.Adapter, Reason: "collector_unavailable", ObservedAt: time.Now().UTC()})
+			}
+			f.market.Profiles = []model.CapacityMarketProfileQuote{}
+			value := 0.0
+			f.a.Evidence[0].Value, f.a.Evidence[0].RangeMin, f.a.Evidence[0].RangeMax = &value, &value, &value
+			ctx := context.Background()
+			first, err := f.store.Assess(ctx, f.policy, f.a)
+			if err != nil || first.Decision.Reason != "down_window_pending" {
+				t.Fatalf("missing prices bypassed down hold: %+v %v", first, err)
+			}
+			time.Sleep(1100 * time.Millisecond) // Actual CI database time owns the hold.
+			proposal, err := f.store.Assess(ctx, f.policy, f.a)
+			if err != nil || !capacity.IsNativeWorkerRetirementOnly(f.p, proposal.Assessment, proposal.Decision) || proposal.Decision.Units != 0 {
+				t.Fatalf("could not propose independently observed retirement: %+v %v", proposal, err)
+			}
+			if changedPressure {
+				value = 1
+			}
+			claimed, err := f.store.Claim(ctx, f.policy, proposal.Generation, f.a)
+			if changedPressure {
+				if err == nil {
+					t.Fatal("Claim ignored newly observed demand before retirement")
+				}
+				return
+			}
+			if err != nil || claimed.Phase != "draining" || claimed.MarketReservation != nil || !claimed.Decision.ExecutionPermitted {
+				t.Fatalf("retirement required a missing quote or reserved a new allocation: %+v %v", claimed, err)
+			}
+			var reserved bool
+			if err = f.db.QueryRow(`SELECT intent ? 'market_reservation' FROM public.capacity_intents WHERE namespace=$1 AND domain=$2`, f.policy.Metadata.Namespace, f.p.Domain).Scan(&reserved); err != nil || reserved {
+				t.Fatal("retirement persisted a fictional zero-cost provider offer", reserved, err)
+			}
+		})
+	}
+}
+
 func TestNativeClaimComparisonIncludesStableBirthAdmissionAndAllocation(t *testing.T) {
 	p := model.CapacityPolicySpec{NativeWorkerPoolBinding: &model.CapacityNativeWorkerPoolBinding{}}
 	o := &model.CapacityNativeWorkerPoolObservation{Schema: "native_worker_pool_v1", RegistryRef: model.CapacityNativePoolRegistryRef{UID: "registry"}, OwnerEpoch: 1, Nodes: []model.CapacityNativeWorkerNode{{NodeUID: "node", ProviderID: "aws:///az/i-1", CapacityPolicyID: "policy", IntentGeneration: 1, FencingToken: 2, RegistrationReceiptSHA256: "birth", AdmissionReceiptSHA256: "admission", AdmissionRegistryUID: "registry", Ready: true, SchedulingAdmitted: true, AllocatableMilliCPU: 2000, AllocatableMemoryBytes: 4 << 30}}}

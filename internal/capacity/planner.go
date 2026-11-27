@@ -153,15 +153,15 @@ func assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		}
 	}
 	var marketProfiles []MarketProfile
+	var marketErr error
 	if p.MarketBinding != nil && !evidenceOnly {
 		if ledger == nil {
 			return holdUnknown(d, "market_ledger_unavailable"), nil
 		}
-		var err error
-		marketProfiles, err = EffectiveProfiles(p, a.Market, *ledger, now)
-		if err != nil {
-			return holdUnknown(d, "market_evidence_unavailable"), nil
+		if p.NativeWorkerPoolBinding != nil && !nativeMarketLedgerCurrent(p, s, ledger, now) {
+			return holdUnknown(d, "market_ledger_unavailable"), nil
 		}
+		marketProfiles, marketErr = EffectiveProfiles(p, a.Market, *ledger, now)
 	}
 	selectProfile := func(units int, repair bool) (model.CapacityProfile, bool) {
 		if p.MarketBinding != nil && !evidenceOnly {
@@ -177,6 +177,9 @@ func assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		return selectEligibleProfile(p, units, now, repair)
 	}
 	if s.Units < p.Floor {
+		if marketErr != nil {
+			return holdUnknown(d, "market_evidence_unavailable"), nil
+		}
 		profile, exists := selectProfile(p.Floor, true)
 		if !exists {
 			d.Reason = "validated_profile_unavailable"
@@ -274,6 +277,9 @@ func assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 	} else {
 		d.Clock.UpSince, d.Clock.DownSince = time.Time{}, time.Time{}
 		if p.MarketBinding != nil && !evidenceOnly {
+			if marketErr != nil {
+				return holdUnknown(d, "market_evidence_unavailable"), nil
+			}
 			return economicMarketDecision(p, marketProfiles, s, d, now), nil
 		}
 		return d, nil
@@ -284,6 +290,9 @@ func assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 	}
 	var wanted int
 	if up {
+		if marketErr != nil {
+			return holdUnknown(d, "market_evidence_unavailable"), nil
+		}
 		ceiling := p.Ceiling
 		if UsesObservedMarketConstraints(p) {
 			ceiling = s.Units
@@ -296,6 +305,23 @@ func assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		wanted = s.Units + min(p.Step, max(0, ceiling-s.Units))
 	} else {
 		wanted = max(p.Floor, s.Units-p.Step)
+	}
+	if !up && p.NativeWorkerPoolBinding != nil && p.MarketBinding != nil && !evidenceOnly {
+		minimum, known := nativeWorkerRetirementMinimum(p, s.Profile)
+		if !known {
+			return holdUnknown(d, "current_profile_unknown"), nil
+		}
+		wanted = max(wanted, minimum)
+		// Retiring an already admitted worker never selects a replacement or
+		// allocates a machine, disk or IP. It uses the independent, fresh pool
+		// and complete surplus signals above, not a fabricated zero-price quote.
+		if wanted < s.Units {
+			d.Action, d.Reason, d.Profile, d.Units = "drain", "sustained_surplus_retirement_only", s.Profile, wanted
+			d.ExecutionPermitted = p.ExecutionEnabled
+			return d, nil
+		}
+		d.Reason = "capacity_boundary"
+		return d, nil
 	}
 	profile, exists := selectProfile(wanted, false)
 	if !exists {
