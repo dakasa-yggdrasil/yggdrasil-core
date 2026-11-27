@@ -156,6 +156,34 @@
     },
     {
       "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_network.go",
+      "function": "serveNativeWorkerNetworkRequest",
+      "line": 171,
+      "predicate": "\"read\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_network.go",
+      "function": "serveNativeWorkerNetworkRequest",
+      "line": 173,
+      "predicate": "\"redeem\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_network.go",
+      "function": "serveNativeWorkerNetworkRequest",
+      "line": 175,
+      "predicate": "\"receive\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_network.go",
+      "function": "serveNativeWorkerNetworkRequest",
+      "line": 177,
+      "predicate": "\"reconcile\""
+    },
+    {
+      "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_phases.go",
       "function": "serveNativeWorkerPhaseRequest",
       "line": 225,

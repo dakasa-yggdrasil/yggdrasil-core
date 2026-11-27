@@ -85,6 +85,9 @@ func ValidateNativeWorkerLifecycleBinding(p model.CapacityPolicySpec) error {
 	if err := ValidateNativeWorkerPhysicalObservers(p); err != nil {
 		return err
 	}
+	if err := ValidateNativeWorkerNetworkBinding(p); err != nil {
+		return err
+	}
 	return ValidateNativeWorkerPhaseReadBinding(p)
 }
 

@@ -179,3 +179,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 - [ADR-0137: Qualify Native births with an independent physical reader](0137-qualify-native-births-with-an-independent-physical-reader.md)
 - [ADR-0138: Bind Native provider RPC to protected mutual TLS clients](0138-bind-native-provider-rpc-to-protected-mutual-tls-clients.md)
 | [0136](0136-close-expired-unredeemed-native-reservations-with-retained-no-send-proof.md) | Close expired unredeemed Native reservations with retained no-send proof | Proposed | 2026-11-27 | Core / immutable unsent closure and shared redemption arbiter |
+
+- [ADR-0140: Bind Native floor network permissions to sealed births and original custody](0140-bind-native-floor-network-permissions-to-sealed-births-and-original-custody.md)
