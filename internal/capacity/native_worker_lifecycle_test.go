@@ -16,13 +16,13 @@ func TestNativeLifecycleNeverReusesReadonlyOrLegacyAuthority(t *testing.T) {
 	exec.ManifestID = marketTestUUID(900)
 	p.NativeWorkerLifecycleBinding = &model.CapacityNativeWorkerLifecycleBinding{Mode: NativeWorkerLifecycleMode, SourceCommit: strings.Repeat("a", 40), MaxReadAgeSeconds: 60}
 	for _, profile := range p.MarketBinding.Profiles {
-		p.NativeWorkerLifecycleBinding.Profiles = append(p.NativeWorkerLifecycleBinding.Profiles, model.CapacityNativeWorkerExecutionProfile{Profile: profile.Profile, Adapter: exec, BindingName: "owned/" + profile.Profile, ScopeSHA256: strings.Repeat("f", 64), EnsureCapability: "ensure_worker", ObserveCapability: "observe_worker", DestroyCapability: "destroy_worker", LaunchTemplateSHA256: strings.Repeat("b", 64), BootstrapSourceCommit: strings.Repeat("c", 40), IPAMScope: "native/overlay", OverlayCIDR: "10.81.0.0/24", ExcludedIPv4: []string{"10.81.0.2"}})
+		p.NativeWorkerLifecycleBinding.Profiles = append(p.NativeWorkerLifecycleBinding.Profiles, model.CapacityNativeWorkerExecutionProfile{Profile: profile.Profile, Adapter: exec, BindingName: "owned/" + profile.Profile, SDKSourceCommit: strings.Repeat("e", 40), ScopeSHA256: strings.Repeat("f", 64), EnsureCapability: "ensure_worker", ObserveCapability: "observe_worker", DestroyCapability: "destroy_worker", LaunchTemplateSHA256: strings.Repeat("b", 64), BootstrapSourceCommit: strings.Repeat("c", 40), IPAMScope: "native/overlay", OverlayCIDR: "10.81.0.0/24", ExcludedIPv4: []string{"10.81.0.2"}})
 	}
 	if ValidateNativeWorkerLifecycleBinding(p) != nil {
 		t.Fatal("closed Source refused")
 	}
 	original, _ := json.Marshal(p)
-	for _, fault := range []string{"readonly-instance", "missing-epoch-source", "public-IPAM", "duplicate-exclusion", "legacy-slot", "registry-pricing-instance"} {
+	for _, fault := range []string{"readonly-instance", "missing-epoch-source", "missing-sdk-source", "public-IPAM", "duplicate-exclusion", "legacy-slot", "registry-pricing-instance"} {
 		var bad model.CapacityPolicySpec
 		json.Unmarshal(original, &bad)
 		switch fault {
@@ -30,6 +30,8 @@ func TestNativeLifecycleNeverReusesReadonlyOrLegacyAuthority(t *testing.T) {
 			bad.NativeWorkerLifecycleBinding.Profiles[0].Adapter = bad.MarketBinding.Profiles[0].Adapter
 		case "missing-epoch-source":
 			bad.NativeWorkerLifecycleBinding.SourceCommit = ""
+		case "missing-sdk-source":
+			bad.NativeWorkerLifecycleBinding.Profiles[0].SDKSourceCommit = ""
 		case "public-IPAM":
 			bad.NativeWorkerLifecycleBinding.Profiles[0].OverlayCIDR = "0.0.0.0/0"
 		case "duplicate-exclusion":

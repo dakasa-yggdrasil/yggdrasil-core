@@ -54,7 +54,7 @@ func ValidateNativeWorkerLifecycleBinding(p model.CapacityPolicySpec) error {
 		}
 		cidr, err := netip.ParsePrefix(v.OverlayCIDR)
 		target := v.Adapter.ManifestID + "/" + v.BindingName
-		if !matched || seen[v.Profile] || targets[target] || !marketAdapterValid(v.Adapter) || !marketID.MatchString(v.BindingName) || !marketSHA.MatchString(v.ScopeSHA256) ||
+		if !matched || seen[v.Profile] || targets[target] || !marketAdapterValid(v.Adapter) || !marketID.MatchString(v.BindingName) || !marketCommit.MatchString(v.SDKSourceCommit) || !marketSHA.MatchString(v.ScopeSHA256) ||
 			!strings.HasPrefix(v.EnsureCapability, "ensure_") || !strings.HasPrefix(v.ObserveCapability, "observe_") ||
 			(!strings.HasPrefix(v.DestroyCapability, "destroy_") && !strings.HasPrefix(v.DestroyCapability, "terminate_")) ||
 			!marketID.MatchString(v.EnsureCapability) || !marketID.MatchString(v.ObserveCapability) || !marketID.MatchString(v.DestroyCapability) ||

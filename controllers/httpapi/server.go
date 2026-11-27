@@ -1054,6 +1054,10 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			s.serveOriginalCanaryAuthority(w, r)
 			return
 		}
+		if nativeWorkerAttemptPath(r.URL.Path) {
+			s.serveNativeWorkerAttemptRequest(w, r, s.capacityMutationCredential(r))
+			return
+		}
 		if nativeWorkerPhasePath(r.URL.Path) {
 			s.serveNativeWorkerPhaseRequest(w, r, s.capacityMutationCredential(r))
 			return

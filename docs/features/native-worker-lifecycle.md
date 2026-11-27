@@ -153,3 +153,35 @@ must qualify its native CAS receiving with installed protected runtime ports. Pa
 useful-versus-charged capacity, replacement and the full execution cycle remain
 requirements before live automatic switching. Persistent data/floor relocation
 is outside this worker protocol.
+
+## Private creator command protocol
+
+An execution profile pins `sdk_source_commit` independently of Core lifecycle
+Source and bootstrap Source. The immutable private command context is committed
+with Reserve, retaining the original controller executor/workflow without adding
+them to public Attempt JSON. The protected SDK actor uses exactly these paths:
+
+| Path suffix under `/internal/capacity/native-workers/attempts/` | Contract |
+| --- | --- |
+| `read` | GET with only `binding_name` and `attempt_id`; no launch or mutation grant |
+| `redeem` | POST with those two fields; one committed original send permit |
+| `receive` | POST with those fields plus `original_return`, `capture_complete`, `error_class`; private custody only |
+
+Each request carries one `X-Yggdrasil-Adapter-Source-Commit` equal to the actor's
+compiled revision. Each response carries Core's compiled
+`X-Yggdrasil-Source-Commit`. TLS, the active hashed exact execution credential and
+Source-written context are required before a body is read. The actual attempt,
+binding, policy and machine scope are rejoined privately after closed decoding.
+The original response is at most 1MiB; the base64 envelope is at most 2MiB.
+Oversized transport data must be truncated by the actor with completeness=false
+and `ORIGINAL_CAPTURE_BOUND_EXCEEDED`; uncertain transport uses
+`ORIGINAL_TRANSPORT_UNCERTAIN`. Neither flag is an ACK or admission assertion.
+
+The private permit includes only the public Launch, fixed execution bindings,
+original expiry and `execution_scope_sha256`. The SDK must compare that scope to
+its actual complete protected binding-file bytes before any provider API call.
+A retry or uncertain redemption cannot return another launch grant. Original
+custody is durable before independent qualification; closed/expired parent
+leases do not erase it. The creator receive path can settle historical ACK or
+unknown truth, and cannot register/admit a Node. Production sender/network
+composition and remote execution evidence are still required before activation.

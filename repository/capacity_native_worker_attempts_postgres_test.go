@@ -98,7 +98,7 @@ func nativeAttemptFixture(t *testing.T, configure ...func(*model.CapacityPolicyS
 	f.market.Profiles[0].Stock.MaxUnits = 1000
 	f.market.Profiles[0].Registration.MaxUnits = 1000
 	f.market.Profiles[0].Network.MaxUnits = 1000
-	f.p.NativeWorkerLifecycleBinding = &model.CapacityNativeWorkerLifecycleBinding{Mode: capacity.NativeWorkerLifecycleMode, SourceCommit: strings.Repeat("a", 40), MaxReadAgeSeconds: 60, Profiles: []model.CapacityNativeWorkerExecutionProfile{{Profile: "hcloud", Adapter: adapter, BindingName: "ci-writer", ScopeSHA256: strings.Repeat("f", 64), EnsureCapability: "ensure_server", ObserveCapability: "observe_server", DestroyCapability: "destroy_server", LaunchTemplateSHA256: strings.Repeat("b", 64), BootstrapSourceCommit: strings.Repeat("c", 40), IPAMScope: "ci/" + uuid.NewString(), OverlayCIDR: "10.81.0.0/24", ExcludedIPv4: []string{"10.81.0.2"}}}}
+	f.p.NativeWorkerLifecycleBinding = &model.CapacityNativeWorkerLifecycleBinding{Mode: capacity.NativeWorkerLifecycleMode, SourceCommit: strings.Repeat("a", 40), MaxReadAgeSeconds: 60, Profiles: []model.CapacityNativeWorkerExecutionProfile{{Profile: "hcloud", Adapter: adapter, BindingName: "ci-writer", SDKSourceCommit: strings.Repeat("e", 40), ScopeSHA256: strings.Repeat("f", 64), EnsureCapability: "ensure_server", ObserveCapability: "observe_server", DestroyCapability: "destroy_server", LaunchTemplateSHA256: strings.Repeat("b", 64), BootstrapSourceCommit: strings.Repeat("c", 40), IPAMScope: "ci/" + uuid.NewString(), OverlayCIDR: "10.81.0.0/24", ExcludedIPv4: []string{"10.81.0.2"}}}}
 	for _, apply := range configure {
 		apply(&f.p)
 	}
