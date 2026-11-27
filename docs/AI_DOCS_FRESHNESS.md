@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 4174a0d02f98fc41170423841335fa6bb6f48ffb
-verified_diff_sha256: c7130e286d08585d0bd7553d0dad28bc1917ae7c5bc7c489b296113f59d768c7
+verified_at_commit: 427989ad94c3f363cbd57038536adbcd0de9eecb
+verified_diff_sha256: 810ccb6940409c7691f4eec70bf2d7f9ebf9f3a6058516521635595eae666bac
 reconciler_schema: 1
 
 Reviewed the complete concrete AWS-only Native runtime, exact copied policy and
@@ -37,3 +37,8 @@ new runtime fixture was refused after1.51s. Original logs are retained; this is
 not a timeout diagnosis. Failure-only assertions expose the same existing policy,
 factory and reader validation seams before the unchanged constructor call.
 No production guard, test acceptance, root or watchdog was relaxed.
+
+The retained diagnostic artifact identifies the exact fixture defect: the AWS
+zone was placed inside a scheme-only provider prefix. Only the fixture changes
+to aws:/// plus the complete zone/resource ProviderID; production validation
+and the original roots and finite deadlines remain unchanged.
