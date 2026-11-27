@@ -113,19 +113,19 @@
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "a68ace3b18a2ed5586748288481d345c8b22e3bdd8e6e7a2d49c617372213209"
+      "sha256": "d992e61c63fd291010a0e4be2c43f3201b6f1402391e53102b00ac2be5510abb"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "b16ece3f03fd10fcd9c45257dd7c8609e17304892dfc6d5da1cdf9557c57ee57"
+      "sha256": "2589ac77bc35b659bfa89ac9aeb05c80e61430297916d5590648eb692cdeb579"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "a4b5ce0bdacdfde98b0dd58b4962d9aaf61676231ce2cba474d234747afcf05f"
+      "sha256": "90835da95a06267a1739fda7387774c813aa9c4872bc0e30b6578b2598db6515"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "a6f555f3b179195df1a1655428f356fe392208470d2cf2c8431efb4fcc7d9daa"
+    "sha256": "58f330cfec0c343c0f52d3d562d0112fbdc503421417ec9e5b9a92f9c7dec35f"
   },
   "unresolved": []
 }

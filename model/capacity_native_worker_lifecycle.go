@@ -22,6 +22,7 @@ type CapacityNativeWorkerExecutionProfile struct {
 	Profile               string                       `json:"profile"`
 	Adapter               CapacityMarketAdapterBinding `json:"adapter"`
 	BindingName           string                       `json:"binding_name"`
+	SDKSourceCommit       string                       `json:"sdk_source_commit"`
 	ScopeSHA256           string                       `json:"scope_sha256"`
 	EnsureCapability      string                       `json:"ensure_capability"`
 	ObserveCapability     string                       `json:"observe_capability"`
@@ -136,6 +137,47 @@ type CapacityNativeWorkerOriginalReturn struct {
 	CaptureComplete bool   `json:"-"`
 }
 
+const CapacityNativeWorkerCommandSchema = "native_worker_attempt_command_v1"
+
+// This private actor protocol never includes controller executor/workflow IDs,
+// original-return hashes or bootstrap credentials. Read never returns a launch.
+type CapacityNativeWorkerCommand struct {
+	Schema               string                                `json:"schema"`
+	AttemptID            uuid.UUID                             `json:"attempt_id"`
+	BindingName          string                                `json:"binding_name"`
+	AttemptState         string                                `json:"attempt_state"`
+	MutationPermitted    bool                                  `json:"mutation_permitted"`
+	Redeemable           bool                                  `json:"redeemable"`
+	ExpiresAt            time.Time                             `json:"expires_at"`
+	SDKSourceCommit      string                                `json:"sdk_source_commit"`
+	ExecutionScopeSHA256 string                                `json:"execution_scope_sha256"`
+	Profile              string                                `json:"profile,omitempty"`
+	Provider             string                                `json:"provider,omitempty"`
+	Region               string                                `json:"region,omitempty"`
+	LaunchSHA256         string                                `json:"launch_sha256,omitempty"`
+	OverlayIPv4          string                                `json:"overlay_ipv4,omitempty"`
+	Execution            *CapacityNativeWorkerExecutionProfile `json:"execution,omitempty"`
+	PublicLaunchJSON     json.RawMessage                       `json:"public_launch_json,omitempty"`
+}
+
+// Caller is assembled exclusively by authenticated protected HTTP composition.
+type CapacityNativeWorkerCommandCaller struct {
+	BindingName     string
+	InstanceID      string
+	SDKSourceCommit string
+	Capability      string
+}
+
+// Receive carries original transport custody, not ACK or lifecycle assertions.
+// Neither these bytes nor their raw hash belongs in public Attempt metadata.
+type CapacityNativeWorkerCommandReceive struct {
+	AttemptID       uuid.UUID `json:"attempt_id"`
+	BindingName     string    `json:"binding_name"`
+	OriginalReturn  []byte    `json:"original_return"`
+	CaptureComplete bool      `json:"capture_complete"`
+	ErrorClass      string    `json:"error_class"`
+}
+
 type CapacityNativeWorkerLaunch struct {
 	AttemptID      uuid.UUID
 	PoolUID        string
@@ -174,4 +216,253 @@ type CapacityNativeWorkerObservation struct {
 	AbsentProviderID              string
 	AbsentResourceCreatedAt       time.Time
 	AbsentOverlayIPv4             string
+}
+
+const CapacityNativeWorkerPhasePermitSchema = "native_worker_kube_phase_permit_v1"
+
+// Registry writer credentials and authority are independent from the read-only
+// pool/market collectors. A single permit authorizes exactly one native CAS.
+type CapacityNativeWorkerRegistryWriterBinding struct {
+	Adapter          CapacityMarketAdapterBinding `json:"adapter"`
+	BindingName      string                       `json:"binding_name"`
+	PrincipalID      string                       `json:"principal_id"`
+	SourceCommit     string                       `json:"source_commit"`
+	ScopeSHA256      string                       `json:"scope_sha256"` // SHA256 of the exact complete reviewed writer inventory bytes.
+	Capability       string                       `json:"capability"`
+	MaxPermitSeconds int                          `json:"max_permit_seconds"`
+}
+
+type CapacityNativeWorkerPhaseNode struct {
+	Name                      string `json:"name"`
+	UID                       string `json:"uid"`
+	ResourceVersion           string `json:"resource_version"`
+	ProviderID                string `json:"provider_id"`
+	Profile                   string `json:"profile"`
+	PhysicalSpecSHA256        string `json:"physical_spec_sha256"`
+	RegistrationBindingSHA256 string `json:"registration_binding_sha256"`
+	CapacityPolicyID          string `json:"capacity_policy_id"`
+	IntentGeneration          int64  `json:"intent_generation"`
+	FencingToken              int64  `json:"fencing_token"`
+	CreationProofSHA256       string `json:"creation_proof_sha256"`
+}
+
+type CapacityNativeWorkerPhaseAdmission struct {
+	ReceiptSHA256               string `json:"receipt_sha256,omitempty"`
+	NetworkBindingSHA256        string `json:"network_binding_sha256,omitempty"`
+	WarmupEvidenceSHA256        string `json:"warmup_evidence_sha256,omitempty"`
+	PhysicalQualificationSHA256 string `json:"physical_qualification_sha256,omitempty"`
+}
+
+// Read always returns MutationPermitted=false and no settlement token. Only
+// the original successful Redeem returns a private one-send mutation permit.
+type CapacityNativeWorkerPhasePermit struct {
+	Schema                          string                             `json:"schema"`
+	PermitID                        uuid.UUID                          `json:"permit_id"`
+	AttemptID                       uuid.UUID                          `json:"attempt_id"`
+	BindingName                     string                             `json:"binding_name"`
+	WriterScopeSHA256               string                             `json:"writer_scope_sha256"`
+	Operation                       string                             `json:"operation"`
+	Action                          string                             `json:"action"`
+	PolicyID                        uuid.UUID                          `json:"policy_id"`
+	IntentGeneration                int64                              `json:"intent_generation"`
+	FencingToken                    int64                              `json:"fencing_token"`
+	PoolUID                         string                             `json:"pool_uid"`
+	Owner                           string                             `json:"owner"`
+	Epoch                           int64                              `json:"epoch"`
+	RealmNamespace                  string                             `json:"realm_namespace"`
+	RealmUID                        string                             `json:"realm_uid"`
+	Registry                        CapacityNativePoolRegistryRef      `json:"registry"`
+	ExpectedRegistryResourceVersion string                             `json:"expected_registry_resource_version"`
+	ExpectedRegistrySHA256          string                             `json:"expected_registry_sha256"`
+	Node                            CapacityNativeWorkerPhaseNode      `json:"node"`
+	Admission                       CapacityNativeWorkerPhaseAdmission `json:"admission"`
+	ExpiresAt                       time.Time                          `json:"expires_at"`
+	MutationPermitted               bool                               `json:"mutation_permitted"`
+	Redeemable                      bool                               `json:"redeemable"`
+	PhaseState                      string                             `json:"phase_state"`
+	SettlementToken                 string                             `json:"settlement_token,omitempty"`
+}
+
+// Caller identity is assembled by authenticated server composition. It is not
+// decoded from the capability input, which contains only binding and permit ID.
+type CapacityNativeWorkerPhaseCaller struct {
+	Adapter      CapacityMarketAdapterBinding
+	PrincipalID  string
+	BindingName  string
+	SourceCommit string
+}
+
+// Receive is authenticated original-return custody, not admission authority.
+// OriginalReturn and its hash never enter public read/workflow metadata.
+type CapacityNativeWorkerPhaseReceive struct {
+	PermitID           uuid.UUID `json:"permit_id"`
+	BindingName        string    `json:"binding_name"`
+	SettlementToken    string    `json:"settlement_token"`
+	HTTPStatus         int       `json:"http_status"`
+	TransportCompleted bool      `json:"transport_completed"`
+	OriginalReturn     []byte    `json:"original_return"`
+	CompletedAt        time.Time `json:"completed_at"`
+}
+
+// Prepared/observed facts come only from installed read-only runtime callbacks.
+// Neither a workflow request nor the mutating adapter supplies these booleans.
+type CapacityNativeWorkerPhasePreparation struct {
+	Context           CapacityNativeWorkerPhasePermit
+	ObservedAt        time.Time
+	NodeReady         bool
+	NetworkVerified   bool
+	WarmupVerified    bool
+	PhysicalQualified bool
+}
+
+type CapacityNativeWorkerPhaseObservation struct {
+	RealmUID                string
+	PoolUID                 string
+	Owner                   string
+	Epoch                   int64
+	ObservedAt              time.Time
+	Applied                 bool
+	NodeUID                 string
+	RegistryUID             string
+	RegistryResourceVersion string
+	RegistrySHA256          string
+	ProviderID              string
+	AdmissionReceiptSHA256  string
+	QuarantineAbsent        bool
+	Ready                   bool
+}
+
+// Phase observation has a separate read-only instance and exact mounted file pin.
+type CapacityNativeWorkerPhaseReadBinding struct {
+	Mode               string                       `json:"mode"`
+	Name               string                       `json:"name"`
+	SourceCommit       string                       `json:"source_commit"`
+	Adapter            CapacityMarketAdapterBinding `json:"adapter"`
+	ScopeSHA256        string                       `json:"scope_sha256"`
+	RealmNamespace     string                       `json:"realm_namespace"`
+	MaxAgeSeconds      int                          `json:"max_age_seconds"`
+	QuarantineTaintKey string                       `json:"quarantine_taint_key"`
+}
+
+// Readiness facts are installed private Go callbacks, never decoded workflow input.
+type CapacityNativeWorkerReadinessProof struct {
+	AttemptID                   uuid.UUID
+	NodeUID                     string
+	ProviderID                  string
+	WorkerIPv4                  string
+	BirthSHA256                 string
+	Physical                    CapacityNativeWorkerPhysical
+	NetworkBindingSHA256        string
+	NetworkEvidenceSHA256       string
+	WarmupEvidenceSHA256        string
+	PhysicalQualificationSHA256 string
+	ObservedAt                  time.Time
+	ValidUntil                  time.Time
+}
+
+type CapacityNativeWorkerRegistryEntry struct {
+	NodeUID                   string                                `json:"node_uid"`
+	ProviderID                string                                `json:"provider_id"`
+	Profile                   string                                `json:"profile"`
+	PhysicalSpecSHA256        string                                `json:"physical_spec_sha256"`
+	RegistrationBindingSHA256 string                                `json:"registration_binding_sha256"`
+	CapacityPolicyID          string                                `json:"capacity_policy_id"`
+	IntentGeneration          int64                                 `json:"intent_generation"`
+	FencingToken              int64                                 `json:"fencing_token"`
+	CreationProofSHA256       string                                `json:"creation_proof_sha256"`
+	Admission                 CapacityNativeWorkerRegistryAdmission `json:"admission"`
+}
+
+type CapacityNativeWorkerRegistryAdmission struct {
+	State                       string `json:"state"`
+	ReceiptSHA256               string `json:"receipt_sha256"`
+	NetworkBindingSHA256        string `json:"network_binding_sha256"`
+	WarmupEvidenceSHA256        string `json:"warmup_evidence_sha256"`
+	PhysicalQualificationSHA256 string `json:"physical_qualification_sha256"`
+}
+
+type CapacityNativeWorkerPhaseReadObservation struct {
+	BindingScopeSHA256            string                               `json:"binding_scope_sha256"`
+	Schema                        string                               `json:"schema"`
+	SourceCommit                  string                               `json:"source_commit"`
+	Adapter                       CapacityMarketAdapterBinding         `json:"adapter"`
+	BindingName                   string                               `json:"binding_name"`
+	RequestedProviderID           string                               `json:"requested_provider_id"`
+	RequestedCreationProofSHA256  string                               `json:"requested_creation_proof_sha256"`
+	ObservedAt                    time.Time                            `json:"observed_at"`
+	Complete                      bool                                 `json:"complete"`
+	FullCollectionComplete        bool                                 `json:"full_collection_complete"`
+	CollectionResourceVersion     string                               `json:"collection_resource_version"`
+	CandidateSelected             bool                                 `json:"candidate_selected"`
+	CandidateAbsenceProven        bool                                 `json:"candidate_absence_proven"`
+	EvidenceSHA256                string                               `json:"evidence_sha256"`
+	MutationAuthorized            bool                                 `json:"mutation_authorized"`
+	UsefulCapacityQualified       bool                                 `json:"useful_capacity_qualified"`
+	Registry                      CapacityNativeWorkerPhaseRegistry    `json:"registry"`
+	Registrations                 []CapacityNativeWorkerRegistryEntry  `json:"registrations"`
+	RegistryRegistrationsComplete bool                                 `json:"registry_registrations_complete"`
+	Candidates                    []CapacityNativeWorkerPhaseCandidate `json:"candidates"`
+}
+type CapacityNativeWorkerPhaseRegistry struct {
+	Ref              CapacityNativePoolRegistryRef `json:"ref"`
+	RealmNamespace   string                        `json:"realm_namespace"`
+	RealmUID         string                        `json:"realm_uid"`
+	PoolUID          string                        `json:"pool_uid"`
+	Owner            string                        `json:"owner"`
+	Epoch            int64                         `json:"epoch"`
+	CurrentProfile   string                        `json:"current_profile"`
+	ResourceVersion  string                        `json:"resource_version"`
+	AnnotationSHA256 string                        `json:"annotation_sha256"`
+}
+type CapacityNativeWorkerPhaseCandidate struct {
+	NodeName                       string                              `json:"node_name"`
+	NodeUID                        string                              `json:"node_uid"`
+	NodeResourceVersion            string                              `json:"node_resource_version"`
+	ProviderID                     string                              `json:"provider_id"`
+	Addresses                      []CapacityNativeWorkerPhaseAddress  `json:"addresses"`
+	ProfileLabel                   string                              `json:"profile_label"`
+	PoolUIDLabel                   string                              `json:"pool_uid_label"`
+	PhysicalSpecSHA256Label        string                              `json:"physical_spec_sha256_label"`
+	RegistrationBindingSHA256Label string                              `json:"registration_binding_sha256_label"`
+	PolicyIDLabel                  string                              `json:"policy_id_label"`
+	GenerationLabel                string                              `json:"generation_label"`
+	FencingTokenLabel              string                              `json:"fencing_token_label"`
+	CreationProofSHA256Label       string                              `json:"creation_proof_sha256_label"`
+	Taints                         []CapacityNativeWorkerPhaseTaint    `json:"taints"`
+	Deleting                       bool                                `json:"deleting"`
+	Unschedulable                  bool                                `json:"unschedulable"`
+	Ready                          bool                                `json:"ready"`
+	Heartbeat                      CapacityNativeWorkerPhaseHeartbeat  `json:"heartbeat"`
+	AllocatableKnown               bool                                `json:"allocatable_known"`
+	AllocatableMilliCPU            int64                               `json:"allocatable_millicpu"`
+	AllocatableMemoryBytes         int64                               `json:"allocatable_memory_bytes"`
+	Registrations                  []CapacityNativeWorkerRegistryEntry `json:"registrations"`
+}
+type CapacityNativeWorkerPhaseAddress struct {
+	Type    string `json:"type"`
+	Address string `json:"address"`
+}
+
+type CapacityNativeWorkerPhaseTaint struct {
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	Effect    string `json:"effect"`
+	TimeAdded string `json:"time_added,omitempty"`
+}
+type CapacityNativeWorkerPhaseHeartbeat struct {
+	Present         bool      `json:"present"`
+	Fresh           bool      `json:"fresh"`
+	UID             string    `json:"uid"`
+	ResourceVersion string    `json:"resource_version"`
+	ObservedAt      time.Time `json:"observed_at"`
+}
+
+func (v *CapacityNativeWorkerPhaseReadObservation) UnmarshalJSON(raw []byte) error {
+	type plain CapacityNativeWorkerPhaseReadObservation
+	var out plain
+	if err := decodeCapacityMarketJSON(raw, &out); err != nil {
+		return err
+	}
+	*v = CapacityNativeWorkerPhaseReadObservation(out)
+	return nil
 }
