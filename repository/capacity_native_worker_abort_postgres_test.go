@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -70,6 +71,30 @@ func (r *abortPGRuntime) ObserveAbort(_ context.Context, _ model.Manifest, a mod
 	}
 	return o, nil
 }
+
+// The release callback reads the admission receipt actually persisted by the
+// preceding real phase, rather than fabricating a replacement proof.
+type abortPGPhaseRuntime struct {
+	*phasePermitRuntime
+	db *sql.DB
+}
+
+func (r *abortPGPhaseRuntime) PreparePhase(ctx context.Context, a model.CapacityNativeWorkerAttempt, action string) (model.CapacityNativeWorkerPhasePreparation, error) {
+	v, e := r.phasePermitRuntime.PreparePhase(ctx, a, action)
+	if e != nil || action != "release_quarantine" {
+		return v, e
+	}
+	var raw []byte
+	if e = r.db.QueryRowContext(ctx, `SELECT record FROM public.capacity_native_worker_phase_permits WHERE attempt_id=$1 AND action='admit_registry' AND state='observed'`, a.ID).Scan(&raw); e != nil {
+		return v, e
+	}
+	var recorded nativeWorkerPhaseRecord
+	if e = json.Unmarshal(raw, &recorded); e != nil {
+		return v, e
+	}
+	v.Context.Admission = recorded.Context.Admission
+	return v, nil
+}
 func nativeWorkerAbortPGFixture(t *testing.T, ttl int) (marketRepositoryFixture, CapacityNativeWorkerAbortStore, *abortPGRuntime, model.CapacityNativeWorkerAuthority, CapacityNativeWorkerPhaseStore, model.CapacityNativeWorkerPhaseCaller) {
 	t.Helper()
 	f, w, provider, authority := nativeAttemptFixture(t, func(p *model.CapacityPolicySpec) {
@@ -85,7 +110,7 @@ func nativeWorkerAbortPGFixture(t *testing.T, ttl int) (marketRepositoryFixture,
 	w.Runtime = runtime
 	s := CapacityNativeWorkerAbortStore{Workers: w, Runtime: runtime, RecoveryWorkflowID: workflow.ID, Enabled: true}
 	phaseRuntime := &phasePermitRuntime{p: f.p, nodes: map[uuid.UUID]string{}, observeApplied: true}
-	phase := CapacityNativeWorkerPhaseStore{Workers: w, Runtime: phaseRuntime, Enabled: true}
+	phase := CapacityNativeWorkerPhaseStore{Workers: w, Runtime: &abortPGPhaseRuntime{phasePermitRuntime: phaseRuntime, db: f.db}, Enabled: true}
 	writer := f.p.NativeWorkerLifecycleBinding.RegistryWriter
 	caller := model.CapacityNativeWorkerPhaseCaller{Adapter: writer.Adapter, BindingName: writer.BindingName, PrincipalID: writer.PrincipalID, SourceCommit: writer.SourceCommit}
 	return f, s, runtime, authority, phase, caller
