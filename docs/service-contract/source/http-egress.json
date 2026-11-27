@@ -118,7 +118,7 @@
       "expression_complete": true,
       "file": "controllers/message/adapter_transport.go",
       "function": "Request",
-      "line": 300
+      "line": 309
     },
     {
       "argument_expression": "ctx, http.MethodPost, targetURL, bytes.NewReader(body)",
@@ -128,7 +128,7 @@
       "expression_complete": true,
       "file": "controllers/message/adapter_transport.go",
       "function": "callHTTPJSONWithPolicy",
-      "line": 343
+      "line": 352
     },
     {
       "argument_expression": "httpReq",
@@ -138,7 +138,7 @@
       "expression_complete": true,
       "file": "controllers/message/adapter_transport.go",
       "function": "callHTTPJSONWithPolicy",
-      "line": 352
+      "line": 361
     },
     {
       "argument_expression": "ctx, method, target, bytes.NewReader(body)",
@@ -148,7 +148,7 @@
       "expression_complete": true,
       "file": "controllers/message/adapter_transport.go",
       "function": "error",
-      "line": 445
+      "line": 457
     },
     {
       "argument_expression": "req",
@@ -158,7 +158,7 @@
       "expression_complete": true,
       "file": "controllers/message/adapter_transport.go",
       "function": "error",
-      "line": 470
+      "line": 482
     },
     {
       "argument_expression": "ctx, http.MethodGet, targetURL, nil",
@@ -168,7 +168,7 @@
       "expression_complete": true,
       "file": "controllers/message/integration_describe.go",
       "function": "checkHTTPJSONTransportConnectivity",
-      "line": 276
+      "line": 292
     },
     {
       "argument_expression": "req",
@@ -178,7 +178,7 @@
       "expression_complete": true,
       "file": "controllers/message/integration_describe.go",
       "function": "checkHTTPJSONTransportConnectivity",
-      "line": 281
+      "line": 297
     },
     {
       "argument_expression": "ctx, rpc.Request{\n\t\tEndpoint:    endpoint,\n\t\tBody:        body,\n\t\tContentType: \"application/json\",\n\t}",
@@ -249,6 +249,26 @@
       "file": "internal/capacity/native_worker_private_factory.go",
       "function": "capability",
       "line": 385
+    },
+    {
+      "argument_expression": "ctx, method, target, bytes.NewReader(raw)",
+      "argument_sha256": "006a28f79177f8e652c902395e014ea27f576a0b3d0c3b9e3de10bcfd997c423",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacity/native_worker_rpc_client.go",
+      "function": "original",
+      "line": 268
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/capacity/native_worker_rpc_client.go",
+      "function": "original",
+      "line": 274
     },
     {
       "argument_expression": "ctx, method, origin+path, bytes.NewReader(body)",

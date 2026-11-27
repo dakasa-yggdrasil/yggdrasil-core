@@ -177,3 +177,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0135](0135-shard-the-complete-source-census-through-a-pinned-dual-reader.md) | Shard the complete source census through a pinned dual reader | Proposed | 2026-11-27 | Core / pinned v1 compatibility and bounded complete v2 source evidence |
 
 - [ADR-0137: Qualify Native births with an independent physical reader](0137-qualify-native-births-with-an-independent-physical-reader.md)
+- [ADR-0138: Bind Native provider RPC to protected mutual TLS clients](0138-bind-native-provider-rpc-to-protected-mutual-tls-clients.md)

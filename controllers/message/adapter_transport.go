@@ -207,6 +207,15 @@ func (c *adapterTransportClient) callWithPolicy(
 	response any,
 	policy adapterCallPolicy,
 ) error {
+	if scope := nativeWorkerRPC(ctx); scope != nil {
+		if typeSpec.Adapter.Transport != "http_json" {
+			return errAdapterCallFailed
+		}
+		if policy.native == nil {
+			policy.native = &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}
+		}
+		policy.detailFreeErrors = true
+	}
 	if policy.native != nil && ctx != nil {
 		copy := *policy.native
 		if d, ok := ctx.Deadline(); ok && (copy.ownerDeadline.IsZero() || d.Before(copy.ownerDeadline)) {
@@ -394,6 +403,9 @@ func (c *adapterTransportClient) callHTTPJSONWithPolicy(
 // One original call, Read and actual Close; no retry, caller header map or
 // refreshed deadline. Private response bodies never become public error text.
 func (c *adapterTransportClient) callNativeHTTPJSON(ctx context.Context, target string, request, response any, policy adapterCallPolicy) error {
+	if nativeWorkerRPC(ctx) != nil {
+		return c.callProtectedNativeWorkerRPC(ctx, target, request, response, policy)
+	}
 	n := policy.native
 	fail := func(err error) error { return &opaqueAdapterError{public: errAdapterCallFailed, cause: err} }
 	if c == nil || c.httpClient == nil || n == nil || n.limit < 1 || n.limit > 8<<20 || nativeAdapterContext(ctx) != nil {

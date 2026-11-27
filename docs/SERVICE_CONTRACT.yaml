@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "92ab3f1dd5be11d9bcf4a34ef928dedf2580a2cbd42b052fcf367177ae27c356"
+      "sha256": "3e4d19466b4f97636388843c3b3fcf2221fb8dab36d33348bdafe8b9fba986dc"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "37a99375eff89b883dff8dc8766e9b8379f6d34b29175fd1f7b2bee10fd8f27e"
+      "sha256": "0d9a524e3c08bd5a9c36250d9aa60631f06b06a8ce4becfea823d09abcf1a55b"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "37a99375eff89b883dff8dc8766e9b8379f6d34b29175fd1f7b2bee10fd8f27e"
+      "sha256": "0d9a524e3c08bd5a9c36250d9aa60631f06b06a8ce4becfea823d09abcf1a55b"
     },
     {
       "evidence": "go.mod",
@@ -125,7 +125,7 @@
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "c410d4c8048e9defc0ecfb34784537dd7d9687a66889e9079bc68c11fa94a9b1"
+      "sha256": "e98a2d4474ad6b0a278597de36fff83710433aaf9d452a39b255e4e43113af22"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "84d6a8599ac481b907d1474ccf3ca6403794ad63957ee2ac591063e3119e708f"
+    "sha256": "1f89f5a3ebd6bfda13819ef139941738067dd1518800d0129b36c1bf895b3343"
   },
   "unresolved": []
 }

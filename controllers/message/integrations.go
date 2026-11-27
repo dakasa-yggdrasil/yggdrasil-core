@@ -316,6 +316,9 @@ func executeIntegrationThroughResolvedWithPolicy(
 	timeoutOverride time.Duration,
 	policy integrationExecutionPolicy,
 ) (model.ExecuteIntegrationResponse, error) {
+	if err := validateNativeWorkerRPCScope(ctx, instanceManifest, instanceSpec, typeManifest, typeSpec); err != nil {
+		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
+	}
 	if !originalDispositionExecutionAllowed(req, policy) {
 		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errSensitiveOutputSink)
 	}

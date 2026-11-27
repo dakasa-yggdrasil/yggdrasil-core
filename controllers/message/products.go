@@ -1169,6 +1169,9 @@ func resolveIntegrationInstance(
 	if err != nil {
 		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("parse integration instance spec: %w", err)
 	}
+	if err := nativeWorkerRPCBeforeHydration(ctx, db, instanceManifest, instanceSpec); err != nil {
+		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, err
+	}
 	if err := hydrateIntegrationInstanceSecrets(ctx, db, &instanceSpec); err != nil {
 		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("hydrate secrets for instance %s/%s: %w", instanceManifest.Metadata.Namespace, instanceManifest.Metadata.Name, err)
 	}
