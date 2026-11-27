@@ -78,7 +78,7 @@ BEGIN
  OR NEW.record->'source_commit' IS DISTINCT FROM OLD.record->'source_commit'
  OR NEW.record->'executor_id' IS DISTINCT FROM OLD.record->'executor_id'
  OR NEW.record->'workflow_id' IS DISTINCT FROM OLD.record->'workflow_id'
- OR (NEW.record->'context'-'state') IS DISTINCT FROM (OLD.record->'context'-'state')
+ OR ((NEW.record->'context')-'state') IS DISTINCT FROM ((OLD.record->'context')-'state')
  THEN RAISE EXCEPTION 'Native cleanup immutable authority changed'; END IF;
  IF OLD.record ? 'original' AND NEW.record->'original' IS DISTINCT FROM OLD.record->'original'
  OR OLD.record ? 'token_sha256' AND NEW.record->'token_sha256' IS DISTINCT FROM OLD.record->'token_sha256'
