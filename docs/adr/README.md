@@ -173,4 +173,7 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0131](0131-record-native-worker-attempts-under-fenced-parent-reservations.md) | Record Native worker attempts under fenced parent reservations | Proposed | 2026-11-27 | Core / separate UUID child authority, private original custody and typed physical births |
 | [0132](0132-bind-private-native-creator-commands-to-original-reservations.md) | Bind private Native creator commands to original reservations | Proposed | 2026-11-27 | Core / immutable private creator authority, compiled SDK scope and custody-first callbacks |
 | [0133](0133-materialize-private-native-bootstrap-before-the-original-create-grant.md) | Materialize private Native bootstrap before the original create grant | Proposed | 2026-11-27 | Core / machine-only bounded private preflight outside reservation locks |
+| [0134](0134-fence-preadmission-worker-cleanup-separately-from-admission.md) | Fence pre-admission worker cleanup separately from admission | Proposed | 2026-11-27 | Core / default-off shared admission arbiter, one-send cleanup permits and complete component closure |
 | [0135](0135-shard-the-complete-source-census-through-a-pinned-dual-reader.md) | Shard the complete source census through a pinned dual reader | Proposed | 2026-11-27 | Core / pinned v1 compatibility and bounded complete v2 source evidence |
+
+- [ADR-0137: Qualify Native births with an independent physical reader](0137-qualify-native-births-with-an-independent-physical-reader.md)
