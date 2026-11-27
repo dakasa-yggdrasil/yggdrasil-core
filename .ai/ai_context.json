@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-27T12:43:28-03:00",
+  "generated_at": "2026-11-27T12:52:23-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1659,
@@ -11,7 +11,7 @@
     ".yml": 38
   },
   "provenance": {
-    "commit": "232184995dca9543bd714eba9c17739b6401c535",
+    "commit": "c083448b91f99c529c3163c3c3788aa869344b20",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "6e6e4acaf69724c1ccf7830499f3f49551e356a5c556672b93e49861f8f6dc06"
+        "sha256": "a3e188c1c55bbe285649db1d911b02a6d03948a34495fabd1097b07e0bf23121"
       },
       {
         "path": "AGENTS.md",
@@ -96,7 +96,7 @@
     {
       "path": "manifest",
       "files": 70,
-      "kb": 406
+      "kb": 407
     },
     {
       "path": "ops/network-guardian/tests",
