@@ -95,21 +95,28 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_attempts.go",
       "function": "serveNativeWorkerAttemptRequest",
-      "line": 159,
+      "line": 165,
+      "predicate": "\"bootstrap\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_attempts.go",
+      "function": "serveNativeWorkerAttemptRequest",
+      "line": 177,
       "predicate": "\"read\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_attempts.go",
       "function": "serveNativeWorkerAttemptRequest",
-      "line": 161,
+      "line": 179,
       "predicate": "\"redeem\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_attempts.go",
       "function": "serveNativeWorkerAttemptRequest",
-      "line": 163,
+      "line": 181,
       "predicate": "\"receive\""
     },
     {

@@ -46,7 +46,7 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_attempts.go",
       "function": "serveNativeWorkerAttemptRequest",
-      "line": 77
+      "line": 83
     },
     {
       "build_constraint": "default",
