@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
@@ -173,8 +174,7 @@ func strictJSONUnmarshal(body []byte, target any) error {
 
 func strictJSONUnmarshalExactNumbers(body []byte, target any) error {
 	// Inspect the original bytes before a generic map can erase duplicate keys.
-	var original json.RawMessage
-	if err := capacity.DecodeNativeCapacity(json.RawMessage(body), &original); err != nil {
+	if err := model.ValidateCapacityMarketJSONFraming(body); err != nil {
 		return err
 	}
 	return strictJSONUnmarshalNumbers(body, target, true)

@@ -744,9 +744,10 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 	if err := capacity.ValidateGuestContractSuccessorJSON(policy.Spec); err != nil {
 		return p, err
 	}
-	var err error
-	p, err = manifest.ParseCapacityPolicySpec(policy.Spec)
-	if err != nil {
+	if err := manifest.ValidateCapacityMarketPolicyJSON(policy.Spec); err != nil {
+		return p, err
+	}
+	if err := json.Unmarshal(policy.Spec, &p); err != nil {
 		return p, err
 	}
 	return p, capacity.ValidatePolicy(p)

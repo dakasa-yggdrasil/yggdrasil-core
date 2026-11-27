@@ -233,6 +233,14 @@ func (v *CapacityMarketAssessment) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
+// ValidateCapacityMarketJSONFraming checks original bytes before a generic RPC
+// map can erase duplicates or noncanonical field names. Typed decoding still
+// owns each response schema and its semantic validation.
+func ValidateCapacityMarketJSONFraming(raw []byte) error {
+	var original json.RawMessage
+	return decodeCapacityMarketJSON(raw, &original)
+}
+
 // Public capacity observations forbid nulls, duplicate keys, unknown fields,
 // trailing values and unbounded nesting before semantic validation.
 func decodeCapacityMarketJSON(raw []byte, out any) error {
@@ -240,6 +248,7 @@ func decodeCapacityMarketJSON(raw []byte, out any) error {
 		return fmt.Errorf("bounded capacity market JSON required")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
 	var walk func(int) error
 	walk = func(depth int) error {
 		if depth > 24 {

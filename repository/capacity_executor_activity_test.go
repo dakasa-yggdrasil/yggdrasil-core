@@ -52,7 +52,6 @@ func TestCapacityExecutorActivityChecksCurrentPolicyBeforeState(t *testing.T) {
 	store := CapacityStore{DB: db, ExecutionEnabled: true, WorkflowID: uuid.New(), ExecutorID: "invocation", ExecutorActivityPrincipal: "machine:agent-a"}
 	key, _ := json.Marshal([]string{"ops", "lab", "ai", "executor"})
 	mock.ExpectBegin()
-	mock.ExpectExec(`^SELECT pg_advisory_xact_lock\(hashtextextended\('capacity-market-shared-reservations-v1', 0\)\)$`).WithoutArgs().WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(string(key)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT checksum, active FROM public.manifests`).WithArgs(policy.ID, "ops", "lab").WillReturnRows(sqlmock.NewRows([]string{"checksum", "active"}).AddRow("policy-checksum", false))
 	mock.ExpectRollback()
@@ -79,7 +78,6 @@ func TestCapacityExecutorActivityRecordsThroughPinnedWorkflowTransaction(t *test
 	state := executoractivity.ExecutorActivityState{Revision: 3, UpdatedAt: now, Tasks: map[string]executoractivity.ExecutorTaskLease{}}
 	raw, _ := json.Marshal(state)
 	mock.ExpectBegin()
-	mock.ExpectExec(`^SELECT pg_advisory_xact_lock\(hashtextextended\('capacity-market-shared-reservations-v1', 0\)\)$`).WithoutArgs().WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(string(key)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT checksum, active FROM public.manifests`).WithArgs(policy.ID, "ops", "lab").WillReturnRows(sqlmock.NewRows([]string{"checksum", "active"}).AddRow(policy.Checksum, true))
 	mock.ExpectQuery(`SELECT active FROM public.manifests`).WithArgs(store.WorkflowID, "ops", "lab-executor").WillReturnRows(sqlmock.NewRows([]string{"active"}).AddRow(true))

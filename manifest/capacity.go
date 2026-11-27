@@ -57,6 +57,12 @@ func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, err
 	return spec, nil
 }
 
+// ValidateCapacityMarketPolicyJSON checks only the new opt-in bindings. Stored
+// legacy policy consumers keep their original parser and historical contracts.
+func ValidateCapacityMarketPolicyJSON(raw []byte) error {
+	return validateMarketPolicyBindingsJSON(raw)
+}
+
 func validateMarketPolicyBindingsJSON(raw []byte) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	if opening, err := d.Token(); err != nil || opening != json.Delim('{') {
