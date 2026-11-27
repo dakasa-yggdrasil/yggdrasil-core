@@ -32,7 +32,7 @@ sequenceDiagram
   Note over C,P: Native worker execution remains separately gated
 ```
 
-Both Assess and Claim refresh through the server-installed observer. Before a claim the current catalog revision, semantic pool identity, quote freshness, decision and shared reservations are rechecked. Every Core capacity writer takes the shared reservation lock before its logical scope lock; an overlapping legacy allocator cannot insert a possible-start grant during the market reservation snapshot. An external direct autoscaler is **not** serialized by this database lock: its actual single-owner handoff remains required before adoption.
+Both Assess and Claim refresh through the server-installed observer. Before a claim the current catalog revision, semantic pool identity, quote freshness, decision and shared reservations are rechecked. Every quota-affecting Core capacity writer takes the same reservation key before its logical scope lock. Market transactions take it exclusively; legacy transactions take it in shared mode. An overlapping legacy allocator cannot insert a possible-start grant during a market reservation snapshot, while independent legacy operations retain their existing concurrency and identity-lock ordering. An external direct autoscaler is **not** serialized by this database lock: its actual single-owner handoff remains required before adoption.
 
 ## Cost and availability decisions
 

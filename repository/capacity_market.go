@@ -45,11 +45,16 @@ func marketReservationKey(i model.CapacityIntent) string {
 	return fmt.Sprintf("%s/%d", i.PolicyID, i.Generation)
 }
 
-func lockCapacityMarketTx(ctx context.Context, tx *sql.Tx, _ model.CapacityPolicySpec) error {
-	// Legacy allocators can share an account quota with a market pool. Every
-	// capacity writer takes this lock before its logical scope lock so a legacy
-	// possible-start cannot race the market's reservation snapshot and claim.
-	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('capacity-market-shared-reservations-v1', 0))`)
+func lockCapacityMarketTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec) error {
+	// Every writer participates before its logical scope lock. Market claims
+	// exclude possible legacy starts while inspecting shared account quotas.
+	// Legacy writers retain their existing logical/native-UID concurrency:
+	// serializing them all here would bypass their original lock handshake.
+	query := `SELECT pg_advisory_xact_lock_shared(hashtextextended('capacity-market-shared-reservations-v1', 0))`
+	if p.MarketBinding != nil {
+		query = `SELECT pg_advisory_xact_lock(hashtextextended('capacity-market-shared-reservations-v1', 0))`
+	}
+	_, err := tx.ExecContext(ctx, query)
 	return err
 }
 
