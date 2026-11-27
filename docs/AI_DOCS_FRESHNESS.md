@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 8901412f3cfd27285daef351b4a9e47fa2641bd0
-verified_diff_sha256: 776683fb6d6953ffeb2699362f20c6ba2998f86ba08af92fd22d60e856cf6b6d
+verified_at_commit: 4f4eb285c6df4dd690cef62972c3407ce81810b3
+verified_diff_sha256: 0057501aaf052ac0aedc41f272e1480439998bb6a9e6a68ba4057153f6ed005d
 reconciler_schema: 1
 
 native_worker_writer_scope_review: The permit now carries the SHA256 of the exact complete reviewed writer inventory bytes; issuance, private persistence, resolution and redemption require the same policy pin. Protected callbacks require one canonical compiled adapter Source header before reading the body and compare it to the resolved writer Source before the operation. Added inventory drift/public roundtrip/PG pin preservation and HTTP pre-body refusal cases for CI. The original c4df PostgreSQL16/17 market CI passed all62 roots with no skip; its two lint findings are corrected without changing decoder or birth acceptance. All894 source facts remain within130931 bytes, with current source hashes and dispatch lines regenerated. No local tests/builds, cloud action or runtime adoption occurred; matching new writer protocol and complete successor CI remain required.
@@ -655,3 +655,5 @@ native_creator_private_command_review: Reviewed the exact256-character Source bi
 native_creator_schema114_ci_review: Original PR CI passed unit/lint/service doctor and all selected market contracts on PostgreSQL16 and17. The scheduler preflight applied schema114 with migration_exit0 and retained all old guards, then correctly failed its stale literal113 expectation before tests. Align only the exact expected version to114 and require the new private command table; no tolerance, skipped case or runtime predicate changed. Independent narrow peer reviewed this correction. Successor CI remains required; no local test/build or production action ran.
 
 Private bootstrap reconciliation: reviewed the fixed machine-only private GET, immutable creator context and exact launch checks, opaque private serialization, before/after authority and deadline validation, and PG cases for factory execution outside SQL locks. Complete894-source census retained at130953bytes; private material and its digest are excluded from public evidence. Tests and builds are authored for GitHub CI only; this Source does not activate a production factory or provider switch.
+
+The final reconciliation includes the source-classified service contract and four derived source evidence files committed after the initial implementation. The actual parent plan measures all14 source paths at4f4eb285; complete context generation ran after that source head. No product bytes changed during this correction.
