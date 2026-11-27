@@ -330,11 +330,8 @@ func declaredMarketWorker(t *testing.T, f marketRepositoryFixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if _, err := f.db.Exec(`DELETE FROM public.capacity_mutation_grants WHERE id=$1`, grantID); err != nil {
-			t.Error(err)
-		}
-	})
+	// Confirmed grant history is immutable. This unique CI fixture remains in
+	// the isolated database until its owning CI service tears down.
 	proofRaw, _ := json.Marshal(proof)
 	f.pool.Nodes = []model.CapacityNativeWorkerNode{{NodeUID: uuid.NewString(), NodeResourceVersion: "7", ProviderID: "hcloud://222222222", Provider: "hcloud", Profile: profile.Profile, PoolUID: f.pool.PoolUID, RegistrationEpoch: f.pool.OwnerEpoch, RegistrationBindingSHA256: profile.RegistrationBindingSHA, PhysicalSpecSHA256: profile.PhysicalSpecSHA256, CurrentRegistration: true, CapacityPolicyID: f.policy.ID.String(), IntentGeneration: 1, FencingToken: 1, RegistrationReceiptSHA256: fmt.Sprintf("%x", sha256.Sum256(proofRaw)), Ready: true, SchedulingAdmitted: true, AdmissionReceiptSHA256: strings.Repeat("f", 64), AdmissionRegistryUID: f.pool.RegistryRef.UID, AdmissionRegistryResourceVersion: f.pool.OwnerResourceVersion, ReadyObservedAt: now, AllocatableMilliCPU: 1000, AllocatableMemoryBytes: 1 << 30}}
 }
