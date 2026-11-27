@@ -7,9 +7,11 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: fb97da5baf5a86bdd901e17989c8c82db02ac4a7
-verified_diff_sha256: 22fc1e845e6d49d0bb5969d288cee3feb31bcb6161bae4b9bcb6cece406aca8d
+verified_at_commit: 7918dfe64e73af1e76ae7ce39d9e977c2226bd19
+verified_diff_sha256: e0a351514165760daae1f6cf7419ea34369d91d90d58a9acf1398310b7f490c4
 reconciler_schema: 1
+
+native_retirement_only_review: Reviewed retirement-only Native planning and fresh claims independently from new-provider pricing. Exact fresh pool/ledger identity, complete surplus evidence, down hold/cooldown and the greater of policy/current-profile minima remain required; new allocation and economic replacement retain current market gates. Independent peer minimum finding closed. The CI PostgreSQL case declares its historical birth fixture explicitly and does not qualify a real VM/network/admission; no zero-price offer or new allocation reservation is recorded. Source census/public evidence and generated context updated. No local tests/builds or provider actions; CI and separate actual lifecycle execution remain required.
 
 adaptive_market_and_native_pool_review: Reviewed the optional fresh all-in provider market, actual Native worker observation, independent economic dwell, strict integer and duplicate-key transport, semantic heartbeat compatibility and global-before-logical shared reservations, exclusive for market transactions and shared for legacy writers. The new market43 roots passed PostgreSQL16/17 CI; its full legacy race gate exposed excess serialization, corrected while retaining every original logical/nativeUID race barrier and assertion. Legacy wire and authority remain scoped; current Native execute/admit explicitly refuses. Added a dedicated CI PostgreSQL16/17 job for every authored market root, including real cross-policy quota and legacy writer concurrency. The CI correction preserves unrelated historical policy parsing and checks original canonical market framing before RPC maps. Each quote now binds its factual currency; an incompatible provider is independently refused without implicit conversion. The actual source census and its public evidence hashes were refreshed. Existing generated context was refreshed. No local tests, provider APIs, Hetzner load or production switch ran; CI and the fenced lifecycle, network and data-floor implementation remain required.
 
