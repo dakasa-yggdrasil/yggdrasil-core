@@ -48,7 +48,7 @@ func TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership(t *testi
 	}
 	for i := range p.NativeWorkerPoolBinding.Profiles {
 		p.NativeWorkerPoolBinding.Profiles[i].Provider = "aws"
-		p.NativeWorkerPoolBinding.Profiles[i].ProviderIDPrefix = "aws:///us-east-1a/"
+		p.NativeWorkerPoolBinding.Profiles[i].ProviderIDPrefix = "aws:///"
 	}
 	execution := p.NativeWorkerLifecycleBinding.Profiles[0]
 	execution.EnsureCapability, execution.ObserveCapability, execution.DestroyCapability = "ensure_native_worker", "observe_native_worker", "destroy_native_worker"
@@ -180,7 +180,7 @@ func TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership(t *testi
 	a.State, a.CreatedAt = "acknowledged", now.Add(-20*time.Second)
 	a.ProviderIDPrefix = profile.ProviderIDPrefix
 	a.PhysicalSpecSHA256, a.BirthSHA256, a.LaunchSHA256 = profile.PhysicalSpecSHA256, strings.Repeat("6", 64), hash(first.PublicJSON)
-	a.Physical = &model.CapacityNativeWorkerPhysical{ResourceID: "i-11111111111111111", ProviderID: profile.ProviderIDPrefix + "i-11111111111111111", AccountID: "153828470928", InstanceType: "m7i.large", NetworkID: "subnet-11111111111111111", CreatedAt: now.Add(-10 * time.Second), ImageID: "ami-11111111111111111", Region: a.Region, Zone: "us-east-1a", NativeIPv4: "10.90.0.7", MACAddress: "02:00:00:00:00:07", PhysicalSpecSHA256: a.PhysicalSpecSHA256, PhysicalBindingSHA256: strings.Repeat("5", 64), LaunchSHA256: a.LaunchSHA256}
+	a.Physical = &model.CapacityNativeWorkerPhysical{ResourceID: "i-11111111111111111", ProviderID: profile.ProviderIDPrefix + "us-east-1a/i-11111111111111111", AccountID: "153828470928", InstanceType: "m7i.large", NetworkID: "subnet-11111111111111111", CreatedAt: now.Add(-10 * time.Second), ImageID: "ami-11111111111111111", Region: a.Region, Zone: "us-east-1a", NativeIPv4: "10.90.0.7", MACAddress: "02:00:00:00:00:07", PhysicalSpecSHA256: a.PhysicalSpecSHA256, PhysicalBindingSHA256: strings.Repeat("5", 64), LaunchSHA256: a.LaunchSHA256}
 	node := model.CapacityNativeWorkerPhaseCandidate{NodeName: "ci-worker", NodeUID: uuid.NewString(), NodeResourceVersion: "31", ProviderID: a.Physical.ProviderID, Addresses: []model.CapacityNativeWorkerPhaseAddress{{Type: "InternalIP", Address: a.OverlayIPv4}}, PoolUIDLabel: pool.PoolUID, Taints: []model.CapacityNativeWorkerPhaseTaint{{Key: p.NativeWorkerLifecycleBinding.PhaseObserver.QuarantineTaintKey, Value: pool.PoolUID, Effect: "NoSchedule"}}}
 	b := p.NativeWorkerLifecycleBinding.PhaseObserver
 	phaseObservation = &model.CapacityNativeWorkerPhaseReadObservation{Schema: b.Mode, SourceCommit: b.SourceCommit, Adapter: b.Adapter, BindingName: b.Name, BindingScopeSHA256: b.ScopeSHA256, RequestedProviderID: a.Physical.ProviderID, RequestedCreationProofSHA256: a.BirthSHA256, ObservedAt: now, Complete: true, FullCollectionComplete: true, CollectionResourceVersion: "100", CandidateSelected: true, EvidenceSHA256: strings.Repeat("4", 64), Registry: model.CapacityNativeWorkerPhaseRegistry{Ref: pool.RegistryRef, RealmNamespace: b.RealmNamespace, RealmUID: pool.RealmUID, PoolUID: pool.PoolUID, Owner: p.Owner, Epoch: pool.ExpectedPoolEpoch, CurrentProfile: a.Profile, ResourceVersion: "20", AnnotationSHA256: strings.Repeat("3", 64)}, RegistryRegistrationsComplete: true, Candidates: []model.CapacityNativeWorkerPhaseCandidate{node}}
