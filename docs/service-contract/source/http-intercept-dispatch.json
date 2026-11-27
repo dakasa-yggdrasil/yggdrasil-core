@@ -90,6 +90,27 @@
       "function": "mutationHTTPError",
       "line": 316,
       "predicate": "errors.Is(err, repository.ErrCapacityConflict), errors.Is(err, repository.ErrCapacityLease), errors.Is(err, repository.ErrCapacityDisabled)"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_phases.go",
+      "function": "serveNativeWorkerPhaseRequest",
+      "line": 134,
+      "predicate": "\"read\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_phases.go",
+      "function": "serveNativeWorkerPhaseRequest",
+      "line": 136,
+      "predicate": "\"redeem\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_phases.go",
+      "function": "serveNativeWorkerPhaseRequest",
+      "line": 138,
+      "predicate": "\"receive\""
     }
   ],
   "schema": "core_source_interface_census_v1",

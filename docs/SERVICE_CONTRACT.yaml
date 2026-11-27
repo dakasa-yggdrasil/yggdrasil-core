@@ -113,7 +113,7 @@
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "a0037bc151b4d471d09ca13546b369c432e92af4c09e8ff7af395901372abd91"
+      "sha256": "92e138f454bb566e00bba3ea43833a1a130b896259c2cb682a24d06c2618247b"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
