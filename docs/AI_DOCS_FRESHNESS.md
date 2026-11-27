@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 64cf17b77349ea73d298bed3bdab74c75ef40ff2
-verified_diff_sha256: fe220c722593f73ed8b3bcf4b098cdd1a951c198570cb5d7852b0219c7666b30
+verified_at_commit: 4174a0d02f98fc41170423841335fa6bb6f48ffb
+verified_diff_sha256: c7130e286d08585d0bd7553d0dad28bc1917ae7c5bc7c489b296113f59d768c7
 reconciler_schema: 1
 
 Reviewed the complete concrete AWS-only Native runtime, exact copied policy and
@@ -31,3 +31,9 @@ completed ai-all generation. Only reading, deterministic generators and cheap
 format/diff checks ran locally. Tests/builds/analysis are mandatory in GitHub CI;
 no local test pass, runtime adoption, provider send, paid resource, network
 mutation or Hetzner load is claimed. Root whole V4 review closed both findings.
+
+The first CI job reached the real factory after all115 migrations, then the
+new runtime fixture was refused after1.51s. Original logs are retained; this is
+not a timeout diagnosis. Failure-only assertions expose the same existing policy,
+factory and reader validation seams before the unchanged constructor call.
+No production guard, test acceptance, root or watchdog was relaxed.
