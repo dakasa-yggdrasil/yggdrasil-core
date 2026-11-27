@@ -69,6 +69,8 @@ jobs:
               'repository/capacity_native_worker_phase_permits_test.go',
               'repository/capacity_native_worker_phase_authority_test.go',
               'internal/capacity/native_worker_lifecycle_test.go',
+              'internal/capacity/native_worker_private_factory_test.go',
+              'internal/capacity/native_worker_private_factory_linux_test.go',
               'internal/capacity/native_worker_phase_reader_test.go',
               'controllers/httpapi/capacity_native_worker_phases_test.go',
               'controllers/httpapi/capacity_native_worker_attempts_test.go',
@@ -125,4 +127,128 @@ jobs:
         with:
           name: capacity-market-pg${{ matrix.postgres }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/capacity-market/
+          if-no-files-found: warn
+
+  private-factory-published-cli:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      GOWORK: "off"
+      GOMAXPROCS: "2"
+      GOMEMLIMIT: 512MiB
+      NATIVE_FACTORY_SYSTEM_SOURCE: 1304e4c70e77a44ea3f34e176b99d45fe0372419
+      NATIVE_FACTORY_SYSTEM_SHA256: 70828b21cd3cb728b51d40be0c17b8bf4df7d5fdfa0533db964358be21a657b8
+      NATIVE_FACTORY_SYSTEM_BYTES: "17674424"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Read only the fixed published System release
+        id: system-release-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-co
+          repositories: dakasa-system
+          permission-contents: read
+      - name: Receive exact versioned release assets without rebuilding System
+        env:
+          GH_TOKEN: ${{ steps.system-release-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/native-private-factory"
+          mkdir -m 700 "$output"
+          # Fixed release cli-1304e4c assets outlive Actions artifact retention.
+          # No latest lookup, mutable tag fallback or arbitrary download URL.
+          gh api -H 'Accept: application/octet-stream' repos/dakasa-co/dakasa-system/releases/assets/801893241 > "$output/system.tar.gz"
+          gh api -H 'Accept: application/octet-stream' repos/dakasa-co/dakasa-system/releases/assets/801893255 > "$output/SOURCE.txt"
+          gh api -H 'Accept: application/octet-stream' repos/dakasa-co/dakasa-system/releases/assets/801893243 > "$output/BUILDINFO.txt"
+          python3 - <<'PY_SYSTEM_RELEASE'
+          import hashlib, json, os, tarfile
+          from pathlib import Path
+          output = Path(os.environ['RUNNER_TEMP']) / 'native-private-factory'
+          pins = {
+              'system.tar.gz': (6854319, 'c552bc730da495436d38784d1b90b8809aa534cb18fb06745d09f74065d81011'),
+              'SOURCE.txt': (82, 'e0bdbc2684a222e2ce2d18dcf2fd2ecc30923501ac0680257b94d9d76c12623c'),
+              'BUILDINFO.txt': (6186, '50b4359165068d4fdfb9eb7f372b5f284c07af0b5ecb4104ece484ca3b430238'),
+          }
+          for name, (size, digest) in pins.items():
+              raw = (output / name).read_bytes()
+              assert len(raw) == size and hashlib.sha256(raw).hexdigest() == digest
+          assert (output / 'SOURCE.txt').read_text().splitlines() == [
+              os.environ['NATIVE_FACTORY_SYSTEM_SOURCE'], 'c72a3d8fb6c7b2ae8cb6bd7c319cef53a1f34d10',
+          ]
+          settings = {}
+          for line in (output / 'BUILDINFO.txt').read_text().splitlines():
+              if line.startswith('\tbuild\t'):
+                  key, value = line[len('\tbuild\t'):].split('=', 1)
+                  settings[key] = value
+          assert settings.get('vcs.revision') == os.environ['NATIVE_FACTORY_SYSTEM_SOURCE']
+          assert settings.get('vcs.modified') == 'false'
+          assert settings.get('GOOS') == 'linux' and settings.get('GOARCH') == 'amd64'
+          assert settings.get('CGO_ENABLED') == '0'
+          with tarfile.open(output / 'system.tar.gz', 'r:gz') as archive:
+              members = archive.getmembers()
+              assert len(members) == 1 and members[0].name == 'dakasa' and members[0].isfile()
+              assert members[0].size == int(os.environ['NATIVE_FACTORY_SYSTEM_BYTES'])
+              raw = archive.extractfile(members[0]).read(members[0].size + 1)
+          assert len(raw) == int(os.environ['NATIVE_FACTORY_SYSTEM_BYTES'])
+          assert hashlib.sha256(raw).hexdigest() == os.environ['NATIVE_FACTORY_SYSTEM_SHA256']
+          binary = output / 'dakasa'
+          with binary.open('xb') as target:
+              target.write(raw)
+          binary.chmod(0o700)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('NATIVE_FACTORY_SYSTEM_CLI=' + str(binary) + '\n')
+          (output / 'published-system-receipt.json').write_text(json.dumps({
+              'schema': 1, 'release_id': 461022395, 'source_commit': os.environ['NATIVE_FACTORY_SYSTEM_SOURCE'],
+              'asset_ids': [801893241, 801893255, 801893243],
+              'binary_sha256': os.environ['NATIVE_FACTORY_SYSTEM_SHA256'],
+              'binary_bytes': int(os.environ['NATIVE_FACTORY_SYSTEM_BYTES']),
+              'provider_or_production_qualification': False,
+          }, sort_keys=True) + '\n')
+          PY_SYSTEM_RELEASE
+      - name: Exercise actual published private parent and pinned factory
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/native-private-factory"
+          git rev-parse HEAD > "$output/core-source-head.txt"
+          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./internal/capacity -run '^TestNativePrivateFactoryPublishedSystemCLI$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
+      - name: Require the actual executable qualification root without skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_FACTORY_ROOT'
+          import collections, json, os
+          from pathlib import Path
+          output = Path(os.environ['RUNNER_TEMP']) / 'native-private-factory'
+          events = [json.loads(line) for line in (output / 'original.jsonl').read_text().splitlines() if line.strip()]
+          assert not any(event.get('Action') in ('skip', 'fail') for event in events)
+          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity', 'TestNativePrivateFactoryPublishedSystemCLI')}
+          for action in ('run', 'pass'):
+              actual = collections.Counter((event['Package'], event['Test']) for event in events if event.get('Action') == action and event.get('Test') and '/' not in event['Test'])
+              assert set(actual) == expected and all(count == 1 for count in actual.values())
+          assert 'WARNING: DATA RACE' not in (output / 'go-test.stderr').read_text()
+          assert not any('WARNING: DATA RACE' in event.get('Output', '') for event in events)
+          (output / 'root-census.json').write_text(json.dumps({'roots': 1, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
+          PY_FACTORY_ROOT
+      - name: Preserve qualification evidence without private material
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-private-factory-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/native-private-factory/published-system-receipt.json
+            ${{ runner.temp }}/native-private-factory/core-source-head.txt
+            ${{ runner.temp }}/native-private-factory/original.jsonl
+            ${{ runner.temp }}/native-private-factory/go-test.stderr
+            ${{ runner.temp }}/native-private-factory/root-census.json
           if-no-files-found: warn

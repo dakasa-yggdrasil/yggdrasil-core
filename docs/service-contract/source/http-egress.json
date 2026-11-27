@@ -241,6 +241,16 @@
       "line": 113
     },
     {
+      "argument_expression": "ctx, http.MethodGet, u.String(), nil",
+      "argument_sha256": "844a09f250e9df81ce9b4186022c8eedb57e13c46c10a601b24d14ddd455e8bb",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacity/native_worker_private_factory.go",
+      "function": "capability",
+      "line": 385
+    },
+    {
       "argument_expression": "ctx, method, origin+path, bytes.NewReader(body)",
       "argument_sha256": "0283f5cf114f72b9fe7652e4cf18bb78860f59fa549a0c812836cec7415d5dcc",
       "build_constraint": "linux",

@@ -265,6 +265,37 @@ refuses the response. A valid preflight leaves the attempt reserved and the
 later grant must retain its exact Launch bytes. Repeated preflights never renew
 the immutable command deadline or authorize another create.
 
-The concrete factory and its private artifact/material receiving remain
-separate from this API composition. Neither this endpoint nor a rendered
-configuration proves private routing, guest health, admission or useful capacity.
+The concrete factory remains separately installed through protected composition.
+Neither this endpoint nor a rendered configuration proves private routing,
+guest health, admission or useful capacity.
+
+### Concrete private factory
+
+`NewNativeWorkerPrivateFactory` binds one exact execution profile to protected
+canonical System launch-template bytes, a node-role agent token, certificate-only
+floor CA and dedicated WireGuard master. Its explicit credentials provider has
+no ambient fallback. A pinned executable descriptor must match the reviewed
+System Source, complete binary hash/size and clean Linux/amd64 Go build metadata.
+Missing or unqualified material refuses construction.
+
+`Prepare` derives the per-attempt key deterministically from the loaded master
+with domain, binding, scope, namespace, pool and attempt separation. It performs
+no I/O, credential retrieval, clock read or randomness inside a reservation
+transaction. HCloud market location and native region remain distinct template
+operands. Rendering accepts only the exact stored canonical public Launch.
+
+Outside SQL locks, rendering signs a fixed versioned S3 operator GET in us-east-1
+with expected owner 153828470928 and a lifetime bounded by credentials, the
+original command deadline and 900 seconds. The real System `render-private` parent
+receives private JSON on stdin and returns at most 16 KiB through FD3. No secret appears in
+arguments, environment, ordinary diagnostics or public hashes. FD4 pins the
+actual executable; bounded process-group cleanup precedes reaping the owned
+parent. Value and pointer representations are opaque, and copied handles share
+one Close fence that erases owned material.
+
+CI retains the complete default test census and separately exercises the actual
+published System CLI from exact versioned release asset IDs and byte hashes.
+It does not rebuild System or use a fake renderer as executable qualification.
+This Source delivery installs no material, factory, network peer or provider
+sender in production. Actual boot/package/download timing must fit the immutable
+command and capability lifetime before live qualification.
