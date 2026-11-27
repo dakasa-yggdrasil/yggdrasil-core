@@ -1,27 +1,24 @@
 # AI docs freshness stamp
 
-The repository reconciliation gate measures the complete source diff and generated
-context provenance. This file records the current reconciliation; historical
-reviews remain in Git history and their owning source/CI receipts.
+The reconciliation gate measures this source diff and actual generated context.
+Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 4065057384cec71e4c368f60b5d70c24569fe21a
-verified_diff_sha256: 766c1c9ce056b7c6848752d0523f1d1462c53d4237541898de69508bc8ce28f3
+verified_at_commit: 8f53fa673337db41d54dda69ff0121226e0f6690
+verified_diff_sha256: 0436a96a0a0740063528ec358228e33bf3b6e7a3e257baf7b1687a88527d493a
 reconciler_schema: 1
 
-Reviewed the fixed machine-only private bootstrap GET, immutable creator context,
-exact stored Launch, opaque private response, output bounds, buffer cleanup and
-parent/deadline checks before and after rendering outside all SQL locks. API
-workers, human sessions and absent factory composition remain refused. The
-complete894-source census and every service-contract evidence digest are current.
+Reviewed the exact published Commons dual-reader commit and complete tracked-tree
+SHA256, the unchanged complete source selection, bounded deterministic v2 producer,
+index paths and per-leaf hashes/sizes/counts, and all current service-contract
+references. Static artifact comparison preserves every894 prior source fact after
+normalizing the existing empty build-constraint default. Other10 evidence envelopes
+are byte-identical. Two leaves plus index occupy147040bytes; limits stay128KiB per
+file,2MiB including index,16 leaves and4096 unique facts.
 
-The real PG16/17, unit, service-doctor and documentation jobs passed at the prior
-implementation head. Its two test-only static-analysis findings are corrected by
-checking expected errors before closing unexpected results; production bytes and
-all negative assertions are preserved. Independent protocol and correction peers
-reported no open finding. Complete current-head CI remains required.
-
-Only formatting, YAML parsing, diff checks, source census and released context
-and reconciliation generators ran locally. No local tests/build/vet, provider
-creation, production activation or Hetzner load test is claimed. The concrete
-factory, private material/artifact receiving and network/admission composition
-remain separate required delivery and operational evidence.
+CI first runs the actual new checker against published complete v1 Core34d664,
+then verifies current v2 generation, every union fact and the same complete actual
+source-tree walk. Independent whole bounded review reported no open finding.
+Only static parsing, formatting/diff checks and the released Source/context
+and reconciliation generators ran locally. No local tests/builds/vet or product
+execution occurred. Actual CI remains required; this change activates no provider,
+worker, private factory, capacity owner or production switch.
