@@ -38,6 +38,18 @@
     },
     {
       "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_abort.go",
+      "function": "nativeWorkerAbortPath",
+      "line": 23
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_abort.go",
+      "function": "serveNativeWorkerAbortRequest",
+      "line": 78
+    },
+    {
+      "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_attempts.go",
       "function": "nativeWorkerAttemptPath",
       "line": 27
@@ -82,19 +94,19 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleRequest",
-      "line": 1224
+      "line": 1228
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "mfaEnrollmentExemptPath",
-      "line": 1274
+      "line": 1278
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "requiresAuthenticatedConsoleAPI",
-      "line": 1301
+      "line": 1305
     },
     {
       "build_constraint": "default",

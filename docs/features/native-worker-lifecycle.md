@@ -58,6 +58,25 @@ and late custody preserves an already observed result. Unknown sends do not
 expire into retry permission. The target birth generation/fence and original
 creation count remain immutable throughout cleanup.
 
+The machine-only callback prefix is
+`/internal/capacity/native-workers/abort-permits/`: `GET read` takes exactly
+`binding_name` and a canonical `permit_id`; `POST redeem`, `receive` and
+`reconcile` share that prefix. Read, redeem and reconcile selectors contain only
+those two fields. Receive accepts the private original return, one-use settlement
+token, capture-completeness flag and closed error class. Every callback requires
+TLS, one active exact machine bearer and one canonical compiled SDK Source
+header. The authenticated instance and effective destroy capability must match
+an existing private issuance before any request body is read. API workers and
+human sessions cannot reach these routes.
+
+Resolution restores the original private recovery workflow and executor; a
+callback cannot supply either identity or another policy. The abort process gate
+`YGGDRASIL_NATIVE_WORKER_ABORT_ENABLED=true` is additionally required to expose
+a new send. Original-return custody remains receivable after gates close or the
+runtime becomes unavailable. Installing `WithNativeWorkerAbortRuntime` requires
+protected Go process composition; neither the header nor a process flag creates
+an observer. These callbacks do not install a controller or a cleanup actor.
+
 This Source slice requires a known sealed physical birth and provides no live
 transport or external cleanup writers. Unknown creation-ACK discovery,
 provider destruction, Node cordon/deletion, registry retirement, network cleanup
