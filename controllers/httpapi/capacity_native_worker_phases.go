@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -41,6 +43,74 @@ func nativeWorkerPhasePath(p string) bool {
 // ports. Neither an HTTP payload nor a workflow can install a runtime callback.
 func WithNativeWorkerPhaseRuntime(workers repository.NativeWorkerRuntime, phases repository.NativeWorkerPhaseRuntime) ServerOption {
 	return func(s *Server) { s.nativeWorkerRuntime, s.nativeWorkerPhaseRuntime = workers, phases }
+}
+
+// This installs the real pinned adapter reader around a separately qualified
+// worker runtime. It does not install a cloud sender or invent readiness. A nil
+// independent network/warmup reader permits quarantine observation only.
+func WithProtectedNativeWorkerPhaseReader(workers repository.NativeWorkerRuntime, readiness capacity.NativeWorkerReadinessFunc) ServerOption {
+	return func(s *Server) {
+		reader := &serverNativeWorkerPhaseReader{server: s, readiness: readiness}
+		s.nativeWorkerPhaseRuntime = reader
+		if workers == nil {
+			s.nativeWorkerRuntime = nil
+			return
+		}
+		s.nativeWorkerRuntime = nativeWorkerWithPhaseAuthority{NativeWorkerRuntime: workers, reader: reader}
+	}
+}
+
+type nativeWorkerWithPhaseAuthority struct {
+	repository.NativeWorkerRuntime
+	reader *serverNativeWorkerPhaseReader
+}
+
+func (r nativeWorkerWithPhaseAuthority) ObservePhaseAuthority(ctx context.Context, policy model.Manifest) (*model.CapacityNativeWorkerPhaseReadObservation, error) {
+	return r.reader.ObservePhaseAuthority(ctx, policy)
+}
+
+type serverNativeWorkerPhaseReader struct {
+	server    *Server
+	readiness capacity.NativeWorkerReadinessFunc
+}
+
+func (r *serverNativeWorkerPhaseReader) forPolicy(ctx context.Context, id uuid.UUID, checksum string) (*capacity.NativeWorkerPhaseReader, error) {
+	if r == nil || r.server == nil || r.server.db == nil || id == uuid.Nil {
+		return nil, repository.ErrCapacityDisabled
+	}
+	policy, err := repository.GetManifestByID(ctx, r.server.db, id)
+	if err != nil || policy.Kind != "capacity_policy" || checksum != "" && policy.Checksum != checksum {
+		return nil, repository.ErrCapacityConflict
+	}
+	p, err := manifest.ParseCapacityPolicySpec(policy.Spec)
+	if err != nil {
+		return nil, repository.ErrCapacityConflict
+	}
+	return capacity.NewNativeWorkerPhaseReader(p, messagecontroller.NewNativeWorkerPhaseReadFunc(r.server.db, r.server.brokerConnection()), r.readiness)
+}
+
+func (r *serverNativeWorkerPhaseReader) ObservePhaseAuthority(ctx context.Context, policy model.Manifest) (*model.CapacityNativeWorkerPhaseReadObservation, error) {
+	reader, err := r.forPolicy(ctx, policy.ID, policy.Checksum)
+	if err != nil {
+		return nil, err
+	}
+	return reader.ObservePhaseAuthority(ctx, policy)
+}
+
+func (r *serverNativeWorkerPhaseReader) PreparePhase(ctx context.Context, a model.CapacityNativeWorkerAttempt, action string) (model.CapacityNativeWorkerPhasePreparation, error) {
+	reader, err := r.forPolicy(ctx, a.PolicyID, a.PolicyChecksum)
+	if err != nil {
+		return model.CapacityNativeWorkerPhasePreparation{}, err
+	}
+	return reader.PreparePhase(ctx, a, action)
+}
+
+func (r *serverNativeWorkerPhaseReader) ObservePhase(ctx context.Context, c model.CapacityNativeWorkerPhasePermit) (model.CapacityNativeWorkerPhaseObservation, error) {
+	reader, err := r.forPolicy(ctx, c.PolicyID, "")
+	if err != nil {
+		return model.CapacityNativeWorkerPhaseObservation{}, err
+	}
+	return reader.ObservePhase(ctx, c)
 }
 
 type nativeWorkerPhaseRequest struct {
@@ -133,7 +203,7 @@ func (s *Server) serveNativeWorkerPhaseRequest(w http.ResponseWriter, r *http.Re
 		mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 		return
 	}
-	if request.PermitID == uuid.Nil || request.BindingName == "" || len(request.BindingName) > 128 {
+	if request.PermitID == uuid.Nil || request.BindingName == "" || len(request.BindingName) > 256 {
 		mutationHTTPError(w, repository.ErrCapacityConflict)
 		return
 	}
