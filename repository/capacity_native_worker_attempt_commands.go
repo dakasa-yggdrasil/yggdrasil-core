@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -27,7 +28,64 @@ type nativeWorkerCommandContext struct {
 	ExpiresAt      time.Time                                  `json:"expires_at"`
 }
 
-type CapacityNativeWorkerCommandStore struct{ Workers CapacityNativeWorkerStore }
+// This private process-owned factory has no provider creation or redemption
+// port. Rendering runs outside SQL locks and must refuse missing material,
+// unpinned executables, invalid capabilities and incomplete private output.
+type NativeWorkerPrivateBootstrapFactory interface {
+	RenderNativeWorkerPrivateBootstrap(context.Context, model.CapacityNativeWorkerAttempt, json.RawMessage, time.Time) ([]byte, error)
+}
+
+type CapacityNativeWorkerCommandStore struct {
+	Workers          CapacityNativeWorkerStore
+	BootstrapFactory NativeWorkerPrivateBootstrapFactory
+}
+
+// Bootstrap is a preflight, not the one-send right. Both freshness checks use
+// the immutable command deadline and the normal parent/epoch/budget guards.
+// The private factory never runs while an SQL connection/row lock is retained.
+func (s CapacityNativeWorkerCommandStore) Bootstrap(ctx context.Context, policy model.Manifest, id uuid.UUID, caller model.CapacityNativeWorkerCommandCaller) (model.CapacityNativeWorkerPrivateBootstrap, error) {
+	var empty model.CapacityNativeWorkerPrivateBootstrap
+	if s.BootstrapFactory == nil {
+		return empty, ErrCapacityDisabled
+	}
+	w, _, a, err := s.bound(ctx, policy, id, caller)
+	if err != nil || a.State != "reserved" {
+		return empty, ErrCapacityConflict
+	}
+	before, err := s.Read(ctx, policy, id, caller)
+	if err != nil || !before.Redeemable || !before.ExpiresAt.After(time.Now().UTC()) {
+		return empty, ErrCapacityLease
+	}
+	var launch []byte
+	err = w.Capacity.DB.QueryRowContext(ctx, `SELECT launch_wire FROM public.capacity_native_worker_attempts WHERE id=$1 AND policy_id=$2 AND namespace=$3`, id, policy.ID, policy.Metadata.Namespace).Scan(&launch)
+	prepared := model.CapacityNativeWorkerLaunch{AttemptID: a.ID, PoolUID: a.PoolUID, PoolEpoch: a.PoolEpoch, Generation: a.Generation, FencingToken: a.FencingToken, OverlayIPv4: a.OverlayIPv4, TemplateSHA256: a.Execution.LaunchTemplateSHA256, PublicJSON: launch}
+	if err != nil || fmt.Sprintf("%x", sha256.Sum256(launch)) != a.LaunchSHA256 || capacity.ValidateNativeWorkerLaunch(a, prepared) != nil {
+		return empty, ErrCapacityConflict
+	}
+	// Protect stored operands from a callback retaining or changing its copies.
+	aRaw, err := json.Marshal(a)
+	var own model.CapacityNativeWorkerAttempt
+	if err != nil || json.Unmarshal(aRaw, &own) != nil {
+		return empty, ErrCapacityConflict
+	}
+	cloudInit, err := s.BootstrapFactory.RenderNativeWorkerPrivateBootstrap(ctx, own, append(json.RawMessage(nil), launch...), before.ExpiresAt)
+	defer clear(cloudInit)
+	if err != nil || ctx.Err() != nil {
+		return empty, ErrCapacityConflict
+	}
+	after, err := s.Read(ctx, policy, id, caller)
+	if err != nil || !after.Redeemable || !after.ExpiresAt.Equal(before.ExpiresAt) ||
+		after.SDKSourceCommit != before.SDKSourceCommit || after.ExecutionScopeSHA256 != before.ExecutionScopeSHA256 || ctx.Err() != nil {
+		return empty, ErrCapacityLease
+	}
+	// Re-read immutable bytes too: never emit private material against a replaced
+	// launch even if another privileged component corrupted the storage contract.
+	var current []byte
+	if err = w.Capacity.DB.QueryRowContext(ctx, `SELECT launch_wire FROM public.capacity_native_worker_attempts WHERE id=$1 AND policy_id=$2 AND namespace=$3`, id, policy.ID, policy.Metadata.Namespace).Scan(&current); err != nil || !bytes.Equal(current, launch) {
+		return empty, ErrCapacityConflict
+	}
+	return model.NewCapacityNativeWorkerPrivateBootstrap(after, launch, cloudInit, time.Now().UTC())
+}
 
 // Authorize the fixed machine before a large body is read. The boolean does
 // not reveal context IDs, policy or raw bytes; exact target resolution follows.

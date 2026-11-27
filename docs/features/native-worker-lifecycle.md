@@ -226,3 +226,45 @@ custody is durable before independent qualification; closed/expired parent
 leases do not erase it. The creator receive path can settle historical ACK or
 unknown truth, and cannot register/admit a Node. Production sender/network
 composition and remote execution evidence are still required before activation.
+
+## Private bootstrap preflight
+
+The fixed `GET /internal/capacity/native-workers/attempts/bootstrap` accepts only
+`binding_name` and the canonical `attempt_id`. It shares the creator machine's
+exact Source/instance/capability, TLS and private immutable-context guards.
+`WithNativeWorkerPrivateBootstrapFactory` is an explicit protected installation
+port; the default is nil. Flags, policies and request bodies cannot install a
+factory or supply private scripts.
+
+```mermaid
+sequenceDiagram
+  participant A as Dedicated provider actor
+  participant C as Core private bootstrap
+  participant F as Protected System factory
+  A->>C: Read exact reserved attempt
+  C->>C: Check original parent, budget, epoch and deadline
+  C->>F: Render outside all SQL locks
+  F-->>C: Bounded private cloud-init
+  C->>C: Recheck authority and exact stored launch
+  C-->>A: Private bootstrap; no send right
+  A->>C: Redeem original one-send grant
+```
+
+The private response schema is `native_worker_private_bootstrap_v1`. It binds the
+attempt/binding, compiled SDK Source, execution scope, original Launch digest,
+original command expiry and exact public Launch bytes. `cloud_init_base64`,
+`cloud_init_sha256` and `cloud_init_bytes` stay private. Raw user-data is at most
+16384bytes and must be complete cloud-config. Ordinary JSON serialization and
+formatting of the Core response object refuse exposure; only the fixed private
+HTTP writer can emit it. Temporary buffers are cleared on success and refusal.
+
+Rendering performs no provider mutation or command redemption. It holds no SQL
+connection while protected file reads, capability signing or process waiting
+occur. Concurrent redemption, closed policy, cancellation or expired authority
+refuses the response. A valid preflight leaves the attempt reserved and the
+later grant must retain its exact Launch bytes. Repeated preflights never renew
+the immutable command deadline or authorize another create.
+
+The concrete factory and its private artifact/material receiving remain
+separate from this API composition. Neither this endpoint nor a rendered
+configuration proves private routing, guest health, admission or useful capacity.

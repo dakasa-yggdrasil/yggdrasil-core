@@ -1459,6 +1459,7 @@ type Server struct {
 	originalCanaryAuthorities       *capacity.OriginalCanaryAuthorityRegistry
 	capacityMutationPrincipals      []capacityMutationPrincipal
 	nativeWorkerRuntime             repository.NativeWorkerRuntime
+	nativeWorkerBootstrapFactory    repository.NativeWorkerPrivateBootstrapFactory
 	nativeWorkerPhaseRuntime        repository.NativeWorkerPhaseRuntime
 	capacityGuestPrincipals         []capacityGuestPrincipal
 	capacityHostFactoryPrincipals   []hostFactoryPrincipal

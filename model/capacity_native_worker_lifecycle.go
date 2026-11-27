@@ -1,7 +1,11 @@
 package model
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/google/uuid"
@@ -176,6 +180,70 @@ type CapacityNativeWorkerCommandReceive struct {
 	OriginalReturn  []byte    `json:"original_return"`
 	CaptureComplete bool      `json:"capture_complete"`
 	ErrorClass      string    `json:"error_class"`
+}
+
+// Private bootstrap bytes are never a workflow result, diagnostic or public
+// evidence hash. Only the fixed authenticated machine HTTP boundary may write
+// their explicitly private representation. Ordinary formatting/JSON is opaque.
+type CapacityNativeWorkerPrivateBootstrap struct{ wire []byte }
+
+func (CapacityNativeWorkerPrivateBootstrap) String() string {
+	return "[private Native worker bootstrap]"
+}
+func (CapacityNativeWorkerPrivateBootstrap) GoString() string {
+	return "[private Native worker bootstrap]"
+}
+func (CapacityNativeWorkerPrivateBootstrap) MarshalJSON() ([]byte, error) {
+	return nil, fmt.Errorf("private Native bootstrap cannot be publicly serialized")
+}
+
+func NewCapacityNativeWorkerPrivateBootstrap(command CapacityNativeWorkerCommand, launch, cloudInit []byte, now time.Time) (CapacityNativeWorkerPrivateBootstrap, error) {
+	var out CapacityNativeWorkerPrivateBootstrap
+	if command.Schema != CapacityNativeWorkerCommandSchema || command.AttemptID == uuid.Nil || command.BindingName == "" ||
+		command.AttemptState != "reserved" || !command.Redeemable || command.MutationPermitted || !command.ExpiresAt.After(now) ||
+		len(launch) == 0 || len(launch) > 32768 || len(cloudInit) == 0 || len(cloudInit) > 16384 || !bytes.HasPrefix(cloudInit, []byte("#cloud-config\n")) {
+		return out, fmt.Errorf("current complete private Native bootstrap required")
+	}
+	// Hashes below stay inside this private response; neither is public evidence.
+	private := struct {
+		Schema               string          `json:"schema"`
+		AttemptID            uuid.UUID       `json:"attempt_id"`
+		BindingName          string          `json:"binding_name"`
+		SDKSourceCommit      string          `json:"sdk_source_commit"`
+		ExecutionScopeSHA256 string          `json:"execution_scope_sha256"`
+		LaunchSHA256         string          `json:"launch_sha256"`
+		ExpiresAt            time.Time       `json:"expires_at"`
+		PublicLaunchJSON     json.RawMessage `json:"public_launch_json"`
+		CloudInit            []byte          `json:"cloud_init_base64"`
+		CloudInitSHA256      string          `json:"cloud_init_sha256"`
+		CloudInitBytes       int             `json:"cloud_init_bytes"`
+	}{"native_worker_private_bootstrap_v1", command.AttemptID, command.BindingName, command.SDKSourceCommit,
+		command.ExecutionScopeSHA256, fmt.Sprintf("%x", sha256.Sum256(launch)), command.ExpiresAt,
+		append(json.RawMessage(nil), launch...), cloudInit, fmt.Sprintf("%x", sha256.Sum256(cloudInit)), len(cloudInit)}
+	var err error
+	out.wire, err = json.Marshal(private)
+	if err != nil {
+		return CapacityNativeWorkerPrivateBootstrap{}, fmt.Errorf("private Native bootstrap encoding refused")
+	}
+	return out, nil
+}
+
+func (p CapacityNativeWorkerPrivateBootstrap) WritePrivateJSON(w io.Writer) error {
+	if w == nil || len(p.wire) == 0 {
+		return fmt.Errorf("private Native bootstrap unavailable")
+	}
+	n, err := w.Write(p.wire)
+	if err != nil || n != len(p.wire) {
+		return io.ErrShortWrite
+	}
+	return nil
+}
+
+func (p *CapacityNativeWorkerPrivateBootstrap) Close() {
+	if p != nil {
+		clear(p.wire)
+		p.wire = nil
+	}
 }
 
 type CapacityNativeWorkerLaunch struct {
