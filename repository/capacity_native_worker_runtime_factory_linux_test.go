@@ -142,6 +142,20 @@ func TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership(t *testi
 	if _, err := newNativeWorkerConcreteRuntime(bad, p.NativeWorkerLifecycleBinding.SourceCommit); err == nil || !factory.MatchesExecution(execution) {
 		t.Fatal("failed constructor stole or closed caller handle")
 	}
+	// Keep failure-only diagnostics at the same real constructor seams. These
+	// assertions do not replace or bypass any constructor validation.
+	if _, err := parseCapacityPolicy(policy); err != nil {
+		t.Fatal("stored runtime policy fixture is not valid", err)
+	}
+	if !policy.Metadata.Active || !factory.MatchesExecution(execution) {
+		t.Fatal("stored policy is inactive or original factory binding changed")
+	}
+	if _, err := capacity.NewNativeWorkerPhaseReader(p, cfg.PhaseRead, nil); err != nil {
+		t.Fatal("protected phase-reader fixture is not valid", err)
+	}
+	if _, err := capacity.NewNativeWorkerACKQualifier(p, cfg.PhysicalRead); err != nil {
+		t.Fatal("independent physical-reader fixture is not valid", err)
+	}
 	runtime, err := newNativeWorkerConcreteRuntime(cfg, p.NativeWorkerLifecycleBinding.SourceCommit)
 	if err != nil {
 		t.Fatal("actual factory-to-runtime composition refused", err)
