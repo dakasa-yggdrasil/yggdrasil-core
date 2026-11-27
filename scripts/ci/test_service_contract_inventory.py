@@ -46,6 +46,14 @@ func real() {
  def test_path_selection_has_exact_script_whitelist(self):
   cases={'scripts/goose/main.go':True,'scripts/bootstrap/main.go':True,'scripts/bootstrap-admin/nested/source.go':True,'scripts/goose_test/main.go':False,'scripts/goose/main_test.go':False,'scripts/other.go':False,'lib/scripts/goose/main.go':False,'scripts/goose/vendor/x.go':False,'docs/contracts/validator.go':True}
   for path,want in cases.items():self.assertEqual(tool.source_path(path),want,path)
+ def test_native_attempt_intercepts_remain_in_complete_census(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);p=root/'controllers/httpapi/capacity_native_worker_attempts.go';p.parent.mkdir(parents=True)
+   p.write_text('package httpapi\nfunc nativeWorkerAttemptPath(p string) bool { return false }\nfunc (s *Server) serveNativeWorkerAttemptRequest() { switch action { case "read": read(); case "redeem": redeem(); case "receive": receive() } }\n')
+   result=tool.generate(root)
+   self.assertIn('controllers/httpapi/capacity_native_worker_attempts.go',result['sources'])
+   self.assertEqual([x['predicate'] for x in result['http-intercept-dispatch']],['"read"','"redeem"','"receive"'])
+   self.assertEqual({x['function'] for x in result['authentication-dispatch']},{'nativeWorkerAttemptPath','serveNativeWorkerAttemptRequest'})
  def test_indirect_source_is_refused(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);(root/'outside.txt').write_text('package main\n');(root/'main.go').symlink_to(root/'outside.txt')

@@ -43,7 +43,7 @@ def generate(root):
    if rel.startswith(tuple('scripts/'+name+'/' for name in PRODUCTION_COMMANDS)) and i>=2 and ts[i-1][0]=='.' and i+1<len(ts) and ts[i+1][0]=='(' and value in ('Open','LoadConfig','Ping','Up','Down','Status','SetDialect','DiscoverFiles','LoadDocument','NormalizeDocument','ValidateDocument','ResolveManifest','CreateManifestVersion','GetCollaboratorByPrimaryEmail','BeginTx','AddCollaboratorToTeamBySlugTx','Commit','Rollback','WriteFile'):
     stop=endcall(ts,i+1);args=text[ts[i+1][2]:ts[stop][1]]
     commands.append(dict(ref(start),command=rel.split('/')[1],callee=ts[i-2][0]+'.'+value,argument_expression=args,argument_expression_sha256=hashlib.sha256(args.encode()).hexdigest()))
-   if value=='case' and rel in ('controllers/httpapi/capacity_guest.go','controllers/httpapi/capacity_mutations.go','controllers/httpapi/capacity_host_original_factory.go','controllers/httpapi/capacity_canary_authority.go','controllers/httpapi/capacity_native_worker_phases.go'):
+   if value=='case' and rel in ('controllers/httpapi/capacity_guest.go','controllers/httpapi/capacity_mutations.go','controllers/httpapi/capacity_host_original_factory.go','controllers/httpapi/capacity_canary_authority.go','controllers/httpapi/capacity_native_worker_phases.go','controllers/httpapi/capacity_native_worker_attempts.go'):
     j=i+1;depth=0
     while j<len(ts):
      if ts[j][0] in ('(', '['):depth+=1
