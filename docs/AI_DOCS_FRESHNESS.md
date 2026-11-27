@@ -3,30 +3,34 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: fc18d04562a3ec87579b3b87a3c49ee370a92400
-verified_diff_sha256: a137daac44bb431fe9737cb0e4d3e556200ec244ffd846a21c9296bf0cd33d8f
+verified_at_commit: d55486f271db5ebd15959a5bf299b84918747b29
+verified_diff_sha256: 395b6c0b0603e7d09cbac6be3d8006f58e509f423c4f41bff3fa29c4471782e0
 reconciler_schema: 1
 
-Reviewed the exact protected Native provider mTLS client, original pre-hydration
-row/type/origin pins, separate private context through Describe/execution,
-actual server CA/hostname/leaf/compiled Source and one owned Read/Close with no
-proxy, redirect, broker fallback or replayable request. Independent whole product
-review and whole Linux test/CI selector review are clean.
+Reviewed the complete optional floor network binding, exact System public DTOs,
+original stored launch and sealed birth joins, one-use permission ledger117,
+shared attempt arbiter, machine authentication before original Read/Close and
+late private custody. Three independent review findings were corrected: the
+original Pod/Service CIDRs must match, an observed action stays consumed, and
+cleanup's transport endpoint comes only from a previously exposed install.
 
-The real AWS/HCloud HTTP catalogs advertise only the two RPC endpoints. The
-initial health assumption was removed: public health is read solely from its
-separate protected configuration URL, carries no client certificate and changes
-no public catalog. The integration fixture retains that actual absent-health
-shape. Both independent peers re-read this concrete correction.
+The complete Root20 authored-path review by Owner and Root whole Bridge390-line
+PostgreSQL source review are clean. Real PostgreSQL CI roots cover concurrent
+single redeem, immutable original/event history and Down refusal, producer/abort
+fencing, independently received install and compensating remove, post-deletion
+cleanup without a fabricated provider GET, and new-UUID-only address reuse.
+Existing previously reviewed no-send closure116 is preserved as an ancestor;
+its accepted implementation is not rewritten.
 
-Seven new mandatory remote roots cover actual mutual TLS, original Describe and
-execution, separate health, scope/role/source/target/CA/pin refusals, private file
-and PEM guards, copied opaque Close state, original Close error and secret
-hydration refusal on row drift. Complete v2 census retains all 907 prior source
-paths and adds exactly two production files, for 909 facts.
+Complete v2 source inventory retains all 910 prior production facts and adds
+exactly six production Go files, for916 facts. The deterministic generator and
+all four changed contract evidence references agree with actual bytes. The
+complete market census includes all new authored unit and PostgreSQL roots;
+existing checks and migration boundaries remain mandatory in CI.
 
-The complete Source evidence was committed before the released reconciliation
-plan and completed ai-all generation. Only reading, deterministic generators and
-cheap formatting/diff checks ran locally. Tests, builds and analysis are pending
-and mandatory in GitHub CI. No production/runtime installation, provider send,
-paid resource, network mutation or Hetzner load is claimed.
+Source was signed and committed before the released reconciliation plan and
+completed ai-all generation. Only reading, deterministic generation and cheap
+format/diff/JSON/YAML checks ran locally. Tests, builds and analysis are mandatory
+in GitHub CI. No floor process, network, provider resource, guest witness
+transport, business deployment, allocator or automatic provider switch is
+installed or operationally qualified by this Source.
