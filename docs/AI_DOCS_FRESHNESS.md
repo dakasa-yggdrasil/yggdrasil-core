@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 5164923fbb38f80e7a44a1898808dd409c2b0cd2
-verified_diff_sha256: a3bf7cbb54ce7bf1217af8e9b3cd802cf04a9458ced0a80110708d61585030c1
+verified_at_commit: 11508d6ec82ce2870929d72cad9157202f1a8084
+verified_diff_sha256: 61c7621445c163fb39511274bfee2f0e235e6eff00958af940c576c0c6b58286
 reconciler_schema: 1
 
 Reviewed the exact published Commons dual-reader commit and complete tracked-tree
