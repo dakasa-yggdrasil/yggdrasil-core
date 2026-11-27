@@ -25,7 +25,7 @@ func newPhaseReaderFixture(t *testing.T, now time.Time) phaseReaderFixture {
 	exec.ManifestID = marketTestUUID(900)
 	lifecycle := &model.CapacityNativeWorkerLifecycleBinding{Mode: NativeWorkerLifecycleMode, SourceCommit: strings.Repeat("a", 40), MaxReadAgeSeconds: 60}
 	for _, profile := range p.MarketBinding.Profiles {
-		lifecycle.Profiles = append(lifecycle.Profiles, model.CapacityNativeWorkerExecutionProfile{Profile: profile.Profile, Adapter: exec, BindingName: "owned/" + profile.Profile, ScopeSHA256: marketTestSHA("f"), EnsureCapability: "ensure_worker", ObserveCapability: "observe_worker", DestroyCapability: "destroy_worker", LaunchTemplateSHA256: marketTestSHA("b"), BootstrapSourceCommit: strings.Repeat("c", 40), IPAMScope: "native/overlay", OverlayCIDR: "10.81.0.0/24", ExcludedIPv4: []string{"10.81.0.2"}})
+		lifecycle.Profiles = append(lifecycle.Profiles, model.CapacityNativeWorkerExecutionProfile{Profile: profile.Profile, Adapter: exec, BindingName: "owned/" + profile.Profile, SDKSourceCommit: strings.Repeat("b", 40), ScopeSHA256: marketTestSHA("f"), EnsureCapability: "ensure_worker", ObserveCapability: "observe_worker", DestroyCapability: "destroy_worker", LaunchTemplateSHA256: marketTestSHA("b"), BootstrapSourceCommit: strings.Repeat("c", 40), IPAMScope: "native/overlay", OverlayCIDR: "10.81.0.0/24", ExcludedIPv4: []string{"10.81.0.2"}})
 	}
 	reader := marketTestAdapter()
 	reader.ManifestID = marketTestUUID(901)

@@ -34,6 +34,12 @@ func WithNativeWorkerAttemptRuntime(runtime repository.NativeWorkerRuntime) Serv
 	return func(s *Server) { s.nativeWorkerRuntime = runtime }
 }
 
+// Bootstrap material can be supplied only by explicit protected composition;
+// neither a policy, request, environment flag nor a machine bearer installs it.
+func WithNativeWorkerPrivateBootstrapFactory(factory repository.NativeWorkerPrivateBootstrapFactory) ServerOption {
+	return func(s *Server) { s.nativeWorkerBootstrapFactory = factory }
+}
+
 type nativeWorkerAttemptRequest struct {
 	BindingName string    `json:"binding_name"`
 	AttemptID   uuid.UUID `json:"attempt_id"`
@@ -93,7 +99,7 @@ func (s *Server) serveNativeWorkerAttemptRequest(w http.ResponseWriter, r *http.
 		return
 	}
 	enabled := os.Getenv("YGGDRASIL_NATIVE_WORKER_LIFECYCLE_ENABLED") == "true"
-	store := repository.CapacityNativeWorkerCommandStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled}}
+	store := repository.CapacityNativeWorkerCommandStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled}, BootstrapFactory: s.nativeWorkerBootstrapFactory}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	// Contexts are Source-written, immutable and private. This indexed check does
@@ -106,7 +112,7 @@ func (s *Server) serveNativeWorkerAttemptRequest(w http.ResponseWriter, r *http.
 	var request nativeWorkerAttemptRequest
 	var received model.CapacityNativeWorkerCommandReceive
 	var err error
-	if action == "read" && r.Method == http.MethodGet {
+	if (action == "read" || action == "bootstrap") && r.Method == http.MethodGet {
 		var q url.Values
 		q, err = url.ParseQuery(r.URL.RawQuery)
 		if err != nil || len(q) != 2 || len(q["binding_name"]) != 1 || len(q["attempt_id"]) != 1 {
@@ -156,6 +162,18 @@ func (s *Server) serveNativeWorkerAttemptRequest(w http.ResponseWriter, r *http.
 	}
 	var out model.CapacityNativeWorkerCommand
 	switch action {
+	case "bootstrap":
+		private, bootstrapErr := store.Bootstrap(ctx, policy, request.AttemptID, caller)
+		if bootstrapErr != nil {
+			mutationHTTPError(w, bootstrapErr)
+			return
+		}
+		defer private.Close()
+		w.Header().Set("Content-Type", "application/json")
+		// This is the only deliberately private serialization port. The opaque
+		// value refuses ordinary JSON/logging and never enters workflow metadata.
+		_ = private.WritePrivateJSON(w)
+		return
 	case "read":
 		out, err = store.Read(ctx, policy, request.AttemptID, caller)
 	case "redeem":

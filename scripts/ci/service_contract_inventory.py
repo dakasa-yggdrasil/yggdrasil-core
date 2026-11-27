@@ -70,24 +70,61 @@ def generate(root):
  for p in sorted((root/'docs/contracts/events/v1').glob('**/*.json')):
   rel=p.relative_to(root).as_posix();schema.append({'schema_key':'.'.join(p.relative_to(root/'docs/contracts/events/v1').with_suffix('').parts),'file':rel,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'classification':'nativequalification-only' if '/native_qualification/' in rel else 'event-schema'})
  return {'sources':sources,'http-routes':routes,'event-emissions':events,'event-schemas':schema,'event-and-queue-constants':constants,'rpc-consumers':consumers,'http-egress':egress,'authentication-dispatch':auth,'http-intercept-dispatch':intercepts,'provider-sdk-operations':sdk,'production-command-operations':commands}
+EVIDENCE_LIMIT=128*1024
+AGGREGATE_LIMIT=2*1024*1024
+SHARD_LIMIT=16
+FACT_LIMIT=4096
+def source_documents(facts,version):
+ if version not in ('v1','v2'):raise ValueError('explicit source evidence version required')
+ if not 1<=len(facts)<=FACT_LIMIT:raise ValueError('complete source fact count outside the published bound')
+ def encode(value):return (json.dumps(value,sort_keys=True,separators=(',',':'))+'\n').encode()
+ if version=='v1':
+  legacy={p:{k:v for k,v in fact.items() if k!='build_constraint' or v!=''} for p,fact in facts.items()}
+  raw=encode({'schema':'core_source_interface_census_v1','records':legacy})
+  if len(raw)>EVIDENCE_LIMIT:raise ValueError('legacy source census exceeds its unchanged file bound')
+  return {'sources.json':raw}
+ documents={};refs=[];part={}
+ def leaf(records):return encode({'schema':'core_source_interface_census_shard_v2','records':records})
+ def flush(records):
+  if not records:return
+  if len(refs)>=SHARD_LIMIT:raise ValueError('source census exceeds its published shard count')
+  raw=leaf(records)
+  if len(raw)>EVIDENCE_LIMIT:raise ValueError('one complete source fact exceeds its published file bound')
+  name=f'shards/sources-{len(refs)+1:04d}.json';documents[name]=raw
+  refs.append({'path':'docs/service-contract/source/'+name,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'records':len(records)})
+ for path,fact in sorted(facts.items()):
+  candidate=dict(part);candidate[path]=fact
+  if part and len(leaf(candidate))>EVIDENCE_LIMIT:flush(part);part={path:fact}
+  else:part=candidate
+ flush(part)
+ index=encode({'schema':'core_source_interface_census_index_v2','total_records':len(facts),'shards':refs})
+ if len(index)>EVIDENCE_LIMIT or len(index)+sum(map(len,documents.values()))>AGGREGATE_LIMIT:raise ValueError('source census exceeds its published aggregate bound')
+ documents['sources.json']=index
+ return documents
 def main():
- a=argparse.ArgumentParser();a.add_argument('--root',type=Path,required=True);a.add_argument('--out',type=Path,required=True);a.add_argument('--verify',action='store_true');x=a.parse_args();result=generate(x.root)
+ a=argparse.ArgumentParser();a.add_argument('--root',type=Path,required=True);a.add_argument('--out',type=Path,required=True);a.add_argument('--verify',action='store_true');a.add_argument('--source-format',choices=('v1','v2'),default='v2');x=a.parse_args();result=generate(x.root)
+ documents=source_documents(result['sources'],x.source_format)
  if not x.verify:x.out.mkdir(parents=True,exist_ok=True)
  failures=[]
+ for name,raw in documents.items():
+  target=x.out/name
+  if target.is_symlink():raise ValueError('source evidence symlink refused')
+  if x.verify:
+   if not target.is_file() or target.read_bytes()!=raw:failures.append(name)
+  else:target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
+ expected=set(documents)
+ for old in (x.out/'shards').glob('sources-[0-9][0-9][0-9][0-9].json'):
+  if old.is_symlink():raise ValueError('source evidence symlink refused')
+  if old.relative_to(x.out).as_posix() not in expected:
+   if x.verify:failures.append(old.relative_to(x.out).as_posix())
+   else:old.unlink()
  for name,data in result.items():
+  if name=='sources':continue
   target=x.out/(name+'.json')
-  # The owning v1 Go publicSourceFact decoder gives an omitted string its
-  # empty default. Encode only that default compactly; every nonempty build
-  # constraint and every path/size/digest remains explicit and unchanged.
-  if name=='sources':data={path:{key:value for key,value in fact.items() if key!='build_constraint' or value!=''} for path,fact in data.items()}
-  # Keep the complete growing Source map within the published doctor's 128KiB bound.
-  options={'separators':(',',':')} if name=='sources' else {'indent':2}
-  envelope={'schema':'core_source_interface_census_v1','records':data}
-  # The owning closed census ABI does not validate its optional descriptive
-  # scope. Omit only that metadata from sources so every complete source fact
-  # remains inside the same bounded read; other evidence envelopes keep it.
-  if name!='sources':envelope['scope']='source facts; no deployed endpoint or runtime authority claimed'
-  raw=json.dumps(envelope,sort_keys=True,**options)+'\n'
+  # Only the complete source map changes packaging. Every other evidence
+  # envelope retains its original bytes, v1 schema and descriptive scope.
+  envelope={'schema':'core_source_interface_census_v1','records':data,'scope':'source facts; no deployed endpoint or runtime authority claimed'}
+  raw=json.dumps(envelope,sort_keys=True,indent=2)+'\n'
   if x.verify:
    if not target.is_file() or target.read_text()!=raw:failures.append(target.name)
   else:target.write_text(raw)

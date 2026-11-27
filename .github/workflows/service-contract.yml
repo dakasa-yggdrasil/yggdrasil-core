@@ -15,8 +15,9 @@ jobs:
     timeout-minutes: 10
     env:
       # Exact reviewed private Commons publication and clean tracked-tree digest.
-      COMMONS_SOURCE_COMMIT: 3ad45d29acd7fd730618959a43e31fd1eea24ddd
-      COMMONS_REVIEWED_TREE_SHA256: f4d5b55f01d765954d8aee968dd366b519ee6ce141b0fd80df66099e998c3a3b
+      COMMONS_SOURCE_COMMIT: 194f4c473f298b3e4ca460a8725601f6f6d87deb
+      COMMONS_REVIEWED_TREE_SHA256: d32c21740070924340b55591a007eb1e9983745bfe58c27a265a23edd2be8592
+      CORE_V1_COMPATIBILITY_SOURCE: 34d66457f393f50989d6fe4f217e03c581083830
       GOMAXPROCS: "2"
       GOMEMLIMIT: 512MiB
       GOWORK: "off"
@@ -67,7 +68,54 @@ jobs:
           grep -q "vcs.revision=$COMMONS_SOURCE_COMMIT" "$RUNNER_TEMP/service-doctor-build.txt"
           grep -q 'vcs.modified=false' "$RUNNER_TEMP/service-doctor-build.txt"
           sha256sum "$RUNNER_TEMP/service-doctor"
+      - name: First qualify the new owning checker against the published complete v1 Core
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CORE_V1_COMPATIBILITY_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags --depth=1 origin "$CORE_V1_COMPATIBILITY_SOURCE"
+          legacy="$RUNNER_TEMP/core-v1-compatibility"
+          git worktree add --detach "$legacy" "$CORE_V1_COMPATIBILITY_SOURCE"
+          python3 - "$legacy" <<'PY_LEGACY'
+          import json, sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          source = root / 'docs/service-contract/source/sources.json'
+          census = json.loads(source.read_bytes())
+          assert census['schema'] == 'core_source_interface_census_v1'
+          assert len(census['records']) == 894 and source.stat().st_size <= 131072
+          PY_LEGACY
+          (cd "$legacy" && "$RUNNER_TEMP/service-doctor" svc doctor --quiet)
+          git worktree remove "$legacy"
       - name: Verify complete source census
         run: python3 scripts/ci/service_contract_inventory.py --root . --out docs/service-contract/source --verify
+      - name: Verify every v2 fact against the unchanged complete source selection
+        run: |
+          python3 - <<'PY_SOURCE_UNION'
+          from pathlib import Path
+          import hashlib, importlib.util, json
+          spec = importlib.util.spec_from_file_location('source_census', 'scripts/ci/service_contract_inventory.py')
+          census = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(census)
+          root = Path('.')
+          expected = census.generate(root)['sources']
+          index = json.loads((root / 'docs/service-contract/source/sources.json').read_bytes())
+          assert index['schema'] == 'core_source_interface_census_index_v2'
+          assert 1 <= len(index['shards']) <= 16
+          actual = {}
+          total = (root / 'docs/service-contract/source/sources.json').stat().st_size
+          for ref in index['shards']:
+              raw = (root / ref['path']).read_bytes()
+              assert len(raw) == ref['bytes'] <= 131072
+              assert hashlib.sha256(raw).hexdigest() == ref['sha256']
+              leaf = json.loads(raw)
+              assert leaf['schema'] == 'core_source_interface_census_shard_v2'
+              assert len(leaf['records']) == ref['records']
+              assert not set(actual).intersection(leaf['records'])
+              actual.update(leaf['records'])
+              total += len(raw)
+          assert actual == expected and len(actual) == index['total_records'] <= 4096
+          assert total <= 2097152
+          PY_SOURCE_UNION
       - name: Verify exact Core service contract
         run: '"$RUNNER_TEMP/service-doctor" svc doctor --quiet'
