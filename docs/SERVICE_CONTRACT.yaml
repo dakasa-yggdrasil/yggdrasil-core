@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "063fc10d28276cbb77320645373676466aa34a40ff3e67f481b562429988d51f"
+      "sha256": "37a99375eff89b883dff8dc8766e9b8379f6d34b29175fd1f7b2bee10fd8f27e"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "063fc10d28276cbb77320645373676466aa34a40ff3e67f481b562429988d51f"
+      "sha256": "37a99375eff89b883dff8dc8766e9b8379f6d34b29175fd1f7b2bee10fd8f27e"
     },
     {
       "evidence": "go.mod",
@@ -113,19 +113,19 @@
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "c795deb1ea112779891f6da64a45a7ec2ec1cd653940bbb3819ca1baf9ac5831"
+      "sha256": "78a53216eff23a6ddc00269d56004b825c7dcaa8856e604dbb7be3864d36ce57"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "d6f1f497a063fd9376bad29139e2a51f1840ffabe49b1d210202fbb2a773d4d9"
+      "sha256": "32d91ca9cfa0d55ff7f9307c89f355de372930c6a06bd7206f59f979b2638eda"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "1ce5fd0302f9497b6e13a3f94e707525a6f6c72daaa47e0a966d6696e4aefdc3"
+      "sha256": "c410d4c8048e9defc0ecfb34784537dd7d9687a66889e9079bc68c11fa94a9b1"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "04a6eb5a098263629941d90b56a02e57ad3588fdb61a1c85cf3573ee93e75fc8"
+    "sha256": "84d6a8599ac481b907d1474ccf3ca6403794ad63957ee2ac591063e3119e708f"
   },
   "unresolved": []
 }

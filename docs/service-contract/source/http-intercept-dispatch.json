@@ -93,6 +93,41 @@
     },
     {
       "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_abort.go",
+      "function": "decodeNativeWorkerAbortReceive",
+      "line": 71,
+      "predicate": "\"\", \"ORIGINAL_TRANSPORT_UNCERTAIN\", \"ORIGINAL_CAPTURE_BOUND_EXCEEDED\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_abort.go",
+      "function": "serveNativeWorkerAbortRequest",
+      "line": 157,
+      "predicate": "\"read\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_abort.go",
+      "function": "serveNativeWorkerAbortRequest",
+      "line": 159,
+      "predicate": "\"redeem\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_abort.go",
+      "function": "serveNativeWorkerAbortRequest",
+      "line": 161,
+      "predicate": "\"receive\""
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_native_worker_abort.go",
+      "function": "serveNativeWorkerAbortRequest",
+      "line": 163,
+      "predicate": "\"reconcile\""
+    },
+    {
+      "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_attempts.go",
       "function": "serveNativeWorkerAttemptRequest",
       "line": 165,
