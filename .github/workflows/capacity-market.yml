@@ -1,0 +1,118 @@
+name: Adaptive capacity market
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  market-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [16, 17]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: market-ci-only
+          POSTGRES_DB: capacity_market
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d capacity_market"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: capacity_market
+      DB_USER: postgres
+      DB_PASSWORD: market-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:market-ci-only@127.0.0.1:5432/capacity_market?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply current production migrations to isolated CI database
+        run: go run ./scripts/goose up
+      - name: Select every authored market contract case
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          files = (
+              'model/capacity_market_test.go',
+              'model/capacity_native_worker_pool_test.go',
+              'internal/capacity/market_test.go',
+              'internal/capacity/planner_market_test.go',
+              'internal/capacity/native_worker_pool_test.go',
+              'repository/capacity_market_postgres_test.go',
+              'manifest/capacity_market_test.go',
+              'controllers/message/rpc_market_numbers_test.go',
+              'controllers/message/workflows_capacity_market_test.go',
+          )
+          expected = []
+          for name in files:
+              path = Path(name)
+              roots = re.findall(r'^func (Test\w+)\(t \*testing\.T\)', path.read_text(), re.M)
+              if not roots:
+                  raise SystemExit('No market test roots: ' + name)
+              package = 'github.com/dakasa-yggdrasil/yggdrasil-core/' + path.parent.as_posix()
+              expected.extend((package, root) for root in roots)
+          if len(set(map(tuple, expected))) != len(expected):
+              raise SystemExit('Duplicate market test roots')
+          evidence = Path(os.environ['RUNNER_TEMP']) / 'capacity-market'
+          evidence.mkdir()
+          (evidence / 'expected.json').write_text(json.dumps(expected))
+          (evidence / 'selector.txt').write_text('^(' + '|'.join(sorted({root for _, root in expected})) + ')$')
+          PY
+      - name: Exercise real reservation concurrency and closed market contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/capacity-market"
+          selector="$(cat "$evidence/selector.txt")"
+          git rev-parse HEAD > "$evidence/source-head.txt"
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./model ./internal/capacity ./repository ./manifest ./controllers/message -run "$selector" 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+      - name: Require every selected root to pass without skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import collections, json, os
+          from pathlib import Path
+          evidence = Path(os.environ['RUNNER_TEMP']) / 'capacity-market'
+          expected = set(map(tuple, json.loads((evidence / 'expected.json').read_text())))
+          events = [json.loads(line) for line in (evidence / 'original.jsonl').read_text().splitlines() if line.strip()]
+          if any(e.get('Action') in ('skip', 'fail') for e in events):
+              raise SystemExit('Market failure or skipped case retained')
+          for action in ('run', 'pass'):
+              actual = collections.Counter((e['Package'], e['Test']) for e in events if e.get('Action') == action and e.get('Test') and '/' not in e['Test'])
+              if set(actual) != expected or any(count != 1 for count in actual.values()):
+                  raise SystemExit('Market root census incomplete: ' + action)
+          if 'WARNING: DATA RACE' in (evidence / 'go-test.stderr').read_text() or any('WARNING: DATA RACE' in e.get('Output', '') for e in events):
+              raise SystemExit('Market data race retained')
+          (evidence / 'census.json').write_text(json.dumps({'roots': len(expected), 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
+          PY
+      - name: Preserve original market CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-market-pg${{ matrix.postgres }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/capacity-market/
+          if-no-files-found: warn

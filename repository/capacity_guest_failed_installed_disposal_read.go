@@ -25,6 +25,11 @@ type FailedInstalledGuestRetirementRead struct {
 // issue another retirement, authorize DELETE or extend the old write deadline.
 func loadFailedInstalledRetirementReadTx(ctx context.Context, tx *sql.Tx, id, preID, admissionID string) (FailedInstalledGuestRetirementRead, error) {
 	var out FailedInstalledGuestRetirementRead
+	// Reentrant when the owning transaction already holds the shared lock.
+	// Acquire before all historical/policy reads, never after FOR SHARE.
+	if err := lockCapacityMarketTx(ctx, tx, model.CapacityPolicySpec{}); err != nil {
+		return out, err
+	}
 	r, _, err := loadFailedInstalledDisposalTx(ctx, tx, admissionID, "claimed")
 	if err != nil {
 		return out, err

@@ -214,6 +214,7 @@ func (f *awsReadUnavailableFixture) receipt() {
 
 func (f *awsReadUnavailableFixture) guard() {
 	f.mock.ExpectBegin()
+	f.mock.ExpectExec(`^SELECT pg_advisory_xact_lock_shared\(hashtextextended\('capacity-market-shared-reservations-v1', 0\)\)$`).WithoutArgs().WillReturnResult(sqlmock.NewResult(0, 1))
 	f.mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 1))
 	f.mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 1))
 	f.mock.ExpectQuery(`SELECT checksum,active FROM public.manifests`).WillReturnRows(sqlmock.NewRows([]string{"checksum", "active"}).AddRow(f.supplier.policy.Checksum, true))

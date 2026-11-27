@@ -282,6 +282,7 @@ func executeIntegrationThroughResolved(
 type integrationExecutionPolicy struct {
 	originalCreateDisposition bool
 	detailFreeErrors          bool
+	exactJSONNumbers          bool
 	safeError                 error
 	allowSensitiveOutput      bool
 	requireExplicitResponse   bool
@@ -384,7 +385,7 @@ func executeIntegrationThroughResolvedWithPolicy(
 		"execute",
 		request,
 		&response,
-		adapterCallPolicy{detailFreeErrors: policy.detailFreeErrors, native: policy.nativeHTTP},
+		adapterCallPolicy{detailFreeErrors: policy.detailFreeErrors, exactJSONNumbers: policy.exactJSONNumbers, native: policy.nativeHTTP},
 	); err != nil {
 		if policy.detailFreeErrors {
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)

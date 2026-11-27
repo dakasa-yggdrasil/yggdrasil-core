@@ -16,6 +16,7 @@ import (
 // present they are never null. qualificationClosedFields refuses this
 // declaration unless it is exactly the type's omitempty member set.
 var qualificationCapacityIntentOptional = map[string]bool{
+	"market_reservation":                        true,
 	"witnessed_unenrolled_expansion_cleanup_id": true,
 	"witnessed_expansion_terminal_reconcile":    true,
 	"failed_unwitnessed_expansion_cleanup_id":   true,

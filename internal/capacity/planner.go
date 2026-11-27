@@ -16,6 +16,15 @@ import (
 
 // ValidatePolicy rejects ambiguous scope, invalid budgets and unsafe numeric inputs.
 func ValidatePolicy(p model.CapacityPolicySpec) error {
+	if p.MarketBinding != nil && p.NativeWorkerPoolBinding == nil {
+		return fmt.Errorf("runtime market requires protected native worker pool observation")
+	}
+	if err := ValidateMarketBinding(p); err != nil {
+		return err
+	}
+	if err := ValidateNativeWorkerPoolBinding(p); err != nil {
+		return err
+	}
 	if err := ValidateGuestContractSuccessor(p); err != nil {
 		return err
 	}
@@ -40,7 +49,12 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 	if len(p.Currency) != 3 || strings.IndexFunc(p.Currency, func(r rune) bool { return r < 'A' || r > 'Z' }) >= 0 {
 		return fmt.Errorf("capacity currency requires an uppercase three-letter code")
 	}
-	if p.Floor < 1 || p.Ceiling < p.Floor || p.Ceiling > 100000 || p.Step < 1 || p.Step > p.Ceiling {
+	minimumFloor := 1
+	if p.NativeWorkerPoolBinding != nil {
+		minimumFloor = 0
+	}
+	observedConstraints := UsesObservedMarketConstraints(p)
+	if p.Floor < minimumFloor || p.Step < 1 || (!observedConstraints && (p.Ceiling < p.Floor || p.Ceiling > 100000 || p.Step > p.Ceiling)) || (observedConstraints && (p.Ceiling != 0 || p.Step > 100000)) {
 		return fmt.Errorf("capacity floor/ceiling/step are invalid")
 	}
 	if p.MaxEvidenceAgeSeconds < 1 || p.MaxEvidenceAgeSeconds > 3600 || p.MinSamples < 1 || p.MinSamples > 100000 || p.MaxSampleGapSeconds < 1 || p.MaxSampleGapSeconds > p.MaxEvidenceAgeSeconds {
@@ -67,7 +81,7 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 		if profile.Name == "" || names[profile.Name] || profile.Provider == "" || profile.Region == "" || profile.ValidationRef == "" || !profilePlanningDeclarations(p, profile) {
 			return fmt.Errorf("capacity profile requires unique name, provider, region and dated validation/quote")
 		}
-		if profile.MinUnits < p.Floor || profile.MaxUnits < profile.MinUnits || profile.MaxUnits > p.Ceiling || profile.UnitMonthlyCostMinor < 0 || profile.UnitMonthlyCostMinor > 1000000000000 || profile.ReadinessSeconds < 0 || profile.ReadinessSeconds > 86400 {
+		if profile.MinUnits < p.Floor || (!observedConstraints && (profile.MaxUnits < profile.MinUnits || profile.MaxUnits > p.Ceiling)) || (observedConstraints && profile.MaxUnits != 0) || profile.UnitMonthlyCostMinor < 0 || profile.UnitMonthlyCostMinor > 1000000000000 || profile.ReadinessSeconds < 0 || profile.ReadinessSeconds > 86400 {
 			return fmt.Errorf("capacity profile budget is invalid")
 		}
 		names[profile.Name] = true
@@ -86,25 +100,84 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 	if err := ValidateGuestNotifyReconcileBinding(p); err != nil {
 		return err
 	}
+	if b := p.NativeWorkerPoolBinding; b != nil {
+		if p.AssessmentBinding != nil || p.HPAExecutionBinding != nil || p.GuestNotifyReconcileBinding != nil || p.GuestRetirementBinding != nil || p.ExecutorPowerBinding != nil || p.ExecutorActivityBinding != nil || len(b.Signals) != len(p.Signals) {
+			return fmt.Errorf("native worker pool requires independent sources and excludes legacy execution authorities")
+		}
+		seen, targets := map[string]bool{}, map[string]bool{}
+		for _, binding := range b.Signals {
+			found := false
+			for _, rule := range p.Signals {
+				if rule.Name == binding.Name {
+					found = true
+				}
+			}
+			key := binding.Adapter.IntegrationInstanceID + "/" + binding.BindingName
+			if !found || seen[binding.Name] || targets[key] || !validObservationAdapter(binding.Adapter) || !ValidDigest(binding.BindingSHA256) || binding.BindingName == "" || len(binding.BindingName) > 128 || strings.TrimSpace(binding.BindingName) != binding.BindingName {
+				return fmt.Errorf("native worker metric source requires exact unique binding")
+			}
+			seen[binding.Name], targets[key] = true, true
+		}
+	}
 	return ValidateBoundAssessmentBinding(p)
 }
 
 // Assess requires every declared signal and a matching current resource snapshot.
 // Profiles change only after sustained pressure; a new profile requires preparation.
 func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous model.CapacityClockState, now time.Time) (model.CapacityDecision, error) {
+	return assess(p, a, previous, now, nil, false)
+}
+
+// AssessWithMarketLedger accepts only the ledger assembled by the repository
+// under the shared quota lock. Runtime prices never change the policy digest.
+func AssessWithMarketLedger(p model.CapacityPolicySpec, a model.CapacityAssessment, previous model.CapacityClockState, ledger MarketLedgerObservation, now time.Time) (model.CapacityDecision, error) {
+	return assess(p, a, previous, now, &ledger, false)
+}
+
+func assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous model.CapacityClockState, now time.Time, ledger *MarketLedgerObservation, evidenceOnly bool) (model.CapacityDecision, error) {
 	if err := ValidatePolicy(p); err != nil {
 		return model.CapacityDecision{}, err
 	}
 	s := a.Snapshot
 	d := model.CapacityDecision{Action: "hold", Reason: "within_envelope", Profile: s.Profile, Units: s.Units, Floor: p.Floor, Clock: previous}
-	if s.TargetIdentity != p.TargetIdentity || s.Owner != p.Owner || s.ResourceUID == "" || s.WorkloadUID == "" || s.WorkloadResourceVersion == "" || s.ResourceVersion == "" || s.Units < 0 || s.Units > p.Ceiling || !fresh(s.ObservedAt, now, p.MaxEvidenceAgeSeconds) {
+	if s.TargetIdentity != p.TargetIdentity || s.Owner != p.Owner || s.ResourceUID == "" || s.WorkloadUID == "" || s.WorkloadResourceVersion == "" || s.ResourceVersion == "" || s.Units < 0 || (!UsesObservedMarketConstraints(p) && s.Units > p.Ceiling) || !fresh(s.ObservedAt, now, p.MaxEvidenceAgeSeconds) {
 		return holdUnknown(d, "snapshot_unavailable"), nil
 	}
 	if !knownProfile(p, s.Profile) {
 		return holdUnknown(d, "current_profile_unknown"), nil
 	}
+	if p.NativeWorkerPoolBinding != nil {
+		derived, err := NativeWorkerPoolSnapshot(p, a.NativeWorkerPool, now)
+		if err != nil || derived != s {
+			return holdUnknown(d, "native_worker_pool_unavailable"), nil
+		}
+	}
+	var marketProfiles []MarketProfile
+	if p.MarketBinding != nil && !evidenceOnly {
+		if ledger == nil {
+			return holdUnknown(d, "market_ledger_unavailable"), nil
+		}
+		var err error
+		marketProfiles, err = EffectiveProfiles(p, a.Market, *ledger, now)
+		if err != nil {
+			return holdUnknown(d, "market_evidence_unavailable"), nil
+		}
+	}
+	selectProfile := func(units int, repair bool) (model.CapacityProfile, bool) {
+		if p.MarketBinding != nil && !evidenceOnly {
+			if units == 0 {
+				for _, candidate := range marketProfiles {
+					if candidate.Profile.Name == s.Profile && candidate.Profile.MinUnits == 0 {
+						return candidate.Profile, true
+					}
+				}
+			}
+			return selectMarketProfile(p, marketProfiles, units, now, repair)
+		}
+		return selectEligibleProfile(p, units, now, repair)
+	}
 	if s.Units < p.Floor {
-		profile, exists := selectEligibleProfile(p, p.Floor, now, true)
+		profile, exists := selectProfile(p.Floor, true)
 		if !exists {
 			d.Reason = "validated_profile_unavailable"
 			return d, nil
@@ -159,14 +232,27 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 	if p.GuestNotifyReconcileBinding != nil {
 		controllerGapSeconds = p.MaxEvidenceAgeSeconds
 	}
-	if previous.PolicyFingerprint != fingerprint || previous.ResourceUID != s.ResourceUID || previous.WorkloadUID != s.WorkloadUID || previous.WorkloadResourceVersion != s.WorkloadResourceVersion || previous.Profile != s.Profile || previous.LastObservedAt.IsZero() || !fresh(previous.LastObservedAt, now, controllerGapSeconds) {
+	workloadChanged := previous.WorkloadResourceVersion != s.WorkloadResourceVersion
+	nativeFingerprint := ""
+	if p.NativeWorkerPoolBinding != nil {
+		var err error
+		nativeFingerprint, err = NativeWorkerPoolSemanticFingerprint(a.NativeWorkerPool)
+		if err != nil {
+			return holdUnknown(d, "native_worker_pool_unavailable"), nil
+		}
+		workloadChanged = previous.NativeWorkerPoolFingerprint != nativeFingerprint
+	}
+	if previous.PolicyFingerprint != fingerprint || previous.ResourceUID != s.ResourceUID || previous.WorkloadUID != s.WorkloadUID || workloadChanged || previous.Profile != s.Profile || previous.LastObservedAt.IsZero() || !fresh(previous.LastObservedAt, now, controllerGapSeconds) {
 		d.Clock.UpSince, d.Clock.DownSince = time.Time{}, time.Time{}
+		d.Clock.EconomicCandidate, d.Clock.EconomicSince = "", nil
 	}
 	d.Clock.PolicyFingerprint, d.Clock.ResourceUID, d.Clock.WorkloadUID, d.Clock.Profile = fingerprint, s.ResourceUID, s.WorkloadUID, s.Profile
 	d.Clock.WorkloadResourceVersion = s.WorkloadResourceVersion
+	d.Clock.NativeWorkerPoolFingerprint = nativeFingerprint
 	d.Clock.LastObservedAt = now
 
 	if up {
+		d.Clock.EconomicCandidate, d.Clock.EconomicSince = "", nil
 		d.Clock.DownSince = time.Time{}
 		if d.Clock.UpSince.IsZero() {
 			d.Clock.UpSince = now
@@ -176,6 +262,7 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 			return d, nil
 		}
 	} else if down {
+		d.Clock.EconomicCandidate, d.Clock.EconomicSince = "", nil
 		d.Clock.UpSince = time.Time{}
 		if d.Clock.DownSince.IsZero() {
 			d.Clock.DownSince = now
@@ -186,6 +273,9 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		}
 	} else {
 		d.Clock.UpSince, d.Clock.DownSince = time.Time{}, time.Time{}
+		if p.MarketBinding != nil && !evidenceOnly {
+			return economicMarketDecision(p, marketProfiles, s, d, now), nil
+		}
 		return d, nil
 	}
 	if !previous.LastActionAt.IsZero() && now.Sub(previous.LastActionAt) < time.Duration(p.CooldownSeconds)*time.Second {
@@ -194,11 +284,20 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 	}
 	var wanted int
 	if up {
-		wanted = min(p.Ceiling, s.Units+p.Step)
+		ceiling := p.Ceiling
+		if UsesObservedMarketConstraints(p) {
+			ceiling = s.Units
+			for _, candidate := range marketProfiles {
+				ceiling = max(ceiling, candidate.Profile.MaxUnits)
+			}
+		}
+		// Subtraction avoids integer overflow and never turns an unavailable
+		// fresh quota into an automatic destructive reduction under pressure.
+		wanted = s.Units + min(p.Step, max(0, ceiling-s.Units))
 	} else {
 		wanted = max(p.Floor, s.Units-p.Step)
 	}
-	profile, exists := cheapestEligible(p, wanted, now)
+	profile, exists := selectProfile(wanted, false)
 	if !exists {
 		d.Reason = "validated_profile_unavailable"
 		return d, nil
@@ -217,6 +316,7 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		d.Action, d.Reason = "drain", "sustained_surplus"
 	}
 	d.ExecutionPermitted = p.ExecutionEnabled
+	d.Clock.EconomicCandidate, d.Clock.EconomicSince = "", nil
 	return d, nil
 }
 
@@ -224,6 +324,7 @@ func holdUnknown(d model.CapacityDecision, reason string) model.CapacityDecision
 	d.Reason = reason
 	d.ExecutionPermitted = false
 	d.Clock.UpSince, d.Clock.DownSince = time.Time{}, time.Time{}
+	d.Clock.EconomicCandidate, d.Clock.EconomicSince = "", nil
 	return d
 }
 
@@ -265,7 +366,7 @@ func Fresh(at, now time.Time, maxAge int) bool { return fresh(at, now, maxAge) }
 
 func ValidateSnapshot(p model.CapacityPolicySpec, a model.CapacityAssessment, now time.Time) error {
 	s := a.Snapshot
-	if s.TargetIdentity != p.TargetIdentity || s.Owner != p.Owner || s.ResourceUID == "" || s.WorkloadUID == "" || s.WorkloadResourceVersion == "" || s.ResourceVersion == "" || s.Units < 0 || s.Units > p.Ceiling || !fresh(s.ObservedAt, now, p.MaxEvidenceAgeSeconds) || !knownProfile(p, s.Profile) {
+	if s.TargetIdentity != p.TargetIdentity || s.Owner != p.Owner || s.ResourceUID == "" || s.WorkloadUID == "" || s.WorkloadResourceVersion == "" || s.ResourceVersion == "" || s.Units < 0 || (!UsesObservedMarketConstraints(p) && s.Units > p.Ceiling) || !fresh(s.ObservedAt, now, p.MaxEvidenceAgeSeconds) || !knownProfile(p, s.Profile) {
 		return fmt.Errorf("capacity snapshot rejected")
 	}
 	return nil
@@ -281,7 +382,7 @@ func ValidateAssessment(p model.CapacityPolicySpec, a model.CapacityAssessment, 
 	// readiness/canary/drain still requires the full strict metric contract.
 	checked := a
 	checked.Snapshot.Units = max(p.Floor, checked.Snapshot.Units)
-	d, err := Assess(p, checked, model.CapacityClockState{}, now)
+	d, err := assess(p, checked, model.CapacityClockState{}, now, nil, true)
 	if err != nil {
 		return err
 	}

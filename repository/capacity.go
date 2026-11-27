@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -23,6 +24,9 @@ const maxCapacityGeneration int64 = 9007199254740991
 // CapacityStore serializes each logical dimension in PostgreSQL. The process
 // gate is explicit and defaults to false in the workflow handler.
 type CapacityStore struct {
+	// MarketObserver is installed only by the protected, server-bound collector.
+	// A wire assessment never supplies provider quotes or pool authority.
+	MarketObserver                      func(context.Context, model.Manifest) (*model.CapacityMarketAssessment, *model.CapacityNativeWorkerPoolObservation, error)
 	OriginalRunID                       uuid.UUID // Private actual dispatch run, never a wire-supplied recovery selector.
 	ExecutorPowerEnabled                bool
 	ExecutorPowerOperator               string
@@ -52,7 +56,12 @@ type CapacityStore struct {
 // Assess persists a proposal, even in shadow mode. An outstanding generation
 // is never overwritten by a concurrent assessment or a policy revision.
 func (s CapacityStore) Assess(ctx context.Context, policy model.Manifest, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
-	intent, err := s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+	var err error
+	assessment, err = s.observeMarketAssessment(ctx, policy, assessment)
+	if err != nil {
+		return model.CapacityIntent{}, err
+	}
+	intent, err := s.transactionWithTx(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time, tx *sql.Tx) (model.CapacityIntent, string, error) {
 		if old != nil && old.FailedUnwitnessedExpansionCleanupID != "" {
 			return *old, "", nil
 		}
@@ -74,7 +83,11 @@ func (s CapacityStore) Assess(ctx context.Context, policy model.Manifest, assess
 				clock = old.Decision.Clock
 			}
 		}
-		decision, err := capacity.Assess(p, assessment, clock, now)
+		ledger, err := s.marketLedgerTx(ctx, tx, policy, p, assessment, now)
+		if err != nil {
+			return model.CapacityIntent{}, "", err
+		}
+		decision, err := capacity.AssessWithMarketLedger(p, assessment, clock, ledger, now)
 		if err != nil {
 			return model.CapacityIntent{}, "", err
 		}
@@ -103,7 +116,12 @@ func (s CapacityStore) Assess(ctx context.Context, policy model.Manifest, assess
 // A previously started generation can only Recover after lease expiry; elapsed
 // time never grants another normal execution lease over an uncertain mutation.
 func (s CapacityStore) Claim(ctx context.Context, policy model.Manifest, generation int64, assessment model.CapacityAssessment) (model.CapacityIntent, error) {
-	return s.transaction(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time) (model.CapacityIntent, string, error) {
+	var err error
+	assessment, err = s.observeMarketAssessment(ctx, policy, assessment)
+	if err != nil {
+		return model.CapacityIntent{}, err
+	}
+	return s.transactionWithTx(ctx, policy, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time, tx *sql.Tx) (model.CapacityIntent, string, error) {
 		if !s.ExecutionEnabled || !p.ExecutionEnabled {
 			return model.CapacityIntent{}, "", ErrCapacityDisabled
 		}
@@ -127,8 +145,12 @@ func (s CapacityStore) Claim(ctx context.Context, policy model.Manifest, generat
 		if !sameCapacityResourceIdentity(old.Assessment.Snapshot, assessment.Snapshot) {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
+		ledger, err := s.marketLedgerTx(ctx, tx, policy, p, assessment, now)
+		if err != nil {
+			return model.CapacityIntent{}, "", err
+		}
 		if old.Phase == "proposed" {
-			if !sameCapacityResources(old.Assessment.Snapshot, assessment.Snapshot) {
+			if !sameCapacityAssessmentResources(p, old.Assessment, assessment) {
 				return model.CapacityIntent{}, "", ErrCapacityConflict
 			}
 			if old.Decision.Reason != "protected_floor_recovery" {
@@ -136,7 +158,7 @@ func (s CapacityStore) Claim(ctx context.Context, policy model.Manifest, generat
 					return model.CapacityIntent{}, "", err
 				}
 			}
-			d, err := capacity.Assess(p, assessment, old.Decision.Clock, now)
+			d, err := capacity.AssessWithMarketLedger(p, assessment, old.Decision.Clock, ledger, now)
 			if err != nil {
 				return model.CapacityIntent{}, "", err
 			}
@@ -147,6 +169,28 @@ func (s CapacityStore) Claim(ctx context.Context, policy model.Manifest, generat
 		next := *old
 		next.Assessment = assessment
 		next.Decision.ExecutionPermitted = capacityProfileCurrent(p, old.Decision, now)
+		if p.MarketBinding != nil {
+			profiles, err := capacity.EffectiveProfiles(p, assessment.Market, ledger, now)
+			if err != nil {
+				return model.CapacityIntent{}, "", err
+			}
+			var reserved *model.CapacityMarketReservation
+			for _, candidate := range profiles {
+				if candidate.Profile.Name != old.Decision.Profile {
+					continue
+				}
+				value, e := capacity.MarketReservationFor(candidate, old.Decision.Units, now)
+				if e != nil {
+					return model.CapacityIntent{}, "", e
+				}
+				reserved = &value
+			}
+			if reserved == nil {
+				return model.CapacityIntent{}, "", ErrCapacityConflict
+			}
+			next.MarketReservation = reserved
+			next.Decision.ExecutionPermitted = true
+		}
 		if next.FencingToken >= maxCapacityGeneration {
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
@@ -414,6 +458,12 @@ func validCapacityExecutor(id string) bool {
 }
 
 func capacityProfileCurrent(p model.CapacityPolicySpec, decision model.CapacityDecision, now time.Time) bool {
+	// Legacy execution has no fresh market/registration dispatch contract.
+	// A market Claim uses its locked offer above; legacy mutation/renew paths
+	// cannot turn the static profile declaration into provider authority.
+	if p.MarketBinding != nil {
+		return false
+	}
 	for _, profile := range p.Profiles {
 		if profile.Name == decision.Profile && profile.MinUnits <= decision.Units && profile.MaxUnits >= decision.Units && capacity.ProfilePlanningCurrent(p, profile, now) {
 			return true
@@ -450,6 +500,8 @@ func redactCapacityLease(intent model.CapacityIntent) model.CapacityIntent {
 
 type capacityMutation func(model.CapacityPolicySpec, *model.CapacityIntent, time.Time) (model.CapacityIntent, string, error)
 
+type capacityMutationTx func(model.CapacityPolicySpec, *model.CapacityIntent, time.Time, *sql.Tx) (model.CapacityIntent, string, error)
+
 func (s CapacityStore) transaction(ctx context.Context, policy model.Manifest, mutate capacityMutation) (model.CapacityIntent, error) {
 	return s.capacityTransaction(ctx, policy, false, mutate)
 }
@@ -459,6 +511,16 @@ func (s CapacityStore) recoveryTransaction(ctx context.Context, policy model.Man
 }
 
 func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Manifest, historical bool, mutate capacityMutation) (model.CapacityIntent, error) {
+	return s.capacityTransactionWithTx(ctx, policy, historical, func(p model.CapacityPolicySpec, old *model.CapacityIntent, now time.Time, _ *sql.Tx) (model.CapacityIntent, string, error) {
+		return mutate(p, old, now)
+	})
+}
+
+func (s CapacityStore) transactionWithTx(ctx context.Context, policy model.Manifest, mutate capacityMutationTx) (model.CapacityIntent, error) {
+	return s.capacityTransactionWithTx(ctx, policy, false, mutate)
+}
+
+func (s CapacityStore) capacityTransactionWithTx(ctx context.Context, policy model.Manifest, historical bool, mutate capacityMutationTx) (model.CapacityIntent, error) {
 	p, err := parseCapacityPolicy(policy)
 	if err != nil {
 		return model.CapacityIntent{}, err
@@ -468,6 +530,11 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 		return model.CapacityIntent{}, err
 	}
 	defer tx.Rollback()
+	// Every market policy shares this lock before its logical-dimension lock.
+	// Account/region/family quota cannot be independently reserved per policy.
+	if err = lockCapacityMarketTx(ctx, tx, p); err != nil {
+		return model.CapacityIntent{}, err
+	}
 	// Advisory lock covers the first insert as well as subsequent row updates.
 	key, _ := json.Marshal([]string{policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension})
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(key)); err != nil {
@@ -535,7 +602,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 			return model.CapacityIntent{}, err
 		}
 	}
-	next, receipt, err := mutate(p, previous, now.UTC())
+	next, receipt, err := mutate(p, previous, now.UTC(), tx)
 	if err != nil {
 		return model.CapacityIntent{}, err
 	}
@@ -675,6 +742,9 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 		return p, fmt.Errorf("capacity requires a stored policy identity")
 	}
 	if err := capacity.ValidateGuestContractSuccessorJSON(policy.Spec); err != nil {
+		return p, err
+	}
+	if err := manifest.ValidateCapacityMarketPolicyJSON(policy.Spec); err != nil {
 		return p, err
 	}
 	if err := json.Unmarshal(policy.Spec, &p); err != nil {

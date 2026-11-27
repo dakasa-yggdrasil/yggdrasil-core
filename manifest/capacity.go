@@ -17,6 +17,9 @@ import (
 
 func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, error) {
 	var spec model.CapacityPolicySpec
+	if err := validateMarketPolicyBindingsJSON(raw); err != nil {
+		return spec, err
+	}
 	if err := capacity.ValidateGuestContractSuccessorJSON(raw); err != nil {
 		return spec, err
 	}
@@ -52,6 +55,52 @@ func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, err
 		return spec, fmt.Errorf("capacity policy must contain one JSON object")
 	}
 	return spec, nil
+}
+
+// ValidateCapacityMarketPolicyJSON checks only the new opt-in bindings. Stored
+// legacy policy consumers keep their original parser and historical contracts.
+func ValidateCapacityMarketPolicyJSON(raw []byte) error {
+	return validateMarketPolicyBindingsJSON(raw)
+}
+
+func validateMarketPolicyBindingsJSON(raw []byte) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	if opening, err := d.Token(); err != nil || opening != json.Delim('{') {
+		return fmt.Errorf("capacity policy object required")
+	}
+	seen := map[string]bool{}
+	for d.More() {
+		key, err := d.Token()
+		name, ok := key.(string)
+		var value json.RawMessage
+		if err != nil || !ok || d.Decode(&value) != nil {
+			return fmt.Errorf("capacity policy member required")
+		}
+		for _, canonical := range []string{"market_binding", "native_worker_pool_binding"} {
+			if !strings.EqualFold(name, canonical) {
+				continue
+			}
+			if name != canonical || seen[canonical] || len(bytes.TrimSpace(value)) == 0 || bytes.TrimSpace(value)[0] != '{' {
+				return fmt.Errorf("canonical nonnull market policy binding required")
+			}
+			seen[canonical] = true
+			if canonical == "market_binding" {
+				var binding model.CapacityMarketBinding
+				if err := capacity.DecodeNativeCapacity(value, &binding); err != nil {
+					return err
+				}
+			} else {
+				var binding model.CapacityNativeWorkerPoolBinding
+				if err := capacity.DecodeNativeCapacity(value, &binding); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if closing, err := d.Token(); err != nil || closing != json.Delim('}') || d.Decode(new(any)) != io.EOF {
+		return fmt.Errorf("one capacity policy object required")
+	}
+	return nil
 }
 
 func validateGuestReconcileJSON(raw []byte) error {

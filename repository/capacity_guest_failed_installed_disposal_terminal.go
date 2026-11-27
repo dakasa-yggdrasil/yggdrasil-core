@@ -187,6 +187,11 @@ func requestedRetirementRecoveryMayReachClaimTx(ctx context.Context, tx *sql.Tx,
 func loadFailedInstalledQuiescentTx(ctx context.Context, tx *sql.Tx, preID, id, activeOriginalRun string) (FailedInstalledGuestDisposal, model.Manifest, model.CapacityPolicySpec, error) {
 	var policy model.Manifest
 	var p model.CapacityPolicySpec
+	// Some callers already own the scope; PostgreSQL's advisory lock is
+	// reentrant. Fresh callers must acquire it before the first policy row.
+	if err := lockCapacityMarketTx(ctx, tx, p); err != nil {
+		return FailedInstalledGuestDisposal{}, policy, p, err
+	}
 	r, _, err := loadFailedInstalledDisposalTx(ctx, tx, id, "quiescent")
 	if err != nil {
 		return r, policy, p, err
