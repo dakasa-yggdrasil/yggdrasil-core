@@ -87,6 +87,7 @@ type CapacityMarketUnavailableProfile struct {
 }
 
 type CapacityMarketProfileQuote struct {
+	Currency                    string                        `json:"currency"`
 	Profile                     string                        `json:"profile"`
 	Provider                    string                        `json:"provider"`
 	Region                      string                        `json:"region"`

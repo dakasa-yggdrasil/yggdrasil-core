@@ -322,7 +322,7 @@ func EffectiveProfiles(p model.CapacityPolicySpec, market *model.CapacityMarketA
 	out := []MarketProfile{}
 	for _, q := range market.Profiles {
 		binding, ok := bindings[q.Profile]
-		if !ok || seen[q.Profile] || q.Provider != binding.Provider || q.Region != binding.Region || q.Adapter != binding.Adapter || q.PhysicalSpecSHA256 != binding.PhysicalSpecSHA256 || q.WorkloadShapeSHA256 != binding.WorkloadShapeSHA256 || q.Architecture != binding.Architecture || q.BillingStopCondition != binding.BillingStopCondition || q.SourceIdentity != binding.QuoteSourceIdentity || !marketSHA.MatchString(q.EvidenceSHA256) {
+		if !ok || seen[q.Profile] || q.Currency != p.Currency || q.Provider != binding.Provider || q.Region != binding.Region || q.Adapter != binding.Adapter || q.PhysicalSpecSHA256 != binding.PhysicalSpecSHA256 || q.WorkloadShapeSHA256 != binding.WorkloadShapeSHA256 || q.Architecture != binding.Architecture || q.BillingStopCondition != binding.BillingStopCondition || q.SourceIdentity != binding.QuoteSourceIdentity || !marketSHA.MatchString(q.EvidenceSHA256) {
 			return nil, fmt.Errorf("market quote outside immutable producer or physical binding")
 		}
 		seen[q.Profile] = true

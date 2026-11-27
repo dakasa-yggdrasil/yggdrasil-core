@@ -36,7 +36,7 @@ Both Assess and Claim refresh through the server-installed observer. Before a cl
 
 ## Cost and availability decisions
 
-Costs use integer currency micros and overflow-safe arithmetic. Every quote explicitly covers compute, disk/storage, public addresses, load balancer, NAT, traffic, backups, control plane, overlap, migration, warm-up, teardown, remaining commitments and tax. A category is known, affirmatively not applicable, or unknown. An unknown upper charge never becomes zero.
+Costs use integer currency micros and overflow-safe arithmetic. Each provider quote declares its own factual currency, which must match the policy and shared assessment; neither the outer policy nor the collector may relabel a USD rate as EUR. No implicit foreign-exchange conversion is supported. Every quote explicitly covers compute, disk/storage, public addresses, load balancer, NAT, traffic, backups, control plane, overlap, migration, warm-up, teardown, remaining commitments and tax. A category is known, affirmatively not applicable, or unknown. An unknown upper charge never becomes zero.
 
 Each known component states its real minimum, billing quantum, rational rate, applicable remaining cycle cap, evidence source and expiry. Provider rates and approved conservative projections are distinct. Economic replacement compares the destination's upper cost with the incumbent's independently justified lower cost over the same units/horizon. It requires absolute and relative savings, its own continuous dwell, minimum residence and cooldown. Fresh quote timestamps do not reset demand holds; missing data or pressure interrupts economic dwell.
 

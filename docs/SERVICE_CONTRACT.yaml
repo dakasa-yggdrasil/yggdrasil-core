@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "3edac12ffcb45e45bd3e919c0d28763ed77f4e1943565ffda596ae3f827f8c88"
+      "sha256": "107441ab1d90890aa53c2c9cb61716904d0d9a4b6bc90d58165e3429324bc992"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -125,7 +125,7 @@
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "5a8081b3a7787849419d3e8898495143560fd5f77a2d57023183f4af8662277a"
+      "sha256": "6e909c41e1ea72207515f3d45dd69ef115f93b2bd0c6c46bd251928b9c7f8d1c"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "2f0f76b7a7781cf5df85f46b66a0cddc31ecf49a38f7dda824012682da6c6995"
+    "sha256": "3ac2d6f668cbededeb45ef6040097a90bec8d82266a297b47ae329a75f9ba80f"
   },
   "unresolved": []
 }

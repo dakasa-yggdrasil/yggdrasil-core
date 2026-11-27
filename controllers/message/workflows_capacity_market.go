@@ -100,7 +100,7 @@ func observeCapacityWorkerMarket(p model.CapacityPolicySpec, read func(model.Cap
 	for _, binding := range p.MarketBinding.Profiles {
 		var quote model.CapacityMarketProfileQuote
 		status, err = read(marketObservationAdapter(binding.Adapter), capacity.ObserveComputeOffer, map[string]any{"binding_name": binding.Profile}, &quote)
-		if err != nil || status != "observed" || quote.Adapter != binding.Adapter || quote.Profile != binding.Profile {
+		if err != nil || status != "observed" || quote.Adapter != binding.Adapter || quote.Profile != binding.Profile || quote.Currency != p.Currency {
 			reason := "collector_contract_refused"
 			if err != nil {
 				reason = "collector_unavailable"

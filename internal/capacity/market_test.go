@@ -42,7 +42,7 @@ func marketFixture(now time.Time) (model.CapacityPolicySpec, *model.CapacityMark
 		p.Profiles = append(p.Profiles, model.CapacityProfile{Name: name, Provider: name, Region: region, MinUnits: 0, MaxUnits: 100, UnitMonthlyCostMinor: int64(100 + i), ReadinessSeconds: 10, ValidationRef: "qualified/same-workload", ValidationValidUntil: now.Add(time.Hour)})
 		binding := model.CapacityMarketProfileBinding{Profile: name, Provider: name, Region: region, Adapter: marketTestAdapter(), PhysicalSpecSHA256: marketTestSHA("d"), WorkloadShapeSHA256: b.WorkloadShapeSHA256, Architecture: "amd64", BillingStopCondition: stop, MaxUnreservedAttempts: 100, QuoteSourceIdentity: "official/" + name, QuotaSourceIdentity: "quota/" + name, RegistrationBindingSHA: marketTestSHA("e"), NetworkBindingSHA: marketTestSHA("f"), QuotaDimensions: []model.CapacityMarketQuotaDimensionBinding{{Scope: "regional", Dimension: "instances", PerUnit: 1}, {Scope: "regional", Dimension: "ipv4", PerUnit: 1}}}
 		b.Profiles = append(b.Profiles, binding)
-		q := model.CapacityMarketProfileQuote{Profile: name, Provider: name, Region: region, Adapter: binding.Adapter, PhysicalSpecSHA256: binding.PhysicalSpecSHA256, WorkloadShapeSHA256: binding.WorkloadShapeSHA256, Architecture: binding.Architecture, BillingStopCondition: stop, WorkloadQualified: true, ValidationRef: p.Profiles[i].ValidationRef, ValidationValidUntil: p.Profiles[i].ValidationValidUntil, QualificationEvidenceSHA256: marketTestSHA("a"), SourceIdentity: binding.QuoteSourceIdentity, EvidenceSHA256: marketTestSHA("b"), ObservedAt: now, ValidUntil: m.ValidUntil, AllInComplete: true, Costs: []model.CapacityMarketCostComponent{}, Quotas: []model.CapacityMarketQuota{}}
+		q := model.CapacityMarketProfileQuote{Currency: "USD", Profile: name, Provider: name, Region: region, Adapter: binding.Adapter, PhysicalSpecSHA256: binding.PhysicalSpecSHA256, WorkloadShapeSHA256: binding.WorkloadShapeSHA256, Architecture: binding.Architecture, BillingStopCondition: stop, WorkloadQualified: true, ValidationRef: p.Profiles[i].ValidationRef, ValidationValidUntil: p.Profiles[i].ValidationValidUntil, QualificationEvidenceSHA256: marketTestSHA("a"), SourceIdentity: binding.QuoteSourceIdentity, EvidenceSHA256: marketTestSHA("b"), ObservedAt: now, ValidUntil: m.ValidUntil, AllInComplete: true, Costs: []model.CapacityMarketCostComponent{}, Quotas: []model.CapacityMarketQuota{}}
 		for _, n := range marketCostNames {
 			q.Costs = append(q.Costs, model.CapacityMarketCostComponent{Name: n, Scope: "per_unit", State: "not_applicable", BillingUnit: "none"})
 		}
@@ -116,6 +116,22 @@ func TestMarketAdaptiveEnvelopeBeyondNinePreservesPolicy(t *testing.T) {
 	}
 	if cost, err := MarketCost(marketFind(t, profiles, "aws"), 0); err != nil || cost != 0 {
 		t.Fatalf("empty worker pool incurred conditional charge: %d %v", cost, err)
+	}
+}
+
+func TestMarketCannotRelabelAProviderCurrency(t *testing.T) {
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+	for _, currency := range []string{"", "EUR"} {
+		p, m, l := marketFixture(now)
+		m.Profiles[1].Currency = currency
+		if _, err := EffectiveProfiles(p, m, l, now); err == nil {
+			t.Fatalf("provider currency %q was silently relabeled USD", currency)
+		}
+	}
+	p, m, l := marketFixture(now)
+	p.Currency, m.Currency = "EUR", "EUR"
+	if _, err := EffectiveProfiles(p, m, l, now); err == nil {
+		t.Fatal("outer policy currency relabeled factual USD provider rates")
 	}
 }
 
