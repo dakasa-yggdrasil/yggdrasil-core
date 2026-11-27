@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "eae4b12c50d63981a112d68c1ddf52050a526daed243ef846492d8969a2c173a"
+    "sha256": "88987292e572870ea9bc9ae6c8ef210b6617be2f51d3638948c805517775add3"
   },
   "unresolved": []
 }
