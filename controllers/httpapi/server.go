@@ -1054,6 +1054,10 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			s.serveOriginalCanaryAuthority(w, r)
 			return
 		}
+		if nativeWorkerNetworkPath(r.URL.Path) {
+			s.serveNativeWorkerNetworkRequest(w, r, s.capacityMutationCredential(r))
+			return
+		}
 		if nativeWorkerAbortPath(r.URL.Path) {
 			s.serveNativeWorkerAbortRequest(w, r, s.capacityMutationCredential(r))
 			return
@@ -1466,6 +1470,7 @@ type Server struct {
 	nativeWorkerBootstrapFactory    repository.NativeWorkerPrivateBootstrapFactory
 	nativeWorkerPhaseRuntime        repository.NativeWorkerPhaseRuntime
 	nativeWorkerAbortRuntime        repository.NativeWorkerAbortRuntime
+	nativeWorkerNetworkRuntime      repository.NativeWorkerNetworkRuntime
 	capacityGuestPrincipals         []capacityGuestPrincipal
 	capacityHostFactoryPrincipals   []hostFactoryPrincipal
 	snapshotHMACSecret              []byte

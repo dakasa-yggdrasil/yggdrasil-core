@@ -180,3 +180,6 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 - [ADR-0138: Bind Native provider RPC to protected mutual TLS clients](0138-bind-native-provider-rpc-to-protected-mutual-tls-clients.md)
 - [ADR-0141: Qualify HCloud births with explicit project and action witnesses](0141-qualify-hcloud-births-with-explicit-project-and-action-witnesses.md)
 - [ADR-0139: Compose Native worker runtime from protected original ports](0139-compose-native-worker-runtime-from-protected-original-ports.md)
+| [0136](0136-close-expired-unredeemed-native-reservations-with-retained-no-send-proof.md) | Close expired unredeemed Native reservations with retained no-send proof | Proposed | 2026-11-27 | Core / immutable unsent closure and shared redemption arbiter |
+
+- [ADR-0140: Bind Native floor network permissions to sealed births and original custody](0140-bind-native-floor-network-permissions-to-sealed-births-and-original-custody.md)
