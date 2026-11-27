@@ -70,7 +70,8 @@ func marketNativeAttemptBirthsTx(ctx context.Context, tx *sql.Tx, policy model.M
 		return err
 	}
 	defer rows.Close()
-	births := map[marketNativeBirthKey]string{}
+	type physicalBirth struct{ nodeUID, providerID string }
+	births := map[marketNativeBirthKey]physicalBirth{}
 	count := 0
 	for rows.Next() {
 		count++
@@ -106,7 +107,7 @@ func marketNativeAttemptBirthsTx(ctx context.Context, tx *sql.Tx, policy model.M
 		if !execMatched {
 			return fmt.Errorf("birth execution adapter differs from exact source binding")
 		}
-		births[marketNativeBirthKey{a.PolicyID.String(), a.Generation, a.FencingToken, a.Profile, b.Physical.ResourceID, b.ExecutionAdapter.ManifestID, digest}] = a.NodeUID
+		births[marketNativeBirthKey{a.PolicyID.String(), a.Generation, a.FencingToken, a.Profile, b.Physical.ResourceID, b.ExecutionAdapter.ManifestID, digest}] = physicalBirth{a.NodeUID, b.Physical.ProviderID}
 	}
 	if err = rows.Err(); err != nil {
 		return err
@@ -118,8 +119,8 @@ func marketNativeAttemptBirthsTx(ctx context.Context, tx *sql.Tx, policy model.M
 	for _, node := range o.Nodes {
 		resource := node.ProviderID[strings.LastIndex(node.ProviderID, "/")+1:]
 		key := marketNativeBirthKey{node.CapacityPolicyID, node.IntentGeneration, node.FencingToken, node.Profile, resource, adapters[node.Profile], node.RegistrationReceiptSHA256}
-		uid, ok := births[key]
-		if !ok || uid != "" && uid != node.NodeUID {
+		birth, ok := births[key]
+		if !ok || birth.providerID != node.ProviderID || birth.nodeUID != "" && birth.nodeUID != node.NodeUID {
 			return fmt.Errorf("Node lacks exact original typed child birth")
 		}
 	}

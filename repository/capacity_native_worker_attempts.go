@@ -245,6 +245,56 @@ func allocateNativeOverlayTx(ctx context.Context, tx *sql.Tx, p model.CapacityNa
 	return "", fmt.Errorf("declared overlay CIDR exhausted; no fake address or unlimited quota")
 }
 
+// The Claim baseline is immutable for this generation. Market reservations
+// already charge only new units; never subtract the baseline a second time or
+// treat the total target as a fresh create budget after a fence rotation.
+func nativeAttemptCreationBudget(parent model.CapacityIntent, now time.Time) (int, error) {
+	r, baseline := parent.MarketReservation, parent.BaselineSnapshot
+	if parent.Phase != "preparing" || (parent.Decision.Action != "expand" && parent.Decision.Action != "prepare") ||
+		r == nil || r.Schema != capacity.CapacityMarketMode || r.Profile != parent.Decision.Profile || r.Units < 1 || parent.Decision.Units < 1 ||
+		baseline.Profile == "" || baseline.Units < 0 || baseline.ObservedAt.IsZero() || baseline.ObservedAt.After(now) ||
+		baseline.TargetIdentity == "" || baseline.Owner == "" || baseline.ResourceUID == "" || baseline.WorkloadUID == "" ||
+		baseline.ResourceVersion == "" || baseline.WorkloadResourceVersion == "" ||
+		parent.Assessment.Market == nil || !parent.Assessment.Market.ValidUntil.After(now) {
+		return 0, ErrCapacityConflict
+	}
+	budget := parent.Decision.Units
+	if parent.Decision.Profile == baseline.Profile {
+		budget -= baseline.Units
+	}
+	if budget < 1 || r.Units != budget {
+		return 0, ErrCapacityConflict
+	}
+	matched := false
+	for _, q := range parent.Assessment.Market.Profiles {
+		if q.Profile != parent.Decision.Profile {
+			continue
+		}
+		if matched || !capacity.ValidDigest(q.EvidenceSHA256) || q.Provider != r.Provider || q.Region != r.Region || q.Currency != r.Currency ||
+			q.EvidenceSHA256 != r.QuoteEvidenceSHA256 || !q.ValidUntil.After(now) || !q.ValidationValidUntil.After(now) {
+			return 0, ErrCapacityConflict
+		}
+		for _, c := range q.Costs {
+			if c.State == "known" && !c.ValidUntil.After(now) {
+				return 0, ErrCapacityConflict
+			}
+		}
+		matched = true
+	}
+	if !matched {
+		return 0, ErrCapacityConflict
+	}
+	return budget, nil
+}
+
+func nativeAttemptGenerationCountTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, generation int64) (int, error) {
+	var count int
+	// Every original child counts, including absent/unknown children and those
+	// owned by an older fence. Recovery cannot replenish consumed create slots.
+	err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_worker_attempts WHERE policy_id=$1 AND generation=$2`, policy.ID, generation).Scan(&count)
+	return count, err
+}
+
 func (s CapacityNativeWorkerStore) Reserve(ctx context.Context, policy model.Manifest, authority model.CapacityNativeWorkerAuthority) (model.CapacityNativeWorkerAttempt, error) {
 	authorized, authErr := s.authenticate(ctx, policy)
 	if authErr != nil {
@@ -257,18 +307,17 @@ func (s CapacityNativeWorkerStore) Reserve(ctx context.Context, policy model.Man
 		if err != nil {
 			return err
 		}
-		if parent.Phase != "preparing" || parent.MarketReservation == nil || parent.MarketReservation.Units < 1 ||
-			(parent.Decision.Action != "expand" && parent.Decision.Action != "prepare") ||
-			parent.Assessment.Market == nil || !parent.Assessment.Market.ValidUntil.After(now) {
-			return ErrCapacityConflict
+		budget, err := nativeAttemptCreationBudget(parent, now)
+		if err != nil {
+			return err
 		}
-		var count int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_worker_attempts WHERE policy_id=$1 AND generation=$2 AND fencing_token=$3`, policy.ID, parent.Generation, parent.FencingToken).Scan(&count); err != nil {
+		count, err := nativeAttemptGenerationCountTx(ctx, tx, policy, parent.Generation)
+		if err != nil {
 			return err
 		}
 		// Even an absent/expired prior child consumes its original send budget.
 		// Another attempt requires a genuinely new parent Claim/reservation.
-		if count >= parent.MarketReservation.Units {
+		if count >= budget {
 			return ErrCapacityConflict
 		}
 		var exec model.CapacityNativeWorkerExecutionProfile
@@ -344,11 +393,22 @@ func (s CapacityNativeWorkerStore) Redeem(ctx context.Context, policy model.Mani
 		if err != nil {
 			return err
 		}
+		budget, err := nativeAttemptCreationBudget(parent, now)
+		if err != nil {
+			return err
+		}
+		count, err := nativeAttemptGenerationCountTx(ctx, tx, policy, parent.Generation)
+		if err != nil {
+			return err
+		}
+		if count < 1 || count > budget {
+			return ErrCapacityConflict
+		}
 		a, launch, err := nativeAttemptLoadTx(ctx, tx, policy, id)
 		if err != nil {
 			return err
 		}
-		if a.State != "reserved" || a.Generation != parent.Generation || a.FencingToken != parent.FencingToken ||
+		if a.State != "reserved" || a.Generation != parent.Generation || a.FencingToken != parent.FencingToken || a.Profile != parent.Decision.Profile ||
 			a.PoolEpoch != p.NativeWorkerPoolBinding.ExpectedPoolEpoch || a.SourceCommit != p.NativeWorkerLifecycleBinding.SourceCommit ||
 			parent.Assessment.Market == nil || !parent.Assessment.Market.ValidUntil.After(now) {
 			return ErrCapacityConflict
