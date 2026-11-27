@@ -175,7 +175,7 @@ func NewNativeWorkerPrivateFactory(c NativeWorkerPrivateFactoryConfig, credentia
 		}
 	}()
 	raw, e := nativePrivateReadFile(c.TemplateFile, 32768, false)
-	if e != nil || nativePrivateSHA(raw) != c.TemplateSHA256 || DecodeNativeCapacity(raw, &f.template) != nil {
+	if e != nil || nativePrivateSHA(raw) != c.TemplateSHA256 || DecodeNativeCapacity(json.RawMessage(raw), &f.template) != nil {
 		return nil, errNativePrivateFactory
 	}
 	canonical, _ := json.Marshal(f.template)
