@@ -50,6 +50,19 @@ See [ADR-0138](../adr/0138-bind-native-provider-rpc-to-protected-mutual-tls-clie
 This composition does not install the provider process, runtime/controller or
 network, and it grants no CREATE or DELETE without its separate original Core
 permit. Existing callers with no protected client context keep their contracts.
+### Expired commands that never granted a send
+
+`CapacityNativeWorkerCommandStore.CloseUnredeemed` closes only an expired
+original command whose Attempt remains revision-one `reserved`, with no birth,
+Node identity or original return. It uses the same mutation/Attempt locks as
+Redeem and retains an immutable private no-send proof before atomically writing
+the normal `absent` state and event. Concurrent calls reuse that proof.
+
+An expired lease, missing ACK or unknown provider response cannot qualify this
+operation after a send was granted. The closed command cannot receive later
+provider custody, replenish the generation's create budget or authorize a
+retry. This protected operation adds no HTTP route or provider action and
+requires the Native and global execution gates. See [ADR-0136](../adr/0136-close-expired-unredeemed-native-reservations-with-retained-no-send-proof.md).
 
 ### Pre-admission failure recovery
 
