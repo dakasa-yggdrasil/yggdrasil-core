@@ -14,6 +14,7 @@ import (
 // Native lifecycle is a separate opt-in authority, never a legacy Guest slot
 // or a write credential added to the read-only market collector.
 type CapacityNativeWorkerLifecycleBinding struct {
+	PhysicalObservers []CapacityNativeWorkerPhysicalReadBinding  `json:"physical_observers,omitempty"`
 	Mode              string                                     `json:"mode"`
 	SourceCommit      string                                     `json:"source_commit"`
 	MaxReadAgeSeconds int                                        `json:"max_read_age_seconds"`
