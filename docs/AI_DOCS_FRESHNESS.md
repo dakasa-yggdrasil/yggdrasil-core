@@ -1,24 +1,23 @@
 # AI docs freshness stamp
 
-The reconciliation gate measures this source diff and actual generated context.
-Earlier reviews remain in Git history and their owning Source/CI receipts.
-
-verified_at_commit: 5164923fbb38f80e7a44a1898808dd409c2b0cd2
-verified_diff_sha256: a3bf7cbb54ce7bf1217af8e9b3cd802cf04a9458ced0a80110708d61585030c1
+verified_at_commit: 50ea03c0fa8ac1402295f31dd3cde696a1ffa285
+verified_diff_sha256: 24f9cf01bb9eb5800d4bda2ea193bc7e432338d08456dbc4fd65b7e6cd5fd52c
 reconciler_schema: 1
 
-Reviewed the exact published Commons dual-reader commit and complete tracked-tree
-SHA256, the unchanged complete source selection, bounded deterministic v2 producer,
-index paths and per-leaf hashes/sizes/counts, and all current service-contract
-references. Static artifact comparison preserves every894 prior source fact after
-normalizing the existing empty build-constraint default. Other10 evidence envelopes
-are byte-identical. Two leaves plus index occupy147040bytes; limits stay128KiB per
-file,2MiB including index,16 leaves and4096 unique facts.
+Reviewed the expired original-command closure against the existing one-send
+arbiter, private command context, original custody, Attempt and event history.
+Only a revision-one reserved child with no physical birth, Node or original
+return can close after its immutable deadline. SQL retains the original
+context and forbids later fabricated custody, substituted final birth fields,
+reopening or history deletion. Schema116 rollback restores the exact schema115
+Attempt guard only when no retained closure exists.
 
-CI first runs the actual new checker against published complete v1 Core34d664,
-then verifies current v2 generation, every union fact and the same complete actual
-source-tree walk. Independent whole bounded review reported no open finding.
-Only static parsing, formatting/diff checks and the released Source/context
-and reconciliation generators ran locally. No local tests/builds/vet or product
-execution occurred. Actual CI remains required; this change activates no provider,
-worker, private factory, capacity owner or production switch.
+The complete Source census preserves all897 inherited facts and adds the one
+new production file, totaling898 under unchanged v2 bounds. Four CI-only
+PostgreSQL roots cover the real clock/deadline, exposed sends, concurrent
+closure, private custody, scope gates and immutable rollback. Required schema
+readback includes the new table. Independent whole review has no open finding.
+
+Only cheap static checks and deterministic Source/reconciliation/context
+generators ran locally. Tests, compilation and analysis remain in CI. This
+Source does not install a controller or perform provider/network/Node actions.
