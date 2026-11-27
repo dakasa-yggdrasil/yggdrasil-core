@@ -58,8 +58,14 @@ func phaseContext(r nativeWorkerPhaseRecord) model.CapacityNativeWorkerPhasePerm
 }
 
 func phaseCaller(r nativeWorkerPhaseRecord, c model.CapacityNativeWorkerPhaseCaller) bool {
-	return c.Adapter == r.Writer.Adapter && c.PrincipalID == r.Writer.PrincipalID &&
+	return nativePhaseWriterScopeMatches(r) && c.Adapter == r.Writer.Adapter && c.PrincipalID == r.Writer.PrincipalID &&
 		c.BindingName == r.Writer.BindingName && c.SourceCommit == r.Writer.SourceCommit
+}
+
+// The pin covers the exact complete reviewed writer inventory bytes, not a
+// re-encoded selected binding or caller-supplied pool identity.
+func nativePhaseWriterScopeMatches(r nativeWorkerPhaseRecord) bool {
+	return nativePhaseSHA.MatchString(r.Writer.ScopeSHA256) && r.Context.WriterScopeSHA256 == r.Writer.ScopeSHA256
 }
 
 func nativePhaseLoadTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, id uuid.UUID) (nativeWorkerPhaseRecord, error) {
@@ -74,7 +80,7 @@ func nativePhaseLoadTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, i
 
 func nativePhaseWriteTx(ctx context.Context, tx *sql.Tx, r nativeWorkerPhaseRecord, now time.Time) error {
 	// Never persist a plaintext bearer or a public mutation permission.
-	if r.Context.SettlementToken != "" || r.Context.MutationPermitted || r.Context.Redeemable {
+	if !nativePhaseWriterScopeMatches(r) || r.Context.SettlementToken != "" || r.Context.MutationPermitted || r.Context.Redeemable {
 		return ErrCapacityConflict
 	}
 	raw, err := json.Marshal(r)
@@ -100,6 +106,7 @@ func nativePhaseWriteTx(ctx context.Context, tx *sql.Tx, r nativeWorkerPhaseReco
 func (s CapacityNativeWorkerPhaseStore) currentPhase(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, r nativeWorkerPhaseRecord, now time.Time) error {
 	if !s.Enabled || s.Runtime == nil || p.NativeWorkerLifecycleBinding == nil || p.NativeWorkerLifecycleBinding.RegistryWriter == nil ||
 		p.NativeWorkerPoolBinding == nil ||
+		!nativePhaseWriterScopeMatches(r) ||
 		r.Writer != *p.NativeWorkerLifecycleBinding.RegistryWriter || policy.Checksum != r.PolicyChecksum ||
 		!r.Context.ExpiresAt.After(now) || r.Context.Epoch != p.NativeWorkerPoolBinding.ExpectedPoolEpoch {
 		return ErrCapacityDisabled
@@ -232,6 +239,7 @@ func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.
 		b := *p.NativeWorkerLifecycleBinding.RegistryWriter
 		c.Schema, c.PermitID, c.AttemptID = model.CapacityNativeWorkerPhasePermitSchema, uuid.New(), attemptID
 		c.BindingName, c.Operation, c.Action = b.BindingName, b.Capability, action
+		c.WriterScopeSHA256 = b.ScopeSHA256
 		c.PolicyID, c.IntentGeneration, c.FencingToken = policy.ID, authority.Generation, authority.FencingToken
 		c.PoolUID, c.Owner, c.Epoch = actual.PoolUID, p.Owner, actual.PoolEpoch
 		c.ExpiresAt = now.Add(time.Duration(b.MaxPermitSeconds) * time.Second)
@@ -277,7 +285,7 @@ func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.
 }
 
 func nativePhaseInsertTx(ctx context.Context, tx *sql.Tx, r nativeWorkerPhaseRecord, namespace string, now time.Time) error {
-	if r.Context.SettlementToken != "" || r.Context.MutationPermitted || r.Context.Redeemable {
+	if !nativePhaseWriterScopeMatches(r) || r.Context.SettlementToken != "" || r.Context.MutationPermitted || r.Context.Redeemable {
 		return ErrCapacityConflict
 	}
 	raw, err := json.Marshal(r)
@@ -501,7 +509,7 @@ func (s CapacityNativeWorkerPhaseStore) ResolvePhaseCaller(ctx context.Context, 
 		return policy, caller, ErrCapacityMutationAuthorization
 	}
 	var r nativeWorkerPhaseRecord
-	if json.Unmarshal(raw, &r) != nil || r.Context.PermitID != id || r.Context.BindingName != binding ||
+	if json.Unmarshal(raw, &r) != nil || !nativePhaseWriterScopeMatches(r) || r.Context.PermitID != id || r.Context.BindingName != binding ||
 		r.Writer.BindingName != binding || r.Writer.PrincipalID != principalID || r.Writer.Adapter.ManifestID != instanceID {
 		return policy, caller, ErrCapacityMutationAuthorization
 	}

@@ -121,7 +121,7 @@ func marketNativeAttemptBirthsTx(ctx context.Context, tx *sql.Tx, policy model.M
 		key := marketNativeBirthKey{node.CapacityPolicyID, node.IntentGeneration, node.FencingToken, node.Profile, resource, adapters[node.Profile], node.RegistrationReceiptSHA256}
 		birth, ok := births[key]
 		if !ok || birth.providerID != node.ProviderID || birth.nodeUID != "" && birth.nodeUID != node.NodeUID {
-			return fmt.Errorf("Node lacks exact original typed child birth")
+			return fmt.Errorf("node lacks exact original typed child birth")
 		}
 	}
 	return nil

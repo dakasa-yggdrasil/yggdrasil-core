@@ -21,6 +21,18 @@ import (
 
 const nativeWorkerPhaseBasePath = "/internal/capacity/native-workers/phase-permits/"
 
+const nativeWorkerPhaseAdapterSourceHeader = "X-Yggdrasil-Adapter-Source-Commit"
+
+var nativeWorkerPhaseSourceCommit = regexp.MustCompile(`^[a-f0-9]{40}$`)
+
+func nativeWorkerPhaseAdapterSource(r *http.Request) (string, bool) {
+	values := r.Header.Values(nativeWorkerPhaseAdapterSourceHeader)
+	if len(values) != 1 || !nativeWorkerPhaseSourceCommit.MatchString(values[0]) {
+		return "", false
+	}
+	return values[0], true
+}
+
 func nativeWorkerPhasePath(p string) bool {
 	return p == strings.TrimSuffix(nativeWorkerPhaseBasePath, "/") || strings.HasPrefix(p, nativeWorkerPhaseBasePath)
 }
@@ -67,11 +79,16 @@ func (s *Server) serveNativeWorkerPhaseRequest(w http.ResponseWriter, r *http.Re
 		writeProblemJSON(w, http.StatusUnauthorized, "capacity.native_worker_unauthorized", "an active exact Native registry writer credential is required")
 		return
 	}
+	adapterSource, sourceOK := nativeWorkerPhaseAdapterSource(r)
+	if !sourceOK {
+		mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
+		return
+	}
 	if r.TLS == nil || path.Clean(r.URL.Path) != r.URL.Path || r.URL.RawPath != "" || !nativeWorkerPhasePath(r.URL.Path) {
 		mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 		return
 	}
-	if !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(source) {
+	if !nativeWorkerPhaseSourceCommit.MatchString(source) {
 		mutationHTTPError(w, repository.ErrCapacityDisabled)
 		return
 	}
@@ -127,6 +144,10 @@ func (s *Server) serveNativeWorkerPhaseRequest(w http.ResponseWriter, r *http.Re
 	policy, caller, err := store.ResolvePhaseCaller(ctx, request.PermitID, request.BindingName, principal.base.principalID, principal.instanceID)
 	if err != nil {
 		mutationHTTPError(w, err)
+		return
+	}
+	if caller.SourceCommit != adapterSource {
+		mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
 		return
 	}
 	var out model.CapacityNativeWorkerPhasePermit
