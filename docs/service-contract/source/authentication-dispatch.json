@@ -40,13 +40,13 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_phases.go",
       "function": "nativeWorkerPhasePath",
-      "line": 36
+      "line": 38
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_native_worker_phases.go",
       "function": "serveNativeWorkerPhaseRequest",
-      "line": 73
+      "line": 143
     },
     {
       "build_constraint": "default",
