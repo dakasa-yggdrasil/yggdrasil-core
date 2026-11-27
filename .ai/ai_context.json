@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-27T12:52:23-03:00",
+  "generated_at": "2026-11-27T13:01:48-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1659,
@@ -11,7 +11,7 @@
     ".yml": 38
   },
   "provenance": {
-    "commit": "c083448b91f99c529c3163c3c3788aa869344b20",
+    "commit": "fb97da5baf5a86bdd901e17989c8c82db02ac4a7",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "a3e188c1c55bbe285649db1d911b02a6d03948a34495fabd1097b07e0bf23121"
+        "sha256": "421a6738d3d34cdef981c8f042aef8378175f04a412ac3718af164afbd8801a9"
       },
       {
         "path": "AGENTS.md",
