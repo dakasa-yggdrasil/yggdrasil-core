@@ -170,26 +170,34 @@ func (s CapacityStore) Claim(ctx context.Context, policy model.Manifest, generat
 		next.Assessment = assessment
 		next.Decision.ExecutionPermitted = capacityProfileCurrent(p, old.Decision, now)
 		if p.MarketBinding != nil {
-			profiles, err := capacity.EffectiveProfiles(p, assessment.Market, ledger, now)
-			if err != nil {
-				return model.CapacityIntent{}, "", err
-			}
-			var reserved *model.CapacityMarketReservation
-			for _, candidate := range profiles {
-				if candidate.Profile.Name != old.Decision.Profile {
-					continue
+			if capacity.IsNativeWorkerRetirementOnly(p, assessment, old.Decision) {
+				// The decision was recomputed above from fresh protected pool and
+				// demand evidence. No new allocation is reserved, and no missing
+				// provider price is recorded as a zero-cost offer.
+				next.MarketReservation = nil
+				next.Decision.ExecutionPermitted = true
+			} else {
+				profiles, err := capacity.EffectiveProfiles(p, assessment.Market, ledger, now)
+				if err != nil {
+					return model.CapacityIntent{}, "", err
 				}
-				value, e := capacity.MarketReservationFor(candidate, old.Decision.Units, now)
-				if e != nil {
-					return model.CapacityIntent{}, "", e
+				var reserved *model.CapacityMarketReservation
+				for _, candidate := range profiles {
+					if candidate.Profile.Name != old.Decision.Profile {
+						continue
+					}
+					value, e := capacity.MarketReservationFor(candidate, old.Decision.Units, now)
+					if e != nil {
+						return model.CapacityIntent{}, "", e
+					}
+					reserved = &value
 				}
-				reserved = &value
+				if reserved == nil {
+					return model.CapacityIntent{}, "", ErrCapacityConflict
+				}
+				next.MarketReservation = reserved
+				next.Decision.ExecutionPermitted = true
 			}
-			if reserved == nil {
-				return model.CapacityIntent{}, "", ErrCapacityConflict
-			}
-			next.MarketReservation = reserved
-			next.Decision.ExecutionPermitted = true
 		}
 		if next.FencingToken >= maxCapacityGeneration {
 			return model.CapacityIntent{}, "", ErrCapacityConflict

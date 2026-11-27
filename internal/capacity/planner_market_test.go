@@ -223,3 +223,97 @@ func TestMarketObservedConstraintsGrowBeyondOldNineWithoutPolicyRewrite(t *testi
 		t.Fatal("zero ceiling sentinel escaped into policy-bounded mode")
 	}
 }
+
+func unavailablePlannerMarket(a *model.CapacityAssessment, now time.Time) {
+	for _, q := range a.Market.Profiles {
+		a.Market.Unavailable = append(a.Market.Unavailable, model.CapacityMarketUnavailableProfile{Profile: q.Profile, Provider: q.Provider, Region: q.Region, Adapter: q.Adapter, Reason: "collector_unavailable", ObservedAt: now})
+	}
+	a.Market.Profiles = []model.CapacityMarketProfileQuote{}
+}
+
+func TestNativeRetirementDoesNotDependOnNewProviderPrices(t *testing.T) {
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+	for _, outage := range []string{"all_collectors_unavailable", "expired_price", "unknown_shared_cost"} {
+		t.Run(outage, func(t *testing.T) {
+			p, a, l := plannerMarketFixture(now, 3)
+			switch outage {
+			case "all_collectors_unavailable":
+				unavailablePlannerMarket(&a, now)
+			case "expired_price":
+				a.Market.ValidUntil = now.Add(-time.Second)
+			case "unknown_shared_cost":
+				l.UnknownReservations = true
+			}
+			a, l = advancePlannerMarket(p, a, l, now, 0)
+			d, err := AssessWithMarketLedger(p, a, model.CapacityClockState{}, l, now)
+			if err != nil || d.Reason != "down_window_pending" {
+				t.Fatalf("retirement did not retain its demand hold: %+v %v", d, err)
+			}
+			at := now.Add(2 * time.Second)
+			a, l = advancePlannerMarket(p, a, l, at, 0)
+			d, err = AssessWithMarketLedger(p, a, d.Clock, l, at)
+			if err != nil || !IsNativeWorkerRetirementOnly(p, a, d) || !d.ExecutionPermitted || d.Units != 2 || d.Profile != a.Snapshot.Profile {
+				t.Fatalf("price outage required a new allocation or blocked owned surplus: %+v %v", d, err)
+			}
+		})
+	}
+}
+
+func TestNativeRetirementStillRequiresFreshDemandPoolLedgerAndCooldown(t *testing.T) {
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+	for _, fault := range []string{"pressure", "missing_signal", "stale_pool", "incomplete_ledger", "wrong_ledger_units", "cooldown", "disabled"} {
+		t.Run(fault, func(t *testing.T) {
+			p, a, l := plannerMarketFixture(now, 3)
+			unavailablePlannerMarket(&a, now)
+			a, l = advancePlannerMarket(p, a, l, now, 0)
+			d, err := AssessWithMarketLedger(p, a, model.CapacityClockState{}, l, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			at := now.Add(2 * time.Second)
+			a, l = advancePlannerMarket(p, a, l, at, 0)
+			switch fault {
+			case "pressure":
+				a, l = advancePlannerMarket(p, a, l, at, 1)
+			case "missing_signal":
+				a.Evidence = nil
+			case "stale_pool":
+				a.NativeWorkerPool.ObservedAt = now.Add(-time.Hour)
+			case "incomplete_ledger":
+				l.Complete = false
+			case "wrong_ledger_units":
+				l.CurrentUnits++
+			case "cooldown":
+				d.Clock.LastActionAt = at
+			case "disabled":
+				p.ExecutionEnabled = false
+			}
+			d, err = AssessWithMarketLedger(p, a, d.Clock, l, at)
+			if err != nil || d.ExecutionPermitted || fault != "disabled" && d.Action != "hold" {
+				t.Fatalf("retirement bypassed its independent safety evidence: %+v %v", d, err)
+			}
+		})
+	}
+}
+
+func TestNativeRetirementPreservesCurrentProfileMinimumWithoutPrices(t *testing.T) {
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+	p, a, l := plannerMarketFixture(now, 1)
+	p.Profiles[0].MinUnits = 1 // Pool floor0 does not erase this profile's floor1.
+	unavailablePlannerMarket(&a, now)
+	a, l = advancePlannerMarket(p, a, l, now, 0)
+	d, err := AssessWithMarketLedger(p, a, model.CapacityClockState{}, l, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := now.Add(2 * time.Second)
+	a, l = advancePlannerMarket(p, a, l, at, 0)
+	d, err = AssessWithMarketLedger(p, a, d.Clock, l, at)
+	if err != nil || d.Action != "hold" || d.Units != 1 || d.Reason != "capacity_boundary" {
+		t.Fatalf("retirement erased the declared current profile floor: %+v %v", d, err)
+	}
+	forged := model.CapacityDecision{Action: "drain", Reason: "sustained_surplus_retirement_only", Profile: a.Snapshot.Profile, Units: 0}
+	if IsNativeWorkerRetirementOnly(p, a, forged) {
+		t.Fatal("retirement classifier accepted units below the current profile minimum")
+	}
+}
