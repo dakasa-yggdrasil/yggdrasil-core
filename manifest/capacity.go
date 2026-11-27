@@ -76,7 +76,7 @@ func validateMarketPolicyBindingsJSON(raw []byte) error {
 		if err != nil || !ok || d.Decode(&value) != nil {
 			return fmt.Errorf("capacity policy member required")
 		}
-		for _, canonical := range []string{"market_binding", "native_worker_pool_binding"} {
+		for _, canonical := range []string{"market_binding", "native_worker_pool_binding", "native_worker_lifecycle_binding"} {
 			if !strings.EqualFold(name, canonical) {
 				continue
 			}
@@ -84,13 +84,19 @@ func validateMarketPolicyBindingsJSON(raw []byte) error {
 				return fmt.Errorf("canonical nonnull market policy binding required")
 			}
 			seen[canonical] = true
-			if canonical == "market_binding" {
+			switch canonical {
+			case "market_binding":
 				var binding model.CapacityMarketBinding
 				if err := capacity.DecodeNativeCapacity(value, &binding); err != nil {
 					return err
 				}
-			} else {
+			case "native_worker_pool_binding":
 				var binding model.CapacityNativeWorkerPoolBinding
+				if err := capacity.DecodeNativeCapacity(value, &binding); err != nil {
+					return err
+				}
+			case "native_worker_lifecycle_binding":
+				var binding model.CapacityNativeWorkerLifecycleBinding
 				if err := capacity.DecodeNativeCapacity(value, &binding); err != nil {
 					return err
 				}

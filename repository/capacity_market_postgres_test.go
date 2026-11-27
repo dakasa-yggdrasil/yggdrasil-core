@@ -32,6 +32,13 @@ type marketRepositoryFixture struct {
 func marketRepoFixture(t *testing.T) marketRepositoryFixture {
 	t.Helper()
 	db, original, a := capacityPostgresFixture(t)
+	return marketRepoFixtureOnDB(t, db, original, a)
+}
+
+// Separate CI databases can reuse the actual fixture without deleting the
+// immutable Native child/return archive during the legacy fixture's cleanup.
+func marketRepoFixtureOnDB(t *testing.T, db *sql.DB, original model.Manifest, a model.CapacityAssessment) marketRepositoryFixture {
+	t.Helper()
 	ctx := context.Background()
 	create := func(kind, name string, spec any) model.Manifest {
 		raw, err := json.Marshal(spec)

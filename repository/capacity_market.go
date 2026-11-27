@@ -112,6 +112,9 @@ func (s CapacityStore) marketLedgerTx(ctx context.Context, tx *sql.Tx, policy mo
 	if err != nil {
 		return ledger, err
 	}
+	if err = appendNativeAttemptReservationsTx(ctx, tx, &ledger, p, covered); err != nil {
+		return ledger, err
+	}
 	// Open legacy/unknown sends can share an account quota. When they cannot
 	// be assigned an already-counted reservation, quantity remains UNKNOWN.
 	rows, err = tx.QueryContext(ctx, `SELECT g.namespace,g.environment,g.domain,g.dimension,g.grant_record,(SELECT m.spec FROM public.manifests m WHERE m.id=(g.grant_record->>'policy_id')::uuid AND m.kind='capacity_policy') FROM public.capacity_mutation_grants g WHERE `+capacityGrantUndisposedSQL+` AND state IN ('issued','redeemed','settled','compensating') LIMIT 100001`)
@@ -324,6 +327,9 @@ type marketNativeBirthKey struct {
 func marketNativeBirthsTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, o *model.CapacityNativeWorkerPoolObservation) error {
 	if len(o.Nodes) == 0 {
 		return nil
+	}
+	if p.NativeWorkerLifecycleBinding != nil {
+		return marketNativeAttemptBirthsTx(ctx, tx, policy, p, o)
 	}
 	// One complete bounded read joins every current Node; no per-Node SQL/WAN.
 	rows, err := tx.QueryContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='confirmed' LIMIT 100001`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension)

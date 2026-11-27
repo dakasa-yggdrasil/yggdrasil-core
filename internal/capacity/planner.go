@@ -16,6 +16,9 @@ import (
 
 // ValidatePolicy rejects ambiguous scope, invalid budgets and unsafe numeric inputs.
 func ValidatePolicy(p model.CapacityPolicySpec) error {
+	if err := ValidateNativeWorkerLifecycleBinding(p); err != nil {
+		return err
+	}
 	if p.MarketBinding != nil && p.NativeWorkerPoolBinding == nil {
 		return fmt.Errorf("runtime market requires protected native worker pool observation")
 	}
