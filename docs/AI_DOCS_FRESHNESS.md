@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 7e4d7329600f99c00bf3f09266ce0cccead62a26
-verified_diff_sha256: b71c90f9d8353579569581e479559f28848ca62279cd3fe7fb7284d7b666cbb6
+verified_at_commit: fbe05c6f1f04210367f45c74a905d70c01bbf454
+verified_diff_sha256: bcf214aa7670432f70b585e380fb7071bc0a842aea3e8cddbf051c48ba6e0304
 reconciler_schema: 1
 
 native_retirement_only_review: Reviewed retirement-only Native planning and fresh claims independently from new-provider pricing. Exact fresh pool/ledger identity, complete surplus evidence, down hold/cooldown and the greater of policy/current-profile minima remain required; new allocation and economic replacement retain current market gates. Independent peer minimum finding closed. The CI PostgreSQL case declares its historical birth fixture explicitly and retains immutable grant history until its isolated database owner is destroyed. Its Claim assertions passed in the initial CI, while the prohibited row cleanup correctly failed and was removed without changing the trigger. The current parent qualification optional-field correction is merged. This does not qualify a real VM/network/admission; no zero-price offer or new allocation reservation is recorded. Source census/public evidence and generated context updated. No local tests/builds or provider actions; CI and separate actual lifecycle execution remain required.
