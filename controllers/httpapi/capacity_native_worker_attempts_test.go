@@ -100,9 +100,36 @@ func TestNativeWorkerAttemptCommandClosedWire(t *testing.T) {
 
 func TestNativeWorkerAttemptRoutesRequireControlAuthority(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodHead} {
-		for _, action := range []string{"read", "redeem", "receive", "unknown"} {
+		for _, action := range []string{"read", "bootstrap", "redeem", "receive", "unknown"} {
 			if (&Server{}).workerRouteAllowed(httptest.NewRequest(method, nativeWorkerAttemptBasePath+action, nil)) {
 				t.Fatal("API worker accepted Native creator callback", method, action)
+			}
+		}
+	}
+}
+
+func TestNativeWorkerPrivateBootstrapHTTPIsDefaultOffAndMachineOnly(t *testing.T) {
+	token := "ci-private-native-bootstrap"
+	s := &Server{capacityMutationPrincipals: capacityMutationTestPrincipal(t, token, uuid.NewString())}
+	if s.nativeWorkerBootstrapFactory != nil {
+		t.Fatal("private bootstrap factory enabled by default")
+	}
+	h := s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("private bootstrap reached an ordinary authenticated route")
+	}))
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodHead} {
+		for _, credential := range []string{"", token} {
+			r := httptest.NewRequest(method, "https://core.example"+nativeWorkerAttemptBasePath+"bootstrap?binding_name=ci-bootstrap&attempt_id="+uuid.NewString(), nil)
+			r.Body = nativePhaseUnreadableBody{t}
+			r.Header.Set(nativeWorkerAdapterSourceHeader, strings.Repeat("e", 40))
+			r.AddCookie(&http.Cookie{Name: authSessionCookieName(), Value: "human-session"})
+			if credential != "" {
+				r.Header.Set("Authorization", "Bearer "+credential)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code >= 200 && w.Code < 300 || strings.Contains(w.Body.String(), token) || w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("unconfigured or unauthorized private bootstrap was exposed", w.Code)
 			}
 		}
 	}
