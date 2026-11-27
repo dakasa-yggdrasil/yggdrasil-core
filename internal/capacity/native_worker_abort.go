@@ -28,7 +28,7 @@ func NativeWorkerAbortObservationValid(p model.CapacityPolicySpec, a model.Capac
 		o.RealmUID != b.RealmUID || o.PoolUID != a.PoolUID || o.PoolUID != b.PoolUID || o.Owner != b.Owner ||
 		o.Epoch != a.PoolEpoch || o.Epoch != b.ExpectedPoolEpoch || o.Registry != a.Registry || o.Registry != b.RegistryRef ||
 		o.RegistryResourceVersion == "" || o.ExecutionScopeSHA256 != a.Execution.ScopeSHA256 ||
-		!fresh(o.ObservedAt, now, p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds) || o.ApplicationPods < 0 {
+		o.ObservedAt.After(now) || !fresh(o.ObservedAt, now, p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds) || o.ApplicationPods < 0 {
 		return false
 	}
 	for _, protected := range b.ProtectedNodes {

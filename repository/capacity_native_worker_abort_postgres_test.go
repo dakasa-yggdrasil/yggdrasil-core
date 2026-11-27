@@ -70,7 +70,7 @@ func (r *abortPGRuntime) ObserveAbort(_ context.Context, _ model.Manifest, a mod
 	}
 	return o, nil
 }
-func abortPGFixture(t *testing.T, ttl int) (marketRepositoryFixture, CapacityNativeWorkerAbortStore, *abortPGRuntime, model.CapacityNativeWorkerAuthority, CapacityNativeWorkerPhaseStore, model.CapacityNativeWorkerPhaseCaller) {
+func nativeWorkerAbortPGFixture(t *testing.T, ttl int) (marketRepositoryFixture, CapacityNativeWorkerAbortStore, *abortPGRuntime, model.CapacityNativeWorkerAuthority, CapacityNativeWorkerPhaseStore, model.CapacityNativeWorkerPhaseCaller) {
 	t.Helper()
 	f, w, provider, authority := nativeAttemptFixture(t, func(p *model.CapacityPolicySpec) {
 		p.NativeWorkerLifecycleBinding.PreAdmissionAbort = &model.CapacityNativeWorkerAbortBinding{Mode: model.CapacityNativeWorkerAbortSchema, Workflow: model.ManifestSelector{Namespace: p.Workflow.Namespace, Name: "cleanup-workers"}, MaxPermitSeconds: ttl}
@@ -137,7 +137,7 @@ func abortPGState(t *testing.T, f marketRepositoryFixture, s CapacityNativeWorke
 }
 
 func TestNativeWorkerAbortPostgresOneSendAndUnknownNodeCannotBecomeZero(t *testing.T) {
-	f, s, r, authority, _, _ := abortPGFixture(t, 30)
+	f, s, r, authority, _, _ := nativeWorkerAbortPGFixture(t, 30)
 	ctx := t.Context()
 	a := abortPGChild(t, f, s, authority)
 	caller := abortPGCaller(a)
@@ -194,7 +194,7 @@ func TestNativeWorkerAbortPostgresOneSendAndUnknownNodeCannotBecomeZero(t *testi
 }
 
 func TestNativeWorkerAbortPostgresLateCustodyAndEveryComponentSettlement(t *testing.T) {
-	f, s, r, authority, _, _ := abortPGFixture(t, 1)
+	f, s, r, authority, _, _ := nativeWorkerAbortPGFixture(t, 1)
 	ctx := t.Context()
 	a := abortPGChild(t, f, s, authority)
 	caller := abortPGCaller(a)
@@ -251,7 +251,7 @@ func TestNativeWorkerAbortPostgresLateCustodyAndEveryComponentSettlement(t *test
 }
 
 func TestNativeWorkerAbortPostgresAdmissionArbiterAndExposedRelease(t *testing.T) {
-	f, s, _, authority, phase, phaseCaller := abortPGFixture(t, 30)
+	f, s, _, authority, phase, phaseCaller := nativeWorkerAbortPGFixture(t, 30)
 	ctx := t.Context()
 	a := abortPGChild(t, f, s, authority)
 	// Register through the existing independent observation path, not a SQL state edit.
@@ -304,7 +304,7 @@ func TestNativeWorkerAbortPostgresAdmissionArbiterAndExposedRelease(t *testing.T
 		}
 	}
 	t.Run("unknown_release_receive_cannot_race_into_cleanup", func(t *testing.T) {
-		f, s, _, authority, phase, caller := abortPGFixture(t, 30)
+		f, s, _, authority, phase, caller := nativeWorkerAbortPGFixture(t, 30)
 		a := abortPGChild(t, f, s, authority)
 		a, err := s.Workers.Record(t.Context(), f.policy, authority, a.ID)
 		if err != nil || a.State != "registered" {
@@ -353,7 +353,7 @@ func TestNativeWorkerAbortPostgresAdmissionArbiterAndExposedRelease(t *testing.T
 }
 
 func TestNativeWorkerAbortPostgresUnknownCreationRemainsCharged(t *testing.T) {
-	f, s, r, authority, _, _ := abortPGFixture(t, 30)
+	f, s, r, authority, _, _ := nativeWorkerAbortPGFixture(t, 30)
 	a, err := s.Workers.Reserve(t.Context(), f.policy, authority)
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +373,7 @@ func TestNativeWorkerAbortPostgresUnknownCreationRemainsCharged(t *testing.T) {
 }
 
 func TestNativeWorkerAbortPostgresScopeDefaultOffAndWorkflowRevocation(t *testing.T) {
-	f, s, _, authority, _, _ := abortPGFixture(t, 30)
+	f, s, _, authority, _, _ := nativeWorkerAbortPGFixture(t, 30)
 	ctx := t.Context()
 	a := abortPGChild(t, f, s, authority)
 	caller := abortPGCaller(a)
