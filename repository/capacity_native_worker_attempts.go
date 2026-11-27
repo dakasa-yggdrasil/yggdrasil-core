@@ -549,6 +549,12 @@ func (s CapacityNativeWorkerStore) Record(ctx context.Context, policy model.Mani
 		}
 		observation = model.CapacityNativeWorkerObservation{State: "unknown", ExecutionScopeSHA256: a.Execution.ScopeSHA256, ObservedAt: time.Now().UTC(), OriginalReturnSHA256: rawSHA}
 	}
+	if observation.HCloudWitness != nil {
+		observation.HCloudWitness = capacity.CloneNativeWorkerHCloudWitness(observation.HCloudWitness)
+		if observation.HCloudWitness == nil {
+			return model.CapacityNativeWorkerAttempt{}, ErrCapacityConflict
+		}
+	}
 	if observation.OriginalReturnSHA256 != rawSHA {
 		return model.CapacityNativeWorkerAttempt{}, ErrCapacityConflict
 	}
@@ -573,6 +579,15 @@ func (s CapacityNativeWorkerStore) Record(ctx context.Context, policy model.Mani
 		}
 		if err = capacity.NativeWorkerObservationValid(current, observation, now, p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds); err != nil {
 			return err
+		}
+		if observation.State != "unknown" && current.Provider == "hetzner" {
+			witness := observation.HCloudWitness
+			if observation.State == "absent" && witness == nil {
+				witness = current.HCloudWitness
+			}
+			if !capacity.NativeWorkerHCloudWitnessBindingValid(p, current, witness) {
+				return ErrCapacityConflict
+			}
 		}
 		for _, protected := range p.NativeWorkerPoolBinding.ProtectedNodes {
 			if observation.IndependentCurrent.ProviderID == protected.ProviderID || observation.NodeUID != "" && observation.NodeUID == protected.NodeUID {
@@ -601,13 +616,30 @@ func (s CapacityNativeWorkerStore) Record(ctx context.Context, policy model.Mani
 		if observation.State == "acknowledged" {
 			physical := observation.IndependentCurrent
 			current.Physical = &physical
+			if current.Provider == "hetzner" {
+				current.HCloudWitness = capacity.CloneNativeWorkerHCloudWitness(observation.HCloudWitness)
+				if !capacity.NativeWorkerHCloudWitnessValid(current, physical, current.HCloudWitness) {
+					return ErrCapacityConflict
+				}
+			}
 			acceptance, _ := json.Marshal(observation.OriginalAcceptance)
 			read, _ := json.Marshal(struct {
 				Physical   model.CapacityNativeWorkerPhysical
 				ObservedAt time.Time
 				RequestID  string
 			}{physical, observation.ObservedAt, observation.IndependentRequestID})
+			if current.HCloudWitness != nil {
+				// This is a safe typed witness, never the privately retained raw
+				// original or its digest. Keep the legacy AWS projection exact.
+				read, _ = json.Marshal(struct {
+					Physical      model.CapacityNativeWorkerPhysical
+					ObservedAt    time.Time
+					RequestID     string
+					HCloudWitness *model.CapacityNativeWorkerHCloudWitness
+				}{physical, observation.ObservedAt, observation.IndependentRequestID, current.HCloudWitness})
+			}
 			birth = &model.CapacityNativeWorkerBirth{Schema: capacity.NativeWorkerLifecycleMode, AttemptID: current.ID, PolicyID: current.PolicyID, Generation: current.Generation, FencingToken: current.FencingToken, PoolUID: current.PoolUID, PoolEpoch: current.PoolEpoch, ExecutionAdapter: current.Execution.Adapter, ExecutionScopeSHA256: current.Execution.ScopeSHA256, LaunchSHA256: current.LaunchSHA256, OriginalAcceptanceSHA256: fmt.Sprintf("%x", sha256.Sum256(acceptance)), IndependentReadSHA256: fmt.Sprintf("%x", sha256.Sum256(read)), OriginalRequestID: observation.OriginalRequestID, IndependentRequestID: observation.IndependentRequestID, Physical: physical}
+			birth.HCloudWitness = capacity.CloneNativeWorkerHCloudWitness(current.HCloudWitness)
 			wire, _ := json.Marshal(birth)
 			current.BirthSHA256 = fmt.Sprintf("%x", sha256.Sum256(wire))
 		}
@@ -715,6 +747,12 @@ func marketNativeAttemptBirthsTx(ctx context.Context, tx *sql.Tx, policy model.M
 			!capacity.ValidDigest(b.OriginalAcceptanceSHA256) || !capacity.ValidDigest(b.IndependentReadSHA256) ||
 			!capacity.NativeWorkerPhysicalValid(a, b.Physical) {
 			return fmt.Errorf("child birth no longer joins immutable launch and SDK acceptance")
+		}
+		if a.Provider == "hetzner" && (a.HCloudWitness == nil || b.HCloudWitness == nil ||
+			a.HCloudWitness.EvidenceSHA256 != b.HCloudWitness.EvidenceSHA256 ||
+			!capacity.NativeWorkerHCloudWitnessValid(a, b.Physical, b.HCloudWitness) ||
+			!capacity.NativeWorkerHCloudWitnessBindingValid(p, a, b.HCloudWitness)) {
+			return fmt.Errorf("HCloud birth no longer joins the complete source-pinned witness")
 		}
 		execMatched := false
 		for _, e := range p.NativeWorkerLifecycleBinding.Profiles {

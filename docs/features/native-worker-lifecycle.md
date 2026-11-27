@@ -160,6 +160,34 @@ qualification. Actual Node UID/provider ID and registry CAS receiving precede
 registration. Bound network, warmup and unexpired qualification receipts precede
 admission. Protected floor identities remain refused.
 
+### HCloud physical witness
+
+Literal provider `hetzner` uses a separate HCloud read DTO and required
+`physical_observers[].hcloud_scope`. The pin names the reviewed logical project,
+token/network-anchor proof kind, anchor ID/creation time and owner label.
+It is compared with actual independent facts, compiled SDK Source, exact catalog
+tuple and the complete reviewed reader inventory digest. It is forbidden on AWS.
+HCloud's `account_id` stays empty; its real create action ID and optional actual
+HTTP request IDs are recorded separately.
+
+The original HTTP 201, canonical base32 launch labels, server lifetime and
+independent server/network/firewall/Primary IP reads must join the immutable
+Launch. The market region is the actual location; System's native provider
+region is the distinct network zone. Complete safe evidence is preserved as
+`hcloud_witness` through the Attempt and immutable Birth. It never includes a
+password, raw original or raw-original hash. A coherent foreign project or
+reader pin still fails the current immutable policy check.
+
+`ReobserveACK` returns only the current physical tuple after a fresh complete
+read. It does not issue a second birth or lifecycle transition. A later protected
+registry/admission observation retains the stored witness and its actual
+original optional HTTP IDs. Generic lifecycle and pre-admission abort guards
+require that witness before accepting HCloud's empty account/IDs. Node, network,
+warmup, admission and all-component absence remain separate proof requirements.
+The provider runtime remains separately gated; SDK complete-read/Close handling
+must be qualified before activation. See
+[ADR-0141](../adr/0141-qualify-hcloud-births-with-explicit-project-and-action-witnesses.md).
+
 ## Registry and quarantine permissions
 
 An optional `registry_writer` pins a separate exact integration instance,

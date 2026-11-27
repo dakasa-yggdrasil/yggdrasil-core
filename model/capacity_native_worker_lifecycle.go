@@ -74,6 +74,7 @@ type CapacityNativeWorkerAttempt struct {
 	GroupFixedCostMicros        int64                                `json:"group_fixed_cost_micros"`
 	Physical                    *CapacityNativeWorkerPhysical        `json:"physical,omitempty"`
 	BirthSHA256                 string                               `json:"birth_sha256,omitempty"`
+	HCloudWitness               *CapacityNativeWorkerHCloudWitness   `json:"hcloud_witness,omitempty"`
 	NodeUID                     string                               `json:"node_uid,omitempty"`
 	CreatedAt                   time.Time                            `json:"created_at"`
 	UpdatedAt                   time.Time                            `json:"updated_at"`
@@ -100,21 +101,22 @@ type CapacityNativeWorkerPhysical struct {
 
 // Birth is neutral registry provenance, not a forged legacy mutation proof.
 type CapacityNativeWorkerBirth struct {
-	Schema                   string                       `json:"schema"`
-	AttemptID                uuid.UUID                    `json:"attempt_id"`
-	PolicyID                 uuid.UUID                    `json:"policy_id"`
-	Generation               int64                        `json:"generation"`
-	FencingToken             int64                        `json:"fencing_token"`
-	PoolUID                  string                       `json:"pool_uid"`
-	PoolEpoch                int64                        `json:"pool_epoch"`
-	ExecutionAdapter         CapacityMarketAdapterBinding `json:"execution_adapter"`
-	ExecutionScopeSHA256     string                       `json:"execution_scope_sha256"`
-	LaunchSHA256             string                       `json:"launch_sha256"`
-	OriginalAcceptanceSHA256 string                       `json:"original_acceptance_sha256"`
-	IndependentReadSHA256    string                       `json:"independent_read_sha256"`
-	OriginalRequestID        string                       `json:"original_request_id"`
-	IndependentRequestID     string                       `json:"independent_request_id"`
-	Physical                 CapacityNativeWorkerPhysical `json:"physical"`
+	Schema                   string                             `json:"schema"`
+	AttemptID                uuid.UUID                          `json:"attempt_id"`
+	PolicyID                 uuid.UUID                          `json:"policy_id"`
+	Generation               int64                              `json:"generation"`
+	FencingToken             int64                              `json:"fencing_token"`
+	PoolUID                  string                             `json:"pool_uid"`
+	PoolEpoch                int64                              `json:"pool_epoch"`
+	ExecutionAdapter         CapacityMarketAdapterBinding       `json:"execution_adapter"`
+	ExecutionScopeSHA256     string                             `json:"execution_scope_sha256"`
+	LaunchSHA256             string                             `json:"launch_sha256"`
+	OriginalAcceptanceSHA256 string                             `json:"original_acceptance_sha256"`
+	IndependentReadSHA256    string                             `json:"independent_read_sha256"`
+	OriginalRequestID        string                             `json:"original_request_id"`
+	IndependentRequestID     string                             `json:"independent_request_id"`
+	Physical                 CapacityNativeWorkerPhysical       `json:"physical"`
+	HCloudWitness            *CapacityNativeWorkerHCloudWitness `json:"hcloud_witness,omitempty"`
 }
 
 // These request operands carry no provider acceptance, prices or observation.
@@ -262,6 +264,7 @@ type CapacityNativeWorkerLaunch struct {
 // Observation can only originate from a protected installed runtime callback,
 // never a workflow/RPC DTO. Concrete SDK/network/registry collectors are separate.
 type CapacityNativeWorkerObservation struct {
+	HCloudWitness                 *CapacityNativeWorkerHCloudWitness `json:"hcloud_witness,omitempty"`
 	State                         string
 	ExecutionScopeSHA256          string
 	ObservedAt                    time.Time

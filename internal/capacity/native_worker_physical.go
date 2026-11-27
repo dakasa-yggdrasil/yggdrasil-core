@@ -37,6 +37,10 @@ func NewNativeWorkerACKQualifier(p model.CapacityPolicySpec, read NativeWorkerPh
 	}
 	q := &NativeWorkerACKQualifier{read: read, source: p.NativeWorkerLifecycleBinding.SourceCommit, maxAge: p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds, bindings: map[string]model.CapacityNativeWorkerPhysicalReadBinding{}}
 	for _, b := range p.NativeWorkerLifecycleBinding.PhysicalObservers {
+		if b.HCloudScope != nil {
+			scope := *b.HCloudScope
+			b.HCloudScope = &scope
+		}
 		q.bindings[b.Profile] = b
 	}
 	return q, nil
@@ -52,6 +56,9 @@ func ValidateNativeWorkerPhysicalObservers(p model.CapacityPolicySpec) error {
 	}
 	seen := map[string]bool{}
 	for _, v := range b.PhysicalObservers {
+		if v.Provider == "hetzner" && !nativeHCloudScopeValid(v.HCloudScope) || v.Provider != "hetzner" && v.HCloudScope != nil {
+			return errNativePhysical
+		}
 		matched := false
 		for _, e := range b.Profiles {
 			if v.Adapter.ManifestID == e.Adapter.ManifestID {
@@ -119,7 +126,13 @@ func nativePhysicalStateValid(a model.CapacityNativeWorkerAttempt, sealed bool) 
 }
 
 func (q *NativeWorkerACKQualifier) qualify(ctx context.Context, a model.CapacityNativeWorkerAttempt, storedLaunch []byte, original model.CapacityNativeWorkerOriginalReturn, sealed bool) (model.CapacityNativeWorkerObservation, error) {
-	if q == nil || q.read == nil || ctx == nil || ctx.Err() != nil || a.Provider != "aws" || a.SourceCommit != q.source || !nativePhysicalStateValid(a, sealed) {
+	if q == nil || q.read == nil || ctx == nil || ctx.Err() != nil || a.SourceCommit != q.source {
+		return model.CapacityNativeWorkerObservation{}, errNativePhysical
+	}
+	if a.Provider == "hetzner" {
+		return q.qualifyHCloud(ctx, a, storedLaunch, original, sealed)
+	}
+	if a.Provider != "aws" || !nativePhysicalStateValid(a, sealed) {
 		return model.CapacityNativeWorkerObservation{}, errNativePhysical
 	}
 	b, exists := q.bindings[a.Profile]
@@ -219,8 +232,11 @@ func PureNativePhysicalQualify(a model.CapacityNativeWorkerAttempt, storedLaunch
 
 // The sealed mode is private to the two fixed public methods, never wire input.
 func pureNativePhysicalQualify(a model.CapacityNativeWorkerAttempt, storedLaunch []byte, original model.CapacityNativeWorkerOriginalReturn, o model.CapacityNativeWorkerPhysicalObservation, b model.CapacityNativeWorkerPhysicalReadBinding, maxAge int, now time.Time, sealed bool) (model.CapacityNativeWorkerObservation, error) {
+	if a.Provider == "hetzner" {
+		return pureNativeHCloudPhysicalQualify(a, storedLaunch, original, o, b, maxAge, now, sealed)
+	}
 	var out model.CapacityNativeWorkerObservation
-	if a.Provider != "aws" || !nativePhysicalStateValid(a, sealed) || b.Profile != a.Profile || b.Provider != a.Provider || b.Region != a.Region || !marketAdapterValid(b.Adapter) || b.Adapter.ManifestID == a.Execution.Adapter.ManifestID || !marketCommit.MatchString(b.SourceCommit) || !marketSHA.MatchString(b.ScopeSHA256) || b.Capability != ObserveNativeWorkerPhysical || maxAge < 1 || maxAge > 300 {
+	if a.Provider != "aws" || o.HCloud != nil || b.HCloudScope != nil || !nativePhysicalStateValid(a, sealed) || b.Profile != a.Profile || b.Provider != a.Provider || b.Region != a.Region || !marketAdapterValid(b.Adapter) || b.Adapter.ManifestID == a.Execution.Adapter.ManifestID || !marketCommit.MatchString(b.SourceCommit) || !marketSHA.MatchString(b.ScopeSHA256) || b.Capability != ObserveNativeWorkerPhysical || maxAge < 1 || maxAge > 300 {
 		return out, errNativePhysical
 	}
 	ack, err := decodeNativeAWSAcceptance(a, original)
