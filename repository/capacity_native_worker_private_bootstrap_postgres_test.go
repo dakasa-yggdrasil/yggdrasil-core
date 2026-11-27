@@ -137,8 +137,8 @@ func TestNativeWorkerPrivateBootstrapRefusesStaleOrFailedPreflightPostgres(t *te
 				caller.SDKSourceCommit = strings.Repeat("d", 40)
 			}
 			out, err := store.Bootstrap(ctx, policy, a.ID, caller)
-			defer out.Close()
 			if err == nil || strings.Contains(err.Error(), "private-fixture") {
+				out.Close()
 				t.Fatal("invalid private response exposed material or succeeded", err)
 			}
 			if (mode == "missing-factory" || mode == "substituted-caller") && calls != 0 {
