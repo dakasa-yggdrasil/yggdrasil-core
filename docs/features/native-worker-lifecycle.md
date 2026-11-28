@@ -191,6 +191,14 @@ region is the distinct network zone. Complete safe evidence is preserved as
 password, raw original or raw-original hash. A coherent foreign project or
 reader pin still fails the current immutable policy check.
 
+Goose118 permits the witness to appear only in the first exact HCloud physical
+ACK after complete private original custody. A deferred constraint requires the
+matching immutable Birth event in that same transaction. It rejects preexisting
+witnesses at INSERT, injection on another provider, and later replacement or
+removal. Any current or archived witness marker blocks rollback; witness-free
+rollback restores the exact schema116 guard. Existing network/abort/unsent
+constraints remain intact.
+
 `ReobserveACK` returns only the current physical tuple after a fresh complete
 read. It does not issue a second birth or lifecycle transition. A later protected
 registry/admission observation retains the stored witness and its actual

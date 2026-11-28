@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
+	"github.com/pressly/goose/v3"
 )
 
 // This fixture drives the real JSONB child/original/birth stores against the
@@ -66,6 +68,158 @@ func nativeHCloudRepositoryFixture(t *testing.T) (marketRepositoryFixture, Capac
 	}
 	runtime := &nativeHCloudRepositoryRuntime{db: db, policy: f.p, pool: f.pool}
 	return f, CapacityNativeWorkerStore{Capacity: f.store, Runtime: runtime, Enabled: true}, runtime, model.CapacityNativeWorkerAuthority{Generation: claimed.Generation, FencingToken: claimed.FencingToken}
+}
+
+func TestNativeHCloudWitnessSQLRequiresOriginalAndAtomicBirthAndKeepsOtherProvidersClosed(t *testing.T) {
+	f, store, runtime, authority := nativeHCloudRepositoryFixture(t)
+	ctx := t.Context()
+	a, err := store.Reserve(ctx, f.policy, authority)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.Redeem(ctx, f.policy, authority, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	a, err = store.Read(ctx, f.policy, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	launch, err := runtime.Prepare(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := runtime.CaptureOriginalReturn(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A pure test fixture supplies a correctly typed witness before DB custody;
+	// that in-memory proof must not suffice for SQL physical receiving.
+	q, err := capacity.NewNativeWorkerACKQualifier(f.p, func(_ context.Context, b model.CapacityNativeWorkerPhysicalReadBinding, request model.CapacityNativeWorkerObservationRequest) (model.CapacityNativeWorkerPhysicalObservation, error) {
+		return runtime.read(a, b, request), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ack, err := q.QualifyACK(ctx, a, launch.PublicJSON, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := a
+	candidate.State, candidate.Revision = "acknowledged", a.Revision+1
+	candidate.Physical, candidate.HCloudWitness = &ack.IndependentCurrent, capacity.CloneNativeWorkerHCloudWitness(ack.HCloudWitness)
+	candidate.BirthSHA256 = strings.Repeat("e", 64) // Negative SQL candidate, never accepted as a real birth.
+	update := func(target model.CapacityNativeWorkerAttempt) error {
+		wire, e := json.Marshal(target)
+		if e != nil {
+			t.Fatal(e)
+		}
+		_, e = f.db.ExecContext(ctx, "UPDATE public.capacity_native_worker_attempts SET state=$2,revision=$3,attempt=$4 WHERE id=$1", target.ID, target.State, target.Revision, wire)
+		return e
+	}
+	firstRefusal := "Native HCloud witness requires the first exact complete physical ACK"
+	if err = update(candidate); err == nil || !strings.Contains(err.Error(), firstRefusal) {
+		t.Fatal("typed witness bypassed missing committed original custody", err)
+	}
+	if _, _, err = persistNativeWorkerOriginal(ctx, f.db, a.ID, raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, fault := range []string{"notACK", "missingWitness", "missingPhysical", "missingBirth", "wrongAttempt", "wrongEpoch", "wrongScope"} {
+		t.Run(fault, func(t *testing.T) {
+			bad := candidate
+			bad.HCloudWitness = capacity.CloneNativeWorkerHCloudWitness(candidate.HCloudWitness)
+			want := firstRefusal
+			switch fault {
+			case "notACK":
+				bad.State = "unknown"
+			case "missingWitness":
+				bad.HCloudWitness = nil
+				want = "Native HCloud ACK requires its complete witness"
+			case "missingPhysical":
+				bad.Physical = nil
+			case "missingBirth":
+				bad.BirthSHA256 = ""
+			case "wrongAttempt":
+				bad.HCloudWitness.AttemptID = uuid.NewString()
+			case "wrongEpoch":
+				bad.HCloudWitness.PoolEpoch++
+			case "wrongScope":
+				bad.HCloudWitness.Reader.ScopeSHA256 = strings.Repeat("f", 64)
+			}
+			if e := update(bad); e == nil || !strings.Contains(e.Error(), want) {
+				t.Fatal("SQL accepted an unbound/incomplete/non-ACK witness", e)
+			}
+		})
+	}
+	if err = update(candidate); err == nil || !strings.Contains(err.Error(), "Native HCloud first ACK requires atomic matching birth event") {
+		t.Fatal("SQL committed a standalone ACK without its immutable birth event", err)
+	}
+	sealed, err := store.Record(ctx, f.policy, authority, a.ID)
+	if err != nil || sealed.State != "acknowledged" {
+		t.Fatal("real atomic Attempt/event/Birth receiving was refused", err)
+	}
+
+	// Deliberately forged SQL injection against the existing generic fixture,
+	// not a positive HCloud witness or a new runtime/provider assertion.
+	generic, genericStore, _, genericAuthority := nativeAttemptFixture(t)
+	other, err := genericStore.Reserve(ctx, generic.policy, genericAuthority)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = genericStore.Redeem(ctx, generic.policy, genericAuthority, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	other, err = genericStore.Read(ctx, generic.policy, other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = genericStore.original(ctx, generic.policy, other); err != nil {
+		t.Fatal(err)
+	}
+	forged := other
+	forged.State, forged.Revision = "acknowledged", other.Revision+1
+	forged.Physical, forged.BirthSHA256 = candidate.Physical, candidate.BirthSHA256
+	forged.HCloudWitness = capacity.CloneNativeWorkerHCloudWitness(candidate.HCloudWitness)
+	w := forged.HCloudWitness
+	w.AttemptID, w.PolicyID, w.PoolUID, w.CoreSourceCommit = other.ID.String(), other.PolicyID.String(), other.PoolUID, other.SourceCommit
+	w.PoolEpoch, w.IntentGeneration, w.FencingToken = other.PoolEpoch, other.Generation, other.FencingToken
+	w.LaunchSHA256, w.Reader.Profile, w.Reader.Region = other.LaunchSHA256, other.Profile, other.Region
+	physical := *candidate.Physical
+	physical.LaunchSHA256 = other.LaunchSHA256
+	forged.Physical = &physical
+	w.Observation.Physical.LaunchSHA256 = other.LaunchSHA256
+	forgedWire, err := json.Marshal(forged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = generic.db.ExecContext(ctx, "UPDATE public.capacity_native_worker_attempts SET state=$2,revision=$3,attempt=$4 WHERE id=$1", forged.ID, forged.State, forged.Revision, forgedWire)
+	if err == nil || !strings.Contains(err.Error(), firstRefusal) {
+		t.Fatal("HCloud witness exception accepted another literal provider", err)
+	}
+	if err = goose.DownTo(generic.db, "../db/migrations", 117); err != nil {
+		t.Fatal("witness-free history could not restore schema116's exact guard", err)
+	}
+	source, err := os.ReadFile("../db/migrations/00116_capacity_native_worker_unsent_closures.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := strings.SplitN(string(source), "CREATE OR REPLACE FUNCTION public.capacity_native_worker_attempt_guard()", 2)[1]
+	expectedBody := strings.SplitN(strings.SplitN(definition, "AS $$", 2)[1], "$$;", 2)[0]
+	var restoredBody string
+	if err = generic.db.QueryRowContext(ctx, "SELECT prosrc FROM pg_proc WHERE oid='public.capacity_native_worker_attempt_guard()'::regprocedure").Scan(&restoredBody); err != nil || restoredBody != expectedBody {
+		t.Fatal("Down changed the original116 transitions/authority/absence guard", err)
+	}
+	if err = goose.Up(generic.db, "../db/migrations"); err != nil {
+		t.Fatal(err)
+	}
+	// Any historical witness marker, including a malformed/null tombstone,
+	// prevents removing the guard even if current Attempt has no witness.
+	_, err = generic.db.ExecContext(ctx, "INSERT INTO public.capacity_native_worker_events(attempt_id,revision,record) VALUES($1,9999,'{\"birth\":{\"hcloud_witness\":null}}'::jsonb)", other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = goose.DownTo(generic.db, "../db/migrations", 117); err == nil || !strings.Contains(err.Error(), "Native HCloud witness history cannot lose its immutable guard") {
+		t.Fatal("event-only witness history lost its guard", err)
+	}
 }
 
 type nativeHCloudRepositoryRuntime struct {
@@ -231,5 +385,64 @@ func TestNativeHCloudBirthWitnessPersistsThroughTheActualPostgresRecord(t *testi
 	}
 	if _, err = store.Redeem(ctx, f.policy, authority, a.ID); err == nil {
 		t.Fatal("persisting a witness reopened the one-shot creation grant")
+	}
+	for _, fault := range []string{"change", "remove", "null", "replace"} {
+		t.Run("immutableSQL/"+fault, func(t *testing.T) {
+			bad := got
+			bad.HCloudWitness = capacity.CloneNativeWorkerHCloudWitness(got.HCloudWitness)
+			bad.State, bad.Revision = "registered", bad.Revision+1
+			switch fault {
+			case "change":
+				bad.HCloudWitness.Acceptance.ActionID = "999"
+			case "remove":
+				bad.HCloudWitness = nil
+			case "replace":
+				bad.HCloudWitness.AttemptID = uuid.NewString()
+			}
+			wire, err := json.Marshal(bad)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fault == "null" {
+				var fields map[string]json.RawMessage
+				if json.Unmarshal(wire, &fields) != nil {
+					t.Fatal("invalid negative fixture")
+				}
+				fields["hcloud_witness"] = json.RawMessage("null")
+				wire, err = json.Marshal(fields)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err = f.db.ExecContext(ctx, "UPDATE public.capacity_native_worker_attempts SET state=$2,revision=$3,attempt=$4 WHERE id=$1", got.ID, bad.State, bad.Revision, wire)
+			if err == nil || !strings.Contains(err.Error(), "Native HCloud witness is immutable after first ACK") {
+				t.Fatal("SQL allowed the complete accepted witness to change or disappear", err)
+			}
+		})
+	}
+	// INSERT is never a physical receiving route, even with a real-looking
+	// copied witness. No row or external authority is created by this refusal.
+	insert := got
+	insert.ID, insert.State, insert.Revision = uuid.New(), "reserved", 1
+	insert.OverlayIPv4 = "10.81.0.200"
+	insert.Physical, insert.BirthSHA256, insert.NodeUID = nil, "", ""
+	insertWire, err := json.Marshal(insert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.db.ExecContext(ctx, "INSERT INTO public.capacity_native_worker_attempts(id,policy_id,namespace,environment,domain,dimension,generation,fencing_token,ipam_scope,overlay_ipv4,state,revision,attempt,launch_wire) SELECT $2,policy_id,namespace,environment,domain,dimension,generation,fencing_token,ipam_scope,$3::inet,'reserved',1,$4,launch_wire FROM public.capacity_native_worker_attempts WHERE id=$1", got.ID, insert.ID, insert.OverlayIPv4, insertWire)
+	if err == nil || !strings.Contains(err.Error(), "Native HCloud witness cannot preexist original creation") {
+		t.Fatal("SQL INSERT manufactured a provider witness", err)
+	}
+	if err = goose.DownTo(f.db, "../db/migrations", 117); err == nil || !strings.Contains(err.Error(), "Native HCloud witness history cannot lose its immutable guard") {
+		t.Fatal("rollback removed the only guard for retained HCloud history", err)
+	}
+	version, err := goose.GetDBVersion(f.db)
+	if err != nil || version != 118 {
+		t.Fatal("refused witness rollback changed the actual schema", version, err)
+	}
+	after, err := store.Read(ctx, f.policy, got.ID)
+	if err != nil || after.State != "acknowledged" || after.BirthSHA256 != got.BirthSHA256 || after.HCloudWitness == nil || after.HCloudWitness.EvidenceSHA256 != got.HCloudWitness.EvidenceSHA256 {
+		t.Fatal("SQL refusals changed the original accepted birth", err)
 	}
 }
