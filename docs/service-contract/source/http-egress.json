@@ -241,6 +241,26 @@
       "line": 113
     },
     {
+      "argument_expression": "ctx, http.MethodGet, target, nil",
+      "argument_sha256": "36af7552ec6fc12463ee029a141ff552012fd687d25e44fb5d9bc6e09dc7472e",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacity/native_worker_guest_read.go",
+      "function": "error",
+      "line": 123
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/capacity/native_worker_guest_read.go",
+      "function": "error",
+      "line": 128
+    },
+    {
       "argument_expression": "ctx, http.MethodPost, c.target, bytes.NewReader(requestBody)",
       "argument_sha256": "6d9f1b951a0719b9b64606bbf58b9f2e7abdbf1ec728741c775a932b89e27e03",
       "build_constraint": "default",
@@ -268,7 +288,7 @@
       "expression_complete": true,
       "file": "internal/capacity/native_worker_private_factory.go",
       "function": "capability",
-      "line": 385
+      "line": 408
     },
     {
       "argument_expression": "ctx, method, target, bytes.NewReader(raw)",

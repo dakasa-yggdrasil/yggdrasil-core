@@ -49,6 +49,7 @@ type NativeWorkerPrivateFactoryConfig struct {
 	ArtifactBucket      string
 	ArtifactKey         string
 	ArtifactVersionID   string
+	GuestRead           *NativeWorkerGuestReadConfig
 }
 
 // NativeWorkerPrivateFactory is a copyable opaque handle. All copies share one
@@ -67,6 +68,7 @@ type nativeWorkerPrivateFactoryState struct {
 	binary            *os.File
 	master, token, ca []byte
 	credentials       aws.CredentialsProvider
+	guest             *nativeGuestReadIdentity
 }
 
 func (NativeWorkerPrivateFactory) String() string     { return "[private Native bootstrap factory]" }
@@ -167,6 +169,13 @@ func NewNativeWorkerPrivateFactory(c NativeWorkerPrivateFactoryConfig, credentia
 		}
 	}
 	c.Execution.ExcludedIPv4 = slices.Clone(c.Execution.ExcludedIPv4)
+	if c.GuestRead != nil {
+		own := *c.GuestRead
+		c.GuestRead = &own
+	}
+	if (c.GuestRead == nil) != (c.Execution.GuestIdentityPolicySHA256 == "") {
+		return nil, errNativePrivateFactory
+	}
 	f := &NativeWorkerPrivateFactory{nativeWorkerPrivateFactoryState: &nativeWorkerPrivateFactoryState{config: c, credentials: credentials}}
 	ok := false
 	defer func() {
@@ -193,6 +202,12 @@ func NewNativeWorkerPrivateFactory(c NativeWorkerPrivateFactoryConfig, credentia
 	}
 	if !nativePrivateCAPEM(f.ca) {
 		return nil, errNativePrivateFactory
+	}
+	if c.GuestRead != nil {
+		f.guest, e = newNativeGuestReadIdentity(*c.GuestRead)
+		if e != nil || f.guest.policySHA256 != c.Execution.GuestIdentityPolicySHA256 || bytes.Equal(f.guest.master, f.master) || !nativeGuestTemplateMatches(f.guest.network, f.template) {
+			return nil, errNativePrivateFactory
+		}
 	}
 	if f.binary, e = nativePrivateOpenExecutable(c); e != nil {
 		return nil, errNativePrivateFactory
@@ -237,6 +252,10 @@ func (f *NativeWorkerPrivateFactory) Close() error {
 		return nil
 	}
 	f.closed = true
+	if f.guest != nil {
+		f.guest.close()
+		f.guest = nil
+	}
 	for _, b := range [][]byte{f.master, f.token, f.ca} {
 		nativePrivateWipe(b)
 	}
@@ -359,6 +378,10 @@ func (f *NativeWorkerPrivateFactory) RenderNativeWorkerPrivateBootstrap(ctx cont
 		Material json.RawMessage `json:"material"`
 		URL      string          `json:"operator_capability_url"`
 	}{"native_worker_private_render_v1", prepared.PublicJSON, a.LaunchSHA256, material, capability})
+	if e == nil && f.guest != nil {
+		nativePrivateWipe(input)
+		input, e = f.guest.renderInput(a, prepared.PublicJSON, material, capability, f.config.SystemBuildSource)
+	}
 	if e != nil || len(input) > 256<<10 {
 		return nil, errNativePrivateFactory
 	}

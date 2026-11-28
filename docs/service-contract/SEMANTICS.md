@@ -1045,3 +1045,12 @@ plus current floor facts and the store's original exposed install endpoint.
 The writer receives only binding_name and retained permit_id for a closed
 action. Store117 alone redeems and archives; the RPC disposition is not effect,
 admission or useful-capacity evidence. Nil guest readiness remains a hold.
+
+Optional guest witness identity remains protected composition. The final
+omitempty Execution guest_identity_policy_sha256 pins public issuance/template
+declarations in immutable Attempt/command custody. Private renderer v2 and
+fixed mTLS GET9445 deliver/read the existing local report without changing
+Launch/material v1. Local report hashes grant neither independent network nor
+warmup proof; the existing full phase verifier and independent producer remain
+mandatory. The new published7007 v2 CLI job is separate from unchanged1304 v1
+qualification, with original Source/hash/size and no-skip/race checks in CI.

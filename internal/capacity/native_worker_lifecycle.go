@@ -62,7 +62,7 @@ func ValidateNativeWorkerLifecycleBinding(p model.CapacityPolicySpec) error {
 			!marketID.MatchString(v.EnsureCapability) || !marketID.MatchString(v.ObserveCapability) || !marketID.MatchString(v.DestroyCapability) ||
 			!marketSHA.MatchString(v.LaunchTemplateSHA256) || !marketCommit.MatchString(v.BootstrapSourceCommit) || !marketID.MatchString(v.IPAMScope) ||
 			err != nil || !cidr.Addr().Is4() || !cidr.Addr().IsPrivate() || cidr != cidr.Masked() || cidr.Bits() < 16 || cidr.Bits() > 30 ||
-			len(v.ExcludedIPv4) == 0 || len(v.ExcludedIPv4) > 64 {
+			len(v.ExcludedIPv4) == 0 || len(v.ExcludedIPv4) > 64 || v.GuestIdentityPolicySHA256 != "" && !marketSHA.MatchString(v.GuestIdentityPolicySHA256) {
 			return fmt.Errorf("exact execution source and private server-owned IPAM required")
 		}
 		excluded := map[string]bool{}

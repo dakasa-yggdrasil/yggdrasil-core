@@ -25,12 +25,13 @@ var errNativeWorkerConcreteRuntime = errors.New("HOLD: protected Native runtime 
 // A failed constructor takes no ownership and closes nothing supplied by its
 // caller. The caller continues to own the database.
 type NativeWorkerConcreteRuntimeConfig struct {
-	DB           *sql.DB
-	Policy       model.Manifest
-	Factories    map[string]*capacity.NativeWorkerPrivateFactory
-	PhaseRead    capacity.NativeWorkerPhaseReadFunc
-	PhysicalRead capacity.NativeWorkerPhysicalReadFunc
-	RPCClients   []*capacity.NativeWorkerRPCClient
+	DB                *sql.DB
+	Policy            model.Manifest
+	Factories         map[string]*capacity.NativeWorkerPrivateFactory
+	PhaseRead         capacity.NativeWorkerPhaseReadFunc
+	PhysicalRead      capacity.NativeWorkerPhysicalReadFunc
+	RPCClients        []*capacity.NativeWorkerRPCClient
+	GuestWitnessProof capacity.NativeWorkerGuestWitnessProofFunc
 }
 
 type NativeWorkerConcreteRuntime struct {
@@ -96,11 +97,10 @@ func newNativeWorkerConcreteRuntime(c NativeWorkerConcreteRuntimeConfig, source 
 		if !pairedProfile || factory == nil || !factory.MatchesExecution(execution) {
 			return nil, errNativeWorkerConcreteRuntime
 		}
+		if execution.GuestIdentityPolicySHA256 != "" && (p.NativeWorkerLifecycleBinding.Network == nil || !factory.MatchesGuestNetwork(p.NativeWorkerLifecycleBinding.Network.Template, p.NativeWorkerLifecycleBinding.Network.TemplateSHA256)) {
+			return nil, errNativeWorkerConcreteRuntime
+		}
 		factories[execution.Profile] = factory
-	}
-	phase, err := capacity.NewNativeWorkerPhaseReader(p, c.PhaseRead, nil)
-	if err != nil {
-		return nil, errNativeWorkerConcreteRuntime
 	}
 	physical, err := capacity.NewNativeWorkerACKQualifier(p, c.PhysicalRead)
 	if err != nil {
@@ -116,6 +116,21 @@ func newNativeWorkerConcreteRuntime(c NativeWorkerConcreteRuntimeConfig, source 
 	policy.Spec = append(json.RawMessage(nil), c.Policy.Spec...)
 	var ownSpec model.CapacityPolicySpec
 	if json.Unmarshal(policy.Spec, &ownSpec) != nil {
+		return nil, errNativeWorkerConcreteRuntime
+	}
+	var readiness capacity.NativeWorkerReadinessFunc
+	guestEnabled := false
+	for _, e := range ownSpec.NativeWorkerLifecycleBinding.Profiles {
+		guestEnabled = guestEnabled || e.GuestIdentityPolicySHA256 != ""
+	}
+	if guestEnabled {
+		readiness = nativeConcreteGuestReadiness(c.DB, policy, source, factories, c.GuestWitnessProof)
+	}
+	if !guestEnabled && c.GuestWitnessProof != nil {
+		return nil, errNativeWorkerConcreteRuntime
+	}
+	phase, err := capacity.NewNativeWorkerPhaseReader(p, c.PhaseRead, readiness)
+	if err != nil {
 		return nil, errNativeWorkerConcreteRuntime
 	}
 	clients := append([]*capacity.NativeWorkerRPCClient(nil), c.RPCClients...)

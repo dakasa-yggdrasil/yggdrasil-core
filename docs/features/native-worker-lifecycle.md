@@ -605,3 +605,39 @@ qualify composition only. They do not replace the independent System kernel
 proof or qualify a production network. No main activation is installed; the
 existing nil readiness port continues to hold admission pending real protected
 guest delivery, end-to-end path/MTU and warmup evidence. See ADR-0145.
+
+## Optional authenticated guest-local witness
+
+A protected factory can opt into private renderer v2 only with an immutable
+Execution.guest_identity_policy_sha256 pin. Legacy omission keeps the entire
+v1 Execution wire, public Launch/schema1 and private material/schema1 unchanged.
+The policy hash pins a separate protected master public proof, issuer CA,
+explicit validity and network-template identity; it contains no private key or
+private bootstrap hash. Server/client keys, serials and EKUs differ per Attempt.
+Dates come from immutable CreatedAt; expired or replaced generations hold and
+cannot silently remint. Retain old protected generations while their Attempts
+remain live. There is no default certificate validity or renewal protocol.
+
+The actual paired System v2 renderer receives closed input containing the
+exact network template and unique guest TLS material on stdin FD0 and returns
+private cloud-init on FD3. The Core client key stays in RAM. The pinned CA must
+authorize both server and client TLS roles before rendering. The fixed zero-body GET on the allocated overlay IPv4:9445 authenticates
+the exact server chain, IP SAN, derived leaf/URI and compiled System Source.
+Original bounded Read, Close and live context are mandatory, with no redirects,
+proxy, replay, caller destination or machine/workflow certificate input.
+
+The concrete runtime installs the existing readiness callback for opted-in
+profiles, with the factory template equal to the policy's actual network
+binding. It checks the complete current Attempt and immutable stored Launch
+before and after the original read. A separate protected Go callback receives
+the authenticated local report and must supply real independent path/network
+and startup evidence. Nil proof remains HOLD and the existing phase verifier
+still checks every Node, Birth, network, qualification, freshness and expiry
+join. No network or warmup field is manufactured from the local report hash.
+
+The new local witness wire remains exact System NetworkWitness, with false
+end-to-end path-MTU, independent-network, scheduling and useful-capacity flags.
+Source-pinned Pod/Service paths, finite DF probes and representative startup
+receiving remain separate requirements. This change installs no controller,
+certificate, process, cloud resource or production configuration. Tests/builds
+run only in CI; no Hetzner load test is performed. See ADR0146.

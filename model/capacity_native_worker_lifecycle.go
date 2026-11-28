@@ -26,19 +26,20 @@ type CapacityNativeWorkerLifecycleBinding struct {
 }
 
 type CapacityNativeWorkerExecutionProfile struct {
-	Profile               string                       `json:"profile"`
-	Adapter               CapacityMarketAdapterBinding `json:"adapter"`
-	BindingName           string                       `json:"binding_name"`
-	SDKSourceCommit       string                       `json:"sdk_source_commit"`
-	ScopeSHA256           string                       `json:"scope_sha256"`
-	EnsureCapability      string                       `json:"ensure_capability"`
-	ObserveCapability     string                       `json:"observe_capability"`
-	DestroyCapability     string                       `json:"destroy_capability"`
-	LaunchTemplateSHA256  string                       `json:"launch_template_sha256"`
-	BootstrapSourceCommit string                       `json:"bootstrap_source_commit"`
-	IPAMScope             string                       `json:"ipam_scope"`
-	OverlayCIDR           string                       `json:"overlay_cidr"`
-	ExcludedIPv4          []string                     `json:"excluded_ipv4"`
+	Profile                   string                       `json:"profile"`
+	Adapter                   CapacityMarketAdapterBinding `json:"adapter"`
+	BindingName               string                       `json:"binding_name"`
+	SDKSourceCommit           string                       `json:"sdk_source_commit"`
+	ScopeSHA256               string                       `json:"scope_sha256"`
+	EnsureCapability          string                       `json:"ensure_capability"`
+	ObserveCapability         string                       `json:"observe_capability"`
+	DestroyCapability         string                       `json:"destroy_capability"`
+	LaunchTemplateSHA256      string                       `json:"launch_template_sha256"`
+	BootstrapSourceCommit     string                       `json:"bootstrap_source_commit"`
+	IPAMScope                 string                       `json:"ipam_scope"`
+	OverlayCIDR               string                       `json:"overlay_cidr"`
+	ExcludedIPv4              []string                     `json:"excluded_ipv4"`
+	GuestIdentityPolicySHA256 string                       `json:"guest_identity_policy_sha256,omitempty"`
 }
 
 // Attempt IDs and addresses are allocated by Core. There is no predeclared
