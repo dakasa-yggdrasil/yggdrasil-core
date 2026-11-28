@@ -1,12 +1,12 @@
 # Documentation freshness
 
-verified_at_commit: 76414f480a58ee674f4602866f76622fdcbcc19b
-verified_diff_sha256: ac0323f4e9b9165b4a06b90f8b137cd84a8eae81dd0af2ad8735523c5300875f
+verified_at_commit: 80733cbd74ceebfadba460c06148a33b96884f80
+verified_diff_sha256: 5de6d0afeb5847716f72588d9206ab24d2289381138c3a398909addca174af7d
 reconciler_schema: 1
 
 Reviewed the final owned Native readiness Controller and inherited Service-NAT
-Source union against freshly fetched Main 75d412ebb924afafeb58245100676446a5213a5c. All72
-Controller paths match their closed partition reviews; the full88-path union
+Source union against freshly fetched Main 75d412ebb924afafeb58245100676446a5213a5c. The Controller and additional real-linter trigger paths match their closed
+partition reviews; the full89-path union
 retains the signed diagnostic and NAT source ancestry. The complete census has
 997 records,34 additions and no omitted Main75 source. All28 contract evidence
 references match exact current files. The standalone four-route private mTLS
@@ -57,3 +57,15 @@ This sibling diagnostic branch receives exactly one isolated NativeReadiness
 workflow dispatch before any normal PR208 successor. It is not a CI pass,
 production correction or permission to skip the later full exact-head PR gates.
 The actual refreshed schema-one plan and ai all both completed with exit0.
+
+The normal PR208 head5de1a4ed passed all56 Controller roots again, but its
+mandatory real golangci-lintv2.1.0 job still failed QF1001 on the remaining
+compound negation. The reviewed next successor expands that equivalent guard
+fully to primitive comparisons; it keeps the same TCP or UDP53 allowlist.
+One added workflow_dispatch trigger exposes the existing unchanged four-job
+mandatory template workflow for a single isolated CI round. Its linter version,
+arguments, permissions, unit/addon/installation steps and assertions are exact
+original bytes. No local linter or test ran. The previous isolated NativeReadiness
+run is not repeated, and no original failed lint is reclassified as a pass.
+This real-linter diagnostic and the full final-head PR checks remain required
+before any merge. The actual refreshed CLI plan and ai all completed with exit0.
