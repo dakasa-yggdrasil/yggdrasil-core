@@ -107,7 +107,7 @@ func (s *Server) serveNativeWorkerNetworkRequest(w http.ResponseWriter, r *http.
 		return
 	}
 	enabled := os.Getenv("YGGDRASIL_NATIVE_WORKER_LIFECYCLE_ENABLED") == "true"
-	store := repository.CapacityNativeWorkerNetworkStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled}, Runtime: s.nativeWorkerNetworkRuntime, AbortRuntime: s.nativeWorkerAbortRuntime, Enabled: enabled && os.Getenv("YGGDRASIL_NATIVE_WORKER_NETWORK_ENABLED") == "true"}
+	store := repository.CapacityNativeWorkerNetworkStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled, Members: s.nativeWorkerMembers}, Runtime: s.nativeWorkerNetworkRuntime, AbortRuntime: s.nativeWorkerAbortRuntime, Enabled: enabled && os.Getenv("YGGDRASIL_NATIVE_WORKER_NETWORK_ENABLED") == "true"}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	if !store.MachineAuthorized(ctx, principal.base.principalID, principal.instanceID, sdk[0], principal.capabilities) {

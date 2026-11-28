@@ -33,17 +33,18 @@ var errNativeGuestRead = errors.New("HOLD: protected Native guest witness is una
 // hash of private bootstrap material. It detects a replaced master at restart.
 // CertificateValiditySeconds has no default and cannot exceed the pinned CA.
 type NativeWorkerGuestReadConfig struct {
-	Version                    string
-	MasterVersion              string
-	MasterFile                 string
-	MasterPublicKey            string
-	IssuerCAFile               string
-	IssuerCASHA256             string
-	IssuerKeyFile              string
-	CertificateValiditySeconds int64
-	NetworkTemplateFile        string
-	NetworkTemplateSHA256      string
-	MaxReadAgeSeconds          int
+	Version                        string
+	MasterVersion                  string
+	MasterFile                     string
+	MasterPublicKey                string
+	IssuerCAFile                   string
+	IssuerCASHA256                 string
+	IssuerKeyFile                  string
+	CertificateValiditySeconds     int64
+	NetworkTemplateFile            string
+	NetworkTemplateSHA256          string
+	MaxReadAgeSeconds              int
+	PlacementBootstrapPolicySHA256 string
 }
 
 type nativeGuestReadIdentity struct {
@@ -74,7 +75,7 @@ func nativeGuestMasterPublic(master []byte, version string) string {
 
 func newNativeGuestReadIdentity(c NativeWorkerGuestReadConfig) (*nativeGuestReadIdentity, error) {
 	if c.Version != NativeWorkerGuestIdentityVersion || !marketID.MatchString(c.MasterVersion) || c.MaxReadAgeSeconds < 1 || c.MaxReadAgeSeconds > 120 || c.CertificateValiditySeconds < 1 || c.CertificateValiditySeconds > math.MaxInt64/int64(time.Second) ||
-		!marketSHA.MatchString(c.IssuerCASHA256) || !marketSHA.MatchString(c.NetworkTemplateSHA256) {
+		!marketSHA.MatchString(c.IssuerCASHA256) || !marketSHA.MatchString(c.NetworkTemplateSHA256) || c.PlacementBootstrapPolicySHA256 != "" && !marketSHA.MatchString(c.PlacementBootstrapPolicySHA256) {
 		return nil, errNativeGuestRead
 	}
 	g := &nativeGuestReadIdentity{config: c}
@@ -158,14 +159,15 @@ func nativeGuestIssuerAllowsBothRoles(issuer *x509.Certificate) bool {
 // The factory requires this value in the already immutable Attempt Execution.
 func NativeWorkerGuestIdentityPolicySHA256(c NativeWorkerGuestReadConfig) string {
 	raw, _ := json.Marshal(struct {
-		Version           string `json:"version"`
-		MasterVersion     string `json:"master_version"`
-		MasterPublicKey   string `json:"master_public_key"`
-		IssuerCA          string `json:"issuer_ca_sha256"`
-		NetworkTemplate   string `json:"network_template_sha256"`
-		ValiditySeconds   int64  `json:"certificate_validity_seconds"`
-		MaxReadAgeSeconds int    `json:"max_read_age_seconds"`
-	}{c.Version, c.MasterVersion, c.MasterPublicKey, c.IssuerCASHA256, c.NetworkTemplateSHA256, c.CertificateValiditySeconds, c.MaxReadAgeSeconds})
+		Version                        string `json:"version"`
+		MasterVersion                  string `json:"master_version"`
+		MasterPublicKey                string `json:"master_public_key"`
+		IssuerCA                       string `json:"issuer_ca_sha256"`
+		NetworkTemplate                string `json:"network_template_sha256"`
+		ValiditySeconds                int64  `json:"certificate_validity_seconds"`
+		MaxReadAgeSeconds              int    `json:"max_read_age_seconds"`
+		PlacementBootstrapPolicySHA256 string `json:"placement_bootstrap_policy_sha256,omitempty"`
+	}{c.Version, c.MasterVersion, c.MasterPublicKey, c.IssuerCASHA256, c.NetworkTemplateSHA256, c.CertificateValiditySeconds, c.MaxReadAgeSeconds, c.PlacementBootstrapPolicySHA256})
 	return nativePrivateSHA(raw)
 }
 

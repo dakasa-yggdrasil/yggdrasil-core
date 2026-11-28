@@ -78,31 +78,48 @@ func nativeGuestWitnessValid(g *nativeGuestReadIdentity, a model.CapacityNativeW
 // validation plus the exact deterministic Attempt/Launch leaf and URI pin.
 func (g *nativeGuestReadIdentity) read(ctx context.Context, a model.CapacityNativeWorkerAttempt, launch []byte, source string, dial func(context.Context, string, string) (net.Conn, error)) (model.CapacityNativeWorkerGuestWitness, error) {
 	var zero model.CapacityNativeWorkerGuestWitness
-	if !nativeRPCDeadline(ctx) {
+	raw, err := g.readOriginal(ctx, a, launch, source, NativeWorkerGuestWitnessPath, dial)
+	if err != nil {
 		return zero, errNativeGuestRead
+	}
+	var out model.CapacityNativeWorkerGuestWitness
+	var l nativePrivateLaunch
+	if nativeWorkerNetworkRPCDecode(raw, &out) != nil || DecodeNativeCapacity(json.RawMessage(launch), &l) != nil || !nativeGuestWitnessValid(g, a, l, out, time.Now().UTC()) {
+		return zero, errNativeGuestRead
+	}
+	// The DTO owns slices independent of any transport buffer or reusable value.
+	out.Routes = slices.Clone(out.Routes)
+	out.DNSAnswerIPv4 = slices.Clone(out.DNSAnswerIPv4)
+	return out, nil
+}
+
+// Shared fixed-path readonly transport; no new key, destination or retry.
+func (g *nativeGuestReadIdentity) readOriginal(ctx context.Context, a model.CapacityNativeWorkerAttempt, launch []byte, source, path string, dial func(context.Context, string, string) (net.Conn, error)) ([]byte, error) {
+	if g == nil || !nativeRPCDeadline(ctx) || (path != NativeWorkerGuestWitnessPath && (path != model.CapacityNativeWorkerPlacementBootstrapPath || !marketSHA.MatchString(g.config.PlacementBootstrapPolicySHA256))) {
+		return nil, errNativeGuestRead
 	}
 	cert, err := g.derive(a, launch, source)
 	if err != nil {
-		return zero, errNativeGuestRead
+		return nil, errNativeGuestRead
 	}
 	defer cert.close()
 	clientCert, err := g.deriveClient(a, launch, source)
 	if err != nil {
-		return zero, errNativeGuestRead
+		return nil, errNativeGuestRead
 	}
 	defer clientCert.close()
 	pair, err := tls.X509KeyPair(clientCert.certificatePEM, clientCert.privateKeyPEM)
 	if err != nil {
-		return zero, errNativeGuestRead
+		return nil, errNativeGuestRead
 	}
 	clientKey, ok := pair.PrivateKey.(ed25519.PrivateKey)
 	if !ok {
-		return zero, errNativeGuestRead
+		return nil, errNativeGuestRead
 	}
 	defer nativePrivateWipe(clientKey)
 	now := time.Now().UTC()
 	if !now.Before(cert.notAfter) {
-		return zero, errNativeGuestRead
+		return nil, errNativeGuestRead
 	}
 	pool := x509.NewCertPool()
 	pool.AddCert(g.issuer)
@@ -119,26 +136,18 @@ func (g *nativeGuestReadIdentity) read(ctx context.Context, a model.CapacityNati
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return errNativeGuestRead }}
 	defer client.CloseIdleConnections()
-	target := "https://" + net.JoinHostPort(a.OverlayIPv4, nativeWorkerGuestWitnessPort) + NativeWorkerGuestWitnessPath
+	target := "https://" + net.JoinHostPort(a.OverlayIPv4, nativeWorkerGuestWitnessPort) + path
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return zero, errNativeGuestRead
+		return nil, errNativeGuestRead
 	}
 	request.GetBody = nil
 	response, callErr := client.Do(request)
 	raw, err := nativeGuestOriginalRead(ctx, response, callErr, target, source)
 	if err != nil {
-		return zero, errNativeGuestRead
+		return nil, errNativeGuestRead
 	}
-	var out model.CapacityNativeWorkerGuestWitness
-	var l nativePrivateLaunch
-	if nativeWorkerNetworkRPCDecode(raw, &out) != nil || DecodeNativeCapacity(json.RawMessage(launch), &l) != nil || !nativeGuestWitnessValid(g, a, l, out, time.Now().UTC()) {
-		return zero, errNativeGuestRead
-	}
-	// The DTO owns slices independent of any transport buffer or reusable value.
-	out.Routes = slices.Clone(out.Routes)
-	out.DNSAnswerIPv4 = slices.Clone(out.DNSAnswerIPv4)
-	return out, nil
+	return raw, nil
 }
 
 // Consume only the authenticated original return, including its actual Close.

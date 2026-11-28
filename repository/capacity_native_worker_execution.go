@@ -169,7 +169,7 @@ func (s *NativeWorkerExecutionSession) Phase(ctx context.Context, runtime Native
 	if !errors.Is(err, sql.ErrNoRows) {
 		return zero, err
 	}
-	return (CapacityNativeWorkerPhaseStore{Workers: s.workers, Runtime: runtime, Enabled: true}).Issue(ctx, s.policy, s.authority, id, action)
+	return (CapacityNativeWorkerPhaseStore{Workers: s.workers, Runtime: runtime, Enabled: true, Members: s.workers.Members}).Issue(ctx, s.policy, s.authority, id, action)
 }
 
 func (s *NativeWorkerExecutionSession) ReconcilePhase(ctx context.Context, runtime NativeWorkerPhaseRuntime, id uuid.UUID) (model.CapacityNativeWorkerPhasePermit, error) {
@@ -186,7 +186,7 @@ func (s *NativeWorkerExecutionSession) ReconcilePhase(ctx context.Context, runti
 		return zero, ErrCapacityConflict
 	}
 	caller := model.CapacityNativeWorkerPhaseCaller{Adapter: r.Writer.Adapter, PrincipalID: r.Writer.PrincipalID, BindingName: r.Writer.BindingName, SourceCommit: r.Writer.SourceCommit}
-	return (CapacityNativeWorkerPhaseStore{Workers: s.workers, Runtime: runtime, Enabled: true}).Reconcile(ctx, s.policy, id, caller)
+	return (CapacityNativeWorkerPhaseStore{Workers: s.workers, Runtime: runtime, Enabled: true, Members: s.workers.Members}).Reconcile(ctx, s.policy, id, caller)
 }
 
 func (s *NativeWorkerExecutionSession) Network(ctx context.Context, runtime NativeWorkerNetworkRuntime, id uuid.UUID) (model.CapacityNativeWorkerNetworkGrant, error) {

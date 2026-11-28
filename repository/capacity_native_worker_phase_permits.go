@@ -29,6 +29,7 @@ type CapacityNativeWorkerPhaseStore struct {
 	Workers CapacityNativeWorkerStore
 	Runtime NativeWorkerPhaseRuntime
 	Enabled bool
+	Members *CapacityNativeWorkerMemberStore
 }
 
 // This record and its event stream are private database custody. Public reads
@@ -46,6 +47,7 @@ type nativeWorkerPhaseRecord struct {
 	SettlementTokenSHA256 string                                          `json:"settlement_token_sha256,omitempty"`
 	Original              *model.CapacityNativeWorkerPhaseReceive         `json:"original,omitempty"`
 	ReceivedAt            *time.Time                                      `json:"received_at,omitempty"`
+	MemberPreflight       *nativeMemberPreflight                          `json:"member_preflight,omitempty"`
 }
 
 var nativePhaseSHA = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -120,6 +122,17 @@ func (s CapacityNativeWorkerPhaseStore) currentPhase(ctx context.Context, tx *sq
 	a, _, err := nativeAttemptLoadTx(ctx, tx, policy, r.Context.AttemptID)
 	if err != nil {
 		return err
+	}
+	if err = nativeMemberGrowthAllowedTx(ctx, tx, p, a); err != nil {
+		return err
+	}
+	if p.NativeWorkerLifecycleBinding.Members != nil && r.Context.Action != "register" {
+		if s.Members == nil {
+			return ErrCapacityDisabled
+		}
+		if err = nativeMemberPreflightValidTx(ctx, tx, policy, p, a, r.MemberPreflight, now); err != nil {
+			return err
+		}
 	}
 	if a.PolicyID != policy.ID || a.PolicyChecksum != policy.Checksum || a.Generation != r.Context.IntentGeneration ||
 		a.FencingToken != r.Context.FencingToken || a.PoolUID != r.Context.PoolUID || a.PoolEpoch != r.Context.Epoch ||
@@ -202,6 +215,21 @@ func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.
 	if err != nil {
 		return out, err
 	}
+	var memberPreflight *nativeMemberPreflight
+	spec, specErr := parseCapacityPolicy(policy)
+	if specErr != nil {
+		return out, specErr
+	}
+	if spec.NativeWorkerLifecycleBinding != nil && spec.NativeWorkerLifecycleBinding.Members != nil && action != "register" {
+		if s.Members == nil {
+			return out, ErrCapacityDisabled
+		}
+		f, e := s.Members.admissionPreflight(ctx, a)
+		if e != nil {
+			return out, e
+		}
+		memberPreflight = &f
+	}
 	err = s.Workers.tx(ctx, policy, func(tx *sql.Tx, p model.CapacityPolicySpec, now time.Time) error {
 		if capacity.ValidateNativeWorkerRegistryWriterBinding(p) != nil || p.NativeWorkerLifecycleBinding.RegistryWriter == nil {
 			return ErrCapacityDisabled
@@ -212,6 +240,9 @@ func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.
 		}
 		actual, _, e := nativeAttemptLoadTx(ctx, tx, policy, attemptID)
 		if e != nil {
+			return e
+		}
+		if e = nativeMemberGrowthAllowedTx(ctx, tx, p, actual); e != nil {
 			return e
 		}
 		if actual.Revision != a.Revision || actual.PolicyChecksum != policy.Checksum || actual.Generation != authority.Generation || actual.FencingToken != authority.FencingToken || !phasePrepared(p, actual, action, prepared, now) {
@@ -252,6 +283,14 @@ func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.
 		if action != "register" && prepared.ReadinessValidUntil.Before(c.ExpiresAt) {
 			c.ExpiresAt = prepared.ReadinessValidUntil
 		}
+		if memberPreflight != nil && memberPreflight.ValidUntil.Before(c.ExpiresAt) {
+			c.ExpiresAt = memberPreflight.ValidUntil
+		}
+		if p.NativeWorkerLifecycleBinding.Members != nil && action != "register" {
+			if e = nativeMemberPreflightValidTx(ctx, tx, policy, p, actual, memberPreflight, now); e != nil {
+				return e
+			}
+		}
 		c.MutationPermitted, c.Redeemable, c.SettlementToken, c.PhaseState = false, false, "", "issued"
 		if action == "register" {
 			c.Admission = model.CapacityNativeWorkerPhaseAdmission{}
@@ -276,7 +315,7 @@ func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.
 				}
 			}
 		}
-		r := nativeWorkerPhaseRecord{Context: c, Writer: b, MaxReadAgeSeconds: p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds, PolicyChecksum: policy.Checksum, ExecutorID: s.Workers.Capacity.ExecutorID, WorkflowID: s.Workers.Capacity.WorkflowID, Revision: 1}
+		r := nativeWorkerPhaseRecord{Context: c, Writer: b, MaxReadAgeSeconds: p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds, PolicyChecksum: policy.Checksum, ExecutorID: s.Workers.Capacity.ExecutorID, WorkflowID: s.Workers.Capacity.WorkflowID, Revision: 1, MemberPreflight: memberPreflight}
 		// Scope is persisted independently from caller-controlled input.
 		if e = nativePhaseInsertTx(ctx, tx, r, policy.Metadata.Namespace, now); e != nil {
 			return e

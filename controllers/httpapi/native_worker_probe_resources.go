@@ -3,9 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"crypto"
 	"crypto/sha256"
-	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -13,16 +11,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
-	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -79,17 +72,9 @@ func (NativeWorkerProbeResourceListener) MarshalJSON() ([]byte, error) {
 }
 
 type nativeProbeResourceListenerState struct {
-	mu                   sync.Mutex
-	config               NativeWorkerProbeResourceListenerConfig
-	backend              NativeWorkerProbeResourceCallbacks
-	server               *http.Server
-	cancel               context.CancelFunc
-	started, closing     bool
-	active               int
-	idle, served, closed chan struct{}
-	closeOnce            sync.Once
-	serveErr, closeErr   error
-	address              string
+	*nativeWorkerCallbackTransport
+	config  NativeWorkerProbeResourceListenerConfig
+	backend NativeWorkerProbeResourceCallbacks
 }
 
 func nativeProbeResourceDigest(b []byte) string {
@@ -118,192 +103,50 @@ func NewNativeWorkerProbeResourceListener(c NativeWorkerProbeResourceListenerCon
 
 // Source injection is package-private for deterministic CI, never HTTP/env input.
 func newNativeWorkerProbeResourceListener(c NativeWorkerProbeResourceListenerConfig, backend NativeWorkerProbeResourceCallbacks, source string) (*NativeWorkerProbeResourceListener, error) {
-	if backend == nil || reflect.ValueOf(backend).Kind() == reflect.Pointer && reflect.ValueOf(backend).IsNil() || !nativeWorkerPhaseSourceCommit.MatchString(source) || c.CoreSourceCommit != source || !nativeWorkerPhaseSourceCommit.MatchString(c.SDKSourceCommit) || !nativeProbeResourceID.MatchString(c.BindingName) || c.ServerName == "" || strings.ContainsAny(c.ServerName, "\r\n\x00") || !nativeProbeResourceURI(c.ServerURI) || !nativeProbeResourceURI(c.ClientURI) || !nativeProbeResourceSHA.MatchString(c.ServerLeafSHA256) || !nativeProbeResourceSHA.MatchString(c.ClientLeafSHA256) || !nativeProbeResourceSHA.MatchString(c.BearerTokenSHA256) || !nativeProbeResourceSHA.MatchString(c.SDKScopeSHA256) || c.ClientCAs == nil || c.ClientCAs.Equal(x509.NewCertPool()) {
+	if backend == nil || reflect.ValueOf(backend).Kind() == reflect.Pointer && reflect.ValueOf(backend).IsNil() || !nativeWorkerPhaseSourceCommit.MatchString(c.SDKSourceCommit) || !nativeProbeResourceSHA.MatchString(c.BearerTokenSHA256) || !nativeProbeResourceSHA.MatchString(c.SDKScopeSHA256) {
 		return nil, errNativeProbeResourceListener
 	}
-	host, port, err := net.SplitHostPort(c.ListenAddr)
-	n, numberErr := strconv.Atoi(port)
-	if err != nil || numberErr != nil || n < 0 || n > 65535 || strconv.Itoa(n) != port || net.JoinHostPort(host, port) != c.ListenAddr {
-		return nil, errNativeProbeResourceListener
-	}
-	if host != "" {
-		ip, e := netip.ParseAddr(host)
-		if e != nil || ip.String() != host {
-			return nil, errNativeProbeResourceListener
-		}
-	}
-	if len(c.ServerCertificate.Certificate) == 0 || len(c.ServerCertificate.Certificate) > 8 {
-		return nil, errNativeProbeResourceListener
-	}
-	pair := tls.Certificate{}
-	for _, der := range c.ServerCertificate.Certificate {
-		if len(der) == 0 || len(der) > 64<<10 {
-			return nil, errNativeProbeResourceListener
-		}
-		pair.Certificate = append(pair.Certificate, bytes.Clone(der))
-	}
-	leaf, err := x509.ParseCertificate(pair.Certificate[0])
-	if err != nil || !nativeProbeResourceLeaf(leaf, c.ServerURI, c.ServerLeafSHA256, x509.ExtKeyUsageServerAuth, time.Now()) || leaf.VerifyHostname(c.ServerName) != nil {
-		return nil, errNativeProbeResourceListener
-	}
-	encoded, err := x509.MarshalPKCS8PrivateKey(c.ServerCertificate.PrivateKey)
+	s := &nativeProbeResourceListenerState{backend: backend}
+	transport, cloned, err := newNativeWorkerCallbackTransport(c, source, http.HandlerFunc(s.handle))
 	if err != nil {
-		return nil, errNativeProbeResourceListener
+		return nil, err
 	}
-	defer clear(encoded)
-	pair.PrivateKey, err = x509.ParsePKCS8PrivateKey(encoded)
-	signer, ok := pair.PrivateKey.(crypto.Signer)
-	if err != nil || !ok {
-		return nil, errNativeProbeResourceListener
-	}
-	public, err := x509.MarshalPKIXPublicKey(signer.Public())
-	if err != nil || !bytes.Equal(public, leaf.RawSubjectPublicKeyInfo) {
-		return nil, errNativeProbeResourceListener
-	}
-	pair.Leaf = leaf
-	c.ServerCertificate, c.ClientCAs = pair, c.ClientCAs.Clone()
-	owned, cancel := context.WithCancel(context.Background())
-	idle := make(chan struct{})
-	close(idle)
-	s := &nativeProbeResourceListenerState{config: c, backend: backend, cancel: cancel, idle: idle, served: make(chan struct{}), closed: make(chan struct{})}
-	s.server = &http.Server{Handler: http.HandlerFunc(s.handle), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 5 * time.Second, MaxHeaderBytes: 32 << 10, ErrorLog: log.New(io.Discard, "", 0), BaseContext: func(net.Listener) context.Context { return owned }, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, ClientCAs: c.ClientCAs, ClientAuth: tls.RequireAndVerifyClientCert, NextProtos: []string{"http/1.1"}, SessionTicketsDisabled: true}}
-	s.server.SetKeepAlivesEnabled(false)
+	s.nativeWorkerCallbackTransport, s.config = transport, cloned
 	return &NativeWorkerProbeResourceListener{state: s}, nil
 }
 
-// The startup context controls binding only. Receiving remains alive until Close
-// so producer cancellation cannot destroy an original in-flight callback.
+// The startup context controls binding only; explicit Close joins receiving.
 func (l *NativeWorkerProbeResourceListener) Start(ctx context.Context) error {
-	if l == nil || l.state == nil || ctx == nil || ctx.Err() != nil {
+	if l == nil || l.state == nil {
 		return errNativeProbeResourceListener
 	}
-	s := l.state
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.started || s.closing {
-		return errNativeProbeResourceListener
-	}
-	s.started = true
-	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.config.ListenAddr)
-	if err != nil || ctx.Err() != nil {
-		if listener != nil {
-			_ = listener.Close()
-		}
-		s.serveErr = errNativeProbeResourceListener
-		close(s.served)
-		return errNativeProbeResourceListener
-	}
-	s.address = listener.Addr().String()
-	go func() {
-		defer close(s.served)
-		err := s.server.Serve(tls.NewListener(listener, s.server.TLSConfig))
-		s.mu.Lock()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.serveErr = errNativeProbeResourceListener
-		}
-		s.mu.Unlock()
-	}()
-	return nil
+	return l.state.nativeWorkerCallbackTransport.Start(ctx)
 }
-
 func (l *NativeWorkerProbeResourceListener) Address() string {
 	if l == nil || l.state == nil {
 		return ""
 	}
-	l.state.mu.Lock()
-	defer l.state.mu.Unlock()
-	return l.state.address
+	return l.state.nativeWorkerCallbackTransport.Address()
 }
-
-// Close owns only this listener. Backend, database and caller TLS handles remain
-// borrowed. A forced/unfinished shutdown returns an error, never a joined claim.
 func (l *NativeWorkerProbeResourceListener) Close() error {
 	if l == nil || l.state == nil {
 		return nil
 	}
-	s := l.state
-	s.closeOnce.Do(func() {
-		defer close(s.closed)
-		s.mu.Lock()
-		s.closing = true
-		started, idle := s.started, s.idle
-		s.mu.Unlock()
-		ctx, cancel := context.WithTimeout(context.Background(), nativeProbeResourceCloseWait)
-		defer cancel()
-		if err := s.server.Shutdown(ctx); err != nil {
-			s.closeErr = errNativeProbeResourceListener
-			s.cancel()
-			_ = s.server.Close()
-		}
-		s.cancel()
-		join, cancelJoin := context.WithTimeout(context.Background(), nativeProbeResourceCloseWait)
-		defer cancelJoin()
-		if started {
-			select {
-			case <-s.served:
-			case <-join.Done():
-				s.closeErr = errNativeProbeResourceListener
-			}
-		}
-		select {
-		case <-idle:
-		case <-join.Done():
-			s.closeErr = errNativeProbeResourceListener
-		}
-		s.mu.Lock()
-		if s.serveErr != nil {
-			s.closeErr = errNativeProbeResourceListener
-		}
-		s.mu.Unlock()
-	})
-	<-s.closed
-	return s.closeErr
+	return l.state.nativeWorkerCallbackTransport.Close()
 }
 
-func (s *nativeProbeResourceListenerState) enter() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closing {
-		return false
-	}
-	if s.active == 0 {
-		s.idle = make(chan struct{})
-	}
-	s.active++
-	return true
-}
-func (s *nativeProbeResourceListenerState) leave() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.active--
-	if s.active == 0 {
-		close(s.idle)
-	}
-}
 func (s *nativeProbeResourceListenerState) refuse(w http.ResponseWriter, status int) {
 	w.WriteHeader(status)
 	_, _ = io.WriteString(w, `{"error":"native probe callback unavailable"}`)
 }
 func (s *nativeProbeResourceListenerState) authenticated(r *http.Request) bool {
 	c := s.config
-	if r.TLS == nil || r.TLS.Version < tls.VersionTLS13 || len(r.TLS.VerifiedChains) == 0 || len(r.TLS.PeerCertificates) == 0 || !nativeProbeResourceLeaf(r.TLS.PeerCertificates[0], c.ClientURI, c.ClientLeafSHA256, x509.ExtKeyUsageClientAuth, time.Now()) {
+	if !nativeWorkerCallbackTLSAuthenticated(c, r) {
 		return false
 	}
-	bearer, source, scope := r.Header.Values("Authorization"), r.Header.Values(nativeWorkerPhaseAdapterSourceHeader), r.Header.Values(nativeProbeResourceScopeHeader)
-	if len(bearer) != 1 || len(source) != 1 || len(scope) != 1 || source[0] != c.SDKSourceCommit || scope[0] != c.SDKScopeSHA256 || !strings.HasPrefix(bearer[0], "Bearer ") {
-		return false
-	}
-	token := strings.TrimPrefix(bearer[0], "Bearer ")
-	if len(token) < 32 || len(token) > 8192 {
-		return false
-	}
-	for _, ch := range token {
-		if ch < 33 || ch > 126 {
-			return false
-		}
-	}
-	return subtle.ConstantTimeCompare([]byte(nativeProbeResourceDigest([]byte(token))), []byte(c.BearerTokenSHA256)) == 1
+	return nativeWorkerCallbackSDKAuthenticated(c, r)
 }
+
 func nativeProbeResourceInputValid(in model.NativeWorkerProbeResourceInput, binding string) bool {
 	id, err := uuid.Parse(in.RunID)
 	if in.BindingName != binding || err != nil || id == uuid.Nil || id.String() != in.RunID {

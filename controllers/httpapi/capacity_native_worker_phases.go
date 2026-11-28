@@ -210,7 +210,7 @@ func (s *Server) serveNativeWorkerPhaseRequest(w http.ResponseWriter, r *http.Re
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	enabled := os.Getenv("YGGDRASIL_NATIVE_WORKER_LIFECYCLE_ENABLED") == "true"
-	store := repository.CapacityNativeWorkerPhaseStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled}, Runtime: s.nativeWorkerPhaseRuntime, Enabled: enabled}
+	store := repository.CapacityNativeWorkerPhaseStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled, Members: s.nativeWorkerMembers}, Runtime: s.nativeWorkerPhaseRuntime, Enabled: enabled, Members: s.nativeWorkerMembers}
 	policy, caller, err := store.ResolvePhaseCaller(ctx, request.PermitID, request.BindingName, principal.base.principalID, principal.instanceID)
 	if err != nil {
 		mutationHTTPError(w, err)

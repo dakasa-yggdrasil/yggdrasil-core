@@ -19,7 +19,7 @@ import (
 var errNativeWorkerReceiving = errors.New("native worker remains in protected receiving or HOLD")
 
 func nativeWorkerExecutionCatalog(ts model.IntegrationTypeManifestSpec, operation string) bool {
-	if operation != "ensure_native_worker" && operation != "ensure_native_worker_pool" || !slices.Contains(ts.Capabilities, "execute") {
+	if operation != "ensure_native_worker" && operation != "ensure_native_worker_pool" && operation != "destroy_native_worker" || !slices.Contains(ts.Capabilities, "execute") {
 		return false
 	}
 	for _, action := range ts.ActionCatalog {
@@ -138,7 +138,7 @@ func executeCapacityNativeWorkerExecution(ctx context.Context, conn *amqp.Connec
 		}
 		executor, _ := callCtx.Value(capacityInvocationKey{}).(string)
 		store := repository.CapacityStore{DB: db, ExecutionEnabled: true, WorkflowID: workflow.ID, ExecutorID: executor, MarketObserver: observer}
-		workers, err := repository.NativeWorkerRecordingStore(repository.CapacityNativeWorkerStore{Capacity: store, Runtime: scope.Workers, Enabled: true}, scope.Workers)
+		workers, err := repository.NativeWorkerRecordingStore(repository.CapacityNativeWorkerStore{Capacity: store, Runtime: scope.Workers, Enabled: true, Members: scope.Members}, scope.Workers)
 		if err != nil {
 			return err
 		}

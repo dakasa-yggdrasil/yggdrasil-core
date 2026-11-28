@@ -354,7 +354,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleCollaboratorCreate",
-      "line": 2187,
+      "line": 2188,
       "type_expressions": [
         "repository.EventTypeCollaboratorCreated"
       ]
@@ -365,7 +365,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamCreate",
-      "line": 2429,
+      "line": 2430,
       "type_expressions": [
         "repository.EventTypeTeamCreated"
       ]
@@ -376,7 +376,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamUpdate",
-      "line": 2524,
+      "line": 2525,
       "type_expressions": [
         "repository.EventTypeTeamUpdated"
       ]
@@ -387,7 +387,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamDelete",
-      "line": 2613,
+      "line": 2614,
       "type_expressions": [
         "repository.EventTypeTeamDeleted"
       ]
@@ -398,7 +398,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantCreate",
-      "line": 2677,
+      "line": 2678,
       "type_expressions": [
         "repository.EventTypeTeamGrantAdded",
         "model.ActorTypeAPI"
@@ -410,7 +410,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantDelete",
-      "line": 2714,
+      "line": 2715,
       "type_expressions": [
         "repository.EventTypeTeamGrantRevoked",
         "model.ActorTypeAPI"
@@ -422,7 +422,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2821,
+      "line": 2822,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded"
       ]
@@ -433,7 +433,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2846,
+      "line": 2847,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved"
       ]
@@ -706,6 +706,28 @@
       "type_expressions": [
         "record.EventProvider + \".\" + record.EventResource + \".\" + verb",
         "\"workflow\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "09e4976a718934573a26f54c04012dbcfdafaa32ea46e88d472f68b80e8a92f6",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "repository/capacity_native_worker_member_reconcile.go",
+      "function": "nativeMemberPublicEventTx",
+      "line": 90,
+      "type_expressions": [
+        "\"kubernetes.\" + resource + \".\" + verb"
+      ]
+    },
+    {
+      "argument_expression_sha256": "dfc3d7bbf8074668aeeceacbaffc56ff950b3d11da3a38ee29ebfd48bb9088de",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "repository/capacity_native_worker_member_settlement.go",
+      "function": "error",
+      "line": 198,
+      "type_expressions": [
+        "\"kubernetes.native_worker_pool_member.destroyed\""
       ]
     },
     {

@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "7aded911cc4eefdd6e7231039af4cb1c1f49512702a681e79eda55d2e9798b03"
+      "sha256": "680bcb55e55973cb5ef9854fb66c95111010899f2715ce6b6a74cdb5733d1d6c"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "ab560648ad80d5f99163a411ad0b7caf0723452ef977b5ea9c62ccf1a22d34ef"
+      "sha256": "e9aaaf6e20f52f6a4eac1e877e03b9a05b60f80c24df147cb2fea971ef843044"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "ab560648ad80d5f99163a411ad0b7caf0723452ef977b5ea9c62ccf1a22d34ef"
+      "sha256": "e9aaaf6e20f52f6a4eac1e877e03b9a05b60f80c24df147cb2fea971ef843044"
     },
     {
       "evidence": "go.mod",
@@ -123,14 +123,19 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "native_probe_resource_private_mtls_callbacks",
-      "sha256": "ab560648ad80d5f99163a411ad0b7caf0723452ef977b5ea9c62ccf1a22d34ef"
+      "sha256": "e9aaaf6e20f52f6a4eac1e877e03b9a05b60f80c24df147cb2fea971ef843044"
+    },
+    {
+      "evidence": "docs/service-contract/SEMANTICS.md",
+      "id": "native_member_private_mtls_and_stock_bind_callbacks",
+      "sha256": "e9aaaf6e20f52f6a4eac1e877e03b9a05b60f80c24df147cb2fea971ef843044"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "7dea1512ca3bb3ed57179c0b19916a270143a6ceef94f4eb3d0f760ac01ea40f"
+      "sha256": "f8c7078873ad7e18071b1f23b6e27b6c0dbce6359a46023b6e37da12c3f6df16"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",

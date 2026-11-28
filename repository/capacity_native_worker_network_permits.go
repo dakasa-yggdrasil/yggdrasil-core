@@ -317,6 +317,24 @@ func (s CapacityNativeWorkerNetworkStore) Redeem(ctx context.Context, policy mod
 	if e != nil || !nativeNetworkCaller(r, caller) {
 		return model.CapacityNativeWorkerNetworkGrant{}, ErrCapacityMutationAuthorization
 	}
+	var members *nativeMemberNetworkPreflight
+	p, pe := parseCapacityPolicy(policy)
+	if pe != nil || p.NativeWorkerLifecycleBinding == nil {
+		return model.CapacityNativeWorkerNetworkGrant{}, ErrCapacityDisabled
+	}
+	if r.Context.Action == "remove" && p.NativeWorkerLifecycleBinding.Members != nil {
+		if s.Workers.Members == nil {
+			return model.CapacityNativeWorkerNetworkGrant{}, ErrCapacityDisabled
+		}
+		currentMember, readErr := s.Workers.Read(ctx, policy, r.Attempt.ID)
+		if readErr != nil {
+			return model.CapacityNativeWorkerNetworkGrant{}, readErr
+		}
+		members, e = s.Workers.Members.networkPreflight(ctx, currentMember)
+		if e != nil {
+			return model.CapacityNativeWorkerNetworkGrant{}, e
+		}
+	}
 	w, e := s.Workers.authenticate(ctx, policy)
 	if e != nil {
 		return model.CapacityNativeWorkerNetworkGrant{}, e
@@ -341,6 +359,17 @@ func (s CapacityNativeWorkerNetworkStore) Redeem(ctx context.Context, policy mod
 		}
 		if err = s.current(ctx, tx, policy, p, current, actual, now); err != nil {
 			return err
+		}
+		if actual.Context.Action == "remove" && p.NativeWorkerLifecycleBinding.Members != nil {
+			if s.Workers.Members == nil {
+				return ErrCapacityDisabled
+			}
+			if err = s.Workers.Members.networkCurrentTx(ctx, tx, p, current, id, members, now); err != nil {
+				return err
+			}
+			if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil || !actual.Context.ExpiresAt.After(now) {
+				return ErrCapacityConflict
+			}
 		}
 		actual.Context.State = "redeemed"
 		actual.Revision++

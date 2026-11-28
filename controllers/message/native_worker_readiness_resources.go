@@ -82,6 +82,10 @@ func NewNativeWorkerReadinessSDKPorts(db *sql.DB, broker func() *amqp.Connection
 // pair is the protected diagnostic resource; no other ensure/destroy gains a
 // new route or hydrates credentials before its original public pins are read.
 func resolveNativeProbeAdapter(ctx context.Context, conn *amqp.Connection, db *sql.DB, b model.CapacityNativeWorkerProbeResourceBinding, op string) (capacityResolvedObservationAdapter, error) {
+	return resolveNativeClosedResourceAdapter(ctx, conn, db, b, op, nativeProbeCatalogOperation)
+}
+
+func resolveNativeClosedResourceAdapter(ctx context.Context, conn *amqp.Connection, db *sql.DB, b model.CapacityNativeWorkerProbeResourceBinding, op string, catalog func(model.IntegrationTypeManifestSpec, string) bool) (capacityResolvedObservationAdapter, error) {
 	var zero capacityResolvedObservationAdapter
 	im, err := resolveManifestForKind(ctx, db, "integration_instance", b.Adapter.ManifestID, "", "", nil)
 	if err != nil || !im.Metadata.Active || im.Kind != "integration_instance" || im.ID.String() != b.Adapter.ManifestID || im.Version != b.Adapter.Version || im.Checksum != b.Adapter.Checksum {
@@ -96,11 +100,11 @@ func resolveNativeProbeAdapter(ctx context.Context, conn *amqp.Connection, db *s
 		return zero, errCapacityBoundAssessment
 	}
 	ts, err := manifest.ParseIntegrationTypeSpec(tm.Spec)
-	if err != nil || manifest.ValidateIntegrationTypeSpec(ts) != nil || !nativeProbeCatalogOperation(ts, op) || validateNativeWorkerRPCScope(ctx, im, is, tm, ts) != nil {
+	if err != nil || manifest.ValidateIntegrationTypeSpec(ts) != nil || !catalog(ts, op) || validateNativeWorkerRPCScope(ctx, im, is, tm, ts) != nil {
 		return zero, errCapacityBoundAssessment
 	}
 	im, is, tm, ts, err = resolveIntegrationInstance(ctx, conn, db, model.ManifestSelector{ManifestID: b.Adapter.ManifestID})
-	if err != nil || im.Version != b.Adapter.Version || im.ID.String() != b.Adapter.ManifestID || im.Checksum != b.Adapter.Checksum || tm.ID.String() != b.Adapter.IntegrationTypeID || tm.Checksum != b.Adapter.TypeChecksum || !im.Metadata.Active || !tm.Metadata.Active || manifest.ValidateIntegrationTypeSpec(ts) != nil || !nativeProbeCatalogOperation(ts, op) || validateNativeWorkerRPCScope(ctx, im, is, tm, ts) != nil {
+	if err != nil || im.Version != b.Adapter.Version || im.ID.String() != b.Adapter.ManifestID || im.Checksum != b.Adapter.Checksum || tm.ID.String() != b.Adapter.IntegrationTypeID || tm.Checksum != b.Adapter.TypeChecksum || !im.Metadata.Active || !tm.Metadata.Active || manifest.ValidateIntegrationTypeSpec(ts) != nil || !catalog(ts, op) || validateNativeWorkerRPCScope(ctx, im, is, tm, ts) != nil {
 		return zero, errCapacityBoundAssessment
 	}
 	return capacityResolvedObservationAdapter{im, is, tm, ts}, nil

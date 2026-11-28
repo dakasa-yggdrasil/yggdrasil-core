@@ -30,6 +30,7 @@ type CapacityNativeWorkerAbortStore struct {
 	Runtime            NativeWorkerAbortRuntime
 	RecoveryWorkflowID uuid.UUID
 	Enabled            bool
+	Members            *CapacityNativeWorkerMemberStore // optional additional Members fence; Abort v1 wire stays unchanged
 }
 
 type nativeWorkerAbortRecord struct {
@@ -321,6 +322,20 @@ func (s CapacityNativeWorkerAbortStore) Redeem(ctx context.Context, policy model
 	if e != nil {
 		return model.CapacityNativeWorkerAbortPermit{}, e
 	}
+	var memberFacts *nativeMemberAbortPreflight
+	p, pe := parseCapacityPolicy(policy)
+	if pe != nil {
+		return model.CapacityNativeWorkerAbortPermit{}, pe
+	}
+	if p.NativeWorkerLifecycleBinding != nil && p.NativeWorkerLifecycleBinding.Members != nil {
+		if s.Members == nil {
+			return model.CapacityNativeWorkerAbortPermit{}, ErrCapacityDisabled
+		}
+		memberFacts, e = s.Members.abortPreflight(ctx, policy, a)
+		if e != nil {
+			return model.CapacityNativeWorkerAbortPermit{}, e
+		}
+	}
 	var out model.CapacityNativeWorkerAbortPermit
 	e = s.Workers.tx(ctx, policy, func(tx *sql.Tx, p model.CapacityPolicySpec, now time.Time) error {
 		current, _, e := nativeAttemptLoadTx(ctx, tx, policy, a.ID)
@@ -336,6 +351,17 @@ func (s CapacityNativeWorkerAbortStore) Redeem(ctx context.Context, policy model
 		}
 		if e = s.current(ctx, tx, policy, p, current, now); e != nil {
 			return e
+		}
+		if p.NativeWorkerLifecycleBinding.Members != nil {
+			if s.Members == nil {
+				return ErrCapacityDisabled
+			}
+			if e = s.Members.abortCurrentTx(ctx, tx, p, current, id, memberFacts, now); e != nil {
+				return e
+			}
+			if e = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); e != nil || !r.Context.ExpiresAt.After(now) {
+				return ErrCapacityConflict
+			}
 		}
 		// Compare against append-only pre-send custody even if a previous
 		// Reconcile replaced the mutable latest Observation. The locked Attempt
@@ -440,7 +466,10 @@ func (s CapacityNativeWorkerAbortStore) Reconcile(ctx context.Context, policy mo
 			return ErrCapacityConflict
 		}
 		r.Observation = &o
-		if capacity.NativeWorkerAbortSettled(o) {
+		// Members owns the single composed settlement transaction. The old
+		// predicate remains exact; a provider callback cannot release Attempt/IPAM
+		// early and bypass the retained member plan and canonical final event.
+		if capacity.NativeWorkerAbortSettled(o) && p.NativeWorkerLifecycleBinding.Members == nil {
 			current.State = "absent"
 			current.Revision++
 			current.UpdatedAt = now

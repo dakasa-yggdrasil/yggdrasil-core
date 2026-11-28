@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**118 decisions.**
+**119 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -197,3 +197,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 - [ADR-0149: Execute Native expansion through durable child and phase receiving](0149-execute-native-expansion-through-durable-child-and-phase-receiving.md)
 
 - [ADR-0150: Qualify Native readiness with one owned finite probe run](0150-qualify-native-readiness-with-one-owned-finite-probe-run.md)
+
+| [0151](0151-bind-native-placement-and-member-retirement-to-one-effect-permits.md) | Bind Native placement and member retirement to one-effect permits | Proposed | 2026-11-28 | Core Native placement and member retirement |

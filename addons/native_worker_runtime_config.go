@@ -34,6 +34,7 @@ type nativeWorkerRuntimeConfig struct {
 	FloorReader           nativeWorkerFloorFiles      `json:"floor_reader"`
 	FloorWriter           nativeWorkerFloorFiles      `json:"floor_writer"`
 	Readiness             *nativeWorkerReadinessFiles `json:"readiness,omitempty"`
+	Members               *nativeWorkerMemberFiles    `json:"members,omitempty"`
 }
 
 type nativeWorkerPolicyPin struct {
@@ -83,17 +84,18 @@ type nativeWorkerProfileFiles struct {
 }
 
 type nativeWorkerGuestFiles struct {
-	Version                    string `json:"version"`
-	MasterVersion              string `json:"master_version"`
-	MasterFile                 string `json:"master_file"`
-	MasterPublicKey            string `json:"master_public_key"`
-	IssuerCAFile               string `json:"issuer_ca_file"`
-	IssuerCASHA256             string `json:"issuer_ca_sha256"`
-	IssuerKeyFile              string `json:"issuer_key_file"`
-	CertificateValiditySeconds int64  `json:"certificate_validity_seconds"`
-	NetworkTemplateFile        string `json:"network_template_file"`
-	NetworkTemplateSHA256      string `json:"network_template_sha256"`
-	MaxReadAgeSeconds          int    `json:"max_read_age_seconds"`
+	Version                        string `json:"version"`
+	MasterVersion                  string `json:"master_version"`
+	MasterFile                     string `json:"master_file"`
+	MasterPublicKey                string `json:"master_public_key"`
+	IssuerCAFile                   string `json:"issuer_ca_file"`
+	IssuerCASHA256                 string `json:"issuer_ca_sha256"`
+	IssuerKeyFile                  string `json:"issuer_key_file"`
+	CertificateValiditySeconds     int64  `json:"certificate_validity_seconds"`
+	NetworkTemplateFile            string `json:"network_template_file"`
+	NetworkTemplateSHA256          string `json:"network_template_sha256"`
+	MaxReadAgeSeconds              int    `json:"max_read_age_seconds"`
+	PlacementBootstrapPolicySHA256 string `json:"placement_bootstrap_policy_sha256,omitempty"`
 }
 
 type nativeWorkerArtifactSecret struct {
@@ -121,6 +123,9 @@ func nativeWorkerConfigDecode(raw []byte, source string) (nativeWorkerRuntimeCon
 	}
 	seen := map[string]bool{}
 	if c.Readiness != nil && (!nativeWorkerPrivatePath(c.Readiness.File) || !nativeRuntimeSHA.MatchString(c.Readiness.SHA256)) {
+		return nativeWorkerRuntimeConfig{}, errNativeWorkerInstallation
+	}
+	if c.Members != nil && (!nativeWorkerPrivatePath(c.Members.File) || !nativeRuntimeSHA.MatchString(c.Members.SHA256)) {
 		return nativeWorkerRuntimeConfig{}, errNativeWorkerInstallation
 	}
 	for _, profile := range c.Profiles {
@@ -164,5 +169,5 @@ func (c nativeWorkerGuestFiles) config() *capacity.NativeWorkerGuestReadConfig {
 	return &capacity.NativeWorkerGuestReadConfig{Version: c.Version, MasterVersion: c.MasterVersion, MasterFile: c.MasterFile,
 		MasterPublicKey: c.MasterPublicKey, IssuerCAFile: c.IssuerCAFile, IssuerCASHA256: c.IssuerCASHA256, IssuerKeyFile: c.IssuerKeyFile,
 		CertificateValiditySeconds: c.CertificateValiditySeconds, NetworkTemplateFile: c.NetworkTemplateFile,
-		NetworkTemplateSHA256: c.NetworkTemplateSHA256, MaxReadAgeSeconds: c.MaxReadAgeSeconds}
+		NetworkTemplateSHA256: c.NetworkTemplateSHA256, MaxReadAgeSeconds: c.MaxReadAgeSeconds, PlacementBootstrapPolicySHA256: c.PlacementBootstrapPolicySHA256}
 }

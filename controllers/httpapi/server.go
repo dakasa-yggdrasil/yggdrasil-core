@@ -1470,6 +1470,7 @@ type Server struct {
 	nativeWorkerBootstrapFactory    repository.NativeWorkerPrivateBootstrapFactory
 	nativeWorkerPhaseRuntime        repository.NativeWorkerPhaseRuntime
 	nativeWorkerAbortRuntime        repository.NativeWorkerAbortRuntime
+	nativeWorkerMembers             *repository.CapacityNativeWorkerMemberStore
 	nativeWorkerNetworkRuntime      repository.NativeWorkerNetworkRuntime
 	capacityGuestPrincipals         []capacityGuestPrincipal
 	capacityHostFactoryPrincipals   []hostFactoryPrincipal
