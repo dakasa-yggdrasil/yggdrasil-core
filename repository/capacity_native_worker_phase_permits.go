@@ -181,7 +181,7 @@ func phasePrepared(p model.CapacityPolicySpec, a model.CapacityNativeWorkerAttem
 		now.Sub(v.ObservedAt) > time.Duration(p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds)*time.Second {
 		return false
 	}
-	return action == "register" || (v.NodeReady && v.NetworkVerified && v.WarmupVerified && v.PhysicalQualified)
+	return action == "register" || (v.ReadinessValidUntil.After(now) && v.NodeReady && v.NetworkVerified && v.WarmupVerified && v.PhysicalQualified)
 }
 
 func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.Manifest, authority model.CapacityNativeWorkerAuthority, attemptID uuid.UUID, action string) (model.CapacityNativeWorkerPhasePermit, error) {
@@ -248,6 +248,9 @@ func (s CapacityNativeWorkerPhaseStore) Issue(ctx context.Context, policy model.
 		}
 		if action != "register" && actual.QualificationValidUntil.Before(c.ExpiresAt) {
 			c.ExpiresAt = actual.QualificationValidUntil
+		}
+		if action != "register" && prepared.ReadinessValidUntil.Before(c.ExpiresAt) {
+			c.ExpiresAt = prepared.ReadinessValidUntil
 		}
 		c.MutationPermitted, c.Redeemable, c.SettlementToken, c.PhaseState = false, false, "", "issued"
 		if action == "register" {

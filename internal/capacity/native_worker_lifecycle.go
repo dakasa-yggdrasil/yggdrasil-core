@@ -524,7 +524,16 @@ func PrepareNativeWorkerPhaseFromRead(p model.CapacityPolicySpec, a model.Capaci
 		}
 		c.Admission = nativePhaseAdmission(existing.Admission)
 	}
-	return model.CapacityNativeWorkerPhasePreparation{Context: c, ObservedAt: o.ObservedAt, NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}, nil
+	// Carry the existing evidence-age limits across the later SQL lock, too.
+	// Issuing a permit cannot turn a fresh-at-read fact into a longer lease.
+	readinessValidUntil := proof.ValidUntil
+	maxAge := time.Duration(p.NativeWorkerLifecycleBinding.PhaseObserver.MaxAgeSeconds) * time.Second
+	for _, observedAt := range []time.Time{proof.ObservedAt, o.ObservedAt, n.Heartbeat.ObservedAt} {
+		if until := observedAt.Add(maxAge); until.Before(readinessValidUntil) {
+			readinessValidUntil = until
+		}
+	}
+	return model.CapacityNativeWorkerPhasePreparation{Context: c, ObservedAt: o.ObservedAt, ReadinessValidUntil: readinessValidUntil, NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}, nil
 }
 
 func ObserveNativeWorkerPhaseFromRead(p model.CapacityPolicySpec, c model.CapacityNativeWorkerPhasePermit, o model.CapacityNativeWorkerPhaseReadObservation, now time.Time) (model.CapacityNativeWorkerPhaseObservation, error) {

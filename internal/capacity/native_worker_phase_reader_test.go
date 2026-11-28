@@ -128,7 +128,7 @@ func TestPhaseReaderRegistrationJoinsStoredBirthAndOptionalClaims(t *testing.T) 
 	now := time.Now().UTC()
 	f := newPhaseReaderFixture(t, now)
 	prep, err := PrepareNativeWorkerPhaseFromRead(f.p, f.a, "register", f.o, nil, now)
-	if err != nil || prep.Context.Node.UID != f.o.Candidates[0].NodeUID || prep.Context.Node.ProviderID != f.a.Physical.ProviderID || prep.Context.Node.CreationProofSHA256 != f.a.BirthSHA256 || prep.NodeReady || prep.NetworkVerified || prep.WarmupVerified || prep.PhysicalQualified {
+	if err != nil || prep.Context.Node.UID != f.o.Candidates[0].NodeUID || prep.Context.Node.ProviderID != f.a.Physical.ProviderID || prep.Context.Node.CreationProofSHA256 != f.a.BirthSHA256 || !prep.ReadinessValidUntil.IsZero() || prep.NodeReady || prep.NetworkVerified || prep.WarmupVerified || prep.PhysicalQualified {
 		t.Fatalf("register minted readiness or lost birth: %+v %v", prep, err)
 	}
 	fields := []struct {
@@ -193,7 +193,7 @@ func TestPhaseReaderAdmissionRequiresActualReadinessAndPrivateProof(t *testing.T
 	base := newPhaseReaderFixture(t, now)
 	base.registered(false)
 	prep, err := PrepareNativeWorkerPhaseFromRead(base.p, base.a, "admit_registry", base.o, &base.proof, now)
-	if err != nil || !prep.NodeReady || !prep.NetworkVerified || !prep.WarmupVerified || !prep.PhysicalQualified || prep.Context.Admission.NetworkBindingSHA256 != base.a.NetworkBindingSHA256 {
+	if err != nil || !prep.NodeReady || !prep.NetworkVerified || !prep.WarmupVerified || !prep.PhysicalQualified || prep.Context.Admission.NetworkBindingSHA256 != base.a.NetworkBindingSHA256 || !prep.ReadinessValidUntil.Equal(now.Add(30*time.Second)) {
 		t.Fatalf("genuine readiness did not bind %+v %v", prep, err)
 	}
 	cases := []struct {
@@ -221,13 +221,35 @@ func TestPhaseReaderAdmissionRequiresActualReadinessAndPrivateProof(t *testing.T
 			t.Fatal("missing private readiness was replaced by labels or Node Ready", action)
 		}
 	}
+	for _, tc := range []struct {
+		name   string
+		change func(*phaseReaderFixture)
+		want   time.Time
+	}{
+		{"proof_expiry", func(f *phaseReaderFixture) { f.proof.ValidUntil = now.Add(time.Second) }, now.Add(time.Second)},
+		{"proof_freshness", func(f *phaseReaderFixture) { f.proof.ObservedAt = now.Add(-20 * time.Second) }, now.Add(10 * time.Second)},
+		{"phase_freshness", func(f *phaseReaderFixture) { f.o.ObservedAt = now.Add(-25 * time.Second) }, now.Add(5 * time.Second)},
+		{"heartbeat_freshness", func(f *phaseReaderFixture) { f.o.Candidates[0].Heartbeat.ObservedAt = now.Add(-29 * time.Second) }, now.Add(time.Second)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := base.copy(t)
+			tc.change(&f)
+			for _, action := range []string{"admit_registry", "release_quarantine"} {
+				f.registered(action == "release_quarantine")
+				out, err := PrepareNativeWorkerPhaseFromRead(f.p, f.a, action, f.o, &f.proof, now)
+				if err != nil || !out.ReadinessValidUntil.Equal(tc.want) {
+					t.Fatal("phase lost the earliest effective readiness boundary", action, out.ReadinessValidUntil, err)
+				}
+			}
+		})
+	}
 }
 func TestPhaseReaderReleaseAndLateGETUseExactPersistedAdmission(t *testing.T) {
 	now := time.Now().UTC()
 	f := newPhaseReaderFixture(t, now)
 	f.registered(true)
 	prep, err := PrepareNativeWorkerPhaseFromRead(f.p, f.a, "release_quarantine", f.o, &f.proof, now)
-	if err != nil {
+	if err != nil || !prep.ReadinessValidUntil.Equal(now.Add(30*time.Second)) {
 		t.Fatal(err)
 	}
 	c := phaseReaderPermitScope(f, prep.Context)

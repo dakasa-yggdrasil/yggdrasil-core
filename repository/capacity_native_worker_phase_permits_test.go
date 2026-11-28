@@ -122,7 +122,7 @@ func nativePhasePreparedFixture() (model.CapacityPolicySpec, model.CapacityNativ
 	registry := model.CapacityNativePoolRegistryRef{Kind: "Lease", Namespace: "infra", Name: "ci-pool", UID: uuid.NewString()}
 	p := model.CapacityPolicySpec{NativeWorkerPoolBinding: &model.CapacityNativeWorkerPoolBinding{RealmUID: uuid.NewString(), Profiles: []model.CapacityNativeWorkerProfileBinding{{Profile: "ci", RegistrationBindingSHA: hash("b")}}}, NativeWorkerLifecycleBinding: &model.CapacityNativeWorkerLifecycleBinding{MaxReadAgeSeconds: 60}}
 	a := model.CapacityNativeWorkerAttempt{ID: uuid.New(), PolicyID: id, Generation: 2, FencingToken: 3, State: "registered", Registry: registry, NodeUID: node, Profile: "ci", PhysicalSpecSHA256: hash("a"), BirthSHA256: hash("c"), NetworkBindingSHA256: hash("d"), QualificationEvidenceSHA256: hash("e"), QualificationValidUntil: now.Add(time.Minute), Physical: &model.CapacityNativeWorkerPhysical{ProviderID: "hcloud://12345"}}
-	v := model.CapacityNativeWorkerPhasePreparation{Context: model.CapacityNativeWorkerPhasePermit{Action: "admit_registry", RealmNamespace: "dakasa", RealmUID: p.NativeWorkerPoolBinding.RealmUID, Registry: registry, ExpectedRegistryResourceVersion: "10", ExpectedRegistrySHA256: hash("f"), Node: model.CapacityNativeWorkerPhaseNode{Name: "ci-worker", UID: node, ResourceVersion: "12", ProviderID: a.Physical.ProviderID, Profile: a.Profile, PhysicalSpecSHA256: a.PhysicalSpecSHA256, RegistrationBindingSHA256: hash("b"), CapacityPolicyID: id.String(), IntentGeneration: 2, FencingToken: 3, CreationProofSHA256: a.BirthSHA256}, Admission: model.CapacityNativeWorkerPhaseAdmission{NetworkBindingSHA256: a.NetworkBindingSHA256, WarmupEvidenceSHA256: hash("a"), PhysicalQualificationSHA256: a.QualificationEvidenceSHA256}}, ObservedAt: now, NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}
+	v := model.CapacityNativeWorkerPhasePreparation{Context: model.CapacityNativeWorkerPhasePermit{Action: "admit_registry", RealmNamespace: "dakasa", RealmUID: p.NativeWorkerPoolBinding.RealmUID, Registry: registry, ExpectedRegistryResourceVersion: "10", ExpectedRegistrySHA256: hash("f"), Node: model.CapacityNativeWorkerPhaseNode{Name: "ci-worker", UID: node, ResourceVersion: "12", ProviderID: a.Physical.ProviderID, Profile: a.Profile, PhysicalSpecSHA256: a.PhysicalSpecSHA256, RegistrationBindingSHA256: hash("b"), CapacityPolicyID: id.String(), IntentGeneration: 2, FencingToken: 3, CreationProofSHA256: a.BirthSHA256}, Admission: model.CapacityNativeWorkerPhaseAdmission{NetworkBindingSHA256: a.NetworkBindingSHA256, WarmupEvidenceSHA256: hash("a"), PhysicalQualificationSHA256: a.QualificationEvidenceSHA256}}, ObservedAt: now, ReadinessValidUntil: now.Add(time.Minute), NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}
 	return p, a, v, now
 }
 
@@ -130,6 +130,10 @@ func TestNativeWorkerPhasePreparationBindsBirthAndIndependentAdmissionFacts(t *t
 	p, a, v, now := nativePhasePreparedFixture()
 	if !phasePrepared(p, a, "admit_registry", v, now) {
 		t.Fatal("qualified baseline refused")
+	}
+	wire, err := json.Marshal(v)
+	if err != nil || strings.Contains(string(wire), "ReadinessValidUntil") || strings.Contains(string(wire), "readiness_valid_until") {
+		t.Fatal("private callback validity entered a JSON preparation")
 	}
 	for _, tc := range []struct {
 		name  string
@@ -156,6 +160,15 @@ func TestNativeWorkerPhasePreparationBindsBirthAndIndependentAdmissionFacts(t *t
 		{"expiredQualification", func(_ *model.CapacityPolicySpec, a *model.CapacityNativeWorkerAttempt, _ *model.CapacityNativeWorkerPhasePreparation) {
 			a.QualificationValidUntil = now
 		}},
+		{"missingReadinessValidity", func(_ *model.CapacityPolicySpec, _ *model.CapacityNativeWorkerAttempt, v *model.CapacityNativeWorkerPhasePreparation) {
+			v.ReadinessValidUntil = time.Time{}
+		}},
+		{"expiredReadiness", func(_ *model.CapacityPolicySpec, _ *model.CapacityNativeWorkerAttempt, v *model.CapacityNativeWorkerPhasePreparation) {
+			v.ReadinessValidUntil = now.Add(-time.Nanosecond)
+		}},
+		{"readinessAtBoundary", func(_ *model.CapacityPolicySpec, _ *model.CapacityNativeWorkerAttempt, v *model.CapacityNativeWorkerPhasePreparation) {
+			v.ReadinessValidUntil = now
+		}},
 		{"endedAttempt", func(_ *model.CapacityPolicySpec, a *model.CapacityNativeWorkerAttempt, _ *model.CapacityNativeWorkerPhasePreparation) {
 			a.State = "absent"
 		}},
@@ -181,14 +194,17 @@ func TestNativeWorkerPhasePreparationBindsBirthAndIndependentAdmissionFacts(t *t
 		t.Run(tc.name, func(t *testing.T) {
 			p, a, v, _ := nativePhasePreparedFixture()
 			tc.alter(&p, &a, &v)
-			if phasePrepared(p, a, "admit_registry", v, now) {
-				t.Fatal("unqualified or substituted phase became a mutation right")
+			for _, action := range []string{"admit_registry", "release_quarantine"} {
+				if phasePrepared(p, a, action, v, now) {
+					t.Fatal("unqualified or substituted phase became a mutation right", action)
+				}
 			}
 		})
 	}
 	p, a, v, now = nativePhasePreparedFixture()
 	a.State = "acknowledged"
 	a.NodeUID = ""
+	v.ReadinessValidUntil = time.Time{}
 	if !phasePrepared(p, a, "register", v, now) {
 		t.Fatal("first independently observed Node UID cannot be bound at registration")
 	}
@@ -220,7 +236,7 @@ func (r *phasePermitRuntime) PreparePhase(_ context.Context, a model.CapacityNat
 		}
 	}
 	c := model.CapacityNativeWorkerPhasePermit{Action: action, RealmNamespace: r.p.NativeWorkerPoolBinding.RegistryRef.Namespace, RealmUID: r.p.NativeWorkerPoolBinding.RealmUID, Registry: a.Registry, ExpectedRegistryResourceVersion: "10", ExpectedRegistrySHA256: strings.Repeat("a", 64), Node: model.CapacityNativeWorkerPhaseNode{Name: "ci-worker-" + a.ID.String(), UID: node, ResourceVersion: "11", ProviderID: a.Physical.ProviderID, Profile: a.Profile, PhysicalSpecSHA256: a.PhysicalSpecSHA256, RegistrationBindingSHA256: r.p.NativeWorkerPoolBinding.Profiles[0].RegistrationBindingSHA, CapacityPolicyID: a.PolicyID.String(), IntentGeneration: a.Generation, FencingToken: a.FencingToken, CreationProofSHA256: a.BirthSHA256}, Admission: model.CapacityNativeWorkerPhaseAdmission{NetworkBindingSHA256: a.NetworkBindingSHA256, WarmupEvidenceSHA256: strings.Repeat("b", 64), PhysicalQualificationSHA256: a.QualificationEvidenceSHA256}}
-	return model.CapacityNativeWorkerPhasePreparation{Context: c, ObservedAt: time.Now().UTC(), NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}, nil
+	return model.CapacityNativeWorkerPhasePreparation{Context: c, ObservedAt: time.Now().UTC(), ReadinessValidUntil: a.QualificationValidUntil, NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}, nil
 }
 func (r *phasePermitRuntime) ObservePhase(_ context.Context, c model.CapacityNativeWorkerPhasePermit) (model.CapacityNativeWorkerPhaseObservation, error) {
 	r.mu.Lock()
@@ -232,10 +248,13 @@ func (r *phasePermitRuntime) ObservePhase(_ context.Context, c model.CapacityNat
 	return model.CapacityNativeWorkerPhaseObservation{RealmUID: c.RealmUID, PoolUID: c.PoolUID, Owner: c.Owner, Epoch: epoch, ObservedAt: time.Now().UTC(), Applied: r.observeApplied, NodeUID: c.Node.UID, RegistryUID: c.Registry.UID, RegistryResourceVersion: "20", RegistrySHA256: strings.Repeat("c", 64), ProviderID: c.Node.ProviderID, AdmissionReceiptSHA256: c.Admission.ReceiptSHA256, QuarantineAbsent: true, Ready: true}, nil
 }
 
-func nativePhasePGFixture(t *testing.T, maxPermitSeconds int) (marketRepositoryFixture, CapacityNativeWorkerPhaseStore, *nativeAttemptRuntime, *phasePermitRuntime, model.CapacityNativeWorkerAuthority, model.CapacityNativeWorkerPhaseCaller) {
+func nativePhasePGFixture(t *testing.T, maxPermitSeconds int, configure ...func(*model.CapacityPolicySpec)) (marketRepositoryFixture, CapacityNativeWorkerPhaseStore, *nativeAttemptRuntime, *phasePermitRuntime, model.CapacityNativeWorkerAuthority, model.CapacityNativeWorkerPhaseCaller) {
 	t.Helper()
 	f, workers, provider, authority := nativeAttemptFixture(t, func(p *model.CapacityPolicySpec) {
 		p.NativeWorkerLifecycleBinding.RegistryWriter = &model.CapacityNativeWorkerRegistryWriterBinding{Adapter: p.NativeWorkerLifecycleBinding.Profiles[0].Adapter, BindingName: "ci-registry-writer", PrincipalID: "ci-registry-writer-principal", SourceCommit: strings.Repeat("a", 40), ScopeSHA256: strings.Repeat("e", 64), Capability: "ensure_native_worker_pool", MaxPermitSeconds: maxPermitSeconds}
+		for _, apply := range configure {
+			apply(p)
+		}
 	})
 	runtime := &phasePermitRuntime{p: f.p, nodes: map[uuid.UUID]string{}, observeApplied: true}
 	store := CapacityNativeWorkerPhaseStore{Workers: workers, Runtime: runtime, Enabled: true}
@@ -559,5 +578,97 @@ func TestNativeWorkerPhasePermitPostgresExpiredNeverRedeemedCanBeReissued(t *tes
 	}
 	if _, err = s.Issue(ctx, f.policy, authority, child.ID, "register"); err == nil {
 		t.Fatal("fresh issued successor lost at-most-one active permit fence")
+	}
+}
+
+// The protected runtime supplies a fixed evidence expiry, not a fresh TTL
+// every time a caller asks to redeem a previously issued permission.
+type phaseReadinessExpiryRuntime struct {
+	*phasePermitRuntime
+	validUntil time.Time
+	prepares   int
+}
+
+func (r *phaseReadinessExpiryRuntime) PreparePhase(ctx context.Context, a model.CapacityNativeWorkerAttempt, action string) (model.CapacityNativeWorkerPhasePreparation, error) {
+	v, err := r.phasePermitRuntime.PreparePhase(ctx, a, action)
+	r.prepares++
+	v.ReadinessValidUntil = r.validUntil
+	return v, err
+}
+
+func TestNativeWorkerPhasePermitPostgresReadinessExpiryCannotBecomeSendAuthority(t *testing.T) {
+	f, s, _, runtime, authority, caller := nativePhasePGFixture(t, 30, func(p *model.CapacityPolicySpec) {
+		p.LeaseSeconds = 20
+	})
+	ctx := t.Context()
+	r := &phaseReadinessExpiryRuntime{phasePermitRuntime: runtime}
+	s.Runtime = r
+	registered := func() model.CapacityNativeWorkerAttempt {
+		t.Helper()
+		a := nativePhaseAcknowledged(t, f, s, authority)
+		a, err := s.Workers.Record(ctx, f.policy, authority, a.ID)
+		if err != nil || a.State != "registered" || a.NodeUID == "" {
+			t.Fatal("original child birth/registration required", err)
+		}
+		return a
+	}
+
+	child := registered()
+	r.validUntil = time.Now().UTC().Add(2 * time.Second)
+	p, err := s.Issue(ctx, f.policy, authority, child.ID, "admit_registry")
+	if err != nil || !p.ExpiresAt.Equal(r.validUntil) || p.MutationPermitted || p.SettlementToken != "" {
+		t.Fatal("shorter readiness evidence did not bound the actual issued permit", err)
+	}
+	if read, err := s.Read(ctx, f.policy, p.PermitID, caller); err != nil || !read.Redeemable {
+		t.Fatal("fresh evidence did not retain normal redeemability", err)
+	}
+	// CI only: let the real DB clock cross the actual stored evidence limit.
+	// Do not rewrite an immutable record or substitute a fake clock.
+	timer := time.NewTimer(time.Until(p.ExpiresAt) + 25*time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	if out, err := s.Redeem(ctx, f.policy, p.PermitID, caller); err == nil || out.MutationPermitted || out.SettlementToken != "" {
+		t.Fatal("expired readiness between Issue and Redeem minted a send bearer")
+	}
+	if read, err := s.Read(ctx, f.policy, p.PermitID, caller); err != nil || read.Redeemable || read.MutationPermitted {
+		t.Fatal("expired evidence hid history or refreshed its authority", err)
+	}
+	stored := nativePhaseStored(t, f, p.PermitID)
+	if stored.Revision != 1 || stored.Context.PhaseState != "issued" || stored.SettlementTokenSHA256 != "" || stored.Original != nil || !stored.Context.ExpiresAt.Equal(r.validUntil) || r.prepares != 1 {
+		t.Fatal("refused redemption renewed evidence, consumed a permit or rewrote original custody")
+	}
+
+	// The evidence cap must never extend a still-shorter real parent lease.
+	child = registered()
+	var parent model.CapacityIntent
+	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1`, f.policy.Metadata.Namespace).Scan((*nativeIntentScan)(&parent)); err != nil || parent.LeaseExpiresAt == nil {
+		t.Fatal("real parent progress lease required", err)
+	}
+	r.validUntil = time.Now().UTC().Add(time.Minute)
+	if !parent.LeaseExpiresAt.Before(r.validUntil) {
+		t.Fatal("fixture does not establish the shorter parent lease")
+	}
+	p, err = s.Issue(ctx, f.policy, authority, child.ID, "admit_registry")
+	if err != nil || !p.ExpiresAt.Equal(*parent.LeaseExpiresAt) {
+		t.Fatal("longer evidence extended the original parent lease", err)
+	}
+	if out, err := s.Redeem(ctx, f.policy, p.PermitID, caller); err != nil || !out.MutationPermitted || out.SettlementToken == "" {
+		t.Fatal("fresh genuinely bounded permit was refused", err)
+	}
+
+	child = registered()
+	for _, until := range []time.Time{{}, time.Now().UTC().Add(-time.Second)} {
+		r.validUntil = until
+		if out, err := s.Issue(ctx, f.policy, authority, child.ID, "admit_registry"); err == nil || out.MutationPermitted || out.SettlementToken != "" {
+			t.Fatal("missing/expired private readiness was issued as a new permission")
+		}
+	}
+	var rows int
+	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_worker_phase_permits WHERE attempt_id=$1`, child.ID).Scan(&rows); err != nil || rows != 0 {
+		t.Fatal("refused readiness created phase history", rows, err)
 	}
 }

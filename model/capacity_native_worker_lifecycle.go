@@ -383,12 +383,14 @@ type CapacityNativeWorkerPhaseReceive struct {
 // Prepared/observed facts come only from installed read-only runtime callbacks.
 // Neither a workflow request nor the mutating adapter supplies these booleans.
 type CapacityNativeWorkerPhasePreparation struct {
-	Context           CapacityNativeWorkerPhasePermit
-	ObservedAt        time.Time
-	NodeReady         bool
-	NetworkVerified   bool
-	WarmupVerified    bool
-	PhysicalQualified bool
+	Context    CapacityNativeWorkerPhasePermit
+	ObservedAt time.Time
+	// Private callback validity limits both admission mutations; never a wire grant.
+	ReadinessValidUntil time.Time `json:"-"`
+	NodeReady           bool
+	NetworkVerified     bool
+	WarmupVerified      bool
+	PhysicalQualified   bool
 }
 
 type CapacityNativeWorkerPhaseObservation struct {
