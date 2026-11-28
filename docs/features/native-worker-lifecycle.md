@@ -531,3 +531,27 @@ custody and sealed-witness reobservation, plus a third mandatory factory artifac
 root. Both existing factory roots and their watchdog/no-skip/race verdict stay
 unchanged. No controller, network writer, readiness/admission callback, process
 activation or provider resource is installed by this Source.
+
+## Protected floor network RPC handles
+
+`NativeWorkerNetworkRPCClient` is separate from provider and Kubernetes clients.
+Protected Go composition fixes the System process role, AdapterID, compiled
+Source, whole binding-file scope, floor identity, template and TLS trust files.
+The destination is calculated from the floor's canonical private IPv4 and the
+reader9444 or writer9443 port, always HTTPS `/rpc/execute`. There is no Describe,
+health, catalog, manifest-selected endpoint or fake provider adapter.
+
+The reader sends only the five declared selectors and checks actual Source,
+scope, floor/template, freshness and complete typed kernel inventories. The
+writer sends only binding name and permit UUID for install/remove. Both require
+the real System three-key request and five-key reply envelopes, explicit false
+network/useful metadata, exact member names, complete original Read and Close,
+and a live bounded context. Missing/null inventories never become absence.
+
+Writer output retains the real five-field disposition: permit ID, state,
+GET-only recovery and two false qualification/admission flags. Unknown and
+`original_return_custodied` remain dispositions rather than effect receipts.
+System checks Core's scope-bound one-use permission independently; the client
+does not invent a reply scope echo or issue permission. Shared Close closes all
+copies. The source installs no network runtime, controller, guest witness or
+production configuration. See [ADR-0143](../adr/0143-bind-floor-network-rpc-to-protected-mutual-tls-clients.md).

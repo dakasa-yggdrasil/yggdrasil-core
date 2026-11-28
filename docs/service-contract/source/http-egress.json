@@ -241,6 +241,26 @@
       "line": 113
     },
     {
+      "argument_expression": "ctx, http.MethodPost, c.target, bytes.NewReader(requestBody)",
+      "argument_sha256": "6d9f1b951a0719b9b64606bbf58b9f2e7abdbf1ec728741c775a932b89e27e03",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacity/native_worker_network_rpc_client.go",
+      "function": "call",
+      "line": 278
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/capacity/native_worker_network_rpc_client.go",
+      "function": "call",
+      "line": 284
+    },
+    {
       "argument_expression": "ctx, http.MethodGet, u.String(), nil",
       "argument_sha256": "844a09f250e9df81ce9b4186022c8eedb57e13c46c10a601b24d14ddd455e8bb",
       "build_constraint": "default",

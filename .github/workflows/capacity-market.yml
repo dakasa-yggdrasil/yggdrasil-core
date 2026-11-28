@@ -90,6 +90,7 @@ jobs:
               'internal/capacity/native_worker_hcloud_physical_test.go',
               'internal/capacity/native_worker_hcloud_guards_test.go',
               'internal/capacity/native_worker_rpc_client_linux_test.go',
+              'internal/capacity/native_worker_network_rpc_client_linux_test.go',
               'internal/capacity/native_worker_rpc_roles_test.go',
               'internal/capacity/native_worker_rpc_roles_linux_test.go',
               'internal/capacity/native_worker_private_factory_binding_test.go',

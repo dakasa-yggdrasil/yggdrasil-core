@@ -185,3 +185,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 - [ADR-0140: Bind Native floor network permissions to sealed births and original custody](0140-bind-native-floor-network-permissions-to-sealed-births-and-original-custody.md)
 
 - [ADR-0142: Pair concrete Native runtime with typed HCloud qualification](0142-pair-concrete-native-runtime-with-typed-hcloud-qualification.md)
+- [ADR-0143: Bind floor network RPC to protected mutual TLS clients](0143-bind-floor-network-rpc-to-protected-mutual-tls-clients.md)
