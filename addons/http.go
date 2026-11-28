@@ -64,8 +64,21 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	nativeOwner, err := loadNativeWorkerRuntime(ctx, app, db, role)
+	if err != nil {
+		return err
+	}
+	nativeInstalled := false
+	defer func() {
+		if !nativeInstalled && nativeOwner != nil {
+			_ = nativeOwner.Close()
+		}
+	}()
 
 	var opts []httpapi.ServerOption
+	if nativeOwner != nil {
+		opts = append(opts, nativeOwner.options()...)
+	}
 	owners, err := httpapi.NewOriginalWorkflowOwners(ctx)
 	if err != nil {
 		return err
@@ -186,6 +199,8 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 	if worker {
 		handler = lifetime.Handler(handler)
+	} else {
+		handler = nativeWorkerRuntimeHandler(app, handler)
 	}
 
 	servers := configuredHTTPServers(addr, secondaryAddr, handler, tlsConfig)
@@ -214,8 +229,12 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 		app.SetResource("http_tls_server", servers[1])
 		app.SetResource("http_tls_addr", secondaryAddr)
 	}
+	if nativeOwner != nil {
+		app.SetResource(nativeWorkerRuntimeResource, nativeOwner)
+		app.RegisterDrainer(nativeOwner.Seal)
+	}
 	app.RegisterCloser(func(ctx context.Context) error {
-		if err := shutdownOwnedHTTPServers(ctx, owners, servers); err != nil {
+		if err := shutdownNativeOwnedHTTPServers(ctx, owners, nativeOwner, servers); err != nil {
 			return err
 		}
 		if worker {
@@ -224,6 +243,7 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 		}
 		return nil
 	})
+	nativeInstalled = true
 	app.RegisterDrainer(owners.Seal)
 	if worker {
 		app.RegisterDrainer(lifetime.BeginDrain)

@@ -178,7 +178,7 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		return r.Status, nil
 	}
 	if p.NativeWorkerPoolBinding != nil {
-		return executeCapacityNativeWorkerBoundStep(ctx, db, policy, p, wf, result, read, fail)
+		return executeCapacityNativeWorkerBoundStep(ctx, conn, db, policy, p, wf, result, read, fail)
 	}
 	b := p.AssessmentBinding
 	if admissionOnly {

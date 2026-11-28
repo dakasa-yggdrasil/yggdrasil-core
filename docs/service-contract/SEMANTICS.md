@@ -1127,3 +1127,32 @@ Pod termination/kubelet sync metadata; it neither waits on behalf of the agent
 nor supplies readiness authority. No Secret content or private-body digest is
 logged. An original failed run remains failed and cannot be reclassified by a
 later diagnostic observation.
+
+
+## Main Native runtime owner
+
+The authority process may load one private mounted
+`native_worker_runtime_installation_v1` file. Absence is off; configured invalid
+Source/policy/material fails without fallback or partial installation. Adapter,
+capability, execution and scope identities derive from the exact stored policy;
+TLS/material/artifact references are protected process configuration, never
+workflow inputs. The pool reader's missing manifest scope is supplied as a
+mandatory private whole-file pin. API workers refuse installation.
+
+Worker/Guest, Network and Abort share one opaque lifetime and borrowed DB.
+New scope admission seals without waiting, then Close joins borrowers and
+closes Abort/Network/Worker in reverse ownership order. HTTP and RabbitMQ use a
+current protected per-operation resolver, not a captured missing owner or stale
+broker. No execution gate or legacy Native dispatcher is enabled. The optional
+independent guest readiness producer remains nil/HOLD. Artifact signing reads
+the fixed managed-secret identity on every Retrieve and checks closed safe
+Source/artifact scope, active status, future expiry and exactly three temporary
+credential keys. There is no ambient chain/cache or implicit IAM qualification.
+Source/CI installation evidence does not establish live allocator handoff,
+credential renewal, warmup, end-to-end MTU or production admission. See ADR0148.
+
+Native shutdown Join is cancelable and retains callback listeners until original
+borrowers return. The opt-in dependency-shutdown barrier stops later closes on
+join failure, retaining the original error and durable uncertainty; ordinary
+legacy closer errors still continue. Process exit remains possible and is not
+a successful join or proof that the original survives.
