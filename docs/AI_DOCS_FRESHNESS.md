@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 8a9cd867ba3c31451da8829004153c1865fc20c8
-verified_diff_sha256: 57d09a5c5e84eafef2e3a1304f907982ec2e9dd9653bb76197c66330a32361ec
+verified_at_commit: 0a483c2401bef8f0b390ee9a021d5394266bce28
+verified_diff_sha256: 9846f83248b8b92103290c612e13c7d986a9b1013efee41e0c2286b18060bee9
 reconciler_schema: 1
 
 Reviewed the exact union of private main installation and durable same-profile
@@ -30,3 +30,13 @@ execution roots. Final-head CI must qualify all twenty new roots and every old
 gate; previous passes do not qualify the new union. No test/build/analysis ran
 locally, and no live material/IAM, renewal, allocator handoff, provider/network
 effect, MTU/warmup, admission or production activation is claimed.
+
+The integrated CI2 original exposed three concrete issues: network permit wire
+strings passed to UUID APIs, a fixture expecting a boolean absent from the real
+Go permit, and an adversarial fixture that incorrectly demanded an invalid
+current registration pass its existing Source guard. The narrow reviewed
+correction parses canonical nonnil UUIDs, asserts the actual permit and persisted
+Source-bound send_started row, and keeps the independent current GET valid
+while requiring rejection of the substituted original/grant. Production phase
+qualification, one-send authority, deadlines and all twenty root names remain
+unchanged. Original failure logs are retained; final CI remains the gate.
