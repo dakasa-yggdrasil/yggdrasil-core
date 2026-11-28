@@ -1115,3 +1115,15 @@ reservations remain held until Store117 permits absent atomically. There is no
 mutation callback, automatic retry, readiness/admission fallback or main-process
 activation. Source/CI fixtures do not prove a live provider deletion or billing
 closure. See ADR0147.
+
+The diagnostic agent's missing-projection startup bound is fixed at 120 seconds,
+covering Kubernetes 1.32's normal 60-to-90-second Secret-remount resync window
+with finite headroom. It still honors parent cancellation and refuses present
+malformed/expired material immediately. Discovery cannot renew the original
+Config.NotBefore/HardNotAfter, packet deadlines or proof validity. The Kind
+fixture retains its original configuration and Job/test budgets. A separate
+bounded CI observer records only fixed filenames, presence/length and actual
+Pod termination/kubelet sync metadata; it neither waits on behalf of the agent
+nor supplies readiness authority. No Secret content or private-body digest is
+logged. An original failed run remains failed and cannot be reclassified by a
+later diagnostic observation.

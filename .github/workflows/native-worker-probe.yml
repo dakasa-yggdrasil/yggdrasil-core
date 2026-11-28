@@ -204,6 +204,10 @@ jobs:
           awk -v source="vcs.revision=$SOURCE_COMMIT" '$1 == "build" && $2 == source {found=1} END {exit !found}' "$directory/controller-build-info.txt"
           awk '$1 == "build" && $2 == "vcs.modified=false" {found=1} END {exit !found}' "$directory/controller-build-info.txt"
           sha256sum "$directory/context/native-probe-service.test" > "$directory/controller-binary.sha256"
+          go test -race -count=1 -timeout=30s -json ./scripts/ci/native-probe-service | tee "$directory/projection-observer-tests.jsonl"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=true -o "$directory/projection-observer" ./scripts/ci/native-probe-service
+          go version -m "$directory/projection-observer" > "$directory/projection-observer-build-info.txt"
+          sha256sum "$directory/projection-observer" > "$directory/projection-observer-binary.sha256"
       - name: Reuse the exact qualified normal agent binary without a wrapper
         shell: bash
         run: |
@@ -281,6 +285,11 @@ jobs:
         run: |
           set -euo pipefail
           kubectl apply -f scripts/ci/native-probe-service/bootstrap.yaml
+          directory="$RUNNER_TEMP/probe-service-kind"
+          # Read-only metadata observer, not an agent wrapper or startup waiter.
+          REQUIRE_NATIVE_PROBE_SERVICE_KIND=true "$directory/projection-observer" > "$directory/projection-metadata.jsonl" &
+          observer_pid=$!
+          trap 'kill -TERM "$observer_pid" 2>/dev/null || true; wait "$observer_pid" || true; rm -f "$directory/projection-observer"' EXIT
           # Fixed disposable bootstrap only. Resource creation/protocol/identity
           # joins are performed by the tagged Go controller inside the cluster.
           kubectl set image --local -f scripts/ci/native-probe-service/job.yaml "controller=$NATIVE_PROBE_CONTROLLER_IMAGE" -o yaml |
@@ -328,7 +337,16 @@ jobs:
           job = json.loads((p / 'job.json').read_text())
           if job.get('status', {}).get('succeeded') != 1 or job.get('status', {}).get('failed', 0) != 0:
               raise SystemExit('Original controller did not succeed exactly once')
+          observer_roots = ['TestProjectionObserverRejectsForeignHostAndObjectSelectors', 'TestProjectionObserverBoundsChildOutputWithoutLeakingDiscardedBytes']
+          observer_events = [json.loads(line) for line in (p / 'projection-observer-tests.jsonl').read_text().splitlines()]
+          if any(e.get('Action') in ('fail', 'skip') for e in observer_events):
+              raise SystemExit('Projection observer failed/skipped')
+          for action in ('run', 'pass'):
+              actual = collections.Counter(e['Test'] for e in observer_events if e.get('Action') == action and e.get('Test') and '/' not in e['Test'])
+              if actual != collections.Counter(observer_roots):
+                  raise SystemExit('Missing/repeated observer roots')
           result = {'schema': 1, 'source_commit': os.environ['SOURCE_COMMIT'], 'event_sha': os.environ['GITHUB_SHA'], 'root': root, 'run': 1, 'pass': 1, 'skip': 0, 'agent_image': proof['Image'], 'service_source_echoes': proof['ServiceSourceEchoes'], 'requests': 12, 'echoes': 12, 'network_only': True, 'live_adoption': False}
+          result['projection_observer_roots'] = observer_roots
           result['files'] = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.iterdir()) if f.is_file()}
           (p / 'qualified.json').write_text(json.dumps(result, indent=2) + '\n')
           PY

@@ -275,6 +275,7 @@ func TestNativeProbeActualClusterIPReverseSNATEcho(t *testing.T) {
 				return false
 			}
 			if len(p.Status.ContainerStatuses) == 1 && p.Status.ContainerStatuses[0].State.Terminated != nil {
+				logTerminated(t, p)
 				t.Fatalf("normal agent exited before material: code=%d", p.Status.ContainerStatuses[0].State.Terminated.ExitCode)
 			}
 			v, ok := life(p)
@@ -358,13 +359,14 @@ func TestNativeProbeActualClusterIPReverseSNATEcho(t *testing.T) {
 	t.Logf("NATIVE_PROBE_SERVICE_SETUP %s", setup)
 	for i := range pods {
 		index := i
-		await(t, ctx, "actual original45s loader/mTLS server", func() bool {
+		await(t, ctx, "actual normal bounded loader/mTLS server", func() bool {
 			p, err := client.CoreV1().Pods(fixtureNamespace).Get(ctx, pods[index].Name, metav1.GetOptions{})
 			if err != nil {
 				return false
 			}
 			if len(p.Status.ContainerStatuses) == 1 && p.Status.ContainerStatuses[0].State.Terminated != nil {
-				t.Fatalf("normal45s loader/late projection failed: exit=%d", p.Status.ContainerStatuses[0].State.Terminated.ExitCode)
+				logTerminated(t, p)
+				t.Fatalf("normal bounded loader/late projection failed: exit=%d", p.Status.ContainerStatuses[0].State.Terminated.ExitCode)
 			}
 			out, err := call(ctx, httpClients[index], lives[index].IP, probe.ReportPath, http.MethodGet, source)
 			if err != nil {
@@ -535,4 +537,21 @@ func endpointsExact(rows []discoveryv1.EndpointSlice, service *corev1.Service, p
 	port := s.Ports[0]
 	e := s.Endpoints[0]
 	return port.Port != nil && *port.Port == 9446 && port.Protocol != nil && *port.Protocol == corev1.ProtocolUDP && e.TargetRef != nil && e.TargetRef.Kind == "Pod" && e.TargetRef.Namespace == fixtureNamespace && e.TargetRef.Name == pod.Name && e.TargetRef.UID == pod.UID && e.NodeName != nil && *e.NodeName == pod.Spec.NodeName && len(e.Addresses) == 1 && e.Addresses[0] == ip
+}
+
+// Termination messages and projected contents are intentionally excluded.
+func logTerminated(t *testing.T, p *corev1.Pod) {
+	t.Helper()
+	for _, s := range p.Status.ContainerStatuses {
+		if s.Name != "probe" || s.State.Terminated == nil {
+			continue
+		}
+		v := s.State.Terminated
+		raw, _ := json.Marshal(struct {
+			Name, UID, Node       string
+			ExitCode              int32
+			StartedAt, FinishedAt metav1.Time
+		}{p.Name, string(p.UID), p.Spec.NodeName, v.ExitCode, v.StartedAt, v.FinishedAt})
+		t.Logf("NATIVE_PROBE_SERVICE_TERMINATED %s", raw)
+	}
 }
