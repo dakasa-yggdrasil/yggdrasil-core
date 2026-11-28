@@ -674,3 +674,36 @@ Node/registry/network mutation, deployment, admission or readiness fallback.
 CI uses real published factory handles, PostgreSQL and floor TLS but synthetic
 provider/Kubernetes facts. Live provider cleanup and main activation require
 separate receiving. See ADR-0147.
+
+
+## Bound same-profile execution (Source; default-off)
+
+`capacity.execute_bound` now consumes the protected current owner, original
+market Claim/command114 identity and child/phase/network stores. New work is
+restricted to same-profile expansion. The current complete useful pool preserves
+the original baseline and joins every added Node/provider to its immutable birth.
+An admission-only invocation uses existing pending children and never Claims or
+Reserves. Cross-profile handoff, shrink and admitted retirement remain HOLD.
+
+Migration120 commits an immutable one-RPC barrier before each provider create,
+registry phase or network install invocation. Retry/restart reuses the same
+child and target permit; an existing barrier means receiving/uncertainty, never
+success or an unsent proof. A crash before the SDK call can remain reserved.
+Original SDK callbacks still perform their single redeem and custody first.
+
+Only an executor Record wrapper projects complete native Lease/Node originals
+plus current selected registry/Node/physical reads into registered/admitted.
+The base provider callback stays ACK-only. Current HCloud read metadata is
+separate from its immutable historical witness. Registration/admission cannot
+be manufactured from a permit, local hash or a header-only pool observation.
+Independent readiness is mandatory, and nil proof keeps HOLD. Parent completion
+uses dedicated current useful-pool/target/budget/parent joins, without HPA
+Advance or caller health/inflight values. Expired parent authority never opens
+a fresh Claim; historical original receiving and recovery stay separate.
+
+Execution retains policy and process execution gates, real owner/clients and
+exact Source workflow identity; admission/release additionally require the
+existing admission gate. Only a completed verified target returns success.
+Unknown outcomes retain safe receiving metadata and fail the workflow step.
+There is no deployment, provider mutation qualification or throughput claim in
+this Source delivery. See ADR-0149.

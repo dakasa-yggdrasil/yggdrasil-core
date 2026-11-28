@@ -13,11 +13,14 @@ import (
 
 // No input carries prices, adapter choices, registry identity or worker count.
 // Only fixed source binding names are dispatched to protected collectors.
-func executeCapacityNativeWorkerBoundStep(ctx context.Context, db *sql.DB, policy model.Manifest, p model.CapacityPolicySpec, workflow model.Manifest, result model.WorkflowRunStepResult, read func(model.CapacityObservationAdapterBinding, string, map[string]any, any) (string, error), fail func(...error) model.WorkflowRunStepResult) model.WorkflowRunStepResult {
-	if p.NativeWorkerPoolBinding == nil || p.MarketBinding == nil || result.Operation == "capacity.admit_bound" || result.Operation == "capacity.execute_bound" {
+func executeCapacityNativeWorkerBoundStep(ctx context.Context, conn *amqp.Connection, db *sql.DB, policy model.Manifest, p model.CapacityPolicySpec, workflow model.Manifest, result model.WorkflowRunStepResult, read func(model.CapacityObservationAdapterBinding, string, map[string]any, any) (string, error), fail func(...error) model.WorkflowRunStepResult) model.WorkflowRunStepResult {
+	if p.NativeWorkerPoolBinding == nil || p.MarketBinding == nil {
 		// Worker execution requires the separate fenced market/provider lifecycle.
 		// The legacy HPA executor never receives this new unit or authority.
 		return fail()
+	}
+	if result.Operation == "capacity.execute_bound" || result.Operation == "capacity.admit_bound" {
+		return executeCapacityNativeWorkerExecution(ctx, conn, db, policy, p, workflow, result, read, fail)
 	}
 	observer := func(callCtx context.Context, actual model.Manifest) (*model.CapacityMarketAssessment, *model.CapacityNativeWorkerPoolObservation, error) {
 		if actual.ID != policy.ID || actual.Checksum != policy.Checksum || callCtx.Err() != nil {
