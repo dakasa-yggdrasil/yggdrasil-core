@@ -74,6 +74,8 @@ jobs:
               'repository/capacity_native_worker_abort_postgres_test.go',
               'repository/capacity_native_worker_abort_commands_postgres_test.go',
               'repository/capacity_native_worker_runtime_postgres_test.go',
+              'repository/capacity_native_worker_runtime_hcloud_postgres_test.go',
+              'repository/capacity_native_worker_runtime_provider_test.go',
               'repository/capacity_native_worker_unsent_postgres_test.go',
               'repository/capacity_native_worker_network_postgres_test.go',
               'repository/capacity_native_worker_network_original_test.go',
@@ -260,7 +262,7 @@ jobs:
           set -euo pipefail
           output="$RUNNER_TEMP/native-private-factory"
           git rev-parse HEAD > "$output/core-source-head.txt"
-          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository -run '^(TestNativePrivateFactoryPublishedSystemCLI|TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership)$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
+          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository -run '^(TestNativePrivateFactoryPublishedSystemCLI|TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership|TestNativeConcreteHCloudRuntimePublishedFactoryPreservesCanonicalScopeAndOwnership)$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
       - name: Require the actual executable qualification root without skips
         shell: bash
         run: |
@@ -271,13 +273,13 @@ jobs:
           output = Path(os.environ['RUNNER_TEMP']) / 'native-private-factory'
           events = [json.loads(line) for line in (output / 'original.jsonl').read_text().splitlines() if line.strip()]
           assert not any(event.get('Action') in ('skip', 'fail') for event in events)
-          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity', 'TestNativePrivateFactoryPublishedSystemCLI'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership')}
+          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity', 'TestNativePrivateFactoryPublishedSystemCLI'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeConcreteHCloudRuntimePublishedFactoryPreservesCanonicalScopeAndOwnership')}
           for action in ('run', 'pass'):
               actual = collections.Counter((event['Package'], event['Test']) for event in events if event.get('Action') == action and event.get('Test') and '/' not in event['Test'])
               assert set(actual) == expected and all(count == 1 for count in actual.values())
           assert 'WARNING: DATA RACE' not in (output / 'go-test.stderr').read_text()
           assert not any('WARNING: DATA RACE' in event.get('Output', '') for event in events)
-          (output / 'root-census.json').write_text(json.dumps({'roots': 2, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
+          (output / 'root-census.json').write_text(json.dumps({'roots': 3, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
           PY_FACTORY_ROOT
       - name: Preserve qualification evidence without private material
         if: always()

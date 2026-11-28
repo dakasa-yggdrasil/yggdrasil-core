@@ -468,7 +468,7 @@ reader; native private addresses are not Internet endpoints. This fact does not
 qualify reachability or authorize a floor peer. ReobserveACK still returns only
 the sealed physical tuple; the protected raw reader port retains endpoint facts.
 
-## Concrete private AWS runtime composition
+## Concrete private runtime composition
 
 `message.NewProtectedNativeWorkerConcreteRuntime` builds the existing catalog/RPC
 readers around Source-owned mTLS handles. The repository runtime binds a copied
@@ -492,8 +492,11 @@ an actor or convert an absent return into empty completed custody. Before a
 physical GET, qualification rechecks exact archived bytes/private digest, current
 Attempt and immutable launch. AWS acknowledgement qualification is separate from
 sealed reobservation; the latter returns only current physical identity and
-preserves lifecycle state. HCloud preparation/qualification remains refused by
-this runtime until the separately typed qualifier is paired.
+preserves lifecycle state. The closed provider set is `aws` and `hetzner`, each matching its copied
+profile and market region. `hcloud` and other aliases remain refused. HCloud
+qualification uses its separately typed original201, action and independent
+project/network witness; empty account and absent HTTP request IDs cannot be
+filled with invented values. The same strict qualifier owns sealed reobservation.
 
 The same real phase reader forwards preparation and GET-only receiving under the
 copied policy, pool epoch, writer inventory scope and shared Close fence. Missing
@@ -512,3 +515,19 @@ actual local-to-runner mTLS role isolation and real factory-handle composition
 using the existing published System CLI artifact. These are Source tests, not
 provider provisioning, production adoption, network qualification or load proof.
 See ADR0139.
+
+
+The paired HCloud runtime keeps factory preparation before CREATE independent of
+physical witness creation. Its market location (`hel1`) remains distinct from
+the canonical System network region (`eu-central`), and the System account stays
+empty. A real factory handle bound to the immutable published System executable
+qualifies pure deterministic preparation and transferred ownership only. Missing
+HCloud reader project/anchor scope is refused at construction. Actual provider
+acceptance still requires committed original bytes, immutable launch and the
+complete independent typed witness; preparation cannot supply that proof.
+
+CI adds exact closed-provider/profile refusal cases, real PostgreSQL original
+custody and sealed-witness reobservation, plus a third mandatory factory artifact
+root. Both existing factory roots and their watchdog/no-skip/race verdict stay
+unchanged. No controller, network writer, readiness/admission callback, process
+activation or provider resource is installed by this Source.

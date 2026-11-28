@@ -56,6 +56,12 @@ func (NativeWorkerConcreteRuntime) MarshalJSON() ([]byte, error) {
 	return []byte(`{"private_native_runtime":"redacted"}`), nil
 }
 
+// Provider literals are paired with the independently reviewed ACK qualifier.
+// A generic test provider or an alias cannot select either real provider path.
+func nativeConcreteRuntimeProvider(provider string) bool {
+	return provider == "aws" || provider == "hetzner"
+}
+
 func NewNativeWorkerConcreteRuntime(c NativeWorkerConcreteRuntimeConfig) (*NativeWorkerConcreteRuntime, error) {
 	return newNativeWorkerConcreteRuntime(c, capacity.CurrentGuestCoreSource())
 }
@@ -80,14 +86,14 @@ func newNativeWorkerConcreteRuntime(c NativeWorkerConcreteRuntimeConfig, source 
 	}
 	factories := make(map[string]*capacity.NativeWorkerPrivateFactory, len(c.Factories))
 	for _, execution := range p.NativeWorkerLifecycleBinding.Profiles {
-		awsProfile := false
+		pairedProfile := false
 		for _, profile := range p.Profiles {
-			if profile.Name == execution.Profile && profile.Provider == "aws" {
-				awsProfile = true
+			if profile.Name == execution.Profile && nativeConcreteRuntimeProvider(profile.Provider) {
+				pairedProfile = true
 			}
 		}
 		factory := c.Factories[execution.Profile]
-		if !awsProfile || factory == nil || !factory.MatchesExecution(execution) {
+		if !pairedProfile || factory == nil || !factory.MatchesExecution(execution) {
 			return nil, errNativeWorkerConcreteRuntime
 		}
 		factories[execution.Profile] = factory
@@ -163,9 +169,20 @@ func (r *NativeWorkerConcreteRuntime) ObservePhaseAuthority(ctx context.Context,
 	return r.phase.ObservePhaseAuthority(ctx, policy)
 }
 
+// Provider and market region belong to the frozen stored profile, not merely
+// to a known-provider allowlist. This also protects phase and pure factory ports.
+func (r *NativeWorkerConcreteRuntime) attemptProfileBound(a model.CapacityNativeWorkerAttempt) bool {
+	for _, p := range r.spec.Profiles {
+		if p.Name == a.Profile {
+			return nativeConcreteRuntimeProvider(p.Provider) && a.Provider == p.Provider && a.Region == p.Region
+		}
+	}
+	return false
+}
+
 func (r *NativeWorkerConcreteRuntime) phaseAttemptBound(a model.CapacityNativeWorkerAttempt) bool {
 	b, pool := r.spec.NativeWorkerLifecycleBinding, r.spec.NativeWorkerPoolBinding
-	if b == nil || pool == nil || b.PhaseObserver == nil || b.RegistryWriter == nil || a.Provider != "aws" || a.SourceCommit != r.source ||
+	if b == nil || pool == nil || b.PhaseObserver == nil || b.RegistryWriter == nil || !r.attemptProfileBound(a) || a.SourceCommit != r.source ||
 		a.PolicyID != r.policy.ID || a.PolicyChecksum != r.policy.Checksum || a.Namespace != r.policy.Metadata.Namespace ||
 		a.PoolUID != pool.PoolUID || a.PoolEpoch != pool.ExpectedPoolEpoch || a.Registry != pool.RegistryRef {
 		return false
@@ -215,7 +232,7 @@ func (r *NativeWorkerConcreteRuntime) Prepare(a model.CapacityNativeWorkerAttemp
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	factory := r.factories[a.Profile]
-	if r.closed || a.Provider != "aws" || a.SourceCommit != r.source || a.PolicyID != r.policy.ID || a.PolicyChecksum != r.policy.Checksum || a.Namespace != r.policy.Metadata.Namespace || factory == nil {
+	if r.closed || !r.attemptProfileBound(a) || a.SourceCommit != r.source || a.PolicyID != r.policy.ID || a.PolicyChecksum != r.policy.Checksum || a.Namespace != r.policy.Metadata.Namespace || factory == nil {
 		return model.CapacityNativeWorkerLaunch{}, errNativeWorkerConcreteRuntime
 	}
 	return factory.Prepare(a) // Pure: existing factory performs no I/O here.
@@ -228,7 +245,7 @@ func (r *NativeWorkerConcreteRuntime) RenderNativeWorkerPrivateBootstrap(ctx con
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	factory := r.factories[a.Profile]
-	if r.closed || a.Provider != "aws" || a.SourceCommit != r.source || a.PolicyID != r.policy.ID || a.PolicyChecksum != r.policy.Checksum || a.Namespace != r.policy.Metadata.Namespace || factory == nil {
+	if r.closed || !r.attemptProfileBound(a) || a.SourceCommit != r.source || a.PolicyID != r.policy.ID || a.PolicyChecksum != r.policy.Checksum || a.Namespace != r.policy.Metadata.Namespace || factory == nil {
 		return nil, errNativeWorkerConcreteRuntime
 	}
 	return factory.RenderNativeWorkerPrivateBootstrap(ctx, a, append(json.RawMessage(nil), launch...), expiry)
@@ -293,7 +310,7 @@ func (r *NativeWorkerConcreteRuntime) Qualify(ctx context.Context, a model.Capac
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if r.closed || a.Provider != "aws" {
+	if r.closed || !r.attemptProfileBound(a) {
 		return model.CapacityNativeWorkerObservation{}, errNativeWorkerConcreteRuntime
 	}
 	launch, err := r.launchAndOriginal(ctx, a, original)
@@ -311,7 +328,7 @@ func (r *NativeWorkerConcreteRuntime) ReobserveACK(ctx context.Context, a model.
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if r.closed || a.Provider != "aws" {
+	if r.closed || !r.attemptProfileBound(a) {
 		return model.CapacityNativeWorkerPhysical{}, errNativeWorkerConcreteRuntime
 	}
 	original, err := r.loadOriginal(ctx, a)
