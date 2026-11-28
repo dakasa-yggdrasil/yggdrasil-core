@@ -3,15 +3,19 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 83891b4b9a10281e3abd656a0b5f4c7d50a53976
-verified_diff_sha256: cd9a369e4b7a4c37ab7e2ef616c06a27d8c6fd69df2a915a75e05a141a505fc4
+verified_at_commit: cac7891cf85b8f3f76e2b49b339867ccacd113b9
+verified_diff_sha256: 1480734817c8b1b8b2ea008bc2878cb4e1b44c63d075499c4a16fca53efb9013
 reconciler_schema: 1
 
 Reviewed the complete finite probe command, protected per-run material, signed
 DF-UDP protocol, real mTLS and fixed loopback process-readiness projection.
 Independent whole-path review covers all 23 product/test/workflow/documentation
-paths and all 952 production source records without omission. Fourteen authored
-roots await CI; no tests, builds, vet, Docker or provider calls ran locally.
+paths and all 952 production source records without omission. The original CI exercised all fourteen roots under race without skipped cases.
+Its ARM64 platform-warning and lint failures are preserved. The reviewed
+successor pins actual PR Source separately from the event SHA, declares the
+platform explicitly and retains every runtime/test/image assertion. Current
+successor CI remains required; no tests, builds, vet, Docker or provider calls
+ran locally.
 
 The separate normal Main publisher verifies actual clean buildvcs, extracted
 binary Source/architecture and image config before publishing platform digests
