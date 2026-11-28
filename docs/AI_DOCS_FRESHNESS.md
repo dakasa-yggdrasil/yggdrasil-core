@@ -1,7 +1,7 @@
 # Documentation freshness
 
-verified_at_commit: 7416d2143c86a5d62b3b73dbcac3977bbd11cd6a
-verified_diff_sha256: 880f0ebe57f3624668933e08fc3cc179ef88a81a19eb59013729d0daa103856f
+verified_at_commit: 76414f480a58ee674f4602866f76622fdcbcc19b
+verified_diff_sha256: ac0323f4e9b9165b4a06b90f8b137cd84a8eae81dd0af2ad8735523c5300875f
 reconciler_schema: 1
 
 Reviewed the final owned Native readiness Controller and inherited Service-NAT
@@ -44,3 +44,16 @@ This records actual tool provenance without claiming a clean release binary.
 The two generated outputs and this explicit stamp form the only metadata
 commit. Source acceptance and a draft PR provide no runtime activation,
 installed artifact, useful capacity, readiness or billing-closure authority.
+
+The original PR208 head3b461918 remains failed. Its six TLS listener roots
+could not issue leaves because the fixture used the leaf signer instead of the
+retained CA signer. One idle Source negative reused its baseline value; nine
+PostgreSQL roots lacked the configured phase-authority runtime interface in
+their common setup. Three equivalent lint expressions were also rejected.
+The independently reviewed eight-path successor fixes only these concrete
+fixtures/styles and two derived source facts. Every original guard, assertion,
+timeout and all56 root names remain. Original logs and ZIP digests are retained.
+This sibling diagnostic branch receives exactly one isolated NativeReadiness
+workflow dispatch before any normal PR208 successor. It is not a CI pass,
+production correction or permission to skip the later full exact-head PR gates.
+The actual refreshed schema-one plan and ai all both completed with exit0.
