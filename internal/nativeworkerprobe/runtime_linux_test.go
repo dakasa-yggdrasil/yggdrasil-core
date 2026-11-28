@@ -185,9 +185,10 @@ func mustProbeCertificate(t *testing.T, der []byte) *x509.Certificate {
 }
 
 func TestProbeRealAuthenticatedPOSTStartsExactlyOnceAndGETOnlyReobserves(t *testing.T) {
-	a, b, ctx := enginePair(t)
 	f := tlsFixture(t, "127.0.0.1")
-	a.material.config.ControllerLeafSHA256, b.material.config.ControllerLeafSHA256 = sha(f.clientDER), sha(f.clientDER)
+	a, b, ctx := enginePair(t, func(a, b *material) {
+		a.config.ControllerLeafSHA256, b.config.ControllerLeafSHA256 = sha(f.clientDER), sha(f.clientDER)
+	})
 	as, bs := probeHTTP(t, a, ctx, f), probeHTTP(t, b, ctx, f)
 	client := probeClient(t, f, &f.client)
 	for _, phase := range []string{InitialPath, FinalPath} {

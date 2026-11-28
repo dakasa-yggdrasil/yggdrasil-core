@@ -13,7 +13,7 @@ import (
 // Linux loopback aliases exercise the real DF socket and signed protocol, not
 // a Kubernetes Service/overlay qualification. Only this unexported fixture maps
 // both target paths to the same peer socket; the production loader rejects it.
-func enginePair(t *testing.T) (*engine, *engine, context.Context) {
+func enginePair(t *testing.T, configure ...func(*material, *material)) (*engine, *engine, context.Context) {
 	t.Helper()
 	c := testConfig("floor")
 	c.Identity.PodIPv4, c.Identity.ServiceClusterIPv4 = "127.0.0.2", "127.0.0.2"
@@ -22,13 +22,20 @@ func enginePair(t *testing.T) (*engine, *engine, context.Context) {
 	p := peerConfig(c)
 	pub, key := packetKeys(t)
 	peerPub, peerKey := packetKeys(t)
+	am := &material{config: c, scope: "scope-floor", signing: key, peer: peerPub}
+	bm := &material{config: p, scope: "scope-candidate", signing: peerKey, peer: pub}
+	// The production engine treats configuration/keys as immutable. Fixtures
+	// make every substitution before either socket receiver starts too.
+	for _, apply := range configure {
+		apply(am, bm)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	a, ac, err := newEngine(ctx, &material{config: c, scope: "scope-floor", signing: key, peer: peerPub})
+	a, ac, err := newEngine(ctx, am)
 	if err != nil {
 		cancel()
 		t.Fatal(err)
 	}
-	b, _, err := newEngine(ctx, &material{config: p, scope: "scope-candidate", signing: peerKey, peer: pub})
+	b, _, err := newEngine(ctx, bm)
 	if err != nil {
 		_ = a.close()
 		cancel()
@@ -136,10 +143,9 @@ func TestProbeActualDFUDPCompletesOnlyTwoFiniteBatchesWithoutReplay(t *testing.T
 }
 
 func TestProbeUnstartedPeerCanQueueButCannotEchoAndReplayConsumesRun(t *testing.T) {
-	a, _, ctx := enginePair(t)
-	peer := peerConfig(a.material.config)
 	_, peerKey := packetKeys(t)
-	a.material.peer = peerKey.Public().(ed25519.PublicKey)
+	a, _, ctx := enginePair(t, func(a, _ *material) { a.peer = peerKey.Public().(ed25519.PublicKey) })
+	peer := peerConfig(a.material.config)
 	raw, err := makePacket(peer, peerKey, "initial", "pod", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +166,7 @@ func TestProbeUnstartedPeerCanQueueButCannotEchoAndReplayConsumesRun(t *testing.
 }
 
 func TestProbeIncompleteSendCannotRetryOrOpenFinal(t *testing.T) {
-	a, _, ctx := enginePair(t)
+	a, _, ctx := enginePair(t, func(a, _ *material) { a.config.HardNotAfter = time.Now().Add(200 * time.Millisecond) })
 	// A canceled parent forbids the first emission, without turning cancellation
 	// into a new run or moving the configured hardNotAfter.
 	closed, cancel := context.WithCancel(ctx)
@@ -168,7 +174,6 @@ func TestProbeIncompleteSendCannotRetryOrOpenFinal(t *testing.T) {
 	if a.start(closed, "initial") || len(a.report(fixtureSource).Initial.Sent) != 0 {
 		t.Fatal("canceled invocation emitted")
 	}
-	a.material.config.HardNotAfter = time.Now().Add(200 * time.Millisecond)
 	if !a.start(ctx, "initial") {
 		t.Fatal("first finite invocation refused")
 	}
