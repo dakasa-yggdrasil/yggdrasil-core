@@ -31,7 +31,7 @@ func (NativeWorkerPhaseRecordEvidence) MarshalJSON() ([]byte, error) {
 func (r *NativeWorkerPhaseReader) ReadLifecyclePhase(ctx context.Context, a model.CapacityNativeWorkerAttempt) (model.CapacityNativeWorkerPhaseReadObservation, *model.CapacityNativeWorkerReadinessProof, error) {
 	var zero model.CapacityNativeWorkerPhaseReadObservation
 	if r == nil || r.read == nil || a.Physical == nil || ctx == nil || ctx.Err() != nil {
-		return zero, nil, fmt.Errorf("Native phase record reader unavailable")
+		return zero, nil, fmt.Errorf("native phase record reader unavailable")
 	}
 	o, err := r.read(ctx, *r.policy.NativeWorkerLifecycleBinding.PhaseObserver, a.Physical.ProviderID, a.BirthSHA256)
 	if err != nil {

@@ -16,7 +16,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-var errNativeWorkerReceiving = errors.New("Native worker remains in protected receiving or HOLD")
+var errNativeWorkerReceiving = errors.New("native worker remains in protected receiving or HOLD")
 
 func nativeWorkerExecutionCatalog(ts model.IntegrationTypeManifestSpec, operation string) bool {
 	if operation != "ensure_native_worker" && operation != "ensure_native_worker_pool" || !slices.Contains(ts.Capabilities, "execute") {
