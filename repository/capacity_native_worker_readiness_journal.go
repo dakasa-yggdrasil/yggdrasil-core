@@ -212,7 +212,7 @@ func (s *nativeReadinessRunJournal) guard(ctx context.Context, tx *sql.Tx, a mod
 	if err := tx.QueryRowContext(ctx, `SELECT checksum,active FROM public.manifests WHERE id=$1 AND kind='capacity_policy' AND namespace=$2 FOR SHARE`, s.policy.ID, s.policy.Metadata.Namespace).Scan(&checksum, &active); err != nil || !active || checksum != s.policy.Checksum {
 		return time.Time{}, errNativeReadinessRun
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT attempt,launch_wire FROM public.capacity_native_worker_attempts WHERE id=$1 AND policy_id=$2 AND namespace=$3 FOR SHARE`, a.ID, a.PolicyID, a.Namespace).Scan(&raw, &launch); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT attempt,launch_wire FROM public.capacity_native_worker_attempts WHERE id=$1 AND policy_id=$2 AND namespace=$3 FOR UPDATE`, a.ID, a.PolicyID, a.Namespace).Scan(&raw, &launch); err != nil {
 		return time.Time{}, errNativeReadinessRun
 	}
 	var actual model.CapacityNativeWorkerAttempt
@@ -232,6 +232,9 @@ func (s *nativeReadinessRunJournal) guard(ctx context.Context, tx *sql.Tx, a mod
 	p, pe := parseCapacityPolicy(s.policy)
 	if pe != nil || json.Unmarshal(command, &c) != nil || c.AttemptID != a.ID || c.PolicyID != a.PolicyID || c.PolicyChecksum != a.PolicyChecksum || c.Namespace != a.Namespace || c.Generation != a.Generation || c.FencingToken != a.FencingToken || !validCapacityExecutor(c.ExecutorID) || c.WorkflowID == uuid.Nil || !c.ExpiresAt.After(now) {
 		return time.Time{}, errNativeReadinessRun
+	}
+	if err = nativeMemberGrowthAllowedTx(ctx, tx, p, actual); err != nil {
+		return time.Time{}, err
 	}
 	intent, err := loadCapacityIntent(ctx, tx, a.Namespace, p, true)
 	if err != nil || intent.PolicyID != a.PolicyID || intent.PolicyChecksum != a.PolicyChecksum || intent.Generation != a.Generation || intent.FencingToken != a.FencingToken || intent.LeaseOwner == "" || intent.LeaseExecutorID != c.ExecutorID || intent.LeaseExpiresAt == nil || !intent.LeaseExpiresAt.After(now) || intent.RecoveryOnly || !intent.Decision.ExecutionPermitted || intent.Phase != "preparing" || intent.Assessment.NativeWorkerPool == nil || intent.Assessment.NativeWorkerPool.OwnerEpoch != a.PoolEpoch {

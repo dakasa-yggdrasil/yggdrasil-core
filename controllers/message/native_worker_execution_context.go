@@ -21,6 +21,7 @@ type NativeWorkerExecutionScope struct {
 	PoolReaderScopeSHA256 string
 	RegistryWriter        *capacity.NativeWorkerRPCClient
 	ProviderMutations     map[string]*capacity.NativeWorkerRPCClient
+	Members               *repository.CapacityNativeWorkerMemberStore
 }
 
 func (NativeWorkerExecutionScope) String() string     { return "[private Native worker execution scope]" }

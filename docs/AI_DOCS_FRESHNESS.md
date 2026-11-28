@@ -1,71 +1,69 @@
 # Documentation freshness
 
-verified_at_commit: 80733cbd74ceebfadba460c06148a33b96884f80
-verified_diff_sha256: 5de6d0afeb5847716f72588d9206ab24d2289381138c3a398909addca174af7d
+verified_at_commit: 805a07770da045f50b65c1b9f7dbe2993c048771
+verified_diff_sha256: c03a3e9eb9282d9c048de43073214835bf9abb870d3dbcc2a288d53aca63b392
 reconciler_schema: 1
 
-Reviewed the final owned Native readiness Controller and inherited Service-NAT
-Source union against freshly fetched Main 75d412ebb924afafeb58245100676446a5213a5c. The Controller and additional real-linter trigger paths match their closed
-partition reviews; the full89-path union
-retains the signed diagnostic and NAT source ancestry. The complete census has
-997 records,34 additions and no omitted Main75 source. All28 contract evidence
-references match exact current files. The standalone four-route private mTLS
-listener is classified explicitly without relabeling the mux/intercept counts.
+Reviewed the optional Native placement and never-admitted member retirement
+Source against freshly fetched Main d1b9ea3019e0a03d31335d31dc7a8baaadaf3601.
+The original82-file Source and eight-path first-CI successor are retained by
+ancestry with a ten-path style/fixture successor. The complete source census has1027 records,30 additions and zero
+omitted parent sources; all29 contract
+references match current evidence. Standalone member mTLS and official stock
+scheduler handlers are classified explicitly without fictitious mux counts.
 
-The immutable encrypted run, private original custody, qualified Kubernetes
-reads, finite packet reports, real API-worker startup and same PendingProof
-cleanup are one protected opt-in composition. New runs need180s and are capped
-at300s while preserving the original command, lease and qualification expiry.
-Authenticated GET-only idle waiting voluntarily yields with the parent live;
-Proof65s and dispatch90s are unchanged. A new GET cannot refresh original final
-frames, an exposed POST cannot replay, and only independent known-UID absence
-commits a destroyed event. Shutdown/rollback retain borrowed dependencies on
-an unjoined callback or cleanup owner.
+The composition uses separate principals, a realm-wide PodUID barrier, opaque
+Lease/RV identities, immutable one-send dispatch and encrypted private originals.
+Mandatory guards are in the actual Network.Redeem path and its locked transaction.
+Sealing is nonblocking. Local HTTP cancellation is not remote original EOF:
+finite private custody joins retain receiving, keys and lower dependencies when
+an expected original is missing, incomplete, uncertain or unreadable. The bounded
+history scan is not a scale qualification. Complete provider framing is not
+acceptance, billing or absence. Only composed closure uses the unchanged Abort
+settled predicate for the final Attempt/IPAM/member-destroyed transaction.
 
-The actual signed Service request may retain a canonical nonzero translated
-source port only from the exact peer Pod. Its emitted echo must return to that
-same observed address and preserve the original signed request. Pod requests
-and received echoes keep9446. Original signatures, selectors,12requests+12echoes,
-1302-byte payloads and30s batch bounds are unchanged. The original failed
-Service runs and diagnostic headers remain evidence; no successful Service,
-DF, warmup or production qualification is inferred from this Source review.
+The installer original verifier/read port is still absent. Literal Authority,
+Source markers and copied403 canaries do not qualify enforcement. This default-off
+Source cannot enable paid creation, admitted retirement, Node-less member cleanup
+or profile handoff without their real counterparts. It changes no production
+installation or existing Abort wire.
 
-The authored CI inventory contains56 Controller roots (44unit,10Postgres,
-2clean-Source TLS ownership), plus inherited18 probe roots,2 observer roots and
-the actual disposable-Kind Service case. These tests have not run locally.
-Current-head CI must qualify the complete union; no gate or failed original
-is waived. No cloud, VM, provider or production workload was executed here.
+The CI-only authored inventory has48 selected roots:40 unit,6 PostgreSQL roots
+on each of versions16 and17, and2 clean-Source real TLS ownership roots. The
+receiving PostgreSQL/TLS fixtures exercise actual store custody with synthetic
+SDK/allocator facts; ownership fixtures declare lower dependency spies. Neither
+is a live installer, complete constructor, cloud or cluster qualification. No
+local tests, build, lint, vet, SQL or cloud execution occurred. Current-head CI
+must still compile and qualify all selected and inherited required checks.
 
-The installed CLI actually produced the schema-one reconciliation plan above
-and completed ai all with exit0 before metadata staging. Its retained binary
-SHA256 is d8ed72559b32e72f7d48071046adbe48ef935d0996b8ff4364a111f70413fab7;
-its own version says dev(none) and buildvcs reports2cb49685 withmodified=true.
-This records actual tool provenance without claiming a clean release binary.
-The two generated outputs and this explicit stamp form the only metadata
-commit. Source acceptance and a draft PR provide no runtime activation,
-installed artifact, useful capacity, readiness or billing-closure authority.
+The installed CLI actually generated this schema-one plan and completed ai all
+with exit0. Its retained SHA256 is
+d8ed72559b32e72f7d48071046adbe48ef935d0996b8ff4364a111f70413fab7;
+version reports dev(none), buildvcs revision2cb49685 withmodified=true. Generated
+context reports this actual Source with dirty=true; that original tool output
+is retained without relabeling it as a clean release binary. Only the two
+normal generated outputs and this explicit stamp form the metadata commit.
+A draft PR is Source review and CI, with no runtime adoption or merge authority.
 
-The original PR208 head3b461918 remains failed. Its six TLS listener roots
-could not issue leaves because the fixture used the leaf signer instead of the
-retained CA signer. One idle Source negative reused its baseline value; nine
-PostgreSQL roots lacked the configured phase-authority runtime interface in
-their common setup. Three equivalent lint expressions were also rejected.
-The independently reviewed eight-path successor fixes only these concrete
-fixtures/styles and two derived source facts. Every original guard, assertion,
-timeout and all56 root names remain. Original logs and ZIP digests are retained.
-This sibling diagnostic branch receives exactly one isolated NativeReadiness
-workflow dispatch before any normal PR208 successor. It is not a CI pass,
-production correction or permission to skip the later full exact-head PR gates.
-The actual refreshed schema-one plan and ai all both completed with exit0.
+The original PR209 headabe4 remains failed and its API-verified original ZIPs
+and logs are retained. Repository compilation found two unused imports and one
+string/UUID fixture mismatch; separately executed member and Guest roots exposed
+an incoherent registry/useful-capacity fixture and a foreign-CA signer mismatch.
+Service-doctor also found the stale source_inventory object ref omitted by an
+array-only ref update. The reviewed successor changes only these causes and the
+two regenerated source facts, preserving the1027 key set, runtime criteria and
+all48 selected root names. No missing execution is reported as pass. Actual
+current-head CI remains mandatory.
 
-The normal PR208 head5de1a4ed passed all56 Controller roots again, but its
-mandatory real golangci-lintv2.1.0 job still failed QF1001 on the remaining
-compound negation. The reviewed next successor expands that equivalent guard
-fully to primitive comparisons; it keeps the same TCP or UDP53 allowlist.
-One added workflow_dispatch trigger exposes the existing unchanged four-job
-mandatory template workflow for a single isolated CI round. Its linter version,
-arguments, permissions, unit/addon/installation steps and assertions are exact
-original bytes. No local linter or test ran. The previous isolated NativeReadiness
-run is not repeated, and no original failed lint is reclassified as a pass.
-This real-linter diagnostic and the full final-head PR checks remain required
-before any merge. The actual refreshed CLI plan and ai all completed with exit0.
+The second original head053abd is also retained. Readiness originals demonstrate
+44 unit,2 ownership and10 PostgreSQL roots per version passing on that exact
+head; this does not replace current-head CI. Members executed40 unit roots with
+38 passing and two direct-redeem fixture failures, plus all6 PostgreSQL roots
+passing on each version. Its ownership stage did not execute after unit failure.
+The real linter reported ten expression/style findings. The reviewed ten-path
+successor changes only equivalent selector/switch/absence forms, preserves the
+official untagged stock input fixture, and fixes the actual scripted read order
+and wrapped authentication error in the two denial tests. Four derived source
+facts and their evidence pins are refreshed; keys, roles, guards and selected
+root names remain unchanged. No executed failure or missing ownership check is
+reported as success. Current full PR qualification remains required.

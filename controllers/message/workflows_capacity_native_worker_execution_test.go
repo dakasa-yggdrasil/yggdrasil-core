@@ -79,7 +79,7 @@ func TestNativeWorkerExecutionFlagsCannotReplaceProtectedPorts(t *testing.T) {
 func TestNativeWorkerExecutionCatalogIsClosedAndNativeOnly(t *testing.T) {
 	ts := model.IntegrationTypeManifestSpec{Capabilities: []string{"execute"}}
 	// Use JSON to keep this boundary fixture identical to catalog wire fields.
-	for _, operation := range []string{"ensure_native_worker", "ensure_native_worker_pool"} {
+	for _, operation := range []string{"ensure_native_worker", "ensure_native_worker_pool", "destroy_native_worker"} {
 		raw := `{"capabilities":["execute"],"action_catalog":[{"name":"` + operation + `","idempotent":false,"resource_types":["native_worker"]}],"resource_types":[{"name":"native_worker","default_actions":["` + operation + `"]}]}`
 		if json.Unmarshal([]byte(raw), &ts) != nil || !nativeWorkerExecutionCatalog(ts, operation) {
 			t.Fatal("native Source contract refused", operation)
@@ -89,7 +89,11 @@ func TestNativeWorkerExecutionCatalogIsClosedAndNativeOnly(t *testing.T) {
 			t.Fatal("replayable mutation accepted")
 		}
 	}
-	for _, operation := range []string{"ensure_server", "ensure_capacity_pod_drain", "destroy_native_worker", "observe_native_worker", "Ensure_native_worker", ""} {
+	for _, operation := range []string{"ensure_server", "destroy_server", "ensure_capacity_pod_drain", "observe_native_worker", "Ensure_native_worker", ""} {
+		raw := `{"capabilities":["execute"],"action_catalog":[{"name":"` + operation + `","idempotent":false,"resource_types":["native_worker"]}],"resource_types":[{"name":"native_worker","default_actions":["` + operation + `"]}]}`
+		if json.Unmarshal([]byte(raw), &ts) != nil {
+			t.Fatal("catalog fixture framing")
+		}
 		if nativeWorkerExecutionCatalog(ts, operation) {
 			t.Fatal("unrelated authority selected", operation)
 		}

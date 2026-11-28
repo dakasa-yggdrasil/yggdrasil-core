@@ -23,8 +23,10 @@ import (
 // matches the retained pool's real fixture namespace; no guard is rewritten to
 // fit a different namespace. This does not qualify a Node, VM, path or warmup.
 type nativeReadinessComposedOptions struct {
-	NoOpen   bool
-	QuoteTTL time.Duration
+	NoOpen          bool
+	QuoteTTL        time.Duration
+	ConfigurePolicy func(*testing.T, *model.CapacityPolicySpec)
+	BeforeRedeem    func(*testing.T, marketRepositoryFixture, *CapacityNativeWorkerStore, model.CapacityNativeWorkerAttempt)
 }
 
 func nativeReadinessComposedFixture(t *testing.T, options ...nativeReadinessComposedOptions) (marketRepositoryFixture, model.CapacityNativeWorkerAttempt, *NativeWorkerReadinessProducer, nativeReadinessRun) {
@@ -90,6 +92,9 @@ func nativeReadinessComposedFixture(t *testing.T, options ...nativeReadinessComp
 			}
 		}
 	}
+	if option.ConfigurePolicy != nil {
+		option.ConfigurePolicy(t, &f.p)
+	}
 	if err := capacity.ValidatePolicy(f.p); err != nil {
 		t.Fatal("composed fixture must satisfy the real complete policy validator", err)
 	}
@@ -109,6 +114,9 @@ func nativeReadinessComposedFixture(t *testing.T, options ...nativeReadinessComp
 	a, err := workers.Reserve(t.Context(), f.policy, auth)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if option.BeforeRedeem != nil {
+		option.BeforeRedeem(t, f, &workers, a)
 	}
 	if _, err := workers.Redeem(t.Context(), f.policy, auth, a.ID); err != nil {
 		t.Fatal(err)

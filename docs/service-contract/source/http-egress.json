@@ -248,7 +248,7 @@
       "expression_complete": true,
       "file": "internal/capacity/native_worker_guest_read.go",
       "function": "error",
-      "line": 123
+      "line": 140
     },
     {
       "argument_expression": "request",
@@ -258,7 +258,7 @@
       "expression_complete": true,
       "file": "internal/capacity/native_worker_guest_read.go",
       "function": "error",
-      "line": 128
+      "line": 145
     },
     {
       "argument_expression": "ctx, http.MethodPost, c.target, bytes.NewReader(requestBody)",

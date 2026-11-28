@@ -45,7 +45,9 @@ type CapacityNativeWorkerStore struct {
 	Enabled          bool                                       // Separate process gate, default false.
 	authority        *model.CapacityNativeWorkerPoolObservation // Private per-call observation.
 	phaseAuthority   *model.CapacityNativeWorkerPhaseReadObservation
-	commandExpiresAt time.Time // Private immutable original actor command deadline.
+	commandExpiresAt time.Time                        // Private immutable original actor command deadline.
+	Members          *CapacityNativeWorkerMemberStore // Protected opt-in; no manifest installs a port.
+	memberFence      *nativeMemberAllocatorPreflight
 }
 
 // Authenticate outside transaction locks. A fresh Lease read is necessary but
@@ -341,6 +343,24 @@ func (s CapacityNativeWorkerStore) Reserve(ctx context.Context, policy model.Man
 }
 
 func (s CapacityNativeWorkerStore) Redeem(ctx context.Context, policy model.Manifest, authority model.CapacityNativeWorkerAuthority, id uuid.UUID) (model.CapacityNativeWorkerPermit, error) {
+	spec, specErr := parseCapacityPolicy(policy)
+	if specErr != nil {
+		return model.CapacityNativeWorkerPermit{}, specErr
+	}
+	if spec.NativeWorkerLifecycleBinding != nil && spec.NativeWorkerLifecycleBinding.Members != nil {
+		if s.Members == nil {
+			return model.CapacityNativeWorkerPermit{}, ErrCapacityDisabled
+		}
+		a, e := s.Read(ctx, policy, id)
+		if e != nil {
+			return model.CapacityNativeWorkerPermit{}, e
+		}
+		f, e := s.Members.allocatorPreflight(ctx, a)
+		if e != nil {
+			return model.CapacityNativeWorkerPermit{}, e
+		}
+		s.memberFence = &f
+	}
 	authorized, authErr := s.authenticate(ctx, policy)
 	if authErr != nil {
 		return model.CapacityNativeWorkerPermit{}, authErr
@@ -383,6 +403,14 @@ func (s CapacityNativeWorkerStore) Redeem(ctx context.Context, policy model.Mani
 		}
 		if !matched {
 			return ErrCapacityConflict
+		}
+		if p.NativeWorkerLifecycleBinding.Members != nil {
+			if e := tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); e != nil {
+				return e
+			}
+			if s.Members == nil || s.Members.allocatorCurrentTx(ctx, tx, p, a, s.memberFence, now) != nil || parent.LeaseExpiresAt == nil || !parent.LeaseExpiresAt.After(now) || !s.commandExpiresAt.IsZero() && !s.commandExpiresAt.After(now) || !parent.Assessment.Market.ValidUntil.After(now) {
+				return ErrCapacityLease
+			}
 		}
 		a.State, a.Revision, a.UpdatedAt = "send_started", a.Revision+1, now
 		if err = nativeAttemptWriteTx(ctx, tx, a, nil, false, nil); err != nil {

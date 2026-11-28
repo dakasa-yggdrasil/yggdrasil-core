@@ -116,7 +116,7 @@ func NewNativeWorkerRPCClient(c NativeWorkerRPCConfig) (*NativeWorkerRPCClient, 
 	if e != nil || !marketAdapterValid(c.Adapter) || !marketID.MatchString(c.Profile) || !marketID.MatchString(c.BindingName) ||
 		!marketCommit.MatchString(c.SDKSourceCommit) || !marketSHA.MatchString(c.ScopeSHA256) ||
 		!marketSHA.MatchString(c.ServerCASHA256) || !marketSHA.MatchString(c.ServerCertificateSHA256) ||
-		!nativeRPCURL(c.BaseURL, true) || u.Path != "" || !nativeRPCURL(c.HealthURL, false) || len(c.AllowedCapabilities) < 1 || len(c.AllowedCapabilities) > 2 {
+		!nativeRPCURL(c.BaseURL, true) || u.Path != "" || !nativeRPCURL(c.HealthURL, false) || len(c.AllowedCapabilities) < 1 || len(c.AllowedCapabilities) > 4 {
 		return nil, errNativeWorkerRPC
 	}
 	allowed, validRole := nativeWorkerRPCRole(c.AllowedCapabilities)

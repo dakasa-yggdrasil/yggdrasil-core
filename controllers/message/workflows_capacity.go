@@ -89,6 +89,13 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 		return fail(fmt.Errorf("native VM/Node linkage is not readiness, canary, routing, business drain or retirement proof"))
 	}
 	authorizedWorkflow := p.Workflow
+	nativeMemberRecovery := result.Operation == "capacity.recover" && p.NativeWorkerLifecycleBinding != nil && p.NativeWorkerLifecycleBinding.Members != nil
+	if nativeMemberRecovery {
+		if len(input) != 1 || parsed.Policy.Version != nil || p.NativeWorkerLifecycleBinding.PreAdmissionAbort == nil {
+			return fail(errCapacityBoundAssessment)
+		}
+		authorizedWorkflow = p.NativeWorkerLifecycleBinding.PreAdmissionAbort.Workflow
+	}
 	if result.Operation == "capacity.adopt_executor_power" {
 		if p.ExecutorPowerBinding == nil {
 			return fail(fmt.Errorf("executor power binding required"))
@@ -111,6 +118,23 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	}
 	if spec.Authorization == nil {
 		return fail(fmt.Errorf("capacity requires an authenticated, manifest-authorized workflow"))
+	}
+	if nativeMemberRecovery {
+		var recovered repository.NativeWorkerMemberRecoveryResult
+		err = withNativeWorkerExecutionScope(ctx, db, policy, func(call context.Context, scope NativeWorkerExecutionScope) error {
+			if scope.Members == nil || os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") != "true" || os.Getenv("YGGDRASIL_NATIVE_WORKER_ABORT_ENABLED") != "true" {
+				return errCapacityBoundAssessment
+			}
+			var e error
+			recovered, e = scope.Members.Recover(call, wf.ID)
+			return e
+		})
+		if err != nil {
+			return fail(err)
+		}
+		result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+		result.Metadata = map[string]any{"plan_id": recovered.PlanID, "attempt_id": recovered.AttemptID, "state": recovered.State, "automatic_retry_permitted": false}
+		return result
 	}
 	executorID, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executorID}

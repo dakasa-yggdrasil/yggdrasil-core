@@ -44,6 +44,7 @@ type nativeWorkerRuntimeOwnerState struct {
 	poolReaderScopeSHA256      string
 	mutations                  map[string]*capacity.NativeWorkerRPCClient
 	readiness                  *nativeWorkerReadinessOwner
+	members                    *nativeWorkerMemberOwner
 	closeErr                   error
 	// Construction order is credentials/clients -> Workers -> Network -> Abort.
 	// Transferred handles are removed, so rollback and final Close share LIFO.
@@ -119,6 +120,9 @@ func newNativeWorkerRuntimeOwner(ctx context.Context, db *sql.DB, policy model.M
 		return nil, errNativeWorkerInstallation
 	}
 	if (p.NativeWorkerLifecycleBinding.ReadinessProducer == nil) != (c.Readiness == nil) || c.Readiness != nil && proof != nil {
+		return nil, errNativeWorkerInstallation
+	}
+	if (p.NativeWorkerLifecycleBinding.Members == nil) != (c.Members == nil) {
 		return nil, errNativeWorkerInstallation
 	}
 	// Copy the real JSONB bytes, rather than compacting them through Marshal.
@@ -275,12 +279,25 @@ func newNativeWorkerRuntimeOwner(ctx context.Context, db *sql.DB, policy model.M
 	}
 	transfer(abortTransfers)
 	own(o.abort.Close)
+	if c.Members != nil {
+		o.members, e = newNativeWorkerMemberOwner(ctx, db, policy, p, *c.Members, broker, phaseClient, o.workers, o.abort, o.network, o.mutations)
+		if o.members != nil {
+			own(o.members.Close)
+		}
+		if e != nil {
+			return nil, errors.Join(errNativeWorkerInstallation, e)
+		}
+	}
 	ok = true
 	return o, nil
 }
 
 func (o *nativeWorkerRuntimeOwner) options() []httpapi.ServerOption {
-	return []httpapi.ServerOption{httpapi.WithConcreteNativeWorkerRuntime(o.workers), httpapi.WithNativeWorkerNetworkRuntime(o.network), httpapi.WithNativeWorkerAbortRuntime(o.abort)}
+	options := []httpapi.ServerOption{httpapi.WithConcreteNativeWorkerRuntime(o.workers), httpapi.WithNativeWorkerNetworkRuntime(o.network), httpapi.WithNativeWorkerAbortRuntime(o.abort)}
+	if o.members != nil {
+		options = append(options, httpapi.WithNativeWorkerMemberStore(o.members.store))
+	}
+	return options
 }
 
 func (o *nativeWorkerRuntimeOwner) Seal() {
@@ -289,9 +306,12 @@ func (o *nativeWorkerRuntimeOwner) Seal() {
 	}
 	// Serialize admission with the idle-channel snapshot used by Join.
 	o.borrowMu.Lock()
-	defer o.borrowMu.Unlock()
 	// Draining closes admission without joining an original borrower.
 	o.sealed.Store(true)
+	o.borrowMu.Unlock()
+	if o.members != nil && o.members.store != nil {
+		o.members.store.Seal()
+	}
 }
 
 func (o *nativeWorkerRuntimeOwner) Join(ctx context.Context) error {
@@ -391,7 +411,11 @@ func nativeWorkerExecutionResolver(app *runtime.ServiceApp) message.NativeWorker
 		// Reject recursive resolution before taking another read lock: a Close
 		// waiting for this borrower must not deadlock behind a nested RLock.
 		borrowed := context.WithValue(ctx, nativeWorkerBorrowKey{}, struct{}{})
-		return use(borrowed, message.NativeWorkerExecutionScope{Workers: o.workers, Network: o.network, Abort: o.abort, PoolReader: o.poolReader, PoolReaderScopeSHA256: o.poolReaderScopeSHA256, RegistryWriter: o.registryWriter, ProviderMutations: mutations})
+		var members *repository.CapacityNativeWorkerMemberStore
+		if o.members != nil {
+			members = o.members.store
+		}
+		return use(borrowed, message.NativeWorkerExecutionScope{Workers: o.workers, Network: o.network, Abort: o.abort, PoolReader: o.poolReader, PoolReaderScopeSHA256: o.poolReaderScopeSHA256, RegistryWriter: o.registryWriter, ProviderMutations: mutations, Members: members})
 	}
 }
 

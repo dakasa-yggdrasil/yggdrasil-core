@@ -99,7 +99,7 @@ func (s *Server) serveNativeWorkerAttemptRequest(w http.ResponseWriter, r *http.
 		return
 	}
 	enabled := os.Getenv("YGGDRASIL_NATIVE_WORKER_LIFECYCLE_ENABLED") == "true"
-	store := repository.CapacityNativeWorkerCommandStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled}, BootstrapFactory: s.nativeWorkerBootstrapFactory}
+	store := repository.CapacityNativeWorkerCommandStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled, Members: s.nativeWorkerMembers}, BootstrapFactory: s.nativeWorkerBootstrapFactory}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	// Contexts are Source-written, immutable and private. This indexed check does

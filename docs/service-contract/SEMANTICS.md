@@ -102,6 +102,21 @@ Canonical binding/run/slot selectors select only the already-owned journal;
 GETs have no body, bootstrap is private, and receive204 establishes custody only.
 No ordinary session, workflow header or API-worker role grants this authority.
 
+The optional Native member composition reuses the private TLS transport with
+separate closed roles. Its fixed member-permits prefix has GET `read`, POST
+`redeem`, `receive`, `receive-read` and controller-only `reconcile`; allocator
+fence read resolves the pre-create creator context without a fictional Node.
+A distinct stock-scheduler TLS listener exposes only fixed POST
+`/internal/capacity/native-workers/native-scheduler/bind`, with official
+PascalCase `PodName`, `PodNamespace`, `PodUID`, `Node` and result `Error`. It rejects
+SDK headers/bearers rather than treating them as stock identity. These standalone
+switch handlers are classified here, without adding fictitious mux/legacy
+intercept counts. Every body follows role/leaf/Source/scope checks. Member SDK
+selectors contain only `binding_name` and `permit_id`; read custody204 conveys
+no write or effective-config authority. The protected installer/read verifier
+is still a mandatory missing counterpart; declaration/marker/literal403 never
+qualifies current enforcement. No installed or paid-create claim follows.
+
 The `httpapi.New` pipeline is logging, request cache, `requireAuthenticatedConsoleAPIs`, CSRF and the mux. The authentication owner decides directory machine claims first, followed by original host-factory credentials/routes, Guest credentials/routes, original canary claims and capacity mutation credentials/routes. Ambiguous Directory claims and Directory requests that also claim a host, Guest, canary or capacity identity are rejected with synchronous audit. Recognized expired/revoked or malformed dedicated credentials remain in their own rejecting branches; they cannot use a browser cookie or a workflow token to acquire another authority.
 
 The ordinary gate uses `requiresAuthenticatedConsoleRequest`, its exact administration mutation map and `requiresAuthenticatedConsoleAPI` prefix map. It authorizes event writers only on the exact event publication/authorization routes; auth-admin credentials on their administration mutations; deploy credentials on deploy/bootstrap/install routes; and workflow credentials on dispatch/poll routes. It can then resolve an opt-in same-issuer/audience JWT or an opaque session, including the source's phone/MFA/password checks. The route-level `requireOpsPermissionFunc`/`guard` wrappers and handler-owned authorization remain additive. The source records describe current behavior; an unwrapped route is not a declaration that it is anonymous, since some routes authenticate in-handler.
@@ -152,6 +167,18 @@ known original UID commits destroyed; a DELETE ACK remains private journal
 audit. The dynamic emission expression `e.Type` is classified by that closed
 mapping, rather than by adding new public event verbs.
 
+Members preserves the same canonical provider/resource grammar. Cordon emits
+`kubernetes.native_worker_pool_member.ensured`; a qualified Binding emits
+`kubernetes.native_worker_pod_placement.ensured`, and a placement Eviction can
+emit its `.destroyed` only from current independent PodUID absence. Draining,
+Node deletion and registry retirement never emit partial member destroyed.
+`kubernetes.native_worker_pool_member.destroyed` belongs only to the final
+transaction joining complete original custody, fresh independent physical and
+ancillary absence, whole zero-Pod roster, Node/registry/network closure and the
+unchanged Abort settled predicate with Attempt/IPAM release. Dynamic type
+expressions in the member event helper are this finite mapping; private journal
+events/originals and their raw hashes are never public mutation evidence.
+
 `event-emissions.json` lists actual repository/helper emission callsites and their type expressions. Dynamic expressions are retained as expressions, rather than pretending every event type is a source literal. `event-and-queue-constants.json` lists source constants, and `event-schemas.json` lists embedded schema keys, not an assertion that a schema filename is a wire event name. The closed canonical mapping and dynamic provider/resource mutation grammar live in `docs/contracts/events_validator.go`; consumers must continue to use that validator. External mutation writers use exact or logical grants on the event HTTP surface; human sessions and workflow credentials do not inherit publication permission. The explicit credential-free development posture is not a production fallback.
 
 The `native-qemu.server.ensured` and `.destroyed` schemas are embedded by `events_native_qualification_enabled.go` only when the `nativequalification` build tag is selected. Default builds use the separate default mapping and do not acquire those events merely because schema files exist in the repository. The native qualification echo and source-only provider realm do not represent a production workload roster.
@@ -168,6 +195,7 @@ The `native-qemu.server.ensured` and `.destroyed` schemas are embedded by `event
 - Surface discovery, manifest/data reads and declared actions use configured/discovered surface base URLs and view/action metadata. Permission and handler checks remain in the caller; a surface URL is not a global egress grant.
 - OAuth/OIDC third-party login uses configured provider discovery, token and userinfo URLs. Back-channel logout uses registered relying-party URIs and the existing signed token/client rules. Same-process OP JWT verification reads its own signing key set; it is not an arbitrary remote JWKS fetch.
 - Original host/Guest/capacity callers use the exact Core/member origin, mTLS/bearer/phase bindings and closed response checks in their owners. The source-only native qualification and fixture callers are distinguished by build constraints in the census and are not a production egress list.
+- The optional placement-bootstrap Guest read shares the existing per-Attempt readonly mTLS client and permits only fixed GET0 `/native-worker/placement-bootstrap` on its protected guest identity; the old network-witness GET remains separate and unchanged. Effective configz is read by the dedicated Kubernetes SDK over the protected Node IP/CA/SAN and fixed `/configz`, with private original custody before interpretation. This Source installs no generic URL/proxy or kubelet write port.
 - The operator and public CLI clients call the user-configured Core origin. They are separate command entry points, not additional listeners inside the Core daemon.
 - The optional direct AWS provisioner uses the SDK default credential chain and configured region for S3 bucket/CORS, SES identity and SNS topic operations. `provider-sdk-operations.json` names the four source SDK callsites. This is separate from the general adapter transport graph; absence of a literal `http.NewRequest` does not remove SDK network effects. Dispatch lock disables construction of this optional client.
 

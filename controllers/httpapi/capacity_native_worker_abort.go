@@ -93,7 +93,7 @@ func (s *Server) serveNativeWorkerAbortRequest(w http.ResponseWriter, r *http.Re
 		return
 	}
 	enabled := os.Getenv("YGGDRASIL_NATIVE_WORKER_LIFECYCLE_ENABLED") == "true"
-	store := repository.CapacityNativeWorkerAbortStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled}, Runtime: s.nativeWorkerAbortRuntime, Enabled: enabled && os.Getenv("YGGDRASIL_NATIVE_WORKER_ABORT_ENABLED") == "true"}
+	store := repository.CapacityNativeWorkerAbortStore{Workers: repository.CapacityNativeWorkerStore{Capacity: repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}, Runtime: s.nativeWorkerRuntime, Enabled: enabled, Members: s.nativeWorkerMembers}, Runtime: s.nativeWorkerAbortRuntime, Members: s.nativeWorkerMembers, Enabled: enabled && os.Getenv("YGGDRASIL_NATIVE_WORKER_ABORT_ENABLED") == "true"}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	if !store.MachineAuthorized(ctx, principal.instanceID, sdk[0], principal.capabilities) {
