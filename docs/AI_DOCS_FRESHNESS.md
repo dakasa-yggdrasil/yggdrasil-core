@@ -3,43 +3,21 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 4771a11598e666462562f4c7ab82afacafd042b1
-verified_diff_sha256: a84b0d0ea38220e947c113c13711723204e5a4b76460a961e23613b29f0db54c
+verified_at_commit: 3fb07c4ab1e65d65b14d76d6e1c6da3d15d5be56
+verified_diff_sha256: c89de17ebda3140dab7ba6d87b8b297d3c5f10ba8420eb17a9568f3991984469
 reconciler_schema: 1
 
-Reviewed the complete thirteen-path Native network composition, including the
-exact immutable archive/launch selectors, borrowed concrete worker ownership,
-separate protected floor clients, sealed transport observation and removal
-after provider deletion. Store117 remains the sole owner of one-send grants and
-private original custody. RPC dispositions grant no network/admission proof;
-the existing nil readiness port remains a hold. Root's whole union review and
-independent product, pure-root and complete Linux-fixture partitions are retained
-in local review receipts with their exact file hashes.
+Reviewed the complete combined guest identity, protected abort recovery and
+readiness-permit validity changes. Independent component and union peers cover
+all product/test paths, all 942 production source records and current contract
+references. Append-only original resource custody precedes delete authority;
+complete independent provider, Node/Pod/registry and owned network receiving
+remain required. Private readiness expiry preserves proof/header/heartbeat
+freshness through SQL and cannot extend parent or physical qualification.
 
-Signed ancestry retains the reviewed199/200 products and qualified Main508ada.
-The original199 CI failure remains preserved. Its approved fixture correction
-matches production's bounded five-second private custody after the original
-HTTP clock, without changing the original four-second deadline or criteria.
-The complete source census preserves all926 prior facts and adds exactly two;
-all928 facts and27 service-contract evidence references remain complete.
-
-The existing published-factory job and its three roots are byte-identical.
-The new dedicated CI job uses the fixed normally published System Main52ed
-executable, real factory handles, PostgreSQL custody and public mTLS clients
-without a dial override. Its private alias belongs only to the isolated runner;
-provider/floor facts are explicit synthetic fixtures and do not qualify live
-network, LUKS, provider operations, guest readiness or useful capacity.
-
-All Source and evidence paths were committed before the released CLI's real
-plan against Main508ada and completed ai-all generation. Only static reading,
-formatting, parsing, hash comparisons and generators ran locally. Tests/builds
-run only in CI. This Source performs no cloud or production action, install,
-purchase or Hetzner load test and enables no runtime or controller.
-
-The first real composition CI exposed an inherited constructor defect: a JSON
-roundtrip compacted the stored PostgreSQL policy Spec before strict byte
-comparison. Both constructors now retain their own exact original Spec bytes.
-The real PostgreSQL fixture also checks non-aliasing and subsequent caller
-mutation without replacing the positive input or weakening policyMatches.
-The original failing run/log is retained; revised remote qualification remains
-pending. Root/Ollo reviewed the complete six-path causal correction.
+The normal published System7007 executable supplies the guest-v2 factory job;
+legacy published-factory coverage is retained. The actual released CLI produced
+the content-addressed plan against Main68a7 and both context outputs before this
+stamp. Source ancestry retains PR202 and its exact ADR-marker/object-fixture
+corrections. Tests, analysis and builds run only in CI. No main activation,
+provider mutation, live network/warmup or operational billing closure is claimed.

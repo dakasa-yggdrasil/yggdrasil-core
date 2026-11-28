@@ -605,3 +605,72 @@ qualify composition only. They do not replace the independent System kernel
 proof or qualify a production network. No main activation is installed; the
 existing nil readiness port continues to hold admission pending real protected
 guest delivery, end-to-end path/MTU and warmup evidence. See ADR-0145.
+
+## Optional authenticated guest-local witness
+
+A protected factory can opt into private renderer v2 only with an immutable
+Execution.guest_identity_policy_sha256 pin. Legacy omission keeps the entire
+v1 Execution wire, public Launch/schema1 and private material/schema1 unchanged.
+The policy hash pins a separate protected master public proof, issuer CA,
+explicit validity and network-template identity; it contains no private key or
+private bootstrap hash. Server/client keys, serials and EKUs differ per Attempt.
+Dates come from immutable CreatedAt; expired or replaced generations hold and
+cannot silently remint. Retain old protected generations while their Attempts
+remain live. There is no default certificate validity or renewal protocol.
+
+The actual paired System v2 renderer receives closed input containing the
+exact network template and unique guest TLS material on stdin FD0 and returns
+private cloud-init on FD3. The Core client key stays in RAM. The pinned CA must
+authorize both server and client TLS roles before rendering. The fixed zero-body GET on the allocated overlay IPv4:9445 authenticates
+the exact server chain, IP SAN, derived leaf/URI and compiled System Source.
+Original bounded Read, Close and live context are mandatory, with no redirects,
+proxy, replay, caller destination or machine/workflow certificate input.
+
+The concrete runtime installs the existing readiness callback for opted-in
+profiles, with the factory template equal to the policy's actual network
+binding. It checks the complete current Attempt and immutable stored Launch
+before and after the original read. A separate protected Go callback receives
+the authenticated local report and must supply real independent path/network
+and startup evidence. Nil proof remains HOLD and the existing phase verifier
+still checks every Node, Birth, network, qualification, freshness and expiry
+join. No network or warmup field is manufactured from the local report hash.
+
+The new local witness wire remains exact System NetworkWitness, with false
+end-to-end path-MTU, independent-network, scheduling and useful-capacity flags.
+Source-pinned Pod/Service paths, finite DF probes and representative startup
+receiving remain separate requirements. This change installs no controller,
+certificate, process, cloud resource or production configuration. Tests/builds
+run only in CI; no Hetzner load test is performed. See ADR0146.
+
+## Concrete independent abort receiving
+
+`NewProtectedNativeWorkerConcreteAbortRuntime` connects the existing abort store
+to separate protected provider-cleanup and Kubernetes Node/Pod readers and the
+borrowed concrete network/worker composition. Exact policy/database/Source,
+immutable launch/original custody and read-only catalog/role pins precede remote
+reads. Copied private handles share ownership identity and cannot steal a
+borrowed Close fence. Successful Close owns only the new reader clients.
+
+The optional `abort_inventory_observer` pins the separate whole-file scope of
+the complete all-namespace inventory. Every nonterminal Pod counts; the original
+System Node name is derived from the Attempt UUID and sealed actual instance ID.
+Registry admission, absent quarantine, unknown inventory or an uncordoned
+present Node cannot authorize deletion. No registry/Node writer is invented.
+
+A null provider footprint captures only PRESENT resources. The first safe
+snapshot is committed in append-only abort history before the successful Redeem
+exposes any send, including after an earlier unknown Begin. Redemption compares
+history inside the same transaction even when a later observation replaced the
+mutable latest row. Receiving uses that committed original resource set. Every
+original disk/interface/IP must independently close; terminated VM alone is
+insufficient. HCloud Primary IPs must be disposable and unprotected before send.
+
+Fresh complete floor peer/address-route/firewall receiving and the existing
+network producer fence are separate final conditions. The internal IP/cost
+reservation remains held until the original Store/Goose117 atomically permits
+`absent`; `IPAMEntryAbsent` means only that external address use is absent under
+that owned complete projection. This composition performs no create/delete,
+Node/registry/network mutation, deployment, admission or readiness fallback.
+CI uses real published factory handles, PostgreSQL and floor TLS but synthetic
+provider/Kubernetes facts. Live provider cleanup and main activation require
+separate receiving. See ADR-0147.

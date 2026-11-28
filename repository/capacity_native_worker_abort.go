@@ -337,6 +337,16 @@ func (s CapacityNativeWorkerAbortStore) Redeem(ctx context.Context, policy model
 		if e = s.current(ctx, tx, policy, p, current, now); e != nil {
 			return e
 		}
+		// Compare against append-only pre-send custody even if a previous
+		// Reconcile replaced the mutable latest Observation. The locked Attempt
+		// arbitrates this same transaction against all cleanup/admission sends.
+		origin, err := nativeAbortCommittedResourceFootprintFrom(ctx, tx, policy, current, p.NativeWorkerLifecycleBinding.SourceCommit)
+		if err != nil || origin != nil && !capacity.NativeWorkerResourceFootprintStableEqual(origin, o.ResourceFootprint) {
+			return ErrCapacityConflict
+		}
+		if e = nativeAbortRetainResourceFootprint(&r, o); e != nil {
+			return e
+		}
 		nonce := make([]byte, 32)
 		if _, e = rand.Read(nonce); e != nil {
 			return e

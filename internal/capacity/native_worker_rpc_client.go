@@ -191,6 +191,12 @@ func (c *NativeWorkerRPCClient) Matches(adapter model.CapacityMarketAdapterBindi
 		c.config.SDKSourceCommit == source && c.config.ScopeSHA256 == scope && c.allowed[capability]
 }
 
+// SharesState compares only opaque ownership identity. Copying this handle
+// retains the same Close fence; it cannot transfer ownership of borrowed state.
+func (c *NativeWorkerRPCClient) SharesState(other *NativeWorkerRPCClient) bool {
+	return c != nil && other != nil && c.nativeWorkerRPCState != nil && c.nativeWorkerRPCState == other.nativeWorkerRPCState
+}
+
 // ScopeValid is checked before the original resolver can hydrate credentials.
 // Only an already selected private handle is consulted; inputs select no files.
 func (c *NativeWorkerRPCClient) ScopeValid(adapter model.CapacityMarketAdapterBinding, base string) bool {

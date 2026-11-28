@@ -62,7 +62,7 @@ func ValidateNativeWorkerLifecycleBinding(p model.CapacityPolicySpec) error {
 			!marketID.MatchString(v.EnsureCapability) || !marketID.MatchString(v.ObserveCapability) || !marketID.MatchString(v.DestroyCapability) ||
 			!marketSHA.MatchString(v.LaunchTemplateSHA256) || !marketCommit.MatchString(v.BootstrapSourceCommit) || !marketID.MatchString(v.IPAMScope) ||
 			err != nil || !cidr.Addr().Is4() || !cidr.Addr().IsPrivate() || cidr != cidr.Masked() || cidr.Bits() < 16 || cidr.Bits() > 30 ||
-			len(v.ExcludedIPv4) == 0 || len(v.ExcludedIPv4) > 64 {
+			len(v.ExcludedIPv4) == 0 || len(v.ExcludedIPv4) > 64 || v.GuestIdentityPolicySHA256 != "" && !marketSHA.MatchString(v.GuestIdentityPolicySHA256) {
 			return fmt.Errorf("exact execution source and private server-owned IPAM required")
 		}
 		excluded := map[string]bool{}
@@ -524,7 +524,16 @@ func PrepareNativeWorkerPhaseFromRead(p model.CapacityPolicySpec, a model.Capaci
 		}
 		c.Admission = nativePhaseAdmission(existing.Admission)
 	}
-	return model.CapacityNativeWorkerPhasePreparation{Context: c, ObservedAt: o.ObservedAt, NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}, nil
+	// Carry the existing evidence-age limits across the later SQL lock, too.
+	// Issuing a permit cannot turn a fresh-at-read fact into a longer lease.
+	readinessValidUntil := proof.ValidUntil
+	maxAge := time.Duration(p.NativeWorkerLifecycleBinding.PhaseObserver.MaxAgeSeconds) * time.Second
+	for _, observedAt := range []time.Time{proof.ObservedAt, o.ObservedAt, n.Heartbeat.ObservedAt} {
+		if until := observedAt.Add(maxAge); until.Before(readinessValidUntil) {
+			readinessValidUntil = until
+		}
+	}
+	return model.CapacityNativeWorkerPhasePreparation{Context: c, ObservedAt: o.ObservedAt, ReadinessValidUntil: readinessValidUntil, NodeReady: true, NetworkVerified: true, WarmupVerified: true, PhysicalQualified: true}, nil
 }
 
 func ObserveNativeWorkerPhaseFromRead(p model.CapacityPolicySpec, c model.CapacityNativeWorkerPhasePermit, o model.CapacityNativeWorkerPhaseReadObservation, now time.Time) (model.CapacityNativeWorkerPhaseObservation, error) {

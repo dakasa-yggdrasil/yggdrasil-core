@@ -1045,3 +1045,28 @@ plus current floor facts and the store's original exposed install endpoint.
 The writer receives only binding_name and retained permit_id for a closed
 action. Store117 alone redeems and archives; the RPC disposition is not effect,
 admission or useful-capacity evidence. Nil guest readiness remains a hold.
+
+Optional guest witness identity remains protected composition. The final
+omitempty Execution guest_identity_policy_sha256 pins public issuance/template
+declarations in immutable Attempt/command custody. Private renderer v2 and
+fixed mTLS GET9445 deliver/read the existing local report without changing
+Launch/material v1. Local report hashes grant neither independent network nor
+warmup proof; the existing full phase verifier and independent producer remain
+mandatory. The new published7007 v2 CLI job is separate from unchanged1304 v1
+qualification, with original Source/hash/size and no-skip/race checks in CI.
+
+Concrete Native abort receiving is a private Go composition over the exact
+policy/database/Core Source, immutable original/launch, separately owned provider
+and all-namespace Kubernetes inventory clients, and a borrowed network runtime.
+Opaque client-state identity prevents copied wrappers from taking borrowed Close
+ownership. The separate optional abort observer has its own Source/file scope.
+The first PRESENT safe footprint is committed in append-only abort custody no
+later than the same Redeem transaction exposing one send; immutable history,
+not mutable latest Observation, fences later resource substitutions. Fresh
+receiving checks each original ancillary ID and keeps provider absence distinct
+from disk/interface/IP charge closure. Complete Node/Pod/registry and owned
+network producer/address-use closure are independent conditions. Internal IP/cost
+reservations remain held until Store117 permits absent atomically. There is no
+mutation callback, automatic retry, readiness/admission fallback or main-process
+activation. Source/CI fixtures do not prove a live provider deletion or billing
+closure. See ADR0147.

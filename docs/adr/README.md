@@ -189,3 +189,6 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
 - [ADR-0144: Retain transport facts from the same sealed physical read](0144-retain-transport-facts-from-the-same-sealed-physical-read.md)
 - [ADR-0145: Compose Native network runtime from sealed worker and floor ports](0145-compose-native-network-runtime-from-sealed-worker-and-floor-ports.md)
+- [ADR-0146: Bind private guest witness identities to immutable Attempt Execution](0146-bind-private-guest-witness-identities-to-immutable-attempt-execution.md)
+
+- [ADR-0147: Receive Native abort closure from independent original resource inventory](0147-receive-native-abort-closure-from-independent-original-resource-inventory.md)

@@ -14,31 +14,33 @@ import (
 // Native lifecycle is a separate opt-in authority, never a legacy Guest slot
 // or a write credential added to the read-only market collector.
 type CapacityNativeWorkerLifecycleBinding struct {
-	Network           *CapacityNativeWorkerNetworkBinding        `json:"network,omitempty"`
-	PhysicalObservers []CapacityNativeWorkerPhysicalReadBinding  `json:"physical_observers,omitempty"`
-	Mode              string                                     `json:"mode"`
-	SourceCommit      string                                     `json:"source_commit"`
-	MaxReadAgeSeconds int                                        `json:"max_read_age_seconds"`
-	Profiles          []CapacityNativeWorkerExecutionProfile     `json:"profiles"`
-	PhaseObserver     *CapacityNativeWorkerPhaseReadBinding      `json:"phase_observer,omitempty"`
-	RegistryWriter    *CapacityNativeWorkerRegistryWriterBinding `json:"registry_writer,omitempty"`
-	PreAdmissionAbort *CapacityNativeWorkerAbortBinding          `json:"pre_admission_abort,omitempty"`
+	Network                *CapacityNativeWorkerNetworkBinding        `json:"network,omitempty"`
+	PhysicalObservers      []CapacityNativeWorkerPhysicalReadBinding  `json:"physical_observers,omitempty"`
+	Mode                   string                                     `json:"mode"`
+	SourceCommit           string                                     `json:"source_commit"`
+	MaxReadAgeSeconds      int                                        `json:"max_read_age_seconds"`
+	Profiles               []CapacityNativeWorkerExecutionProfile     `json:"profiles"`
+	PhaseObserver          *CapacityNativeWorkerPhaseReadBinding      `json:"phase_observer,omitempty"`
+	RegistryWriter         *CapacityNativeWorkerRegistryWriterBinding `json:"registry_writer,omitempty"`
+	PreAdmissionAbort      *CapacityNativeWorkerAbortBinding          `json:"pre_admission_abort,omitempty"`
+	AbortInventoryObserver *CapacityNativeWorkerPhaseReadBinding      `json:"abort_inventory_observer,omitempty"`
 }
 
 type CapacityNativeWorkerExecutionProfile struct {
-	Profile               string                       `json:"profile"`
-	Adapter               CapacityMarketAdapterBinding `json:"adapter"`
-	BindingName           string                       `json:"binding_name"`
-	SDKSourceCommit       string                       `json:"sdk_source_commit"`
-	ScopeSHA256           string                       `json:"scope_sha256"`
-	EnsureCapability      string                       `json:"ensure_capability"`
-	ObserveCapability     string                       `json:"observe_capability"`
-	DestroyCapability     string                       `json:"destroy_capability"`
-	LaunchTemplateSHA256  string                       `json:"launch_template_sha256"`
-	BootstrapSourceCommit string                       `json:"bootstrap_source_commit"`
-	IPAMScope             string                       `json:"ipam_scope"`
-	OverlayCIDR           string                       `json:"overlay_cidr"`
-	ExcludedIPv4          []string                     `json:"excluded_ipv4"`
+	Profile                   string                       `json:"profile"`
+	Adapter                   CapacityMarketAdapterBinding `json:"adapter"`
+	BindingName               string                       `json:"binding_name"`
+	SDKSourceCommit           string                       `json:"sdk_source_commit"`
+	ScopeSHA256               string                       `json:"scope_sha256"`
+	EnsureCapability          string                       `json:"ensure_capability"`
+	ObserveCapability         string                       `json:"observe_capability"`
+	DestroyCapability         string                       `json:"destroy_capability"`
+	LaunchTemplateSHA256      string                       `json:"launch_template_sha256"`
+	BootstrapSourceCommit     string                       `json:"bootstrap_source_commit"`
+	IPAMScope                 string                       `json:"ipam_scope"`
+	OverlayCIDR               string                       `json:"overlay_cidr"`
+	ExcludedIPv4              []string                     `json:"excluded_ipv4"`
+	GuestIdentityPolicySHA256 string                       `json:"guest_identity_policy_sha256,omitempty"`
 }
 
 // Attempt IDs and addresses are allocated by Core. There is no predeclared
@@ -381,12 +383,14 @@ type CapacityNativeWorkerPhaseReceive struct {
 // Prepared/observed facts come only from installed read-only runtime callbacks.
 // Neither a workflow request nor the mutating adapter supplies these booleans.
 type CapacityNativeWorkerPhasePreparation struct {
-	Context           CapacityNativeWorkerPhasePermit
-	ObservedAt        time.Time
-	NodeReady         bool
-	NetworkVerified   bool
-	WarmupVerified    bool
-	PhysicalQualified bool
+	Context    CapacityNativeWorkerPhasePermit
+	ObservedAt time.Time
+	// Private callback validity limits both admission mutations; never a wire grant.
+	ReadinessValidUntil time.Time `json:"-"`
+	NodeReady           bool
+	NetworkVerified     bool
+	WarmupVerified      bool
+	PhysicalQualified   bool
 }
 
 type CapacityNativeWorkerPhaseObservation struct {

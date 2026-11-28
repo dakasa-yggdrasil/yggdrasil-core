@@ -86,6 +86,10 @@ type nativeNetworkRuntimeFixture struct {
 }
 
 func newNativeNetworkRuntimeFixture(t *testing.T) *nativeNetworkRuntimeFixture {
+	return newNativeNetworkRuntimeFixtureWithPolicy(t, nil)
+}
+
+func newNativeNetworkRuntimeFixtureWithPolicy(t *testing.T, edit func(*model.CapacityPolicySpec)) *nativeNetworkRuntimeFixture {
 	t.Helper()
 	if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("NATIVE_NETWORK_ISOLATED_ALIAS") != "10.80.0.2" {
 		t.Fatal("dedicated isolated CI alias required; no skip or local use")
@@ -146,6 +150,9 @@ func newNativeNetworkRuntimeFixture(t *testing.T) *nativeNetworkRuntimeFixture {
 	network := model.CapacityNativeWorkerNetworkTemplate{Schema: 1, GuestSystemSourceCommit: systemSource, Interface: "wg-dakasa", MTU: 1380, TransportCIDR: execution.OverlayCIDR, FloorPeerIPv4: execution.ExcludedIPv4[0], FloorPublicKey: base64.StdEncoding.EncodeToString(floorKey.PublicKey().Bytes()), ListenPort: 51820, FirewallChain: "DAKASA_NATIVE", PodCIDR: "10.82.0.0/16", ServiceCIDR: "10.83.0.0/16", ClusterDNSIPv4: "10.83.0.10", DNSName: "kubernetes.default.svc.cluster.local"}
 	p.NativeWorkerLifecycleBinding.Network = &model.CapacityNativeWorkerNetworkBinding{Mode: capacity.NativeWorkerNetworkMode, Writer: model.CapacityNativeWorkerNetworkWriterBinding{AdapterID: uuid.NewString(), PrincipalID: "ci/floor-writer", BindingName: "ci-floor-writer", SystemSourceCommit: systemSource, ScopeSHA256: strings.Repeat("1", 64)}, Reader: model.CapacityNativeWorkerNetworkReaderBinding{AdapterID: uuid.NewString(), BindingName: "ci-floor-reader", SystemSourceCommit: systemSource, ScopeSHA256: strings.Repeat("2", 64)}, Floor: floor, Template: network, TemplateSHA256: capacity.NativeWorkerNetworkTemplateSHA256(network), MaxPermitSeconds: 30}
 	p.NativeWorkerLifecycleBinding.PreAdmissionAbort = &model.CapacityNativeWorkerAbortBinding{Mode: model.CapacityNativeWorkerAbortSchema, Workflow: model.ManifestSelector{Namespace: p.Workflow.Namespace, Name: "cleanup-network"}, MaxPermitSeconds: 30}
+	if edit != nil {
+		edit(&p)
+	}
 	spec, err := json.Marshal(p)
 	if err != nil {
 		t.Fatal(err)
