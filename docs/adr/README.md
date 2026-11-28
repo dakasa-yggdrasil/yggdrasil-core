@@ -193,3 +193,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
 - [ADR-0147: Receive Native abort closure from independent original resource inventory](0147-receive-native-abort-closure-from-independent-original-resource-inventory.md)
 - [ADR-0148: Install Native runtime under one private main-process owner](0148-install-native-runtime-under-one-private-main-process-owner.md)
+
+- [ADR-0149: Execute Native expansion through durable child and phase receiving](0149-execute-native-expansion-through-durable-child-and-phase-receiving.md)
