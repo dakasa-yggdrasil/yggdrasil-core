@@ -177,9 +177,9 @@ func TestNativeHCloudBirthWitnessPersistsThroughTheActualPostgresRecord(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err = store.Redeem(ctx, f.policy, authority, a.ID)
-	if err != nil {
-		t.Fatal(err)
+	permit, err := store.Redeem(ctx, f.policy, authority, a.ID)
+	if err != nil || permit.AttemptID != a.ID {
+		t.Fatal("original one-send permit did not bind the reserved child", err)
 	}
 	runtime.foreignScope = true
 	if _, err = store.Record(ctx, f.policy, authority, a.ID); err == nil {

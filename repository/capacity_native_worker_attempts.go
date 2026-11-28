@@ -752,7 +752,7 @@ func marketNativeAttemptBirthsTx(ctx context.Context, tx *sql.Tx, policy model.M
 			a.HCloudWitness.EvidenceSHA256 != b.HCloudWitness.EvidenceSHA256 ||
 			!capacity.NativeWorkerHCloudWitnessValid(a, b.Physical, b.HCloudWitness) ||
 			!capacity.NativeWorkerHCloudWitnessBindingValid(p, a, b.HCloudWitness)) {
-			return fmt.Errorf("HCloud birth no longer joins the complete source-pinned witness")
+			return fmt.Errorf("hcloud birth no longer joins the complete source-pinned witness")
 		}
 		execMatched := false
 		for _, e := range p.NativeWorkerLifecycleBinding.Profiles {
