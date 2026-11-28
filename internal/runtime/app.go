@@ -2,8 +2,15 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
+
+// ErrDependencyShutdownHeld is an opt-in ownership barrier. A closer that
+// cannot join original users returns it together with the original error;
+// dependencies later in the close chain must remain untouched. Process exit
+// is still possible and does not imply that the original caller joined.
+var ErrDependencyShutdownHeld = errors.New("original dependency shutdown remains held")
 
 // Closer shuts down a runtime resource.
 type Closer func(context.Context) error
@@ -70,8 +77,13 @@ func (a *ServiceApp) Shutdown(ctx context.Context) error {
 
 	var firstErr error
 	for i := len(closers) - 1; i >= 0; i-- {
-		if err := closers[i](ctx); err != nil && firstErr == nil {
-			firstErr = err
+		if err := closers[i](ctx); err != nil {
+			if errors.Is(err, ErrDependencyShutdownHeld) {
+				return errors.Join(firstErr, err)
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 

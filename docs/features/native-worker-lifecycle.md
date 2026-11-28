@@ -674,3 +674,63 @@ Node/registry/network mutation, deployment, admission or readiness fallback.
 CI uses real published factory handles, PostgreSQL and floor TLS but synthetic
 provider/Kubernetes facts. Live provider cleanup and main activation require
 separate receiving. See ADR-0147.
+
+
+## Default-off main-process installation
+
+`YGGDRASIL_NATIVE_WORKER_RUNTIME_FILE` names one mounted regular private file
+(mode 0600, single link, protected owner, no final symlink, at most 256 KiB).
+Absent means no Native owner. A configured empty path, malformed/duplicate/case
+variant/unknown JSON member, wrong compiled Core Source or unavailable exact
+active policy fails startup; there is no legacy fallback or partial owner. API
+workers refuse a configured Native owner. The closed schema is
+`native_worker_runtime_installation_v1`.
+
+The private policy pin is `id`, `namespace`, `name`, `version`, `checksum`. Each
+`profiles` entry selects only a profile already in that policy and supplies
+`template_file`, pinned CLI path/SHA/bytes, node agent token/CA/WireGuard master
+file references, the exact artifact bucket/key/version, a managed-secret
+reference and optional guest identity file references. Execution adapter,
+capabilities, SDK Source/scope, bootstrap Source and launch-template SHA derive
+from the policy, never from this file or workflow input. Private RPC sections
+`phase_reader`, `pool_reader`, `registry_writer`, `inventory_reader`, per-profile
+`physical_reader`, `cleanup_reader`, `provider_mutation`, and `floor_reader`/
+`floor_writer` supply fixed TLS origins/material references. The pool reader's
+`pool_reader_scope_sha256` is explicit because the legacy pool binding has no
+scope member. Each floor role also declares its bounded read age explicitly.
+
+`artifact_credentials` pins a managed-secret `id`, `namespace`, `name` and
+`scope_sha256`. On every signing operation the provider reads that exact row
+again and requires active status, a future expiry, and exactly `access_key_id`,
+`secret_access_key`, `session_token`. Metadata is exactly `artifact_reader`
+(the safe typed Core/policy/profile/artifact/owner/region/action projection) plus
+its `scope_sha256`. No credential value or private-blob digest belongs in Source
+or public output. This check cannot qualify actual IAM; a separately operated
+read-only temporary-credential refresher and exact object-version/owner scope
+must be qualified before activation. There is no cached or ambient fallback.
+
+The single owner builds the existing Worker/bootstrap/phase, Network and Abort
+HTTP options and publishes only after construction/listener setup succeeds.
+Failure closes only its new handles. Shutdown seals new scopes without joining
+inside the drainer, then joins borrowers and closes Abort → Network → Worker.
+Database/broker/global secret ownership remains with the process. Authority
+HTTP and RabbitMQ contexts carry a protected resolver: it looks up the current
+owner per operation, checks exact DB/policy and original JSONB bytes, copies
+maps and borrows synchronously. Recursive or post-seal borrowing refuses.
+Callbacks resolve the current broker per operation without switching or retry.
+
+This installs no executor and flips no process flag. The independent guest
+readiness proof callback stays nil/HOLD. Do not activate concurrent Core and
+old HCloud autoscaler allocation: quiesce the old allocator under an explicit
+producer/unknown-send/quota handoff first, retaining the floor, HCCM fences and
+legacy worker service. Labels and Core DB locks alone do not fence that external
+controller. See ADR-0148.
+
+Shutdown joins originals with private callback listeners still available. A
+Native Join timeout returns the original error plus the explicit dependency
+barrier and stops later runtime/broker/DB closers. Ordinary closer errors retain
+their previous behavior. No timeout is labeled joined. Main can still exit on
+error; durable unknown/receiving state remains held, without a claim that the
+original process survives. The dedicated CI job requires all nine new roots to
+run and pass once under the race detector, refuses any skip/failure and retains
+original JSON plus byte/SHA evidence. Existing qualification jobs are unchanged.

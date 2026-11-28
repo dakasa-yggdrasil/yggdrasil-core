@@ -68,6 +68,9 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 		// pinned SDK settles handler errors with Nack(false); parent shutdown
 		// must not cause that settlement on a still-live socket.
 		sessionCtx, cancelSession := context.WithCancel(context.WithoutCancel(parent))
+		if role == coreprocess.Authority {
+			sessionCtx = message.WithNativeWorkerExecutionResolver(sessionCtx, nativeWorkerExecutionResolver(app))
+		}
 		var stopConsumers func()
 		stopMonitor := func() {}
 		session := &brokersession.Session{Connection: conn, Transport: transport, Closed: closed,
