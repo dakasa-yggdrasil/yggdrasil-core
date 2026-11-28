@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-28T01:50:46-03:00",
+  "generated_at": "2026-11-28T02:39:02-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1788,
@@ -11,7 +11,7 @@
     ".yml": 39
   },
   "provenance": {
-    "commit": "cac7891cf85b8f3f76e2b49b339867ccacd113b9",
+    "commit": "9dbbf5c23ef5611b52b5d5d6e4c371cc09280eee",
     "dirty": true,
     "files": [
       {
