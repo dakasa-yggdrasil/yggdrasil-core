@@ -22,17 +22,18 @@ var nativeRuntimeName = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`
 // This file is private process configuration. It contains references and pins,
 // never secret material, workflow inputs or a switch that enables execution.
 type nativeWorkerRuntimeConfig struct {
-	Schema                string                     `json:"schema"`
-	CoreSourceCommit      string                     `json:"core_source_commit"`
-	Policy                nativeWorkerPolicyPin      `json:"policy"`
-	Profiles              []nativeWorkerProfileFiles `json:"profiles"`
-	PhaseReader           nativeWorkerRPCFiles       `json:"phase_reader"`
-	PoolReader            nativeWorkerRPCFiles       `json:"pool_reader"`
-	PoolReaderScopeSHA256 string                     `json:"pool_reader_scope_sha256"`
-	RegistryWriter        nativeWorkerRPCFiles       `json:"registry_writer"`
-	InventoryReader       nativeWorkerRPCFiles       `json:"inventory_reader"`
-	FloorReader           nativeWorkerFloorFiles     `json:"floor_reader"`
-	FloorWriter           nativeWorkerFloorFiles     `json:"floor_writer"`
+	Schema                string                      `json:"schema"`
+	CoreSourceCommit      string                      `json:"core_source_commit"`
+	Policy                nativeWorkerPolicyPin       `json:"policy"`
+	Profiles              []nativeWorkerProfileFiles  `json:"profiles"`
+	PhaseReader           nativeWorkerRPCFiles        `json:"phase_reader"`
+	PoolReader            nativeWorkerRPCFiles        `json:"pool_reader"`
+	PoolReaderScopeSHA256 string                      `json:"pool_reader_scope_sha256"`
+	RegistryWriter        nativeWorkerRPCFiles        `json:"registry_writer"`
+	InventoryReader       nativeWorkerRPCFiles        `json:"inventory_reader"`
+	FloorReader           nativeWorkerFloorFiles      `json:"floor_reader"`
+	FloorWriter           nativeWorkerFloorFiles      `json:"floor_writer"`
+	Readiness             *nativeWorkerReadinessFiles `json:"readiness,omitempty"`
 }
 
 type nativeWorkerPolicyPin struct {
@@ -119,6 +120,9 @@ func nativeWorkerConfigDecode(raw []byte, source string) (nativeWorkerRuntimeCon
 		return nativeWorkerRuntimeConfig{}, errNativeWorkerInstallation
 	}
 	seen := map[string]bool{}
+	if c.Readiness != nil && (!nativeWorkerPrivatePath(c.Readiness.File) || !nativeRuntimeSHA.MatchString(c.Readiness.SHA256)) {
+		return nativeWorkerRuntimeConfig{}, errNativeWorkerInstallation
+	}
 	for _, profile := range c.Profiles {
 		if !nativeRuntimeName.MatchString(profile.Profile) || seen[profile.Profile] {
 			return nativeWorkerRuntimeConfig{}, errNativeWorkerInstallation

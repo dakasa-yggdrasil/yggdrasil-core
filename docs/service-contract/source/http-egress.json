@@ -569,6 +569,26 @@
       "file": "internal/surface/client.go",
       "function": "ExecuteAction",
       "line": 97
+    },
+    {
+      "argument_expression": "call, method, target, nil",
+      "argument_sha256": "a1d88c4e9ee5afee8eba92781841dd6da64de22fbb90db133df0d0d7bfaa2807",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "repository/capacity_native_worker_readiness_control.go",
+      "function": "nativeReadinessControl",
+      "line": 29
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "repository/capacity_native_worker_readiness_control.go",
+      "function": "nativeReadinessControl",
+      "line": 34
     }
   ],
   "schema": "core_source_interface_census_v1",

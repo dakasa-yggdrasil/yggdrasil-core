@@ -32,7 +32,7 @@ func init() {
 	Register("http", bootstrapHTTP, 30)
 }
 
-func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
+func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) (err error) {
 	lifetime, worker := WorkerLifetime(app)
 	role, roleErr := coreprocess.FromEnvironment()
 	if roleErr != nil {
@@ -71,7 +71,7 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	nativeInstalled := false
 	defer func() {
 		if !nativeInstalled && nativeOwner != nil {
-			_ = nativeOwner.Close()
+			err = rollbackNativeWorkerRuntimeInstallation(app, nativeOwner, err)
 		}
 	}()
 

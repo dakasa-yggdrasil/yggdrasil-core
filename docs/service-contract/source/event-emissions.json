@@ -709,6 +709,17 @@
       ]
     },
     {
+      "argument_expression_sha256": "a5d2bc97f3f1870662e4e41576411c229877b18877d1061c245fd9673fc95dd8",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "repository/capacity_native_worker_readiness_callbacks.go",
+      "function": "nativeReadinessEmitEvent",
+      "line": 235,
+      "type_expressions": [
+        "e.Type"
+      ]
+    },
+    {
       "argument_expression_sha256": "1b06f80657498426df295c81647810c77cb9795b34e8569477daa1c3e161b9ea",
       "build_constraint": "default",
       "callee": "EmitEvent",

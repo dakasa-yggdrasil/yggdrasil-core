@@ -24,6 +24,7 @@ type CapacityNativeWorkerLifecycleBinding struct {
 	RegistryWriter         *CapacityNativeWorkerRegistryWriterBinding `json:"registry_writer,omitempty"`
 	PreAdmissionAbort      *CapacityNativeWorkerAbortBinding          `json:"pre_admission_abort,omitempty"`
 	AbortInventoryObserver *CapacityNativeWorkerPhaseReadBinding      `json:"abort_inventory_observer,omitempty"`
+	ReadinessProducer      *CapacityNativeWorkerReadinessBinding      `json:"readiness_producer,omitempty"`
 }
 
 type CapacityNativeWorkerExecutionProfile struct {

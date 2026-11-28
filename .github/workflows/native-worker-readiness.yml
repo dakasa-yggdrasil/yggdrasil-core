@@ -1,0 +1,113 @@
+name: Native worker readiness controller
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  GOWORK: 'off'
+
+jobs:
+  controller-unit-and-ownership:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ env.SOURCE_COMMIT }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Qualify every authored unit contract under race
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          evidence="$RUNNER_TEMP/native-readiness/unit"
+          python3 scripts/ci/native_readiness_contract.py select unit "$evidence"
+          mapfile -t packages < "$evidence/packages.txt"
+          selector="$(cat "$evidence/selector.txt")"
+          go test -race -count=1 -timeout=3m -json -p 1 -run "$selector" "${packages[@]}" 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          python3 scripts/ci/native_readiness_contract.py verify unit "$evidence"
+      - name: Qualify real mTLS receiving and startup rollback from clean compiled Source
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/native-readiness/ownership"
+          python3 scripts/ci/native_readiness_contract.py select ownership "$evidence"
+          selector="$(cat "$evidence/selector.txt")"
+          binary="$RUNNER_TEMP/native-readiness-owner.test"
+          go test -c -race -buildvcs=true -tags=native_readiness_ownership -o "$binary" ./addons
+          go version -m "$binary" > "$evidence/build-info.txt"
+          awk -v revision="vcs.revision=$SOURCE_COMMIT" '$1 == "build" && $2 == revision {found=1} END {exit !found}' "$evidence/build-info.txt"
+          awk '$1 == "build" && $2 == "vcs.modified=false" {found=1} END {exit !found}' "$evidence/build-info.txt"
+          sha256sum "$binary" > "$evidence/test-binary.sha256"
+          wc -c < "$binary" > "$evidence/test-binary.bytes"
+          go tool test2json -t -p github.com/dakasa-yggdrasil/yggdrasil-core/addons "$binary" -test.v=test2json -test.count=1 -test.timeout=3m -test.run "$selector" 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          python3 scripts/ci/native_readiness_contract.py verify ownership "$evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-readiness-controller-unit-and-ownership
+          path: ${{ runner.temp }}/native-readiness/
+          if-no-files-found: error
+
+  controller-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [16, 17]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: readiness-ci-only
+          POSTGRES_DB: readiness_controller
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d readiness_controller"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DB_URL: postgres://postgres:readiness-ci-only@127.0.0.1:5432/readiness_controller?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: 'true'
+      EXPECTED_POSTGRES_MAJOR: ${{ matrix.postgres }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ env.SOURCE_COMMIT }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Qualify every authored isolated PostgreSQL contract under race
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          evidence="$RUNNER_TEMP/native-readiness-postgres"
+          python3 scripts/ci/native_readiness_contract.py select postgres "$evidence"
+          # Each actual native fixture creates its own database and applies all
+          # current migrations. Immutable history is never cleared to pass CI.
+          psql "$DB_URL" --no-psqlrc -At -c 'SHOW server_version_num' > "$evidence/postgres-version.txt"
+          mapfile -t packages < "$evidence/packages.txt"
+          selector="$(cat "$evidence/selector.txt")"
+          go test -race -count=1 -timeout=5m -json -p 1 -run "$selector" "${packages[@]}" 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          python3 scripts/ci/native_readiness_contract.py verify postgres "$evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-readiness-controller-postgres-${{ matrix.postgres }}
+          path: ${{ runner.temp }}/native-readiness-postgres/
+          if-no-files-found: error

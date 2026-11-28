@@ -43,6 +43,8 @@ type nativeWorkerRuntimeOwnerState struct {
 	poolReader, registryWriter *capacity.NativeWorkerRPCClient
 	poolReaderScopeSHA256      string
 	mutations                  map[string]*capacity.NativeWorkerRPCClient
+	readiness                  *nativeWorkerReadinessOwner
+	closeErr                   error
 	// Construction order is credentials/clients -> Workers -> Network -> Abort.
 	// Transferred handles are removed, so rollback and final Close share LIFO.
 	closers []func() error
@@ -78,10 +80,35 @@ func loadNativeWorkerRuntime(ctx context.Context, app *runtime.ServiceApp, db *s
 		return nil, errNativeWorkerInstallation
 	}
 	broker := func() *amqp.Connection { conn, _ := RabbitMQ(app); return conn }
-	return newNativeWorkerRuntimeOwner(ctx, db, policy, c, broker, nil)
+	o, err := newNativeWorkerRuntimeOwner(ctx, db, policy, c, broker, nil)
+	retainNativeWorkerRuntimeHold(app, o, err)
+	return o, err
 }
 
-func newNativeWorkerRuntimeOwner(ctx context.Context, db *sql.DB, policy model.Manifest, c nativeWorkerRuntimeConfig, broker func() *amqp.Connection, proof capacity.NativeWorkerGuestWitnessProofFunc) (_ *nativeWorkerRuntimeOwner, err error) {
+// A failed startup must retain the opaque owner behind ServiceApp's existing
+// dependency barrier. Returning the error alone would let DB/broker close while
+// an original callback still owns those borrowed resources.
+func retainNativeWorkerRuntimeHold(app *runtime.ServiceApp, o *nativeWorkerRuntimeOwner, err error) {
+	if app != nil && errors.Is(err, runtime.ErrDependencyShutdownHeld) {
+		app.RegisterCloser(func(context.Context) error { return errors.Join(err, o.Close()) })
+	}
+}
+
+func rollbackNativeWorkerRuntimeInstallation(app *runtime.ServiceApp, o *nativeWorkerRuntimeOwner, err error) error {
+	err = errors.Join(err, o.Close())
+	retainNativeWorkerRuntimeHold(app, o, err)
+	return err
+}
+
+func (o *nativeWorkerRuntimeOwner) rollbackConstruction(err error) (*nativeWorkerRuntimeOwner, error) {
+	err = errors.Join(err, o.Close())
+	if errors.Is(err, runtime.ErrDependencyShutdownHeld) {
+		return o, err
+	}
+	return nil, err
+}
+
+func newNativeWorkerRuntimeOwner(ctx context.Context, db *sql.DB, policy model.Manifest, c nativeWorkerRuntimeConfig, broker func() *amqp.Connection, proof capacity.NativeWorkerGuestWitnessProofFunc) (out *nativeWorkerRuntimeOwner, err error) {
 	var p model.CapacityPolicySpec
 	if ctx == nil || ctx.Err() != nil || db == nil || broker == nil || !nativeRuntimeSHA.MatchString(c.PoolReaderScopeSHA256) || !nativeWorkerPolicyMatches(c.Policy, policy) ||
 		json.Unmarshal(policy.Spec, &p) != nil || p.NativeWorkerPoolBinding == nil || p.NativeWorkerLifecycleBinding == nil ||
@@ -91,13 +118,16 @@ func newNativeWorkerRuntimeOwner(ctx context.Context, db *sql.DB, policy model.M
 		len(c.Profiles) != len(p.NativeWorkerLifecycleBinding.Profiles) || len(c.Profiles) != len(p.NativeWorkerLifecycleBinding.PhysicalObservers) {
 		return nil, errNativeWorkerInstallation
 	}
+	if (p.NativeWorkerLifecycleBinding.ReadinessProducer == nil) != (c.Readiness == nil) || c.Readiness != nil && proof != nil {
+		return nil, errNativeWorkerInstallation
+	}
 	// Copy the real JSONB bytes, rather than compacting them through Marshal.
 	policy.Spec = append(json.RawMessage(nil), policy.Spec...)
 	o := &nativeWorkerRuntimeOwner{&nativeWorkerRuntimeOwnerState{db: db, policy: policy, mutations: map[string]*capacity.NativeWorkerRPCClient{}, poolReaderScopeSHA256: c.PoolReaderScopeSHA256}}
 	ok := false
 	defer func() {
 		if !ok {
-			_ = o.Close()
+			out, err = o.rollbackConstruction(err)
 		}
 	}()
 	own := func(close func() error) int { o.closers = append(o.closers, close); return len(o.closers) - 1 }
@@ -201,12 +231,27 @@ func newNativeWorkerRuntimeOwner(ctx context.Context, db *sql.DB, policy model.M
 	if e != nil {
 		return nil, e
 	}
+	readinessIndex := -1
+	if c.Readiness != nil {
+		o.readiness, e = newNativeWorkerReadinessOwner(ctx, db, policy, *c.Readiness, broker, phaseClient, factories)
+		if o.readiness != nil {
+			readinessIndex = own(o.readiness.Close)
+		}
+		if e != nil {
+			return nil, errors.Join(errNativeWorkerInstallation, e)
+		}
+		proof = o.readiness.proof()
+	}
 	o.workers, e = message.NewProtectedNativeWorkerConcreteRuntimeWithBroker(db, broker, policy, factories, phaseClient, physicalClients, proof)
 	if e != nil {
 		return nil, errNativeWorkerInstallation
 	}
 	transfer(workerTransfers)
 	own(o.workers.Close)
+	if readinessIndex >= 0 {
+		transfer([]int{readinessIndex})
+		own(o.readiness.Close)
+	}
 	network := *p.NativeWorkerLifecycleBinding.Network
 	floorReader, e := capacity.NewNativeWorkerNetworkRPCClient(c.FloorReader.floorConfig(network, "reader"))
 	if e != nil {
@@ -279,17 +324,28 @@ func (o *nativeWorkerRuntimeOwner) Close() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
+		if errors.Is(o.closeErr, runtime.ErrDependencyShutdownHeld) {
+			return o.closeErr
+		}
 		return nil
 	}
 	o.closed = true
 	var errs []error
 	for i := len(o.closers) - 1; i >= 0; i-- {
 		if o.closers[i] != nil {
-			errs = append(errs, o.closers[i]())
+			err := o.closers[i]()
+			errs = append(errs, err)
+			if errors.Is(err, runtime.ErrDependencyShutdownHeld) {
+				o.closers = o.closers[:i+1]
+				o.closeErr = errors.Join(errs...)
+				return o.closeErr
+			}
+			o.closers[i] = nil
 		}
 	}
 	o.closers = nil
-	return errors.Join(errs...)
+	o.closeErr = errors.Join(errs...)
+	return o.closeErr
 }
 
 func nativeWorkerExecutionResolver(app *runtime.ServiceApp) message.NativeWorkerExecutionResolver {

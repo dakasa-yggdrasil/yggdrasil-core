@@ -712,15 +712,17 @@ must be qualified before activation. There is no cached or ambient fallback.
 The single owner builds the existing Worker/bootstrap/phase, Network and Abort
 HTTP options and publishes only after construction/listener setup succeeds.
 Failure closes only its new handles. Shutdown seals new scopes without joining
-inside the drainer, then joins borrowers and closes Abort → Network → Worker.
+inside the drainer, then joins borrowers and closes Abort → Network → optional
+Readiness → Worker.
 Database/broker/global secret ownership remains with the process. Authority
 HTTP and RabbitMQ contexts carry a protected resolver: it looks up the current
 owner per operation, checks exact DB/policy and original JSONB bytes, copies
 maps and borrows synchronously. Recursive or post-seal borrowing refuses.
 Callbacks resolve the current broker per operation without switching or retry.
 
-This installs no executor and flips no process flag. The independent guest
-readiness proof callback stays nil/HOLD. Do not activate concurrent Core and
+This installation flips no process flag. Without the separately configured
+independent readiness producer below, the proof callback stays nil/HOLD.
+Do not activate concurrent Core and
 old HCloud autoscaler allocation: quiesce the old allocator under an explicit
 producer/unknown-send/quota handoff first, retaining the floor, HCCM fences and
 legacy worker service. Labels and Core DB locks alone do not fence that external
@@ -767,3 +769,87 @@ existing admission gate. Only a completed verified target returns success.
 Unknown outcomes retain safe receiving metadata and fail the workflow step.
 There is no deployment, provider mutation qualification or throughput claim in
 this Source delivery. See ADR-0149.
+
+## Owned independent readiness producer (Source; default-off)
+
+The optional lifecycle `readiness_producer` binding and private installation
+`readiness: {file, sha256}` install the real Guest witness proof callback. An
+absent binding retains nil/HOLD. The closed private schema
+`native_worker_readiness_producer_bindings_v1` pins its entire original file,
+policy/Source, two independent resource adapters, original namespace/floor,
+normal Core/probe publication receipts, curated worker container/volumes and
+image-pull references, TLS files, journal key and dependency egress. Nothing in
+the workflow chooses those values. Publication receipts are exact protected
+operator-qualified originals; the Core receipt format does not claim binary
+hashes or automatic signature verification it does not contain.
+
+Migration121 owns one immutable finite run per Attempt, encrypted keys and
+append-only revisions. A new run needs three minutes remaining and is capped
+by its original command/parent/physical authority and five minutes. Quote and
+bootstrap configuration must leave that original budget; no deadline is renewed.
+It creates only
+two Pods, two UDP9446 Services, three Secrets and one NetworkPolicy. The candidate
+Pod contains the actual curated API worker plus probe; the floor Pod contains
+only the probe. Fixed dependency Secret/ConfigMap references remain private,
+normal image-pull/CA references are preserved and business9080 stays loopback.
+The candidate's process admission is separate from useful Node admission.
+
+The dedicated SDK writer obtains one permit per resource effect through
+`/internal/capacity/native-workers/probe-resources/{read,bootstrap,redeem,receive}`.
+The standalone listener authenticates mTLS chain/URI/leaf, bearer, SDK Source
+and whole writer scope before its body. The reader has no callback credentials.
+The three operation selectors are binding_name/run_id/slot; callbacks cannot
+select an arbitrary resource. Native originals commit into encrypted custody
+before decoding, and a204 only acknowledges that custody. Create/startup patch
+qualification commits the canonical ensured event with the known original UID.
+Delete acceptance remains private audit until independent absence.
+
+Independent resource reads join current Namespace/Node/birth/registry,
+Pod/Service/EndpointSlice UIDs, actual image IDs from qualified publication
+children, container IDs/start times and zero restarts. Real EndpointSlice ports
+carry no targetPort; Pod target APIVersion may be absent. The probe receives an
+expected Core Source pin; it does not observe a Source header on loopback9080.
+The controller independently joins the actual Core image and process lifetime.
+
+The fixed initial/final runs permit twelve DF requests plus twelve signed
+echoes globally, payload1302/IPv4 MTU1330, at most31920 IP bytes and thirty seconds
+per batch. Exact Pod/ClusterIP targets and signed request/echo direction remain
+mandatory. Warmup separately requires the actual API worker's
+waiting_projection nonce/roster, same-Pod challenge CAS and same-process
+roots_open plus readyz. No business Service or production job consumer is
+installed for this diagnostic worker.
+
+Service DNAT may translate only the incoming signed Service request's source
+port. Its peer Pod IP stays fixed, and the emitted echo must match that exact
+request and observed return address. Pod requests and received echoes still use
+port9446. This changes no packet, signature, replay or lifetime budget.
+
+Both probe servers must first return fresh authenticated idle reports. GET-only
+polling yields before the original dispatch deadline, retaining the run for a
+later eligible invocation without consuming an initial POST. Configuration ACKs
+cannot replace this observation. The existing proof65s/Native-step90s caps stay
+unchanged; expiry or missing final acknowledgement remains HOLD. Secret remount
+and annotation-driven Pod updates have different normal paths and neither is a
+guaranteed delivery bound.
+
+After final resource/process and fresh authenticated Guest reads, the producer
+seals one PendingProof before cleanup. Resume, release preparation and later
+Record use its original hashes, oldest observation time and validity. Cleanup
+does not refresh readiness, send another batch or mint a new lifetime. An
+expired proof remains HOLD even when cleanup later completes.
+
+Cleanup operates on exactly the eight original diagnostic resources. Fresh
+exact-name404 can close only a known original qualified UID, with encrypted
+absence and canonical destroyed event committed together. DELETE ACK/204 alone
+cannot do so; unknown creates without original UID remain held. The owned
+background worker performs cleanup only, with finite original delete contexts
+and GET-only recovery after exposure. The private journal is closed/bounded
+at48MiB while public decoders and per-original1MiB limits stay unchanged.
+
+The main owner joins readiness cleanup and private receiving before closing
+Workers' borrowed factories/phase clients. A failed join retains keys, clients,
+opaque owner and the ServiceApp dependency barrier through constructor and HTTP
+startup rollback. Later Close cannot hide the held outcome. This Source
+composition changes no production gate or image adoption. CI keeps unit,
+native-Source mTLS ownership and PostgreSQL16/17 evidence separate, with
+explicitly synthetic fixtures labeled. See ADR-0150.
