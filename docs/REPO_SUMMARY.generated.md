@@ -1,14 +1,14 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-28T02:39:02-03:00_
+_Generated from HEAD at: 2026-11-28T03:27:00-03:00_
 
 ## Languages
 
-- `.go`: 1788 files
+- `.go`: 1790 files
 - `.json`: 265 files
 - `.py`: 217 files
 - `.sql`: 121 files
-- `.yaml`: 11 files
+- `.yaml`: 14 files
 - `.yml`: 39 files
 
 ## Contracts & Artifacts
