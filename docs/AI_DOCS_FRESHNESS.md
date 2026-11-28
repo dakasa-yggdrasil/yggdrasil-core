@@ -3,45 +3,40 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 5ba1bd4a2d50e3270b105e09628015cf2f194e2a
-verified_diff_sha256: 2e91d6c4cbdd526c200a89ffe5ea384149db3b33eb3fc8f39ad852e800f814fe
+verified_at_commit: 7eb544375c7a42ff109ea8efc578fbe5809506a0
+verified_diff_sha256: 523d9388a5cdd20926d6c5b5b2c1b3f5a1d60b769fd942aafc39410c25dc1d01
 reconciler_schema: 1
 
-Reviewed the concrete Native runtime pairing for the exact provider literals aws
-and hetzner. Every Attempt matches its copied profile/provider/market region;
-aliases cannot choose a real provider path. Existing Source, scope, immutable
-private original/launch joins, shared Close ownership and phase forwarding stay
-intact. HCloud requires the separately typed original201/action and independent
-project/network witness; no account or request ID is invented.
+Reviewed the dedicated floor reader/writer RPC handle against the actual System
+three-member request, five-member response and two explicit false metadata
+claims. Protected Go composition fixes role, AdapterID, compiled Source, whole
+binding-file scope, floor identity, template and mutual TLS trust. The only
+endpoint is derived from the bound private floor address and role port9444/9443.
+No manifest/RPC selects a URL, trust path, header, proxy, redirect or capability.
 
-The new published-factory root uses the real immutable System artifact for pure
-HCloud preparation, empty account, location/network-region distinction and exact
-ownership/refusal checks. Two existing artifact roots, the120s watchdog and
-race/no-skip verdict remain. New PostgreSQL coverage uses actual original and
-birth stores plus the real paired qualifier, then proves sealed reobservation
-writes no transition or witness. A pure exact-profile table checks provider
-aliases and substitution. All three new roots are mandatory remote CI cases.
+Original bounded Read, actual Close and live context precede strict typed
+interpretation. Complete reader inventories remain distinct from absence or
+admission. The exact System interface name is required even when absent, with
+empty/foreign negatives and a matching genuine absent-interface fixture.
+Writer unknown, GET-only and original_return_custodied dispositions create no
+scope echo, effect receipt, network qualification or scheduling admission.
 
-Root whole12-path review closed the typed Redeem Permit/reload finding. The
-inherited actual197 compile/lint correction is present before this Source. The
-complete924-fact source census and evidence references were regenerated from the
-actual whole tree with no paths omitted or bounds raised.
+Six mandatory remote CI roots cover real mutual TLS while retaining the bound
+private Host/IP SAN/role port, exact selectors and identity, framing, explicit
+false/null members, TLS trust, original Read/Close/cancellation, role separation
+and shared Close. A private test-only dialer maps to isolated runner sockets;
+the public constructor exposes no dialer, URL or environment switch.
 
-The signed product precedes the released CLI reconciliation plan and completed
-ai-all generation. Only reading, deterministic generation and cheap format/diff
-checks ran locally. Tests/builds/analysis remain mandatory GitHub CI work. No
-runtime adoption, provider mutation, network/admission qualification, capacity
-purchase, throughput or Hetzner load is claimed.
+The complete925-source census retains every924 parent fact and adds one client;
+actual service-contract references match the generated files. Signed ancestry
+retains runtime198 and its reviewed first-ACK-only migration118, immutable Birth
+history and measured ordinary market package envelope correction. Factory and
+individual deadlines, complete root census, race and no-skip criteria remain.
+Root whole twelve-path review and Bridge whole product parity are recorded in
+local review receipts; no duplicate review is claimed.
 
-The actual signed parent197 successor adds first-HCloud-ACK-only witness receiving
-through Goose118 and an atomic immutable Birth constraint. The original SQL
-failures remain recorded; later mutation, insertion and rollback-history guards
-remain strict. Both actual inherited analysis findings are corrected.
-
-Original CI198 also exhausted its ordinary120-second package envelope while
-Goose fixtures continued progressing. Saved195/196/198 artifacts distinguish
-this cumulative runner limit from the separate P0001 witness failures. Only the
-ordinary market package limit becomes five minutes; the twelve-minute job,
-published-factory120-second watchdog, all individual deadlines, complete root
-census, race settings and no-skip acceptance remain. The reviewed parent is
-inherited by exact signed merge, preserving all original Source heads.
+The signed Source merge precedes the released CLI reconciliation plan and
+completed ai-all generation. Only deterministic generators, formatting, reading
+and diff checks ran locally. Tests, builds and analysis run in GitHub CI. This
+Source installs no runtime, controller, permission, guest witness or production
+configuration and performs no cloud call, purchase or Hetzner load.

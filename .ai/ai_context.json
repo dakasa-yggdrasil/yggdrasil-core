@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-27T21:40:12-03:00",
+  "generated_at": "2026-11-27T21:47:45-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1741,
+    ".go": 1743,
     ".json": 265,
     ".py": 217,
     ".sql": 121,
@@ -11,7 +11,7 @@
     ".yml": 38
   },
   "provenance": {
-    "commit": "5ba1bd4a2d50e3270b105e09628015cf2f194e2a",
+    "commit": "7eb544375c7a42ff109ea8efc578fbe5809506a0",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "7a31abf76a46fb02ff2b9d8cdb6c9f42ed97a6da1e07794801cb8acbd2567637"
+        "sha256": "40fac2a9747712ba519c7e8c9c4aaf8bc0d5b12931bedbf76aefb814b2ceb413"
       },
       {
         "path": "AGENTS.md",
@@ -80,8 +80,8 @@
     },
     {
       "path": "internal/capacity",
-      "files": 181,
-      "kb": 1891
+      "files": 183,
+      "kb": 1932
     },
     {
       "path": "db/migrations",
