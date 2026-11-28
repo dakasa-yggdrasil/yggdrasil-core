@@ -1,0 +1,243 @@
+name: Native worker finite readiness probe
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  probe-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Select every actual probe root
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-worker-probe"
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          roots = []
+          for path in sorted(Path('internal/nativeworkerprobe').glob('*_test.go')):
+              actual = re.findall(r'^func (Test\w+)\(t \*testing\.T\)', path.read_text(), re.M)
+              if not actual:
+                  raise SystemExit('Empty authored test file: ' + str(path))
+              roots.extend(actual)
+          if not roots or len(roots) != len(set(roots)):
+              raise SystemExit('Empty/duplicate probe root set')
+          path = Path(os.environ['RUNNER_TEMP']) / 'native-worker-probe/expected.json'
+          path.write_text(json.dumps(sorted(roots)) + '\n')
+          PY
+      - name: Exercise real DF sockets mTLS startup and finite protocol under race
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -count=1 -timeout=2m -json ./internal/nativeworkerprobe | tee "$RUNNER_TEMP/native-worker-probe/original.jsonl"
+      - name: Require every authored root exactly once without skipped cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import collections, json, os
+          from pathlib import Path
+          directory = Path(os.environ['RUNNER_TEMP']) / 'native-worker-probe'
+          expected = json.loads((directory / 'expected.json').read_text())
+          events = [json.loads(line) for line in (directory / 'original.jsonl').read_text().splitlines()]
+          if any(e.get('Action') in ('fail', 'skip') for e in events):
+              raise SystemExit('Failed/skipped probe case')
+          for action in ('run', 'pass'):
+              actual = collections.Counter(e['Test'] for e in events if e.get('Action') == action and e.get('Test') and '/' not in e['Test'])
+              if actual != collections.Counter(expected):
+                  raise SystemExit('Missing/repeated/unexpected probe roots: ' + action)
+          (directory / 'qualified.json').write_text(json.dumps({'head': os.environ['GITHUB_SHA'], 'roots': expected, 'race': True, 'count': 1, 'skips': 0}, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-worker-probe-original-cases
+          path: ${{ runner.temp }}/native-worker-probe/
+
+  probe-image:
+    needs: probe-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the separate immutable Source target
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/native-worker-probe-image"
+          mkdir -p "$directory"
+          # Each verified leaf is a plain platform manifest. Qualification is
+          # the original native buildvcs/binary/image evidence below.
+          docker buildx build --file Dockerfile.native-worker-probe --target native-worker-probe --platform "linux/$ARCH" --build-arg "SOURCE_COMMIT=$GITHUB_SHA" --provenance=false --load --tag native-worker-probe:ci --metadata-file "$directory/build.json" .
+          docker image inspect native-worker-probe:ci > "$directory/image.json"
+          container_id="$(docker create native-worker-probe:ci unexpected-operand)"
+          trap 'docker rm -f "$container_id" >/dev/null' EXIT
+          docker cp "$container_id:/app/native-worker-probe" "$directory/native-worker-probe"
+          go version -m "$directory/native-worker-probe" > "$directory/build-info.txt"
+          awk -v source="vcs.revision=$GITHUB_SHA" '$1 == "build" && $2 == source {found=1} END {exit !found}' "$directory/build-info.txt"
+          awk '$1 == "build" && $2 == "vcs.modified=false" {found=1} END {exit !found}' "$directory/build-info.txt"
+          awk -v arch="GOARCH=$ARCH" '$1 == "build" && $2 == arch {found=1} END {exit !found}' "$directory/build-info.txt"
+          set +e
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges native-worker-probe:ci unexpected-operand > "$directory/stdout" 2> "$directory/stderr"
+          original_exit=$?
+          set -e
+          test "$original_exit" -eq 1
+          test ! -s "$directory/stdout"
+          test "$(cat "$directory/stderr")" = 'native worker diagnostic unavailable'
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'native-worker-probe-image'
+          image = json.loads((p / 'image.json').read_text())[0]
+          if image['Config']['User'] != '65532:65532' or image['Config']['Entrypoint'] != ['/app/native-worker-probe'] or image['Config']['Labels']['org.opencontainers.image.revision'] != os.environ['GITHUB_SHA'] or image['Architecture'] != os.environ['ARCH']:
+              raise SystemExit('Wrong image identity/privilege/Source')
+          body = (p / 'native-worker-probe').read_bytes()
+          (p / 'qualified.json').write_text(json.dumps({'head': os.environ['GITHUB_SHA'], 'architecture': os.environ['ARCH'], 'image_id': image['Id'], 'binary_sha256': hashlib.sha256(body).hexdigest(), 'binary_bytes': len(body), 'clean_buildvcs': True, 'network_disabled_refusal_exit': 1, 'production_path_qualified': False}, indent=2) + '\n')
+          PY
+      - name: Publish verified platform only on normal Main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          IMAGE: ghcr.io/dakasa-yggdrasil/native-worker-probe
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/native-worker-probe-image"
+          tag="$IMAGE:candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCH"
+          docker tag native-worker-probe:ci "$tag"
+          docker push "$tag"
+          digest="$(docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}')"
+          printf '%s\n' "$digest" > "$directory/published-digest.txt"
+          docker buildx imagetools inspect --raw "$IMAGE@$digest" > "$directory/published-manifest.json"
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'native-worker-probe-image'
+          q = json.loads((p / 'qualified.json').read_text())
+          manifest = json.loads((p / 'published-manifest.json').read_text())
+          digest = (p / 'published-digest.txt').read_text().strip()
+          if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest) or manifest['config']['digest'] != q['image_id']:
+              raise SystemExit('Published platform differs from verified image')
+          q.update({'image': os.environ['IMAGE'], 'digest': digest, 'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT']})
+          (p / 'published.json').write_text(json.dumps(q, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-worker-probe-image-${{ matrix.arch }}
+          path: ${{ runner.temp }}/native-worker-probe-image/
+
+  probe-normal-publisher:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [probe-contract, probe-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-worker-probe-image-*
+          path: ${{ runner.temp }}/probe-platforms
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Join only verified Source platform digests and promote exact index
+        shell: bash
+        env:
+          IMAGE: ghcr.io/dakasa-yggdrasil/native-worker-probe
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/native-worker-probe-publication"
+          mkdir -p "$directory"
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP'])
+          rows = [json.loads(f.read_text()) for f in sorted((p / 'probe-platforms').glob('*/published.json'))]
+          if len(rows) != 2 or sorted(x['architecture'] for x in rows) != ['amd64', 'arm64']:
+              raise SystemExit('Incomplete/duplicate platform set')
+          for x in rows:
+              if x['head'] != os.environ['GITHUB_SHA'] or x['image'] != os.environ['IMAGE'] or x['run_id'] != os.environ['GITHUB_RUN_ID'] or x['run_attempt'] != os.environ['GITHUB_RUN_ATTEMPT'] or not x['clean_buildvcs'] or not re.fullmatch(r'sha256:[a-f0-9]{64}', x['digest']):
+                  raise SystemExit('Wrong Source/run/platform qualification')
+          d = p / 'native-worker-probe-publication'
+          (d / 'platforms.json').write_text(json.dumps(rows, indent=2) + '\n')
+          (d / 'refs.txt').write_text(''.join(x['image'] + '@' + x['digest'] + '\n' for x in rows))
+          PY
+          mapfile -t refs < "$directory/refs.txt"
+          candidate="$IMAGE:candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker buildx imagetools create --tag "$candidate" "${refs[@]}"
+          digest="$(docker buildx imagetools inspect "$candidate" --format '{{.Manifest.Digest}}')"
+          printf '%s\n' "$digest" > "$directory/index-digest.txt"
+          docker buildx imagetools inspect --raw "$IMAGE@$digest" > "$directory/index.json"
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'native-worker-probe-publication'
+          rows = json.loads((p / 'platforms.json').read_text())
+          index = json.loads((p / 'index.json').read_text())
+          expected = {(x['architecture'], x['digest']) for x in rows}
+          descriptors = index.get('manifests', [])
+          if len(descriptors) != 2 or any(x.get('platform', {}).get('os') != 'linux' for x in descriptors) or {(x['platform']['architecture'], x['digest']) for x in descriptors} != expected or not re.fullmatch(r'sha256:[a-f0-9]{64}', (p / 'index-digest.txt').read_text().strip()):
+              raise SystemExit('Index differs from exact qualified platforms')
+          PY
+          docker buildx imagetools create --tag "$IMAGE:edge" --tag "$IMAGE:sha-${GITHUB_SHA::7}" "$IMAGE@$digest"
+          for tag in edge "sha-${GITHUB_SHA::7}"; do
+            actual="$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{.Manifest.Digest}}')"
+            test "$actual" = "$digest"
+          done
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'native-worker-probe-publication'
+          out = {'schema': 1, 'source_commit': os.environ['GITHUB_SHA'], 'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'image': os.environ['IMAGE'], 'index_digest': (p / 'index-digest.txt').read_text().strip(), 'tags': ['edge', 'sha-' + os.environ['GITHUB_SHA'][:7]], 'platforms': json.loads((p / 'platforms.json').read_text()), 'tag_readback_matches': True, 'live_adoption': False}
+          (p / 'normal-publication.json').write_text(json.dumps(out, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-worker-probe-normal-publication
+          path: ${{ runner.temp }}/native-worker-probe-publication/

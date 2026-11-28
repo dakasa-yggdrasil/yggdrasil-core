@@ -8,6 +8,30 @@ The `nativequalification`-only original QEMU fixture exposes fixed Describe and 
 
 ## Protected authority and explicit API workers
 
+The separate `native-worker-probe` command is a finite in-Pod diagnostic,
+not an API worker or an admission owner. A protected projected Secret revision
+binds its run/attempt/birth, actual Pod/Node/Service selectors, per-run signing
+keys, server certificate and exact controller client leaf. Its TCP 9446 mTLS
+handler authenticates before the body and returns compiled Source on every
+HTTP outcome. Zero-body POSTs `/probe/initial` and `/probe/final` consume two
+one-shot compiled batches; GET `/probe/report` reobserves original signed
+datagrams. The complete two-Pod run permits twelve 1302-byte UDP requests and
+twelve echoes, with IPv4 DF and a thirty-second deadline for each batch. A
+failure never grants another send plan; the controller must use Pods with
+`restartPolicy: Never` and retain its durable original run journal.
+
+Candidate-only GET `/probe/startup` reads the real API worker's fixed loopback
+native-admission endpoint, `/readyz`, and native-admission again. Its separate
+admission key is never sent to `/readyz`. This bracket reports actual process
+nonce/projection/readiness and refuses an origin change; it does not admit a
+Node or open business traffic. The floor role has no startup read authority.
+The agent neither queries nor mutates Kubernetes/provider APIs. Actual object
+lifetimes, both network paths, warmup policy and useful admission remain the
+controller's independently joined responsibility. Loopback CI socket tests do
+not qualify a real Kubernetes Service or production path. A dedicated normal
+Main publisher verifies both native buildvcs/architectures, publishes a separate
+OCI package and records exact digest promotion; PR image checks never publish.
+
 The default `authority` role retains the original control-plane startup,
 authentication ceremonies, broker consumers, discovery, schedulers and
 reconcilers. The explicit `api_worker` role is admitted only through the dedicated
