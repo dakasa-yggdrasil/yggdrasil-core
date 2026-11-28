@@ -87,6 +87,7 @@ jobs:
               'internal/capacity/native_worker_private_factory_linux_test.go',
               'internal/capacity/native_worker_abort_test.go',
               'internal/capacity/native_worker_physical_test.go',
+              'internal/capacity/native_worker_transport_observation_test.go',
               'internal/capacity/native_worker_hcloud_physical_test.go',
               'internal/capacity/native_worker_hcloud_guards_test.go',
               'internal/capacity/native_worker_rpc_client_linux_test.go',

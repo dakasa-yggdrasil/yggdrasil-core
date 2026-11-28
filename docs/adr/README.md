@@ -186,3 +186,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
 - [ADR-0142: Pair concrete Native runtime with typed HCloud qualification](0142-pair-concrete-native-runtime-with-typed-hcloud-qualification.md)
 - [ADR-0143: Bind floor network RPC to protected mutual TLS clients](0143-bind-floor-network-rpc-to-protected-mutual-tls-clients.md)
+
+- [ADR-0144: Retain transport facts from the same sealed physical read](0144-retain-transport-facts-from-the-same-sealed-physical-read.md)
