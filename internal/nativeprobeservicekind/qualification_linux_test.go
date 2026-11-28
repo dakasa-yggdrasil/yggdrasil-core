@@ -507,6 +507,53 @@ func TestNativeProbeActualClusterIPReverseSNATEcho(t *testing.T) {
 			if b.State != "complete" || b.StartedAt == nil || b.CompletedAt == nil || b.CompletedAt.Before(*b.StartedAt) || b.CompletedAt.Sub(*b.StartedAt) > probe.BatchDeadline || len(b.Sent) != want || len(b.Echoed) != want || len(b.Received) != 2*want {
 				t.Fatal("normal fixed packet budget differs")
 			}
+			requests := map[string]probe.DatagramRecord{}
+			seen := map[string]bool{}
+			for _, r := range b.Received {
+				if len(r.Packet) != probe.PayloadBytes || r.PayloadBytes != probe.PayloadBytes || r.PayloadSHA256 != digest(r.Packet) {
+					t.Fatal("original signed datagram bytes differ")
+				}
+				address, err := netip.ParseAddrPort(r.Address)
+				if err != nil || !address.Addr().Is4() || address.Port() == 0 || address.String() != r.Address {
+					t.Fatal("actual UDP source unavailable")
+				}
+				echo := probe.VerifyPacket(r.Packet, configs[i], pubs[i], pubs[peer], true)
+				request := probe.VerifyPacket(r.Packet, configs[peer], pubs[peer], pubs[i], false)
+				if echo == request {
+					t.Fatal("frame signature/source identity ambiguous")
+				}
+				if address.Port() != probe.Port && (!request || r.Packet[10] != 1) {
+					t.Fatal("only a signed Service request may have a translated source port")
+				}
+				key := fmt.Sprintf("%t/%d/%d", echo, r.Packet[10], r.Packet[11])
+				if seen[key] {
+					t.Fatal("repeated original signed frame")
+				}
+				seen[key] = true
+				batch := "initial"
+				if batchIndex == 1 {
+					batch = "final"
+				}
+				if r.Batch != batch || int(r.Packet[9]) != batchIndex || r.Sequence != int(r.Packet[11]) || r.ObservedAt.Before(*b.StartedAt) || r.ObservedAt.After(*b.CompletedAt) {
+					t.Fatal("original datagram batch/lifetime differs")
+				}
+				if r.Path == "service" && r.Packet[10] != 1 || r.Path == "pod" && r.Packet[10] != 0 || r.Path != "service" && r.Path != "pod" {
+					t.Fatal("signed path differs from evidence row")
+				}
+				if request {
+					if address.Addr().String() != configs[i].Peer.PodIPv4 {
+						t.Fatal("request widened beyond peer Pod source")
+					}
+					requests[fmt.Sprintf("%d/%d/%d", r.Packet[9], r.Packet[10], r.Packet[11])] = r
+				} else if address.Addr().String() == configs[i].Peer.ServiceClusterIPv4 {
+					if r.Path != "service" {
+						t.Fatal("Pod echo claimed a Service source")
+					}
+					serviceSNAT++
+				} else if address.Addr().String() != configs[i].Peer.PodIPv4 {
+					t.Fatal("foreign echo accepted")
+				}
+			}
 			for echoIndex, rows := range [][]probe.DatagramRecord{b.Sent, b.Echoed} {
 				echo := echoIndex == 1
 				sender, signer, echoer := configs[i], pubs[i], pubs[peer]
@@ -518,60 +565,34 @@ func TestNativeProbeActualClusterIPReverseSNATEcho(t *testing.T) {
 					if !probe.VerifyPacket(r.Packet, sender, signer, echoer, echo) || r.PayloadBytes != probe.PayloadBytes || r.PayloadSHA256 != digest(r.Packet) {
 						t.Fatal("original outbound signed frame differs")
 					}
-					destination := configs[i].Peer.PodIPv4
-					if !echo && r.Path == "service" {
-						destination = configs[i].Peer.ServiceClusterIPv4
+					path := "pod"
+					if r.Packet[10] == 1 {
+						path = "service"
 					}
-					if r.Address != net.JoinHostPort(destination, "9446") {
-						t.Fatal("original outbound path differs")
+					if int(r.Packet[9]) != batchIndex || r.Batch != []string{"initial", "final"}[batchIndex] || r.Path != path || r.Sequence != int(r.Packet[11]) || r.ObservedAt.Before(*b.StartedAt) || r.ObservedAt.After(*b.CompletedAt) {
+						t.Fatal("original outbound signed selection or lifetime differs")
+					}
+					if echo {
+						request, ok := requests[fmt.Sprintf("%d/%d/%d", r.Packet[9], r.Packet[10], r.Packet[11])]
+						// Byte 8 (packet kind) and the final 64-byte echo signature are the
+						// only differences from this exact original request.
+						if !ok || r.Address != request.Address || r.ObservedAt.Before(request.ObservedAt) || !bytes.Equal(r.Packet[:8], request.Packet[:8]) || !bytes.Equal(r.Packet[9:len(r.Packet)-ed25519.SignatureSize], request.Packet[9:len(request.Packet)-ed25519.SignatureSize]) {
+							t.Fatal("echo differs from its exact original request/return address")
+						}
+					} else {
+						destination := configs[i].Peer.PodIPv4
+						if r.Path == "service" {
+							destination = configs[i].Peer.ServiceClusterIPv4
+						}
+						if r.Address != net.JoinHostPort(destination, "9446") {
+							t.Fatal("original outbound path differs")
+						}
 					}
 					key := fmt.Sprintf("%d/%d", r.Packet[10], r.Packet[11])
 					if seen[key] {
 						t.Fatal("duplicate outbound logical frame")
 					}
 					seen[key] = true
-				}
-			}
-			seen := map[string]bool{}
-			for _, r := range b.Received {
-				if len(r.Packet) != probe.PayloadBytes || r.PayloadBytes != probe.PayloadBytes || r.PayloadSHA256 != digest(r.Packet) {
-					t.Fatal("original signed datagram bytes differ")
-				}
-				address, err := netip.ParseAddrPort(r.Address)
-				if err != nil || address.Port() != probe.Port {
-					t.Fatal("actual UDP source unavailable")
-				}
-				echo := probe.VerifyPacket(r.Packet, configs[i], pubs[i], pubs[peer], true)
-				request := probe.VerifyPacket(r.Packet, configs[peer], pubs[peer], pubs[i], false)
-				if echo == request {
-					t.Fatal("frame signature/source identity ambiguous")
-				}
-				key := fmt.Sprintf("%t/%d/%d", echo, r.Packet[10], r.Packet[11])
-				if seen[key] {
-					t.Fatal("repeated original signed frame")
-				}
-				seen[key] = true
-				batch := "initial"
-				if batchIndex == 1 {
-					batch = "final"
-				}
-				if r.Batch != batch || r.Sequence != int(r.Packet[11]) || r.ObservedAt.Before(*b.StartedAt) || r.ObservedAt.After(*b.CompletedAt) {
-					t.Fatal("original datagram batch/lifetime differs")
-				}
-				if r.Path == "service" && r.Packet[10] != 1 || r.Path == "pod" && r.Packet[10] != 0 || r.Path != "service" && r.Path != "pod" {
-					t.Fatal("signed path differs from evidence row")
-				}
-				if request {
-					if address.Addr().String() != configs[i].Peer.PodIPv4 {
-						t.Fatal("request widened beyond peer Pod source")
-					}
-				} else if address.Addr().String() == configs[i].Peer.ServiceClusterIPv4 {
-					if r.Path != "service" {
-						t.Fatal("Pod echo claimed a Service source")
-					}
-					serviceSNAT++
-				} else if address.Addr().String() != configs[i].Peer.PodIPv4 {
-					t.Fatal("foreign echo accepted")
 				}
 			}
 		}

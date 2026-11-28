@@ -234,7 +234,7 @@ func (e *engine) runBatch(parent context.Context, name string) {
 }
 
 func (e *engine) accept(raw []byte, address netip.AddrPort) {
-	if len(raw) != PayloadBytes || address.Port() != Port {
+	if len(raw) != PayloadBytes || address.Port() == 0 {
 		return
 	}
 	echo := raw[packetKindIndex] == 1
@@ -244,6 +244,13 @@ func (e *engine) accept(raw []byte, address netip.AddrPort) {
 		valid = VerifyPacket(raw, e.material.config, ownPublic, e.material.peer, true)
 	}
 	if !valid {
+		return
+	}
+	// Kubernetes Service DNAT can translate the request's source port when
+	// the same Pod pair also has a direct flow. Only a canonical signed
+	// Service request may retain that observed port; every echo and Pod-path
+	// request still requires the fixed port. Replies use the original address.
+	if address.Port() != Port && (echo || raw[10] != 1) {
 		return
 	}
 	// ClusterIP reverse-SNAT may return a service-path echo from the exact
