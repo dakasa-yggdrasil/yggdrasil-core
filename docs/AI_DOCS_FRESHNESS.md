@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 194c532bbaf59ce6c4f44b528bf20a1bf999b4da
-verified_diff_sha256: 9693e9c5a48adad117a7b93bac6c3c264e49e99897630c90967078ac7525ccb2
+verified_at_commit: 342f8f4f205b8d4aad014aaab58dea0e32cd8879
+verified_diff_sha256: 78c8c34628480ad8cff7fc32db4ca5ec218b3534b32446ba31211db75c01e7f3
 reconciler_schema: 1
 
 Reviewed the exact union of private main installation and durable same-profile
@@ -47,3 +47,15 @@ lowercase, with no function, guard, test or selector change. The exact two
 Source records and their census references were refreshed without dropping any
 of the 953 records. Independent review accepted this five-path correction.
 Original CI3 evidence remains preserved; complete final-head CI is pending.
+
+CI4 qualified all nine installation roots and all eleven execution roots on
+both PostgreSQL16/17; each market artifact has exactly213 RUN/PASS roots and
+zero failed/skipped cases. Its original native-core-kind failure occurred
+during initial admission before the recovery adversary, with two Pods admitted
+and one actual process still waiting for its projected challenge. The original
+annotation/file relationship was not captured, so its cause remains unknown.
+The reviewed successor adds only bounded subsequent failure diagnostics:
+Pod GET, public challenge file read and Pod GET under one five-second context
+with a one-second command pipe join. It preserves the original ninety-second
+deadline, all predicates/assertions and kubelet cadence. A green successor does
+not retrospectively establish the cause or repair of that original failure.
