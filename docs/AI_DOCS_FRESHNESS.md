@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: e1fce5a46b7f84a6491dcd965ef1cabb733b34e9
-verified_diff_sha256: 52f6d1f58a1379f5b9ecf1ec3a905e70f84feb3728d77c5826718d9b557eb922
+verified_at_commit: 4771a11598e666462562f4c7ab82afacafd042b1
+verified_diff_sha256: a84b0d0ea38220e947c113c13711723204e5a4b76460a961e23613b29f0db54c
 reconciler_schema: 1
 
 Reviewed the complete thirteen-path Native network composition, including the
@@ -35,3 +35,11 @@ plan against Main508ada and completed ai-all generation. Only static reading,
 formatting, parsing, hash comparisons and generators ran locally. Tests/builds
 run only in CI. This Source performs no cloud or production action, install,
 purchase or Hetzner load test and enables no runtime or controller.
+
+The first real composition CI exposed an inherited constructor defect: a JSON
+roundtrip compacted the stored PostgreSQL policy Spec before strict byte
+comparison. Both constructors now retain their own exact original Spec bytes.
+The real PostgreSQL fixture also checks non-aliasing and subsequent caller
+mutation without replacing the positive input or weakening policyMatches.
+The original failing run/log is retained; revised remote qualification remains
+pending. Root/Ollo reviewed the complete six-path causal correction.
