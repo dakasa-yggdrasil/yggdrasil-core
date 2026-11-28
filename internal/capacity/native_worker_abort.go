@@ -24,11 +24,14 @@ func ValidateNativeWorkerAbortBinding(p model.CapacityPolicySpec) error {
 func NativeWorkerAbortObservationValid(p model.CapacityPolicySpec, a model.CapacityNativeWorkerAttempt, o model.CapacityNativeWorkerAbortObservation, now time.Time) bool {
 	b := p.NativeWorkerPoolBinding
 	if b == nil || p.NativeWorkerLifecycleBinding == nil || a.Physical == nil || !ValidDigest(a.BirthSHA256) ||
-		o.Physical != *a.Physical || !NativeWorkerPhysicalValid(a, o.Physical) || o.Physical.AccountID == "" ||
+		o.Physical != *a.Physical || !NativeWorkerPhysicalValid(a, o.Physical) || (o.Physical.AccountID == "" && a.Provider != "hetzner") ||
 		o.RealmUID != b.RealmUID || o.PoolUID != a.PoolUID || o.PoolUID != b.PoolUID || o.Owner != b.Owner ||
 		o.Epoch != a.PoolEpoch || o.Epoch != b.ExpectedPoolEpoch || o.Registry != a.Registry || o.Registry != b.RegistryRef ||
 		o.RegistryResourceVersion == "" || o.ExecutionScopeSHA256 != a.Execution.ScopeSHA256 ||
 		o.ObservedAt.After(now) || !fresh(o.ObservedAt, now, p.NativeWorkerLifecycleBinding.MaxReadAgeSeconds) || o.ApplicationPods < 0 {
+		return false
+	}
+	if a.Provider == "hetzner" && !NativeWorkerHCloudWitnessBindingValid(p, a, a.HCloudWitness) {
 		return false
 	}
 	for _, protected := range b.ProtectedNodes {

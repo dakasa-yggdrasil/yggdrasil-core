@@ -67,39 +67,43 @@ type CapacityNativeWorkerObservedRPC struct {
 }
 
 type CapacityNativeWorkerPhysicalObservation struct {
-	Schema                  string                                 `json:"schema"`
-	SourceCommit            string                                 `json:"source_commit"`
-	Adapter                 CapacityMarketAdapterBinding           `json:"adapter"`
-	BindingName             string                                 `json:"binding_name"`
-	BindingScopeSHA256      string                                 `json:"binding_scope_sha256"`
-	Requested               CapacityNativeWorkerObservationRequest `json:"requested"`
-	StartedAt               time.Time                              `json:"started_at"`
-	ObservedAt              time.Time                              `json:"observed_at"`
-	Complete                bool                                   `json:"complete"`
-	ActualTags              CapacityNativeWorkerObservedTags       `json:"actual_tags"`
-	ActualClientToken       string                                 `json:"actual_client_token"`
-	InstanceState           string                                 `json:"instance_state"`
-	Physical                CapacityNativeWorkerPhysicalFacts      `json:"physical"`
-	TransportEndpointIPv4   string                                 `json:"transport_endpoint_ipv4,omitempty"`
-	RootVolume              CapacityNativeWorkerObservedVolume     `json:"root_volume"`
-	PrimaryInterface        CapacityNativeWorkerObservedInterface  `json:"primary_interface"`
-	Reads                   []CapacityNativeWorkerObservedRPC      `json:"reads"`
-	EvidenceSHA256          string                                 `json:"evidence_sha256"`
-	MutationAuthorized      bool                                   `json:"mutation_authorized"`
-	NodeReadyQualified      bool                                   `json:"node_ready_qualified"`
-	UsefulCapacityQualified bool                                   `json:"useful_capacity_qualified"`
-	AbsenceProven           bool                                   `json:"absence_proven"`
+	// Internal carrier only. The provider-specific RPC decoder populates this
+	// after closed HCloud decoding; AWS wire/evidence serialization is unchanged.
+	HCloud                  *CapacityNativeWorkerHCloudPhysicalObservation `json:"-"`
+	Schema                  string                                         `json:"schema"`
+	SourceCommit            string                                         `json:"source_commit"`
+	Adapter                 CapacityMarketAdapterBinding                   `json:"adapter"`
+	BindingName             string                                         `json:"binding_name"`
+	BindingScopeSHA256      string                                         `json:"binding_scope_sha256"`
+	Requested               CapacityNativeWorkerObservationRequest         `json:"requested"`
+	StartedAt               time.Time                                      `json:"started_at"`
+	ObservedAt              time.Time                                      `json:"observed_at"`
+	Complete                bool                                           `json:"complete"`
+	ActualTags              CapacityNativeWorkerObservedTags               `json:"actual_tags"`
+	ActualClientToken       string                                         `json:"actual_client_token"`
+	InstanceState           string                                         `json:"instance_state"`
+	Physical                CapacityNativeWorkerPhysicalFacts              `json:"physical"`
+	TransportEndpointIPv4   string                                         `json:"transport_endpoint_ipv4,omitempty"`
+	RootVolume              CapacityNativeWorkerObservedVolume             `json:"root_volume"`
+	PrimaryInterface        CapacityNativeWorkerObservedInterface          `json:"primary_interface"`
+	Reads                   []CapacityNativeWorkerObservedRPC              `json:"reads"`
+	EvidenceSHA256          string                                         `json:"evidence_sha256"`
+	MutationAuthorized      bool                                           `json:"mutation_authorized"`
+	NodeReadyQualified      bool                                           `json:"node_ready_qualified"`
+	UsefulCapacityQualified bool                                           `json:"useful_capacity_qualified"`
+	AbsenceProven           bool                                           `json:"absence_proven"`
 }
 
 // This observer is a separate protected read-only integration, never the
 // execution or pricing instance and never a caller-provided endpoint.
 type CapacityNativeWorkerPhysicalReadBinding struct {
-	Profile      string                       `json:"profile"`
-	Provider     string                       `json:"provider"`
-	Region       string                       `json:"region"`
-	Adapter      CapacityMarketAdapterBinding `json:"adapter"`
-	BindingName  string                       `json:"binding_name"`
-	SourceCommit string                       `json:"source_commit"`
-	ScopeSHA256  string                       `json:"scope_sha256"`
-	Capability   string                       `json:"capability"`
+	Profile      string                                  `json:"profile"`
+	Provider     string                                  `json:"provider"`
+	Region       string                                  `json:"region"`
+	Adapter      CapacityMarketAdapterBinding            `json:"adapter"`
+	BindingName  string                                  `json:"binding_name"`
+	SourceCommit string                                  `json:"source_commit"`
+	ScopeSHA256  string                                  `json:"scope_sha256"`
+	Capability   string                                  `json:"capability"`
+	HCloudScope  *CapacityNativeWorkerHCloudProjectScope `json:"hcloud_scope,omitempty"`
 }

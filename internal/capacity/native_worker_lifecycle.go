@@ -85,6 +85,9 @@ func ValidateNativeWorkerLifecycleBinding(p model.CapacityPolicySpec) error {
 	if err := ValidateNativeWorkerPhysicalObservers(p); err != nil {
 		return err
 	}
+	if err := ValidateNativeWorkerNetworkBinding(p); err != nil {
+		return err
+	}
 	return ValidateNativeWorkerPhaseReadBinding(p)
 }
 
@@ -174,6 +177,10 @@ func ValidateNativeWorkerLaunch(a model.CapacityNativeWorkerAttempt, prepared mo
 }
 
 func NativeWorkerPhysicalValid(a model.CapacityNativeWorkerAttempt, p model.CapacityNativeWorkerPhysical) bool {
+	return nativeWorkerPhysicalIdentityValid(a, p) && (a.Provider != "hetzner" || NativeWorkerHCloudWitnessValid(a, p, a.HCloudWitness))
+}
+
+func nativeWorkerPhysicalIdentityValid(a model.CapacityNativeWorkerAttempt, p model.CapacityNativeWorkerPhysical) bool {
 	ip, e := netip.ParseAddr(p.NativeIPv4)
 	return marketID.MatchString(p.ResourceID) && strings.HasPrefix(p.ProviderID, a.ProviderIDPrefix) &&
 		p.ProviderID[strings.LastIndex(p.ProviderID, "/")+1:] == p.ResourceID &&
@@ -194,6 +201,25 @@ func NativeWorkerObservationValid(a model.CapacityNativeWorkerAttempt, o model.C
 	if o.State == "unknown" {
 		return nil
 	}
+	if a.Provider == "hetzner" {
+		if o.State == "absent" {
+			if a.Physical == nil || !NativeWorkerPhysicalValid(a, *a.Physical) {
+				return fmt.Errorf("sealed HCloud witness required for absence")
+			}
+		} else {
+			var valid bool
+			a, valid = nativeHCloudObservationAttempt(a, o, maxAge)
+			if !valid {
+				return fmt.Errorf("complete linked HCloud acceptance and independent witness required")
+			}
+		}
+	} else if o.HCloudWitness != nil || o.OriginalRequestID == "" || o.IndependentRequestID == "" {
+		// Preserve the existing non-HCloud two-request-ID boundary. HCloud is
+		// an explicit typed exception, never an empty-value wildcard.
+		if o.State != "absent" {
+			return fmt.Errorf("original ACK and independent SDK request IDs required")
+		}
+	}
 	if o.State == "absent" {
 		if a.State != "draining" || a.Physical == nil || o.AbsentProviderID != a.Physical.ProviderID ||
 			!o.AbsentResourceCreatedAt.Equal(a.Physical.CreatedAt) || o.AbsentOverlayIPv4 != a.OverlayIPv4 ||
@@ -204,7 +230,7 @@ func NativeWorkerObservationValid(a model.CapacityNativeWorkerAttempt, o model.C
 	}
 	if !NativeWorkerPhysicalValid(a, o.OriginalAcceptance) || o.OriginalAcceptance != o.IndependentCurrent ||
 		o.IndependentCurrent.CreatedAt.After(o.ObservedAt) ||
-		(a.Physical != nil && *a.Physical != o.IndependentCurrent) || o.OriginalRequestID == "" || o.IndependentRequestID == "" {
+		(a.Physical != nil && *a.Physical != o.IndependentCurrent) {
 		return fmt.Errorf("original ACK and independent full SDK identity must join exact launch")
 	}
 	if o.State == "acknowledged" {

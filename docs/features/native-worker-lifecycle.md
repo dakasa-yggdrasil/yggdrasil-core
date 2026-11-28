@@ -50,6 +50,19 @@ See [ADR-0138](../adr/0138-bind-native-provider-rpc-to-protected-mutual-tls-clie
 This composition does not install the provider process, runtime/controller or
 network, and it grants no CREATE or DELETE without its separate original Core
 permit. Existing callers with no protected client context keep their contracts.
+### Expired commands that never granted a send
+
+`CapacityNativeWorkerCommandStore.CloseUnredeemed` closes only an expired
+original command whose Attempt remains revision-one `reserved`, with no birth,
+Node identity or original return. It uses the same mutation/Attempt locks as
+Redeem and retains an immutable private no-send proof before atomically writing
+the normal `absent` state and event. Concurrent calls reuse that proof.
+
+An expired lease, missing ACK or unknown provider response cannot qualify this
+operation after a send was granted. The closed command cannot receive later
+provider custody, replenish the generation's create budget or authorize a
+retry. This protected operation adds no HTTP route or provider action and
+requires the Native and global execution gates. See [ADR-0136](../adr/0136-close-expired-unredeemed-native-reservations-with-retained-no-send-proof.md).
 
 ### Pre-admission failure recovery
 
@@ -159,6 +172,42 @@ Exact identity, launch and independent current SDK facts must agree before ACK
 qualification. Actual Node UID/provider ID and registry CAS receiving precede
 registration. Bound network, warmup and unexpired qualification receipts precede
 admission. Protected floor identities remain refused.
+
+### HCloud physical witness
+
+Literal provider `hetzner` uses a separate HCloud read DTO and required
+`physical_observers[].hcloud_scope`. The pin names the reviewed logical project,
+token/network-anchor proof kind, anchor ID/creation time and owner label.
+It is compared with actual independent facts, compiled SDK Source, exact catalog
+tuple and the complete reviewed reader inventory digest. It is forbidden on AWS.
+HCloud's `account_id` stays empty; its real create action ID and optional actual
+HTTP request IDs are recorded separately.
+
+The original HTTP 201, canonical base32 launch labels, server lifetime and
+independent server/network/firewall/Primary IP reads must join the immutable
+Launch. The market region is the actual location; System's native provider
+region is the distinct network zone. Complete safe evidence is preserved as
+`hcloud_witness` through the Attempt and immutable Birth. It never includes a
+password, raw original or raw-original hash. A coherent foreign project or
+reader pin still fails the current immutable policy check.
+
+Goose118 permits the witness to appear only in the first exact HCloud physical
+ACK after complete private original custody. A deferred constraint requires the
+matching immutable Birth event in that same transaction. It rejects preexisting
+witnesses at INSERT, injection on another provider, and later replacement or
+removal. Any current or archived witness marker blocks rollback; witness-free
+rollback restores the exact schema116 guard. Existing network/abort/unsent
+constraints remain intact.
+
+`ReobserveACK` returns only the current physical tuple after a fresh complete
+read. It does not issue a second birth or lifecycle transition. A later protected
+registry/admission observation retains the stored witness and its actual
+original optional HTTP IDs. Generic lifecycle and pre-admission abort guards
+require that witness before accepting HCloud's empty account/IDs. Node, network,
+warmup, admission and all-component absence remain separate proof requirements.
+The provider runtime remains separately gated; SDK complete-read/Close handling
+must be qualified before activation. See
+[ADR-0141](../adr/0141-qualify-hcloud-births-with-explicit-project-and-action-witnesses.md).
 
 ## Registry and quarantine permissions
 
@@ -426,3 +475,48 @@ value must be a canonical public IPv4 received from the Source-paired independen
 reader; native private addresses are not Internet endpoints. This fact does not
 qualify reachability or authorize a floor peer. ReobserveACK still returns only
 the sealed physical tuple; the protected raw reader port retains endpoint facts.
+
+## Concrete private AWS runtime composition
+
+`message.NewProtectedNativeWorkerConcreteRuntime` builds the existing catalog/RPC
+readers around Source-owned mTLS handles. The repository runtime binds a copied
+stored policy, its database, real per-profile private factory handles and independent
+physical/phase readers. `WithConcreteNativeWorkerRuntime` installs worker, private-bootstrap and phase
+ports together on the same database, clearing all three before any refused
+replacement; it does not enable
+process gates or install a controller, sender, network writer or readiness
+callback. A missing or unconstructed handle stays disabled.
+
+The public constructor reads Core Source from native build metadata. Preparation
+is a pure delegation to the exact selected factory. Bootstrap rendering uses its
+existing descriptor-pinned System executable and immutable launch checks. After
+successful construction the runtime owns supplied factory/client handles; failed
+construction closes none of the caller's handles. Copies share the Close fence,
+and the database remains caller-owned.
+
+Original capture is an archive read only. Missing rows and read failures return
+the existing pending sentinel, including a concurrent Close; they never invoke
+an actor or convert an absent return into empty completed custody. Before a
+physical GET, qualification rechecks exact archived bytes/private digest, current
+Attempt and immutable launch. AWS acknowledgement qualification is separate from
+sealed reobservation; the latter returns only current physical identity and
+preserves lifecycle state. HCloud preparation/qualification remains refused by
+this runtime until the separately typed qualifier is paired.
+
+The same real phase reader forwards preparation and GET-only receiving under the
+copied policy, pool epoch, writer inventory scope and shared Close fence. Missing
+independent readiness still refuses admission and quarantine release; expired
+permits can receive original GET truth without reopening a mutation.
+The real phase reader supplies a complete authority header. It cannot be cast
+into a fabricated zero-member useful-worker pool. With no independent network
+and warmup evidence this composition grants no admission/readiness substitute.
+The five mTLS capability groups remain separate: provider mutation, provider
+read, Kubernetes writer, pool read and phase read. Kubernetes phase client
+`Profile` and `BindingName` both name the exact protected phase binding; this is
+an identity key rather than a workload-capacity claim.
+
+GitHub CI exercises immutable archive/pending/Close behavior on PostgreSQL 16/17,
+actual local-to-runner mTLS role isolation and real factory-handle composition
+using the existing published System CLI artifact. These are Source tests, not
+provider provisioning, production adoption, network qualification or load proof.
+See ADR0139.

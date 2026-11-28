@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "3e4d19466b4f97636388843c3b3fcf2221fb8dab36d33348bdafe8b9fba986dc"
+      "sha256": "08160177452b55c7736201e0cd596632d76da6fc0648ff46c60196fdb53afa97"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "0d9a524e3c08bd5a9c36250d9aa60631f06b06a8ce4becfea823d09abcf1a55b"
+      "sha256": "a9f2ba48374ec2cc41187a9ab640832cf26fc36224cec5c4e18f051f914e600f"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "0d9a524e3c08bd5a9c36250d9aa60631f06b06a8ce4becfea823d09abcf1a55b"
+      "sha256": "a9f2ba48374ec2cc41187a9ab640832cf26fc36224cec5c4e18f051f914e600f"
     },
     {
       "evidence": "go.mod",
@@ -113,19 +113,19 @@
     {
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
       "id": "pre_mux_capacity_dispatch",
-      "sha256": "78a53216eff23a6ddc00269d56004b825c7dcaa8856e604dbb7be3864d36ce57"
+      "sha256": "da41b8066a6d423881870f23daac70b26d71af10a3582201804595a3694199f5"
     },
     {
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
-      "sha256": "32d91ca9cfa0d55ff7f9307c89f355de372930c6a06bd7206f59f979b2638eda"
+      "sha256": "23e5f15fe4c9647c01644ddccc51fc5f64f8e9ccd1492cbdb145c4d5d76c1167"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "e98a2d4474ad6b0a278597de36fff83710433aaf9d452a39b255e4e43113af22"
+      "sha256": "f7778febdeb758a2086babfe4b603798e0d104a76819d6b6ff87c6f5fe7d0f34"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "1f89f5a3ebd6bfda13819ef139941738067dd1518800d0129b36c1bf895b3343"
+    "sha256": "4c9415aed26f788ede05ece3cc04f33776e7bfacfeec7e4f3cb6791f1e393e72"
   },
   "unresolved": []
 }

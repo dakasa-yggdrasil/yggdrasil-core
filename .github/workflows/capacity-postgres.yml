@@ -1023,7 +1023,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Apply production migrations through schema115
+      - name: Apply production migrations through schema118
         shell: bash
         run: |
           set -euo pipefail
@@ -1034,12 +1034,12 @@ jobs:
           set -e
           printf '%s\n' "$migration_exit" > "$evidence/migrations.exit"
           test "$migration_exit" -eq 0 || exit "$migration_exit"
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "SELECT jsonb_build_object('postgres_major',current_setting('server_version_num')::integer/10000,'schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'schema110_applied',EXISTS(SELECT 1 FROM public.goose_db_version WHERE version_id=110 AND is_applied),'quarantine_table_present',to_regclass('public.capacity_native_abort_quarantines') IS NOT NULL,'migrated_retirement_table_present',to_regclass('public.capacity_native_migrated_origin_retirements') IS NOT NULL,'native_command_context_table_present',to_regclass('public.capacity_native_worker_command_contexts') IS NOT NULL,'native_abort_permit_table_present',to_regclass('public.capacity_native_worker_abort_permits') IS NOT NULL,'native_abort_event_table_present',to_regclass('public.capacity_native_worker_abort_events') IS NOT NULL)" > "$evidence/database.json" 2> "$evidence/database.stderr"
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "SELECT jsonb_build_object('postgres_major',current_setting('server_version_num')::integer/10000,'schema_version',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'schema110_applied',EXISTS(SELECT 1 FROM public.goose_db_version WHERE version_id=110 AND is_applied),'quarantine_table_present',to_regclass('public.capacity_native_abort_quarantines') IS NOT NULL,'migrated_retirement_table_present',to_regclass('public.capacity_native_migrated_origin_retirements') IS NOT NULL,'native_command_context_table_present',to_regclass('public.capacity_native_worker_command_contexts') IS NOT NULL,'native_abort_permit_table_present',to_regclass('public.capacity_native_worker_abort_permits') IS NOT NULL,'native_abort_event_table_present',to_regclass('public.capacity_native_worker_abort_events') IS NOT NULL,'native_unsent_closure_table_present',to_regclass('public.capacity_native_worker_unsent_closures') IS NOT NULL,'native_network_permit_table_present',to_regclass('public.capacity_native_worker_network_permits') IS NOT NULL,'native_network_event_table_present',to_regclass('public.capacity_native_worker_network_events') IS NOT NULL)" > "$evidence/database.json" 2> "$evidence/database.stderr"
           python3 - <<'PYCHECK'
           import json, os
           from pathlib import Path
           actual=json.loads((Path(os.environ['RUNNER_TEMP'])/'scheduler-skip/database.json').read_text())
-          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':115,'schema110_applied':True,'quarantine_table_present':True,'migrated_retirement_table_present':True,'native_command_context_table_present':True,'native_abort_permit_table_present':True,'native_abort_event_table_present':True}:
+          if actual!={'postgres_major':int(os.environ['EXPECTED_POSTGRES_MAJOR']),'schema_version':118,'schema110_applied':True,'quarantine_table_present':True,'migrated_retirement_table_present':True,'native_command_context_table_present':True,'native_abort_permit_table_present':True,'native_abort_event_table_present':True,'native_unsent_closure_table_present':True,'native_network_permit_table_present':True,'native_network_event_table_present':True}:
               raise SystemExit('Scheduler kernel actual PostgreSQL/schema mismatch')
           PYCHECK
       - name: Qualify one-child unredeemed protect recovery on PostgreSQL

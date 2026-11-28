@@ -119,14 +119,8 @@ func NewNativeWorkerRPCClient(c NativeWorkerRPCConfig) (*NativeWorkerRPCClient, 
 		!nativeRPCURL(c.BaseURL, true) || u.Path != "" || !nativeRPCURL(c.HealthURL, false) || len(c.AllowedCapabilities) < 1 || len(c.AllowedCapabilities) > 2 {
 		return nil, errNativeWorkerRPC
 	}
-	allowed := map[string]bool{}
-	for _, cap := range c.AllowedCapabilities {
-		if allowed[cap] || cap != "ensure_native_worker" && cap != "destroy_native_worker" && cap != "observe_native_worker" {
-			return nil, errNativeWorkerRPC
-		}
-		allowed[cap] = true
-	}
-	if allowed["observe_native_worker"] && len(allowed) != 1 {
+	allowed, validRole := nativeWorkerRPCRole(c.AllowedCapabilities)
+	if !validRole {
 		return nil, errNativeWorkerRPC
 	}
 	ca, e := nativePrivateReadFile(c.ServerCAFile, 65536, false)

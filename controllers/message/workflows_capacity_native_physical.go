@@ -41,6 +41,13 @@ func NewNativeWorkerPhysicalReadFunc(db *sql.DB, conn *amqp.Connection) capacity
 
 func nativePhysicalReadReply(b model.CapacityNativeWorkerPhysicalReadBinding, request model.CapacityNativeWorkerObservationRequest, status string, raw any) (model.CapacityNativeWorkerPhysicalObservation, error) {
 	var out model.CapacityNativeWorkerPhysicalObservation
+	if b.Provider == "hetzner" {
+		var hcloud model.CapacityNativeWorkerHCloudPhysicalObservation
+		if status != "observed" || b.HCloudScope == nil || capacity.DecodeNativeCapacity(raw, &hcloud) != nil || hcloud.Adapter != b.Adapter || hcloud.SourceCommit != b.SourceCommit || hcloud.BindingName != b.BindingName || hcloud.BindingScopeSHA256 != b.ScopeSHA256 || hcloud.Requested != request {
+			return out, errCapacityBoundAssessment
+		}
+		return model.CapacityNativeWorkerPhysicalObservation{HCloud: &hcloud}, nil
+	}
 	if status != "observed" || capacity.DecodeNativeCapacity(raw, &out) != nil || out.Adapter != b.Adapter || out.SourceCommit != b.SourceCommit || out.BindingName != b.BindingName || out.BindingScopeSHA256 != b.ScopeSHA256 || out.Requested != request {
 		return out, errCapacityBoundAssessment
 	}

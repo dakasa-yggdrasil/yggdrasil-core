@@ -82,7 +82,7 @@ func (p nativeRPCTestPKI) leaf(t *testing.T, usage x509.ExtKeyUsage) (tls.Certif
 	return pair, certPEM, keyPEM
 }
 
-func nativeRPCClientFixture(t *testing.T, handler http.Handler) (*NativeWorkerRPCClient, NativeWorkerRPCConfig, *httptest.Server, []byte) {
+func nativeRPCClientFixture(t *testing.T, handler http.Handler, operation ...string) (*NativeWorkerRPCClient, NativeWorkerRPCConfig, *httptest.Server, []byte) {
 	t.Helper()
 	pki := nativeRPCPKI(t)
 	serverCert, _, _ := pki.leaf(t, x509.ExtKeyUsageServerAuth)
@@ -109,12 +109,20 @@ func nativeRPCClientFixture(t *testing.T, handler http.Handler) (*NativeWorkerRP
 		return p
 	}
 	config := NativeWorkerRPCConfig{Adapter: model.CapacityMarketAdapterBinding{ManifestID: uuid.NewString(), Version: 3, Checksum: strings.Repeat("a", 64), IntegrationTypeID: uuid.NewString(), TypeChecksum: strings.Repeat("b", 64)}, Profile: "aws-ci", BindingName: "independent-read", SDKSourceCommit: strings.Repeat("c", 40), ScopeSHA256: strings.Repeat("d", 64), BaseURL: server.URL, HealthURL: health.URL + "/healthz", ServerCAFile: write("ca.pem", pki.caPEM), ServerCASHA256: nativeRPCHash(pki.caPEM), ServerCertificateSHA256: nativeRPCHash(serverCert.Certificate[0]), ClientCertificateFile: write("client.pem", clientCert), ClientKeyFile: write("client.key", clientKey), AllowedCapabilities: []string{"observe_native_worker"}}
+	capability := "observe_native_worker"
+	if len(operation) != 0 {
+		if len(operation) != 1 {
+			t.Fatal("exactly one fixture role required")
+		}
+		capability = operation[0]
+		config.AllowedCapabilities = []string{capability}
+	}
 	client, e := NewNativeWorkerRPCClient(config)
 	if e != nil {
 		t.Fatal(e)
 	}
 	t.Cleanup(func() { _ = client.Close() })
-	request := model.AdapterExecuteIntegrationRequest{Operation: "observe_native_worker", Capability: "observe_native_worker", Input: map[string]any{"binding_name": config.BindingName}, Integration: model.AdapterExecuteIntegrationContext{Instance: model.ManifestReference{ID: uuid.MustParse(config.Adapter.ManifestID), Kind: "integration_instance", Version: 3}, Type: model.ManifestReference{ID: uuid.MustParse(config.Adapter.IntegrationTypeID), Kind: "integration_type", Version: 1}}}
+	request := model.AdapterExecuteIntegrationRequest{Operation: capability, Capability: capability, Input: map[string]any{"binding_name": config.BindingName}, Integration: model.AdapterExecuteIntegrationContext{Instance: model.ManifestReference{ID: uuid.MustParse(config.Adapter.ManifestID), Kind: "integration_instance", Version: 3}, Type: model.ManifestReference{ID: uuid.MustParse(config.Adapter.IntegrationTypeID), Kind: "integration_type", Version: 1}}}
 	raw, e := json.Marshal(request)
 	if e != nil {
 		t.Fatal(e)
