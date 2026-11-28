@@ -100,14 +100,19 @@ func TestNativePhaseRecordRequiresOriginalCASAndCurrentSameBirth(t *testing.T) {
 	t.Run("coherent registration scope substitution", func(t *testing.T) {
 		bad := newNativePhaseRecordFixture(t, false)
 		bad.register.Context.Node.RegistrationBindingSHA256 = marketTestSHA("9")
-		bad.f.o.Registrations[0].RegistrationBindingSHA256 = marketTestSHA("9")
-		bad.f.o.Candidates[0].Registrations = bad.f.o.Registrations
-		bad.register.Original.OriginalReturn = nativePhaseACKWire(t, bad.register.Context, bad.f.o.Registrations[0])
+		// The original and private grant agree with each other, while the
+		// independent current GET retains the Source-qualified registration.
+		substituted := bad.f.o.Registrations[0]
+		substituted.RegistrationBindingSHA256 = marketTestSHA("9")
+		bad.register.Original.OriginalReturn = nativePhaseACKWire(t, bad.register.Context, substituted)
 		if _, err := nativePhaseOriginalACK(bad.register); err != nil {
 			t.Fatal("negative lost its coherent original", err)
 		}
-		if _, err := ObserveNativeWorkerPhaseFromRead(bad.f.p, bad.register.Context, bad.f.o, bad.now); err != nil {
-			t.Fatal("negative lost its coherent current read", err)
+		if err := NativeWorkerPhaseHeaderValid(bad.f.p, bad.f.o, bad.now); err != nil {
+			t.Fatal("negative lost its Source-qualified current GET", err)
+		}
+		if _, err := ObserveNativeWorkerPhaseFromRead(bad.f.p, bad.register.Context, bad.f.o, bad.now); err == nil {
+			t.Fatal("current Source guard accepted substituted private grant")
 		}
 		if _, err := bad.project(); err == nil {
 			t.Fatal("coherent self-consistency replaced the Source registration qualification")

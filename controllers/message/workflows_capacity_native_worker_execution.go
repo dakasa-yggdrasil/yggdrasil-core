@@ -12,6 +12,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -228,17 +229,21 @@ func executeCapacityNativeWorkerExecution(ctx context.Context, conn *amqp.Connec
 			if err != nil {
 				return err
 			}
+			networkPermitID, parseErr := uuid.Parse(g.PermitID)
+			if parseErr != nil || networkPermitID == uuid.Nil || networkPermitID.String() != g.PermitID {
+				return errNativeWorkerReceiving
+			}
 			if g.State != "observed" {
 				if g.State == "issued" {
-					won, err := session.ClaimDispatch(callCtx, a.ID, "network_install", g.PermitID)
+					won, err := session.ClaimDispatch(callCtx, a.ID, "network_install", networkPermitID)
 					if err != nil {
 						return err
 					}
 					if won {
-						_, _ = scope.Network.RequestNetworkMutation(callCtx, policy, "install", g.PermitID)
+						_, _ = scope.Network.RequestNetworkMutation(callCtx, policy, "install", networkPermitID)
 					}
 				}
-				g, err = session.ReconcileNetwork(callCtx, scope.Network, g.PermitID)
+				g, err = session.ReconcileNetwork(callCtx, scope.Network, networkPermitID)
 				if err != nil || g.State != "observed" {
 					return errNativeWorkerReceiving
 				}

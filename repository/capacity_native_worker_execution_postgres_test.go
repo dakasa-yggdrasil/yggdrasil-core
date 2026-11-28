@@ -92,8 +92,12 @@ func TestNativeWorkerExecutionConcurrentResumeAndOneRPCBarrierPostgres(t *testin
 		t.Fatal("uncertain original dispatch replayed", err)
 	}
 	permit, err := workers.Redeem(t.Context(), f.policy, authority, id)
-	if err != nil || !permit.MutationPermitted {
+	if err != nil || permit.AttemptID != id || permit.LaunchSHA256 != a.LaunchSHA256 || permit.Capability != a.Execution.EnsureCapability || permit.BindingName != a.Execution.BindingName || permit.Adapter != a.Execution.Adapter || len(permit.PublicLaunchJSON) == 0 {
 		t.Fatal("original SDK redemption failed", err)
+	}
+	started, err := workers.Read(t.Context(), f.policy, id)
+	if err != nil || started.ID != id || started.State != "send_started" || started.PolicyID != a.PolicyID || started.PolicyChecksum != a.PolicyChecksum || started.SourceCommit != a.SourceCommit || started.Generation != a.Generation || started.FencingToken != a.FencingToken || started.LaunchSHA256 != permit.LaunchSHA256 || started.Execution.SDKSourceCommit != a.Execution.SDKSourceCommit || started.Execution.ScopeSHA256 != a.Execution.ScopeSHA256 {
+		t.Fatal("original redemption did not commit the same Source-bound attempt", err)
 	}
 	if _, err = workers.Record(t.Context(), f.policy, authority, id); err != nil {
 		t.Fatal("original SDK callback failed", err)
