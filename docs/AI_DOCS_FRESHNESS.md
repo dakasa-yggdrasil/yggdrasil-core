@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 0a483c2401bef8f0b390ee9a021d5394266bce28
-verified_diff_sha256: 9846f83248b8b92103290c612e13c7d986a9b1013efee41e0c2286b18060bee9
+verified_at_commit: 194c532bbaf59ce6c4f44b528bf20a1bf999b4da
+verified_diff_sha256: 9693e9c5a48adad117a7b93bac6c3c264e49e99897630c90967078ac7525ccb2
 reconciler_schema: 1
 
 Reviewed the exact union of private main installation and durable same-profile
@@ -40,3 +40,10 @@ Source-bound send_started row, and keeps the independent current GET valid
 while requiring rejection of the substituted original/grant. Production phase
 qualification, one-send authority, deadlines and all twenty root names remain
 unchanged. Original failure logs are retained; final CI remains the gate.
+
+CI3 unit and the nine installation roots passed. Its original lint log reports
+only two ST1005 capitalized error literals; both initial letters are now
+lowercase, with no function, guard, test or selector change. The exact two
+Source records and their census references were refreshed without dropping any
+of the 953 records. Independent review accepted this five-path correction.
+Original CI3 evidence remains preserved; complete final-head CI is pending.
