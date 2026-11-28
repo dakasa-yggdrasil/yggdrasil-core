@@ -348,6 +348,8 @@ func TestNativeMemberGuestPlacementUsesActualMTLSAndOneFixedGET(t *testing.T) {
 				defer nativePrivateWipe(foreignKey)
 				foreignCA := *f.guest.issuer
 				foreignCA.Subject.CommonName = "synthetic-untrusted-placement-issuer"
+				foreignCA.RawSubject = nil
+				foreignCA.PublicKey = foreignKey.Public()
 				caDER, err := x509.CreateCertificate(nil, &foreignCA, &foreignCA, foreignKey.Public(), foreignKey)
 				if err != nil {
 					t.Fatal(err)

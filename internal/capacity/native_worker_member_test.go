@@ -54,12 +54,20 @@ func newMemberFactsFixture(t *testing.T, admitted bool) memberFactsFixture {
 		f.o.Candidates[0].Taints = nil
 	}
 	n := &f.o.Candidates[0]
+	// The inherited phase fixture is intentionally below the pool's useful
+	// memory floor. This member fixture explicitly supplies a useful candidate;
+	// the production readiness thresholds remain unchanged.
+	n.AllocatableMilliCPU = pool.Profiles[0].MinAllocatableMilliCPU
+	n.AllocatableMemoryBytes = pool.Profiles[0].MinAllocatableMemory
 	n.Taints = append(n.Taints, model.CapacityNativeWorkerPhaseTaint{Key: NativeWorkerReservedTaint, Value: pool.PoolUID, Effect: "NoSchedule"})
 	n.ProfileLabel, n.PhysicalSpecSHA256Label = f.a.Profile, f.a.PhysicalSpecSHA256
 	n.CreationProofSHA256Label, n.PolicyIDLabel = f.a.BirthSHA256, f.a.PolicyID.String()
 	reader := life.Members.Reader
 	f.o.SourceCommit, f.o.Adapter = reader.SourceCommit, reader.Adapter
 	f.o.BindingName, f.o.BindingScopeSHA256 = reader.Name, reader.ScopeSHA256
+	// The member reader derives its realm namespace from the pool registry;
+	// the legacy phase reader's separate "realm" scope is not its counterpart.
+	f.o.Registry.RealmNamespace = pool.RegistryRef.Namespace
 	mode, receipt := "never_admitted", ""
 	if admitted {
 		mode, receipt = "admitted", f.o.Registrations[0].Admission.ReceiptSHA256
@@ -88,6 +96,12 @@ func (f *memberFactsFixture) reseal() {
 
 func (f memberFactsFixture) requireValid(t *testing.T) {
 	t.Helper()
+	if err := NativeWorkerMemberContextValid(f.Policy, f.Attempt, f.Context, f.Now, false); err != nil {
+		t.Fatal("coherent independent member context refused", err)
+	}
+	if err := NativeWorkerPhaseHeaderValid(nativeMemberPhasePolicy(f.Policy), f.Read.Inventory.Phase, f.Now); err != nil {
+		t.Fatal("coherent independent member phase header refused", err)
+	}
 	if err := NativeWorkerMemberObservationValid(f.Policy, f.Attempt, f.Context, f.Read, f.Authority, f.Now, false); err != nil {
 		t.Fatal("coherent independent member fixture refused", err)
 	}

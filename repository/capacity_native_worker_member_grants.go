@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"time"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )

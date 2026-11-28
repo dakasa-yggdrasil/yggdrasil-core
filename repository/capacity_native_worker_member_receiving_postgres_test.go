@@ -319,7 +319,7 @@ func (f nativeMemberReceivingPG) row(t *testing.T, action string, exposed bool, 
 		t.Fatal(err)
 	}
 	now, planID := time.Now().UTC(), uuid.New()
-	identity := nativeMemberPlanIdentity{Schema: "native_worker_member_plan_v1", PlanID: planID, AttemptID: a.ID, PolicyID: a.PolicyID, PolicyChecksum: a.PolicyChecksum, Namespace: a.Namespace, Kind: "retirement", Mode: "never_admitted", SubjectUID: uuid.MustParse(a.NodeUID), SourceCommit: a.SourceCommit, BirthSHA256: a.BirthSHA256, Generation: a.Generation, Fence: a.FencingToken, ParentKind: "recovery_workflow_v1", RealmUID: pool.RealmUID, PoolUID: pool.PoolUID, Epoch: pool.ExpectedPoolEpoch, ExecutorID: f.f.store.ExecutorID, WorkflowID: f.f.store.WorkflowID}
+	identity := nativeMemberPlanIdentity{Schema: "native_worker_member_plan_v1", PlanID: planID, AttemptID: a.ID, PolicyID: a.PolicyID, PolicyChecksum: a.PolicyChecksum, Namespace: a.Namespace, Kind: "retirement", Mode: "never_admitted", SubjectUID: a.NodeUID, SourceCommit: a.SourceCommit, BirthSHA256: a.BirthSHA256, Generation: a.Generation, Fence: a.FencingToken, ParentKind: "recovery_workflow_v1", RealmUID: pool.RealmUID, PoolUID: pool.PoolUID, Epoch: pool.ExpectedPoolEpoch, ExecutorID: f.f.store.ExecutorID, WorkflowID: f.f.store.WorkflowID}
 	plan := nativeMemberPlanRecord{Identity: identity, State: "active", Revision: 1}
 	_, err = f.f.db.ExecContext(t.Context(), `INSERT INTO public.capacity_native_worker_member_plans(id,attempt_id,policy_id,namespace,kind,mode,subject_uid,state,revision,identity,record,created_at,updated_at) VALUES($1,$2,$3,$4,'retirement','never_admitted',$5,'active',1,$6,$7,$8,$8)`, planID, a.ID, a.PolicyID, a.Namespace, a.NodeUID, nativeMemberDDLJSON(t, identity), nativeMemberDDLJSON(t, plan), now)
 	if err != nil {
