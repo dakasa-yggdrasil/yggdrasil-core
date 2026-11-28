@@ -93,6 +93,9 @@ func newNativeWorkerConcreteNetworkRuntime(c NativeWorkerConcreteNetworkRuntimeC
 	if err != nil || json.Unmarshal(raw, &policy) != nil {
 		return nil, errNativeWorkerConcreteNetwork
 	}
+	// Preserve the stored JSONB bytes: a Manifest JSON roundtrip compacts
+	// RawMessage, while policyMatches intentionally requires exact identity.
+	policy.Spec = append(json.RawMessage(nil), c.Policy.Spec...)
 	var spec model.CapacityPolicySpec
 	if json.Unmarshal(policy.Spec, &spec) != nil {
 		return nil, errNativeWorkerConcreteNetwork

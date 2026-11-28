@@ -228,6 +228,9 @@ func newNativeNetworkRuntimeFixture(t *testing.T) *nativeNetworkRuntimeFixture {
 	if e != nil {
 		t.Fatal("real borrowed runtime", e)
 	}
+	if !bytes.Equal(workers.policy.Spec, policy.Spec) || !workers.policyMatches(policy) || &workers.policy.Spec[0] == &policy.Spec[0] {
+		t.Fatal("worker constructor changed or aliased exact stored JSONB policy bytes")
+	}
 	x.workers = workers
 	t.Cleanup(func() { _ = workers.Close() })
 	x.reader, x.writer = nativeNetworkRuntimeClients(t, x, ca, caDER, key)
@@ -241,6 +244,17 @@ func newNativeNetworkRuntimeFixture(t *testing.T) *nativeNetworkRuntimeFixture {
 	if e != nil {
 		t.Fatal("real network composition", e)
 	}
+	if !bytes.Equal(x.runtime.policy.Spec, policy.Spec) || &x.runtime.policy.Spec[0] == &policy.Spec[0] {
+		t.Fatal("network constructor changed or aliased exact stored JSONB policy bytes")
+	}
+	// Mutating the caller's actual returned JSONB buffer must neither mutate
+	// either owned snapshot nor weaken the original strict policy comparison.
+	storedSpec := bytes.Clone(networkConfig.Policy.Spec)
+	networkConfig.Policy.Spec[0] ^= 1
+	if !bytes.Equal(workers.policy.Spec, storedSpec) || !bytes.Equal(x.runtime.policy.Spec, storedSpec) || workers.policyMatches(networkConfig.Policy) {
+		t.Fatal("caller mutation changed an owned policy or bypassed exact identity")
+	}
+	copy(networkConfig.Policy.Spec, storedSpec)
 	t.Cleanup(func() { _ = x.runtime.Close() })
 	birth := &nativeNetworkBirthRuntime{nativeAttemptRuntime: &nativeAttemptRuntime{db: f.db, pool: f.pool}, x: x}
 	x.store = CapacityNativeWorkerStore{Capacity: f.store, Runtime: birth, Enabled: true}
