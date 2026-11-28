@@ -102,7 +102,7 @@ func nativeReadinessQualifyOriginal(c model.NativeWorkerProbeResourceContext, ex
 		if capacity.DecodeNativeProbeResourceJSON(expectedPrivateJSON, &steps) != nil || len(steps) != 3 || steps[0].Op != "test" || steps[0].Path != "/metadata/uid" || steps[0].Value != c.ExpectedUID || steps[1].Op != "test" || steps[1].Path != "/metadata/resourceVersion" || steps[1].Value != c.ExpectedResourceVersion || steps[2].Op != "add" || steps[2].Path != "/metadata/annotations/yggdrasil.io~1native-admission-v2" {
 			return zero, errNativeReadinessRun
 		}
-		var challenge json.RawMessage = json.RawMessage(steps[2].Value)
+		challenge := json.RawMessage(steps[2].Value)
 		plan := nativeReadinessResourcePlan{Context: c, Challenge: challenge}
 		// Locate the real API worker, independent of container ordering.
 		workers := 0
@@ -220,7 +220,7 @@ func nativeReadinessOriginalMetadata(c model.NativeWorkerProbeResourceContext, m
 	}
 	// metav1.Time's wire format retains whole seconds. Compare the same
 	// precision; it is not independent proof of subsecond clock agreement.
-	return m.Name == c.Name && m.Namespace == c.Namespace && nativeReadinessCanonicalUUID(string(m.UID)) && nativeReadinessResourceVersion(m.ResourceVersion) && m.GenerateName == "" && len(m.OwnerReferences) == 0 && len(m.Finalizers) == 0 && (deleting || m.DeletionTimestamp == nil) && !m.CreationTimestamp.Time.Before(createdAt.Truncate(time.Second)) && !m.CreationTimestamp.Time.After(now) && len(m.Labels) == 3 && m.Labels[model.NativeWorkerProbeRunLabel] == c.RunID && m.Labels[model.NativeWorkerProbeSlotLabel] == slot && m.Labels[model.NativeWorkerProbeAttemptLabel] == c.AttemptID
+	return m.Name == c.Name && m.Namespace == c.Namespace && nativeReadinessCanonicalUUID(string(m.UID)) && nativeReadinessResourceVersion(m.ResourceVersion) && m.GenerateName == "" && len(m.OwnerReferences) == 0 && len(m.Finalizers) == 0 && (deleting || m.DeletionTimestamp == nil) && !m.CreationTimestamp.Time.Before(createdAt.Truncate(time.Second)) && !m.CreationTimestamp.After(now) && len(m.Labels) == 3 && m.Labels[model.NativeWorkerProbeRunLabel] == c.RunID && m.Labels[model.NativeWorkerProbeSlotLabel] == slot && m.Labels[model.NativeWorkerProbeAttemptLabel] == c.AttemptID
 }
 
 func nativeReadinessOriginalEvidence(c model.NativeWorkerProbeResourceContext, original model.NativeWorkerProbeResourceReceive, out nativeReadinessOriginalAcceptance, startupReadSHA string) (nativeReadinessOriginalAcceptance, error) {

@@ -106,7 +106,7 @@ func TestNativeReadinessControlIdleRequiresBothUntouchedBatchesAndOriginalIdenti
 			x, config := good, f
 			switch fault {
 			case "source":
-				x.SourceCommit = strings.Repeat("b", 40)
+				x.SourceCommit = strings.Repeat("c", 40)
 			case "config":
 				x.ConfigSHA256 = strings.Repeat("b", 64)
 			case "identity":

@@ -104,7 +104,7 @@ func nativeReadinessComposedFixture(t *testing.T, options ...nativeReadinessComp
 	if err != nil {
 		t.Fatal(err)
 	}
-	workers := CapacityNativeWorkerStore{Capacity: f.store, Runtime: &nativeAttemptRuntime{db: db, pool: f.pool}, Enabled: true}
+	workers := CapacityNativeWorkerStore{Capacity: f.store, Runtime: &phaseAuthorityTestRuntime{nativeAttemptRuntime: &nativeAttemptRuntime{db: db, pool: f.pool}, header: phaseAuthorityTestHeader(f.p)}, Enabled: true}
 	auth := model.CapacityNativeWorkerAuthority{Generation: claimed.Generation, FencingToken: claimed.FencingToken}
 	a, err := workers.Reserve(t.Context(), f.policy, auth)
 	if err != nil {

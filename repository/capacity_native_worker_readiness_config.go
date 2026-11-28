@@ -213,7 +213,7 @@ func nativeReadinessDependencyEgress(rules []networkingv1.NetworkPolicyEgressRul
 			if n != 53 && n != 5432 && n != 5671 && n != 5672 {
 				return false
 			}
-			if proto != corev1.ProtocolTCP && !(proto == corev1.ProtocolUDP && n == 53) {
+			if !(proto == corev1.ProtocolTCP || proto == corev1.ProtocolUDP && n == 53) {
 				return false
 			}
 		}

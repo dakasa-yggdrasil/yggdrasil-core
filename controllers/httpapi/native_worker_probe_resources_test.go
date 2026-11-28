@@ -169,7 +169,7 @@ func nativeProbeListenerTLS(t *testing.T) nativeProbeListenerTLSFixture {
 			t.Fatal(e)
 		}
 		leaf := &x509.Certificate{SerialNumber: big.NewInt(serial), NotBefore: now.Add(-time.Minute), NotAfter: now.Add(30 * time.Minute), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{role}, URIs: []*url.URL{uri}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
-		raw, e := x509.CreateCertificate(rand.Reader, leaf, ca, p, k)
+		raw, e := x509.CreateCertificate(rand.Reader, leaf, ca, p, key)
 		if e != nil {
 			t.Fatal(e)
 		}
