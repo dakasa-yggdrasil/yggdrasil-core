@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: a05547b5680e6880723df38027b351894d098df1
-verified_diff_sha256: fc7d8bad76f09a156e8395efcbf5406f6e99bdb24c52d493f59fda63df9f1d57
+verified_at_commit: 67f8f9e7a24cb08e6ad412b7580166e520ee90ec
+verified_diff_sha256: bbc9ea2a2d340ecc49f63cd0548d2abaef5fd0c6d53969f3fa2f9357b5170415
 reconciler_schema: 1
 
 Reviewed the complete HCloud physical qualifier, safe project/action witness,
@@ -28,3 +28,7 @@ and analysis run only in GitHub CI. No local pass, provider call, purchase,
 Hetzner load, runtime installation or production activation is claimed.
 The supplier Native GET Close-error finding remains an explicit activation
 blocker until its separate SDK correction and CI are qualified.
+
+The inherited network CI analysis correction changes one diagnostic's initial
+letter only. Its original CI evidence and signed Source remain in ancestry;
+no predicate, test, deadline, guard or acceptance criterion is weakened.
