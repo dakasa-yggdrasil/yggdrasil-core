@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 67f8f9e7a24cb08e6ad412b7580166e520ee90ec
-verified_diff_sha256: bbc9ea2a2d340ecc49f63cd0548d2abaef5fd0c6d53969f3fa2f9357b5170415
+verified_at_commit: 7e83213ab825c29c55d81192f22bf6db3c2e3511
+verified_diff_sha256: 35b77b319c421043300897e275865be455fdf682e258ae2a4d376028be3c8199
 reconciler_schema: 1
 
 Reviewed the complete HCloud physical qualifier, safe project/action witness,
@@ -32,3 +32,9 @@ blocker until its separate SDK correction and CI are qualified.
 The inherited network CI analysis correction changes one diagnostic's initial
 letter only. Its original CI evidence and signed Source remain in ancestry;
 no predicate, test, deadline, guard or acceptance criterion is weakened.
+
+Original CI compiled and passed the published System factory root, then found
+an incompatible assignment in the new PostgreSQL test: Redeem returns a private
+Permit, not an Attempt. The correction asserts that permit's child identity;
+Record retains its original fresh Attempt read. No guard, assertion, test root,
+watchdog or runtime behavior is removed. Original failed CI evidence is retained.
