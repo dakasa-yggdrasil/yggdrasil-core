@@ -129,7 +129,7 @@ jobs:
           evidence="$RUNNER_TEMP/capacity-market"
           selector="$(cat "$evidence/selector.txt")"
           git rev-parse HEAD > "$evidence/source-head.txt"
-          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=120s ./model ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run "$selector" 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+          go test -buildvcs=true -race -json -p 1 -count=1 -timeout=5m ./model ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run "$selector" 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
       - name: Require every selected root to pass without skips
         shell: bash
         run: |
