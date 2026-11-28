@@ -1,42 +1,37 @@
 # AI docs freshness stamp
 
 The reconciliation gate measures this source diff and actual generated context.
-Earlier reviews remain in Git history and their owning Source/CI receipts.
+Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 7eb544375c7a42ff109ea8efc578fbe5809506a0
-verified_diff_sha256: 523d9388a5cdd20926d6c5b5b2c1b3f5a1d60b769fd942aafc39410c25dc1d01
+verified_at_commit: e1fce5a46b7f84a6491dcd965ef1cabb733b34e9
+verified_diff_sha256: 52f6d1f58a1379f5b9ecf1ec3a905e70f84feb3728d77c5826718d9b557eb922
 reconciler_schema: 1
 
-Reviewed the dedicated floor reader/writer RPC handle against the actual System
-three-member request, five-member response and two explicit false metadata
-claims. Protected Go composition fixes role, AdapterID, compiled Source, whole
-binding-file scope, floor identity, template and mutual TLS trust. The only
-endpoint is derived from the bound private floor address and role port9444/9443.
-No manifest/RPC selects a URL, trust path, header, proxy, redirect or capability.
+Reviewed the complete thirteen-path Native network composition, including the
+exact immutable archive/launch selectors, borrowed concrete worker ownership,
+separate protected floor clients, sealed transport observation and removal
+after provider deletion. Store117 remains the sole owner of one-send grants and
+private original custody. RPC dispositions grant no network/admission proof;
+the existing nil readiness port remains a hold. Root's whole union review and
+independent product, pure-root and complete Linux-fixture partitions are retained
+in local review receipts with their exact file hashes.
 
-Original bounded Read, actual Close and live context precede strict typed
-interpretation. Complete reader inventories remain distinct from absence or
-admission. The exact System interface name is required even when absent, with
-empty/foreign negatives and a matching genuine absent-interface fixture.
-Writer unknown, GET-only and original_return_custodied dispositions create no
-scope echo, effect receipt, network qualification or scheduling admission.
+Signed ancestry retains the reviewed199/200 products and qualified Main508ada.
+The original199 CI failure remains preserved. Its approved fixture correction
+matches production's bounded five-second private custody after the original
+HTTP clock, without changing the original four-second deadline or criteria.
+The complete source census preserves all926 prior facts and adds exactly two;
+all928 facts and27 service-contract evidence references remain complete.
 
-Six mandatory remote CI roots cover real mutual TLS while retaining the bound
-private Host/IP SAN/role port, exact selectors and identity, framing, explicit
-false/null members, TLS trust, original Read/Close/cancellation, role separation
-and shared Close. A private test-only dialer maps to isolated runner sockets;
-the public constructor exposes no dialer, URL or environment switch.
+The existing published-factory job and its three roots are byte-identical.
+The new dedicated CI job uses the fixed normally published System Main52ed
+executable, real factory handles, PostgreSQL custody and public mTLS clients
+without a dial override. Its private alias belongs only to the isolated runner;
+provider/floor facts are explicit synthetic fixtures and do not qualify live
+network, LUKS, provider operations, guest readiness or useful capacity.
 
-The complete925-source census retains every924 parent fact and adds one client;
-actual service-contract references match the generated files. Signed ancestry
-retains runtime198 and its reviewed first-ACK-only migration118, immutable Birth
-history and measured ordinary market package envelope correction. Factory and
-individual deadlines, complete root census, race and no-skip criteria remain.
-Root whole twelve-path review and Bridge whole product parity are recorded in
-local review receipts; no duplicate review is claimed.
-
-The signed Source merge precedes the released CLI reconciliation plan and
-completed ai-all generation. Only deterministic generators, formatting, reading
-and diff checks ran locally. Tests, builds and analysis run in GitHub CI. This
-Source installs no runtime, controller, permission, guest witness or production
-configuration and performs no cloud call, purchase or Hetzner load.
+All Source and evidence paths were committed before the released CLI's real
+plan against Main508ada and completed ai-all generation. Only static reading,
+formatting, parsing, hash comparisons and generators ran locally. Tests/builds
+run only in CI. This Source performs no cloud or production action, install,
+purchase or Hetzner load test and enables no runtime or controller.
