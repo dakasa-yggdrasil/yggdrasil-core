@@ -1,34 +1,29 @@
-# AI docs freshness stamp
+# Documentation freshness
 
-The reconciliation gate measures this source diff and actual generated context.
-Earlier Source and CI receipts remain in their original history.
-
-verified_at_commit: cac7891cf85b8f3f76e2b49b339867ccacd113b9
-verified_diff_sha256: 1480734817c8b1b8b2ea008bc2878cb4e1b44c63d075499c4a16fca53efb9013
+verified_at_commit: 4f1a55fa40834dabfcd00ffcc52288ee79bcccc0
+verified_diff_sha256: e6395ad0eb1c5e9abca6f304ef2a3beae17c51c107e49d64dbc5b7ccaea7df61
 reconciler_schema: 1
 
-Reviewed the complete finite probe command, protected per-run material, signed
-DF-UDP protocol, real mTLS and fixed loopback process-readiness projection.
-Independent whole-path review covers all 23 product/test/workflow/documentation
-paths and all 952 production source records without omission. The original CI exercised all fourteen roots under race without skipped cases.
-Its ARM64 platform-warning and lint failures are preserved. The reviewed
-successor pins actual PR Source separately from the event SHA, declares the
-platform explicitly and retains every runtime/test/image assertion. Current
-successor CI remains required; no tests, builds, vet, Docker or provider calls
-ran locally.
+Reviewed the exact union of private main installation, durable same-profile
+Native expansion, and the finite authenticated probe. All49 product, test, SQL
+and workflow paths match their reviewed signed parents byte-for-byte. Only
+documentation and deterministic census conflicts required resolution. The full
+963-record census equals942 existing records plus11 installation/execution and
+10 probe products; all27 contract references match their actual files.
+ADR148/149 and the accepted probe semantics remain intact.
 
-The separate normal Main publisher verifies actual clean buildvcs, extracted
-binary Source/architecture and image config before publishing platform digests
-and promoting the exact index. PR checks do not publish. The existing Core
-Dockerfile and release pipeline remain unchanged.
+The qualified PR204 parent61f passed all45 checks, including the nine new
+installation roots, eleven execution roots on both PostgreSQL versions and the
+native Kubernetes suite. Its retained CI4 initial-admission failure remains an
+incident with unknown cause; the later failure-only diagnostics ran zero times
+in the successful successor. This union also preserves the exact reviewed206
+test-fixture correction by signed ancestry: key/configuration substitutions
+occur before receiver startup, with the same fourteen probe roots, race gate,
+two-hundred-millisecond incomplete-exchange deadline and production behavior.
 
-Candidate process warmup requires a separate actual API-worker container and
-external current-Pod/imageID/provenance joins. CoreSourceCommit in the protected
-startup config is an expected pin, not a Source observed from legacy9080. Agent
-Source is reported separately. No packet/report/hash grants Node admission,
-production path qualification, business traffic or useful capacity. Root owns
-the durable resource controller and actual cost-reviewed qualification.
-
-The released installed CLI produced the actual reconciliation plan against
-Main838 and both context outputs before this stamp. Source and CI publication
-only; no installation, cloud mutation, paid test or Hetzner load is claimed.
+The installed CLI produced the actual plan against normal Main3b and generated
+both machine-context outputs before this stamp. No local test, build or analysis
+was run. Complete successor CI is still required for the combined head.
+Independent readiness production remains nil/HOLD in this delivery; no runtime
+switch, provider/Node/network operation, useful admission or production
+activation is claimed. The complete readiness controller is separate work.

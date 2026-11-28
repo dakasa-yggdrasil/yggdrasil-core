@@ -720,7 +720,11 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 					native, readErr := message.ExecuteIntegration(ctx, conn, db, model.ExecuteIntegrationRequest{Integration: model.ManifestSelector{ManifestID: instance.ID.String()}, Operation: capacity.ObserveNativePodAdmission, Capability: capacity.ObserveNativePodAdmission, Input: input})
 					var ack model.AdapterCapacityPodAdmissionResponse
 					decodeErr := capacity.DecodeNativeCapacity(native.Output, &ack)
-					t.Logf("native origin pod=%s state=%s read=%v decode=%v checkpoint=%v roots=%s readiness=%t", cp.PodName, cp.State, readErr, decodeErr, capacity.NativeProcessAdmissionCheckpoint(p, cp, ack, time.Now().UTC()), ack.Admission.State, ack.Observation.AdmissionReady)
+					checkpointErr := capacity.NativeProcessAdmissionCheckpoint(p, cp, ack, time.Now().UTC())
+					t.Logf("native origin pod=%s state=%s read=%v decode=%v checkpoint=%v roots=%s readiness=%t", cp.PodName, cp.State, readErr, decodeErr, checkpointErr, ack.Admission.State, ack.Observation.AdmissionReady)
+					if checkpointErr != nil {
+						nativeKindAdmissionProjectionDiagnostic(t, ctx, realm, cp, ack)
+					}
 				}
 				t.Fatalf("actual native workflow %s status=%s: %s", workflow, status, result)
 			}
@@ -1258,4 +1262,55 @@ func nativeKindMetricProducer(t *testing.T, ctx context.Context, mode string, re
 		t.Fatal("actual metric JSON")
 	}
 	return value
+}
+
+// These are subsequent CI-only reads after the original workflow has failed.
+// They neither change the original admission deadline nor replay any protocol.
+func nativeKindAdmissionProjectionDiagnostic(t *testing.T, parent context.Context, namespace string, cp model.CapacityNativePodCheckpoint, ack model.AdapterCapacityPodAdmissionResponse) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	type podFacts struct {
+		Metadata struct {
+			UID             string            `json:"uid"`
+			ResourceVersion string            `json:"resourceVersion"`
+			Annotations     map[string]string `json:"annotations"`
+		} `json:"metadata"`
+		Spec struct {
+			NodeName string `json:"nodeName"`
+		} `json:"spec"`
+	}
+	read := func(limit int, args ...string) ([]byte, error) {
+		out := &nativeKindAdmissionDiagnosticOutput{limit: limit}
+		cmd := exec.CommandContext(ctx, "kubectl", args...)
+		cmd.WaitDelay = time.Second
+		cmd.Stdout, cmd.Stderr = out, io.Discard
+		err := cmd.Run()
+		return out.buffer.Bytes(), err
+	}
+	get := func() (podFacts, bool) {
+		var out podFacts
+		raw, err := read(1<<20, "-n", namespace, "get", "pod", cp.PodName, "-o", "json")
+		complete := err == nil && json.Unmarshal(raw, &out) == nil
+		return out, complete
+	}
+	before, beforeOK := get()
+	projected, fileErr := read(64<<10, "-n", namespace, "exec", cp.PodName, "-c", cp.ContainerName, "--", "cat", "/native/challenge")
+	after, afterOK := get()
+	const key = "yggdrasil.io/capacity-drain-challenge"
+	annotation, annotationPresent := before.Metadata.Annotations[key]
+	stable := beforeOK && afterOK && before.Metadata.UID == cp.PodUID && after.Metadata.UID == cp.PodUID && before.Metadata.ResourceVersion == after.Metadata.ResourceVersion && annotation == after.Metadata.Annotations[key]
+	t.Logf("POST-failure native projection diagnostic pod=%s at=%s before_complete=%t file_complete=%t after_complete=%t context_open=%t node=%s uid=%s before_rv=%s after_rv=%s stable_uid_rv_annotation=%t annotation_present=%t annotation_bytes=%d annotation_sha256=%x projected_bytes=%d projected_sha256=%x file_equals_annotation=%t annotation_equals_retained_origin=%t process_nonce_matches=%t container_id_matches=%t restart_count_matches=%t started_at_matches=%t challenge_present=%t", cp.PodName, time.Now().UTC().Format(time.RFC3339Nano), beforeOK, fileErr == nil, afterOK, ctx.Err() == nil, before.Spec.NodeName, before.Metadata.UID, before.Metadata.ResourceVersion, after.Metadata.ResourceVersion, stable, annotationPresent, len(annotation), sha256.Sum256([]byte(annotation)), len(projected), sha256.Sum256(projected), fileErr == nil && bytes.Equal(projected, []byte(annotation)), annotation == string(cp.OriginChallengeBytes), ack.Admission.ProcessNonce == cp.ProcessNonce, ack.Observation.ContainerID == cp.ContainerID, ack.Observation.RestartCount == cp.RestartCount, ack.Observation.StartedAt != nil && ack.Observation.StartedAt.Equal(cp.ContainerStartedAt), ack.Admission.Challenge != nil)
+}
+
+type nativeKindAdmissionDiagnosticOutput struct {
+	buffer bytes.Buffer
+	limit  int
+}
+
+func (w *nativeKindAdmissionDiagnosticOutput) Write(p []byte) (int, error) {
+	if len(p) > w.limit-w.buffer.Len() {
+		return 0, errors.New("native projection diagnostic exceeds bound")
+	}
+	return w.buffer.Write(p)
 }

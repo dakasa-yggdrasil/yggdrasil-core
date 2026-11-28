@@ -47,3 +47,61 @@ jobs:
           cache: true
       - name: List addons
         run: go run ./scripts/addons list
+
+  native-runtime-installation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+          cache: true
+      - name: Qualify private installation and original shutdown ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/native-runtime-installation"
+          mkdir -p "$evidence"
+          selector='^(TestNativeRuntimeArtifactCredentialsRotateAndNeverOwnDatabase|TestNativeRuntimeArtifactCredentialsRefuseDriftExpiryAndMissingToken|TestNativeRuntimeArtifactCloseCancelsPrivateResolution|TestNativeRuntimeClosedConfigurationAndAbsentOnlyOff|TestNativeRuntimeOwnerBorrowSealCloseAndCurrentResource|TestNativeRuntimeDrainKeepsOriginalHTTPCallbackAndDependencyOwnership|TestNativeRuntimePrivateConfigurationFileBoundary|TestNativeRuntimeInvalidConfiguredFilePublishesNothingAndBorrowsDatabase|TestDependencyShutdownHoldIsOptInAndPreservesOriginalError)$'
+          go test -race -json -p 1 -count=1 -timeout=90s ./addons ./internal/runtime -run "$selector" 2> "$evidence/go-test.stderr" | tee "$evidence/original.jsonl"
+      - name: Require every original root and retain exact evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'native-runtime-installation'
+          prefix = 'github.com/dakasa-yggdrasil/yggdrasil-core/'
+          expected = {(prefix + 'addons', name) for name in (
+              'TestNativeRuntimeArtifactCredentialsRotateAndNeverOwnDatabase',
+              'TestNativeRuntimeArtifactCredentialsRefuseDriftExpiryAndMissingToken',
+              'TestNativeRuntimeArtifactCloseCancelsPrivateResolution',
+              'TestNativeRuntimeClosedConfigurationAndAbsentOnlyOff',
+              'TestNativeRuntimeOwnerBorrowSealCloseAndCurrentResource',
+              'TestNativeRuntimeDrainKeepsOriginalHTTPCallbackAndDependencyOwnership',
+              'TestNativeRuntimePrivateConfigurationFileBoundary',
+              'TestNativeRuntimeInvalidConfiguredFilePublishesNothingAndBorrowsDatabase',
+          )} | {(prefix + 'internal/runtime', 'TestDependencyShutdownHoldIsOptInAndPreservesOriginalError')}
+          rows = [json.loads(line) for line in (root / 'original.jsonl').read_text().splitlines() if line.strip()]
+          runs, passes = {}, {}
+          for row in rows:
+              identity = (row.get('Package'), row.get('Test'))
+              if row.get('Action') in ('fail', 'skip'):
+                  raise SystemExit('original failure or skip remains unqualified')
+              if row.get('Test') and '/' not in row['Test'] and row.get('Action') in ('run', 'pass'):
+                  target = runs if row['Action'] == 'run' else passes
+                  target[identity] = target.get(identity, 0) + 1
+          if set(runs) != expected or set(passes) != expected or any(v != 1 for v in (*runs.values(), *passes.values())):
+              raise SystemExit('original nine-root run/pass census mismatch')
+          files = {p.name: {'bytes': p.stat().st_size, 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for p in root.iterdir() if p.is_file()}
+          (root / 'RECEIPT.PUBLIC.json').write_text(json.dumps({'schema': 'native_runtime_installation_ci_v1', 'source': os.environ['GITHUB_SHA'], 'roots': sorted('/'.join(v) for v in expected), 'evidence': files, 'production_activation': False}, sort_keys=True, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-runtime-installation-original-evidence
+          path: ${{ runner.temp }}/native-runtime-installation
+          if-no-files-found: error

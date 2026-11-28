@@ -110,7 +110,7 @@ func nativeAttemptFixture(t *testing.T, configure ...func(*model.CapacityPolicyS
 		t.Fatal(err)
 	}
 	claimed, err := f.store.Claim(t.Context(), f.policy, proposed.Generation, f.a)
-	if err != nil || claimed.MarketReservation == nil || claimed.MarketReservation.Units != 135 {
+	if err != nil || claimed.MarketReservation == nil || claimed.MarketReservation.Units != f.p.Step {
 		t.Fatal("actual market Claim did not reserve desired children", claimed, err)
 	}
 	r := &nativeAttemptRuntime{db: db, pool: f.pool}
