@@ -1,0 +1,27 @@
+# A separate target keeps the existing Core image and entrypoint unchanged.
+FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS probe-build
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETPLATFORM
+ARG SOURCE_COMMIT
+WORKDIR /build
+ENV CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT" \
+ && go build -buildvcs=true -trimpath -o /bin/native-worker-probe ./cmd/native-worker-probe \
+ && go version -m /bin/native-worker-probe > /tmp/probe-build-info \
+ && awk -v expected="vcs.revision=$(git rev-parse HEAD)" '$1 == "build" && $2 == expected { found = 1 } END { exit !found }' /tmp/probe-build-info \
+ && awk '$1 == "build" && $2 == "vcs.modified=false" { found = 1 } END { exit !found }' /tmp/probe-build-info \
+ && awk -v expected="GOARCH=${TARGETPLATFORM#*/}" '$1 == "build" && $2 == expected { found = 1 } END { exit !found }' /tmp/probe-build-info
+
+FROM scratch AS native-worker-probe
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.source="https://github.com/dakasa-yggdrasil/yggdrasil-core" \
+      org.opencontainers.image.revision=$SOURCE_COMMIT \
+      org.opencontainers.image.title="native-worker-probe"
+COPY --from=probe-build /bin/native-worker-probe /app/native-worker-probe
+USER 65532:65532
+EXPOSE 9446/tcp 9446/udp
+ENTRYPOINT ["/app/native-worker-probe"]

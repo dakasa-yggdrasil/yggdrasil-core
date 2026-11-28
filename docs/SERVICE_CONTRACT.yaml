@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "6f0656bd48439664f40c62cc82254ef649f4388c46ddcf2d98707009548e5b84"
+      "sha256": "e8ec179f1336fb55f7e600bd97d0ad5081ddcb16af457a22bb1d5ade50e3c22c"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "9d3b1a3e79d570f38ba878559cdfd3e6c2443b30919ebd5d7b8c741e9f67c00d"
+      "sha256": "0bea8086202cd81dacc2ff41700f4ef2e6e39195ab3d2abce4324c370b1ed801"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "9d3b1a3e79d570f38ba878559cdfd3e6c2443b30919ebd5d7b8c741e9f67c00d"
+      "sha256": "0bea8086202cd81dacc2ff41700f4ef2e6e39195ab3d2abce4324c370b1ed801"
     },
     {
       "evidence": "go.mod",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "5d72ba7b9cafad11356645502711eb5119bd4317dadab66faa456702d669581d"
+    "sha256": "e4c0f31a78d4256c201086315b79ea30a1434b0c329a294a7775aa79723c3e15"
   },
   "unresolved": []
 }
