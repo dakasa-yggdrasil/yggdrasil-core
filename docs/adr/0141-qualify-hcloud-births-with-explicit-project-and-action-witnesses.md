@@ -50,6 +50,16 @@ complete matching witness. Original bytes, passwords and raw-original digests
 remain private. No fresh quote, profile alias or caller observation can replace
 the recorded original.
 
+Extend the existing immutable Attempt guard with Goose118. Only the first
+`send_started` or `unknown` to `acknowledged` transition for literal
+`hetzner` may introduce the witness, with complete original custody, exact
+identity and co-present physical/birth fields. A deferred constraint requires
+the matching immutable Attempt/event/Birth writes in the same transaction.
+Reject witnesses at INSERT, on other providers and on later alteration or
+removal. Rollback refuses any current or archived witness marker, then restores
+the exact schema116 guard when history has no witness. Existing transitions,
+abort/unsent fences and schema117 network guards remain intact.
+
 A sealed birth's witness remains historical. `ReobserveACK` validates fresh
 current facts, preserves the real state, original IDs and birth, and returns only
 the same physical tuple. Later registry/admission observations carry the stored
@@ -61,7 +71,8 @@ capacity, deletion or billing closure.
 
 Provider-specific evidence remains explicit instead of weakening the AWS account
 and two-request-ID checks. The witness is larger but bounded and contains only
-the allowlisted safe DTO. The existing JSONB ledger needs no schema migration.
+the allowlisted safe DTO. Existing JSONB tables retain their shape; migration118
+extends their immutable guard and atomically requires the typed birth event.
 Existing HCloud SDK GET response-close handling must refuse incomplete transport
 before activation; a truthful Core validator cannot recover an error omitted by
 a producer. Source delivery and CI fakes do not qualify provider connectivity,

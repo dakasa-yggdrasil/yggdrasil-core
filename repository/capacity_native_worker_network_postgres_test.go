@@ -223,7 +223,7 @@ func TestNativeWorkerNetworkPostgresOneSendAndLatePrivateCustody(t *testing.T) {
 			t.Fatal("retained network origin/event was mutable")
 		}
 	}
-	if e = goose.Down(f.db, "../db/migrations"); e == nil {
+	if e = goose.DownTo(f.db, "../db/migrations", 116); e == nil {
 		t.Fatal("Down erased retained network commands")
 	}
 	version, e := goose.GetDBVersion(f.db)

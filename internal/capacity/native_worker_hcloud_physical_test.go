@@ -233,7 +233,7 @@ func TestNativeHCloudReobservePreservesEverySealedStateAndOriginalWitness(t *tes
 }
 
 func TestNativeHCloudReaderPinsAreCopiedAndAWSCarrierCannotShadow(t *testing.T) {
-	p, a, launch, original, read, now := nativeHCloudPhysicalFixture(t)
+	p, a, launch, original, read, _ := nativeHCloudPhysicalFixture(t)
 	q, err := NewNativeWorkerACKQualifier(p, func(_ context.Context, b model.CapacityNativeWorkerPhysicalReadBinding, _ model.CapacityNativeWorkerObservationRequest) (model.CapacityNativeWorkerPhysicalObservation, error) {
 		if b.HCloudScope.DeclaredProjectID != "ci-reviewed-project" {
 			t.Fatal("constructor retained caller-owned scope pointer")
@@ -248,7 +248,7 @@ func TestNativeHCloudReaderPinsAreCopiedAndAWSCarrierCannotShadow(t *testing.T) 
 	if _, err = q.QualifyACK(t.Context(), a, launch, original); err != nil {
 		t.Fatal("callback changed the qualifier's private pin", err)
 	}
-	p, a, launch, original, read, now = nativeHCloudPhysicalFixture(t)
+	p, a, launch, original, read, now := nativeHCloudPhysicalFixture(t)
 	read.Schema = "aws_native_worker_physical_observation_v1"
 	if _, err = PureNativePhysicalQualify(a, launch, original, read, p.NativeWorkerLifecycleBinding.PhysicalObservers[0], 30, now); err == nil {
 		t.Fatal("mixed provider carrier accepted")
