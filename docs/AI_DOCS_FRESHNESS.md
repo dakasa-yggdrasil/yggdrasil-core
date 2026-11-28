@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 14b933f5e34d698e931255cc753cd38351c5788b
-verified_diff_sha256: c5bf8b1262fd875322295ae398dab625b4a4387c0598cdb78d5dfc832a676c53
+verified_at_commit: 3fb07c4ab1e65d65b14d76d6e1c6da3d15d5be56
+verified_diff_sha256: c89de17ebda3140dab7ba6d87b8b297d3c5f10ba8420eb17a9568f3991984469
 reconciler_schema: 1
 
 Reviewed the complete combined guest identity, protected abort recovery and
