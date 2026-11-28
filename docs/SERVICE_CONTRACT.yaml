@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "8a94f0021e0bcf7980b4932068ac90dc23547f7d60db5e935e5c709cac8953e2"
+      "sha256": "5f23b3756a9e24876abdea684316411e8da5f76722ad6090196c2a3b440b6921"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "8a94f0021e0bcf7980b4932068ac90dc23547f7d60db5e935e5c709cac8953e2"
+      "sha256": "5f23b3756a9e24876abdea684316411e8da5f76722ad6090196c2a3b440b6921"
     },
     {
       "evidence": "go.mod",
@@ -149,7 +149,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "f2fa617e364b2c566d839ab88deeea6343048b5635ff44d9ce6c1c0664893f16"
+    "sha256": "6acdacb84bee3e0fed4f3dc690deeb451f8706a81958521826dfaa25198cd824"
   },
   "unresolved": []
 }

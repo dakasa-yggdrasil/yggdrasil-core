@@ -188,3 +188,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 - [ADR-0143: Bind floor network RPC to protected mutual TLS clients](0143-bind-floor-network-rpc-to-protected-mutual-tls-clients.md)
 
 - [ADR-0144: Retain transport facts from the same sealed physical read](0144-retain-transport-facts-from-the-same-sealed-physical-read.md)
+- [ADR-0145: Compose Native network runtime from sealed worker and floor ports](0145-compose-native-network-runtime-from-sealed-worker-and-floor-ports.md)

@@ -1035,3 +1035,13 @@ The concrete Native runtime installs worker, private-bootstrap and phase ports t
 The dedicated floor network RPC client is a protected Go-only reader or writer handle, not a provider adapter. Role, AdapterID, compiled System Source, exact whole binding-file SHA256, floor identity and template are matched before composition. Its URL is derived solely from the bound private floor IPv4 with fixed HTTPS9444/9443 and /rpc/execute. Each call has one non-replayable POST, no proxy or redirect, actual mutual TLS chain/hostname/leaf checks, and complete bounded original Read/Close/context checks before typed interpretation. The real System request has three members; its reply has five and two explicitly false metadata claims. Missing/null/extra/aliased/duplicate members are refused. Reader inventory retains exact scope/floor/template/selectors and freshness; missing inventory is never absence. The real five-field writer disposition preserves unknown, GET-only recovery and original_return_custodied without a scope echo, host-effect receipt, network qualification or admission. Copies share Close. This Source installs no runtime, controller, permission, guest witness, network writer or production configuration. See ADR0143.
 
 Sealed transport reobservation wraps the existing qualified physical reader per call, retaining exactly the same fresh typed response and its public endpoint/time/evidence/Source/scope alongside the sealed physical tuple. HCloud internal carrier copying does not alter AWS wire serialization. All original-custody, launch, provider, scope, lifetime and freshness guards remain; absent transport remains unavailable without changing the physical-only ABI. The port creates no ACK, birth, new HTTP identity, mutation permission, network/readiness or admission authority. See ADR0144.
+
+The private concrete Native network composition binds the exact Core database,
+policy and compiled Source to a borrowed worker runtime and two separately owned
+floor RPC clients. Exact immutable launch selectors and private archived
+originals precede provider/floor reads. Install retains endpoint facts from the
+same sealed provider response; remove after provider deletion uses sealed birth
+plus current floor facts and the store's original exposed install endpoint.
+The writer receives only binding_name and retained permit_id for a closed
+action. Store117 alone redeems and archives; the RPC disposition is not effect,
+admission or useful-capacity evidence. Nil guest readiness remains a hold.

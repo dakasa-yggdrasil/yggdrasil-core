@@ -578,3 +578,30 @@ no expected pin, native IP or second unqualified GET replaces an observed fact.
 This read-only Go port creates no new original ACK, birth, HTTP identity,
 lifecycle state, network permission or admission proof. It installs no runtime
 or provider client. See [ADR-0144](../adr/0144-retain-transport-facts-from-the-same-sealed-physical-read.md).
+
+## Concrete protected network composition
+
+`NewNativeWorkerConcreteNetworkRuntime` connects the existing permission store
+to a borrowed concrete worker runtime and separately owned floor reader/writer
+clients. Construction and every call require the exact database, policy,
+compiled Core Source and protected bindings. Failed construction closes nothing;
+successful shared Close closes only the two network clients. The worker runtime
+and database remain owned by the caller.
+
+Installation loads the private original return and exact stored launch before
+one independent sealed provider read and the protected floor observation.
+Removal after provider deletion retains the sealed physical target without a
+new provider GET. The permission store supplies the endpoint only from an
+original exposed install grant. `RequestNetworkMutation` accepts only a closed
+action and retained UUID and sends only the two fixed writer selectors. The
+store remains the sole owner of redemption and private original custody; an
+unknown RPC disposition permits only receiving, never an automatic resend or
+an effect/admission assertion.
+
+The dedicated CI fixture uses the normally published System executable, real
+factory handles, PostgreSQL archives and the public mTLS clients without a dial
+override. Its owned runner alias and provider/floor facts are synthetic and
+qualify composition only. They do not replace the independent System kernel
+proof or qualify a production network. No main activation is installed; the
+existing nil readiness port continues to hold admission pending real protected
+guest delivery, end-to-end path/MTU and warmup evidence. See ADR-0145.
