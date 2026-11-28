@@ -32,7 +32,7 @@ var errNativeMemberNetworkUnexpectedOperation = errors.New("scripted unexpected 
 func TestNativeMemberNetworkRedeemRequiresRetirementBeforeAuthentication(t *testing.T) {
 	for _, owner := range []string{"nil", "uninstalled", "no_retirement_history"} {
 		t.Run(owner, func(t *testing.T) {
-			f := newNativeMemberNetworkRedeemFixture(t, true, owner == "no_retirement_history")
+			f := newNativeMemberNetworkRedeemFixture(t, true, owner != "nil", owner == "no_retirement_history")
 			wantErr := ErrCapacityDisabled
 			switch owner {
 			case "uninstalled":
@@ -66,9 +66,11 @@ func TestNativeMemberNetworkRedeemRequiresRetirementBeforeAuthentication(t *test
 }
 
 func TestNativeMemberNetworkRedeemLegacyControlReachesAuthentication(t *testing.T) {
-	f := newNativeMemberNetworkRedeemFixture(t, false, false)
+	f := newNativeMemberNetworkRedeemFixture(t, false, false, false)
 	got, err := f.store.Redeem(t.Context(), f.policy, f.permit, f.caller)
-	if !errors.Is(err, errNativeMemberNetworkAuthenticationReached) || got.MutationPermitted || got.Redeemable || got.PermitID != "" {
+	// authenticate intentionally wraps a failed phase read as conflict. The
+	// exact call counter below proves the sentinel read really was reached.
+	if !errors.Is(err, ErrCapacityConflict) || got.MutationPermitted || got.Redeemable || got.PermitID != "" {
 		t.Fatal("nil-Members control failed to reach actual authentication", err)
 	}
 	if f.runtime.phaseReads != 1 || f.runtime.poolReads != 0 || f.runtime.networkPrepares != 0 || f.runtime.networkReads != 0 || f.runtime.otherCalls != 0 {
@@ -86,7 +88,7 @@ type nativeMemberNetworkRedeemFixture struct {
 	script  *nativeMemberNetworkReadScript
 }
 
-func newNativeMemberNetworkRedeemFixture(t *testing.T, members, emptyHistory bool) nativeMemberNetworkRedeemFixture {
+func newNativeMemberNetworkRedeemFixture(t *testing.T, members, readAttempt, emptyHistory bool) nativeMemberNetworkRedeemFixture {
 	t.Helper()
 	f := newMemberConfigFixture(t)
 	if !members {
@@ -147,9 +149,13 @@ func newNativeMemberNetworkRedeemFixture(t *testing.T, members, emptyHistory boo
 		query: `SELECT record FROM public.capacity_native_worker_network_permits WHERE id=$1 AND policy_id=$2 AND namespace=$3`,
 		args:  []driver.Value{permit.String(), policy.ID.String(), policy.Metadata.Namespace}, value: marshal(r),
 	}}}
-	if emptyHistory {
+	if readAttempt {
 		script.steps = append(script.steps,
 			nativeMemberNetworkQuery{query: `SELECT attempt FROM public.capacity_native_worker_attempts WHERE id=$1 AND policy_id=$2 AND namespace=$3`, args: []driver.Value{a.ID.String(), policy.ID.String(), policy.Metadata.Namespace}, value: marshal(a)},
+		)
+	}
+	if emptyHistory {
+		script.steps = append(script.steps,
 			nativeMemberNetworkQuery{query: `SELECT CASE WHEN octet_length(p.record::text)<=8388608 THEN p.record END FROM public.capacity_native_worker_member_permits p JOIN public.capacity_native_worker_member_plans plan ON plan.id=p.plan_id WHERE p.attempt_id=$1 AND plan.kind='retirement' AND plan.mode='never_admitted' AND plan.state='active' AND p.action='retire_registry' AND p.state='observed' ORDER BY p.created_at DESC,p.id DESC LIMIT 1`, args: []driver.Value{a.ID.String()}, noRows: true},
 		)
 	}

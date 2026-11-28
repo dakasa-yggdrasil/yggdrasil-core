@@ -173,11 +173,12 @@ func (s *CapacityNativeWorkerMemberStore) Seed(ctx context.Context, attemptID uu
 		} else if e != sql.ErrNoRows {
 			return e
 		}
-		if kind == "retirement" {
+		switch kind {
+		case "retirement":
 			if e = nativeMemberRetirementFenceTx(ctx, tx, st.policy, actual, now); e != nil {
 				return e
 			}
-		} else if kind == "placement" {
+		case "placement":
 			if e = nativeMemberBindFreeTx(ctx, tx, p, subject); e != nil {
 				return e
 			}
@@ -198,9 +199,10 @@ func (s *CapacityNativeWorkerMemberStore) Seed(ctx context.Context, attemptID uu
 			return errNativeMember
 		}
 		plan := nativeMemberPlanRecord{Identity: nativeMemberPlanIdentity{Schema: "native_worker_member_plan_v1", PlanID: uuid.New(), AttemptID: a.ID, PolicyID: a.PolicyID, PolicyChecksum: a.PolicyChecksum, Namespace: a.Namespace, Kind: kind, Mode: mode, SubjectUID: subject, SourceCommit: a.SourceCommit, BirthSHA256: a.BirthSHA256, Generation: a.Generation, Fence: a.FencingToken, ParentKind: parentKind, RealmUID: pool.RealmUID, PoolUID: pool.PoolUID, Epoch: pool.ExpectedPoolEpoch, ExecutorID: st.workers.Capacity.ExecutorID}, State: "preparing", Revision: 1}
-		if kind == "placement" {
+		switch kind {
+		case "placement":
 			plan.Identity.ParentNotAfter = end
-		} else if kind == "retirement" {
+		case "retirement":
 			plan.Identity.WorkflowID = st.abort.RecoveryWorkflowID
 		}
 		if e = nativeMemberPlanWriteTx(ctx, tx, st.policy, plan, true, now); e != nil {

@@ -120,19 +120,19 @@ func (l *NativeWorkerProbeResourceListener) Start(ctx context.Context) error {
 	if l == nil || l.state == nil {
 		return errNativeProbeResourceListener
 	}
-	return l.state.nativeWorkerCallbackTransport.Start(ctx)
+	return l.state.Start(ctx)
 }
 func (l *NativeWorkerProbeResourceListener) Address() string {
 	if l == nil || l.state == nil {
 		return ""
 	}
-	return l.state.nativeWorkerCallbackTransport.Address()
+	return l.state.Address()
 }
 func (l *NativeWorkerProbeResourceListener) Close() error {
 	if l == nil || l.state == nil {
 		return nil
 	}
-	return l.state.nativeWorkerCallbackTransport.Close()
+	return l.state.Close()
 }
 
 func (s *nativeProbeResourceListenerState) refuse(w http.ResponseWriter, status int) {

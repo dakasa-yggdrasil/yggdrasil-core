@@ -815,8 +815,8 @@ func TestNativeMemberListenerOfficialStockWireAndHeldResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := nativeProbeListenerClient(t, f, &f.client)
-	stock := NativeWorkerSchedulerBinding{PodName: "nw-ci-pod", PodNamespace: "ci-native", PodUID: memberListenerTestPermitID, Node: "nw-ci-node"}
-	raw, err := json.Marshal(memberListenerUpstreamExtenderBindingArgs{PodName: stock.PodName, PodNamespace: stock.PodNamespace, PodUID: stock.PodUID, Node: stock.Node})
+	stock := memberListenerUpstreamExtenderBindingArgs{PodName: "nw-ci-pod", PodNamespace: "ci-native", PodUID: memberListenerTestPermitID, Node: "nw-ci-node"}
+	raw, err := json.Marshal(stock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -837,7 +837,7 @@ func TestNativeMemberListenerOfficialStockWireAndHeldResult(t *testing.T) {
 	observed := b.binding
 	b.fail = true
 	b.mu.Unlock()
-	if observed != stock {
+	if observed != NativeWorkerSchedulerBinding(stock) {
 		t.Fatal("stock binding identity changed before backend")
 	}
 	status, out = memberListenerResponse(t, client, memberListenerRequest(t, l.Address(), b, "bind", raw))

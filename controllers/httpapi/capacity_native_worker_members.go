@@ -109,7 +109,7 @@ func (l *NativeWorkerMemberListener) Start(ctx context.Context) error {
 	if l == nil || l.state == nil {
 		return errNativeMemberListener
 	}
-	if l.state.nativeWorkerCallbackTransport.Start(ctx) != nil {
+	if l.state.Start(ctx) != nil {
 		return errNativeMemberListener
 	}
 	return nil
@@ -118,13 +118,13 @@ func (l *NativeWorkerMemberListener) Address() string {
 	if l == nil || l.state == nil {
 		return ""
 	}
-	return l.state.nativeWorkerCallbackTransport.Address()
+	return l.state.Address()
 }
 func (l *NativeWorkerMemberListener) Close() error {
 	if l == nil || l.state == nil {
 		return nil
 	}
-	if l.state.nativeWorkerCallbackTransport.Close() != nil {
+	if l.state.Close() != nil {
 		return errNativeMemberListener
 	}
 	return nil

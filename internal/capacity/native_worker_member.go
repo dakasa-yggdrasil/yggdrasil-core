@@ -288,7 +288,7 @@ func nativeWorkerMemberObservationValid(p model.CapacityPolicySpec, a model.Capa
 		return ErrNativeWorkerMember
 	}
 	if phase.CandidateAbsenceProven {
-		if c.Action != "retire_registry" && !(after && c.Action == "delete_node") || len(phase.Candidates) != 0 || len(o.Pods) != 0 || o.Configuration != nil {
+		if c.Action != "retire_registry" && (!after || c.Action != "delete_node") || len(phase.Candidates) != 0 || len(o.Pods) != 0 || o.Configuration != nil {
 			return ErrNativeWorkerMember
 		}
 		return nil
