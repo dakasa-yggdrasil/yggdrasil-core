@@ -3,21 +3,22 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: 3fb07c4ab1e65d65b14d76d6e1c6da3d15d5be56
-verified_diff_sha256: c89de17ebda3140dab7ba6d87b8b297d3c5f10ba8420eb17a9568f3991984469
+verified_at_commit: 5f86db8753dd04f2589df3025dd4f1532de93f51
+verified_diff_sha256: 23eef175546846056dcbc161320c32a8b573bbdf8a4d98e501829fafb810a546
 reconciler_schema: 1
 
-Reviewed the complete combined guest identity, protected abort recovery and
-readiness-permit validity changes. Independent component and union peers cover
-all product/test paths, all 942 production source records and current contract
-references. Append-only original resource custody precedes delete authority;
-complete independent provider, Node/Pod/registry and owned network receiving
-remain required. Private readiness expiry preserves proof/header/heartbeat
-freshness through SQL and cannot extend parent or physical qualification.
+Reviewed all 23 installation paths, the complete 948-record source census with
+zero dropped records, all 27 contract references, the exact shared protected
+execution context and unchanged original workflow jobs. One private authority
+owner composes Worker/Guest, Network and Abort under exact policy/compiled
+Source and separate TLS/material references. Artifact signing resolves its
+scoped expiring managed secret per operation without cache or ambient fallback.
+Original borrowers retain callbacks through Join; the opt-in shutdown barrier
+withholds dependency Close when the original join remains unresolved.
 
-The normal published System7007 executable supplies the guest-v2 factory job;
-legacy published-factory coverage is retained. The actual released CLI produced
-the content-addressed plan against Main68a7 and both context outputs before this
-stamp. Source ancestry retains PR202 and its exact ADR-marker/object-fixture
-corrections. Tests, analysis and builds run only in CI. No main activation,
-provider mutation, live network/warmup or operational billing closure is claimed.
+The released CLI generated the actual plan against Main838f and both context
+outputs before this stamp. Ancestry includes the normally merged and qualified
+PR203 dependency. The new nine-root race/JSON job and all existing tests/builds
+run only in CI. Installation enables no executor or process gate; independent
+guest proof stays nil/HOLD. No live material/IAM/credential renewal, allocator
+handoff, provider effect, network/warmup or admission is qualified here.
