@@ -88,7 +88,7 @@ func NativeWorkerCleanupOutcome(p model.CapacityPolicySpec, a model.CapacityNati
 			gone = true
 		case "terminal":
 			if mode != "closure" || a.Provider != "aws" || row.NotFoundCode != "" || row.AttachedInstanceID != "" ||
-				!(row.Kind == "instance" && row.NativeState == "terminated" || row.Kind == "volume" && row.NativeState == "deleted") {
+				(row.Kind != "instance" || row.NativeState != "terminated") && (row.Kind != "volume" || row.NativeState != "deleted") {
 				return "", false, errNativeCleanup
 			}
 			gone = true
