@@ -1,29 +1,38 @@
 # Documentation freshness
 
-verified_at_commit: 4f1a55fa40834dabfcd00ffcc52288ee79bcccc0
-verified_diff_sha256: e6395ad0eb1c5e9abca6f304ef2a3beae17c51c107e49d64dbc5b7ccaea7df61
+verified_at_commit: f24ff3a24b1a7f3622cd6a5e9c8a6aacaed5a82b
+verified_diff_sha256: 9eb1b34e51ef329d501cef8e18bbc6e92aa3b4dd1050bc675996c776dcc3a1f6
 reconciler_schema: 1
 
-Reviewed the exact union of private main installation, durable same-profile
-Native expansion, and the finite authenticated probe. All49 product, test, SQL
-and workflow paths match their reviewed signed parents byte-for-byte. Only
-documentation and deterministic census conflicts required resolution. The full
-963-record census equals942 existing records plus11 installation/execution and
-10 probe products; all27 contract references match their actual files.
-ADR148/149 and the accepted probe semantics remain intact.
+Reviewed the exact diagnostic Source union with normal Main75. All seventeen
+changed Source and evidence paths match the frozen union. Every other tracked
+path retains a reviewed parent blob; both parent semantics remain in full.
+The complete census retains all 963 actual records, with only the engine and
+normal startup records differing from Main75. All 27 evidence references match;
+the other ten evidence envelopes retain their exact Main75 bytes.
 
-The qualified PR204 parent61f passed all45 checks, including the nine new
-installation roots, eleven execution roots on both PostgreSQL versions and the
-native Kubernetes suite. Its retained CI4 initial-admission failure remains an
-incident with unknown cause; the later failure-only diagnostics ran zero times
-in the successful successor. This union also preserves the exact reviewed206
-test-fixture correction by signed ancestry: key/configuration substitutions
-occur before receiver startup, with the same fourteen probe roots, race gate,
-two-hundred-millisecond incomplete-exchange deadline and production behavior.
+The existing Service echo rule and finite 120-second missing-projection startup
+retain every signature, packet, replay and original configuration deadline.
+The two reviewed registry selectors require the literal docker.io hostname.
+Failure-only diagnostics retain a bounded public projection of the same failed
+GET and distinguish two subsequent audit GETs. The two disposable worker network
+namespaces provide only passive UDP header text, capped by original time,
+packet count and file size. No payload dump, agent retry, route or kubelet
+cadence change is added. Original seventeen probe roots, two observer roots
+and the single real Kind root remain required without skips.
 
-The installed CLI produced the actual plan against normal Main3b and generated
-both machine-context outputs before this stamp. No local test, build or analysis
-was run. Complete successor CI is still required for the combined head.
-Independent readiness production remains nil/HOLD in this delivery; no runtime
-switch, provider/Node/network operation, useful admission or production
-activation is claimed. The complete readiness controller is separate work.
+Original PR207 CI1 failed material startup before any exchange. CI2 passed all
+seventeen probe roots and both images, then failed its original initial batch
+with datagram_deadline. Its CodeQL hostname alert and exact original logs remain
+preserved. Neither failed run contains a Service proof; the original datagram
+cause remains unproved. The local hostname fix and these additional diagnostics
+require genuine successor CI and cannot reclassify an original failure.
+
+The installed released CLI produced the actual schema-one plan against normal
+Main75 at the signed Source merge and completed ai all before metadata staging.
+The machine-context outputs and this explicit provenance stamp are metadata
+only. No local test, build, vet or host/provider operation ran. A manual workflow
+dispatch on this isolated branch is diagnostic only and does not publish a Main
+image. The final Controller union still requires full CI. No Native birth,
+startup, readiness, network admission, business or production activation is
+qualified here.
