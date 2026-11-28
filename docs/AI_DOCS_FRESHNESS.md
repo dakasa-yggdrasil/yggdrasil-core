@@ -1,13 +1,13 @@
 # Documentation freshness
 
-verified_at_commit: 309b8bba08da312c210d17aa5bc8ff586b1ef720
-verified_diff_sha256: d6fedd5a09d4185f24ea859d51e562ab293bd79511eb280c2ac52acf01372279
+verified_at_commit: 805a07770da045f50b65c1b9f7dbe2993c048771
+verified_diff_sha256: c03a3e9eb9282d9c048de43073214835bf9abb870d3dbcc2a288d53aca63b392
 reconciler_schema: 1
 
 Reviewed the optional Native placement and never-admitted member retirement
 Source against freshly fetched Main d1b9ea3019e0a03d31335d31dc7a8baaadaf3601.
-The original82-file Source is retained by ancestry with an eight-path causal
-successor. The complete source census has1027 records,30 additions and zero
+The original82-file Source and eight-path first-CI successor are retained by
+ancestry with a ten-path style/fixture successor. The complete source census has1027 records,30 additions and zero
 omitted parent sources; all29 contract
 references match current evidence. Standalone member mTLS and official stock
 scheduler handlers are classified explicitly without fictitious mux counts.
@@ -54,3 +54,16 @@ array-only ref update. The reviewed successor changes only these causes and the
 two regenerated source facts, preserving the1027 key set, runtime criteria and
 all48 selected root names. No missing execution is reported as pass. Actual
 current-head CI remains mandatory.
+
+The second original head053abd is also retained. Readiness originals demonstrate
+44 unit,2 ownership and10 PostgreSQL roots per version passing on that exact
+head; this does not replace current-head CI. Members executed40 unit roots with
+38 passing and two direct-redeem fixture failures, plus all6 PostgreSQL roots
+passing on each version. Its ownership stage did not execute after unit failure.
+The real linter reported ten expression/style findings. The reviewed ten-path
+successor changes only equivalent selector/switch/absence forms, preserves the
+official untagged stock input fixture, and fixes the actual scripted read order
+and wrapped authentication error in the two denial tests. Four derived source
+facts and their evidence pins are refreshed; keys, roles, guards and selected
+root names remain unchanged. No executed failure or missing ownership check is
+reported as success. Current full PR qualification remains required.
