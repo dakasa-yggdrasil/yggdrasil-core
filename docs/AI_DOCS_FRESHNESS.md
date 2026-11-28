@@ -3,8 +3,8 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier Source and CI receipts remain in their original history.
 
-verified_at_commit: d91de4e2a09d1222d29cec964b7d2ff3fd56063b
-verified_diff_sha256: ec0e0982536a0a198fa13066761a7a723be42049c915624488672b469d8b0eb2
+verified_at_commit: ad3d4418596b6332cf4db1a1405c1d5d565d5528
+verified_diff_sha256: 54df94aea4b3788b6917cacbdd8c209c0291505fb787fe5df9cc9c0dcb042cef
 reconciler_schema: 1
 
 Reviewed the complete authenticated guest witness delivery and readiness slice,
