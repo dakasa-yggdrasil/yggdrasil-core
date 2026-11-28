@@ -1,13 +1,14 @@
 # Documentation freshness
 
-verified_at_commit: 6eeab8e21a22393563852ccef8a54885a64740a8
-verified_diff_sha256: ae48a7217761f810a1ecd95d8810735f8e98ab0cc05759092a1fb1a29fe668d2
+verified_at_commit: 309b8bba08da312c210d17aa5bc8ff586b1ef720
+verified_diff_sha256: d6fedd5a09d4185f24ea859d51e562ab293bd79511eb280c2ac52acf01372279
 reconciler_schema: 1
 
 Reviewed the optional Native placement and never-admitted member retirement
 Source against freshly fetched Main d1b9ea3019e0a03d31335d31dc7a8baaadaf3601.
-The signed Source commit contains82 reviewed files. The complete source census
-has1027 records,30 additions and zero omitted parent sources; all28 contract
+The original82-file Source is retained by ancestry with an eight-path causal
+successor. The complete source census has1027 records,30 additions and zero
+omitted parent sources; all29 contract
 references match current evidence. Standalone member mTLS and official stock
 scheduler handlers are classified explicitly without fictitious mux counts.
 
@@ -43,3 +44,13 @@ context reports this actual Source with dirty=true; that original tool output
 is retained without relabeling it as a clean release binary. Only the two
 normal generated outputs and this explicit stamp form the metadata commit.
 A draft PR is Source review and CI, with no runtime adoption or merge authority.
+
+The original PR209 headabe4 remains failed and its API-verified original ZIPs
+and logs are retained. Repository compilation found two unused imports and one
+string/UUID fixture mismatch; separately executed member and Guest roots exposed
+an incoherent registry/useful-capacity fixture and a foreign-CA signer mismatch.
+Service-doctor also found the stale source_inventory object ref omitted by an
+array-only ref update. The reviewed successor changes only these causes and the
+two regenerated source facts, preserving the1027 key set, runtime criteria and
+all48 selected root names. No missing execution is reported as pass. Actual
+current-head CI remains mandatory.
