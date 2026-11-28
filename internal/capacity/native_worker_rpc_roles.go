@@ -23,6 +23,10 @@ func nativeWorkerRPCRole(capabilities []string) (map[string]bool, bool) {
 			group = "kube_phase_read"
 		case "observe_native_worker_abort_inventory":
 			group = "kube_abort_read"
+		case "ensure_native_worker_probe_resource", "destroy_native_worker_probe_resource":
+			group = "kube_probe_writer"
+		case "observe_native_worker_probe_resource":
+			group = "kube_probe_reader"
 		default:
 			return nil, false
 		}

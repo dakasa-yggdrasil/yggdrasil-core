@@ -20,6 +20,13 @@ twelve echoes, with IPv4 DF and a thirty-second deadline for each batch. A
 failure never grants another send plan; the controller must use Pods with
 `restartPolicy: Never` and retain its durable original run journal.
 
+Address checks follow full frame signature/identity validation. Requests and
+Pod-path echoes require the configured peer Pod IP. Only a signed Service-path
+echo may also come from the exact configured peer ClusterIP, as returned by
+Kubernetes reverse-SNAT; direct Pod-IP replies remain valid for that path. The
+report retains the actual source address. This rule permits neither a foreign
+IP nor another packet, path, signature or replay budget.
+
 Candidate-only GET `/probe/startup` reads the real API worker's fixed loopback
 native-admission endpoint, `/readyz`, and native-admission again. Its separate
 admission key is never sent to `/readyz`. This bracket reports actual process
@@ -31,6 +38,20 @@ controller's independently joined responsibility. Loopback CI socket tests do
 not qualify a real Kubernetes Service or production path. A dedicated normal
 Main publisher verifies both native buildvcs/architectures, publishes a separate
 OCI package and records exact digest promotion; PR image checks never publish.
+
+A separate tagged Go controller runs inside a disposable two-worker Kind
+cluster and calls the normal agent at its actual Pod IP. It reuses the exact
+qualified normal binary, records actual Pod/Node/Service/EndpointSlice identities,
+mounts late immutable per-Pod material through the unchanged optional Secret
+loader, and invokes each original initial/final control POST once. Its own
+server-side creation uses no init container, agent wrapper, host route or
+kubelet cadence override. The case requires original signed frame bytes, all
+twelve requests and twelve echoes, unchanged process/object lifetimes, and an
+actual Service-IP echo source. A Pod-IP-only success cannot qualify that case.
+The ordinary Main stable publisher depends on that CI case as well as the
+existing unit/race and platform-image checks. The case is network-only: its
+synthetic run/birth/startup selection grants no Native birth, startup, readiness,
+MTU qualification on another cluster, or production admission.
 
 The default `authority` role retains the original control-plane startup,
 authentication ceremonies, broker consumers, discovery, schedulers and
@@ -67,6 +88,19 @@ usefulness remain separate qualification steps.
 ## HTTP ingress and authorization
 
 `http-routes.json` records actual `Handle` and `HandleFunc` declarations, including handler wrappers and expressions for dynamic mount prefixes. `http-intercept-dispatch.json` additionally records branch predicates in the dedicated capacity/Guest/host dispatchers. These branches intercept requests before the ordinary mux; they must not be omitted merely because they do not call `HandleFunc`.
+
+The optional Native readiness resource callbacks use a separate, protected
+listener rather than the ordinary mux or its pre-mux intercepts. Its exact
+routes are GET `/internal/capacity/native-workers/probe-resources/read` and
+`/bootstrap`, and POST `/internal/capacity/native-workers/probe-resources/redeem`
+and `/receive` under the same prefix. They are classified here explicitly;
+the unchanged `Handle` and legacy-intercept census counts do not enumerate
+this standalone handler. TLS1.3 requires a client chain plus the exact leaf
+URI/digest, bearer digest, compiled SDK Source and whole-file scope before
+reading a body. The compiled Core Source header accompanies every HTTP outcome.
+Canonical binding/run/slot selectors select only the already-owned journal;
+GETs have no body, bootstrap is private, and receive204 establishes custody only.
+No ordinary session, workflow header or API-worker role grants this authority.
 
 The `httpapi.New` pipeline is logging, request cache, `requireAuthenticatedConsoleAPIs`, CSRF and the mux. The authentication owner decides directory machine claims first, followed by original host-factory credentials/routes, Guest credentials/routes, original canary claims and capacity mutation credentials/routes. Ambiguous Directory claims and Directory requests that also claim a host, Guest, canary or capacity identity are rejected with synchronous audit. Recognized expired/revoked or malformed dedicated credentials remain in their own rejecting branches; they cannot use a browser cookie or a workflow token to acquire another authority.
 
@@ -110,6 +144,14 @@ The separate stable-epoch maintenance operation can refresh only these fixed can
 
 Core mutation events are persisted by `repository.EmitEventWithOutcome` in the caller's SQL transaction. The state change, event and materialized reactions commit or roll back together. The event log is audit/notification state; it does not replace current resource or lifecycle authority. Idempotency uses event type plus idempotency key where supplied. Reactive workflow dispatch, reactor reconciliation and event-stream consumers read committed records using their existing checkpoints and deduplication semantics.
 
+Native readiness resource events retain the existing canonical
+`kubernetes.native_worker_probe_resource.ensured` and `.destroyed` grammar.
+Qualified create/startup ACK and ensured event commit with their retained
+resource identity in one transaction. Only an independently read absence of a
+known original UID commits destroyed; a DELETE ACK remains private journal
+audit. The dynamic emission expression `e.Type` is classified by that closed
+mapping, rather than by adding new public event verbs.
+
 `event-emissions.json` lists actual repository/helper emission callsites and their type expressions. Dynamic expressions are retained as expressions, rather than pretending every event type is a source literal. `event-and-queue-constants.json` lists source constants, and `event-schemas.json` lists embedded schema keys, not an assertion that a schema filename is a wire event name. The closed canonical mapping and dynamic provider/resource mutation grammar live in `docs/contracts/events_validator.go`; consumers must continue to use that validator. External mutation writers use exact or logical grants on the event HTTP surface; human sessions and workflow credentials do not inherit publication permission. The explicit credential-free development posture is not a production fallback.
 
 The `native-qemu.server.ensured` and `.destroyed` schemas are embedded by `events_native_qualification_enabled.go` only when the `nativequalification` build tag is selected. Default builds use the separate default mapping and do not acquire those events merely because schema files exist in the repository. The native qualification echo and source-only provider realm do not represent a production workload roster.
@@ -121,6 +163,7 @@ The `native-qemu.server.ensured` and `.destroyed` schemas are embedded by `event
 `http-egress.json` records HTTP request constructors and transport callsites. It deliberately retains dynamic argument expressions. The following families complete the logical graph:
 
 - Adapter calls resolve active integration instance/type manifests, credentials references and transport definitions. AMQP endpoint names or HTTP base URLs/capability routes come from that active configuration. Ordinary HTTP transport supports the source's `http`/`https` rules; this contract does not falsely claim every ordinary adapter call already uses the protected Guest TLS policy. Protected native/Guest calls use their separate private policies, exact origins, credentials and original deadlines.
+- The readiness controller's separate per-run mTLS client calls only the independently joined probe Pod IPv4 on HTTPS9446. GET `/probe/report` and candidate-only GET `/probe/startup` capture original replies before interpretation; one zero-body POST each to `/probe/initial` and `/probe/final` is fenced by the immutable run journal. Both authenticated idle reports precede the first POST. Fixed paths, actual compiled probe Source, per-run CA/leaf identity and original authority expiry replace arbitrary URLs, proxies, redirects or replay. The signed DF-UDP Pod/Service datagrams belong to the separate finite probe process; they are not HTTP-egress callsites in the controller census.
 - Quickstart installation fetches an operator-selected catalog URL through its existing validation path. A fetched document is not automatically installed or trusted beyond its owning manifest/install checks.
 - Surface discovery, manifest/data reads and declared actions use configured/discovered surface base URLs and view/action metadata. Permission and handler checks remain in the caller; a surface URL is not a global egress grant.
 - OAuth/OIDC third-party login uses configured provider discovery, token and userinfo URLs. Back-channel logout uses registered relying-party URIs and the existing signed token/client rules. Same-process OP JWT verification reads its own signing key set; it is not an arbitrary remote JWKS fetch.
@@ -1095,6 +1138,18 @@ mutation callback, automatic retry, readiness/admission fallback or main-process
 activation. Source/CI fixtures do not prove a live provider deletion or billing
 closure. See ADR0147.
 
+The diagnostic agent's missing-projection startup bound is fixed at 120 seconds,
+covering Kubernetes 1.32's normal 60-to-90-second Secret-remount resync window
+with finite headroom. It still honors parent cancellation and refuses present
+malformed/expired material immediately. Discovery cannot renew the original
+Config.NotBefore/HardNotAfter, packet deadlines or proof validity. The Kind
+fixture retains its original configuration and Job/test budgets. A separate
+bounded CI observer records only fixed filenames, presence/length and actual
+Pod termination/kubelet sync metadata; it neither waits on behalf of the agent
+nor supplies readiness authority. No Secret content or private-body digest is
+logged. An original failed run remains failed and cannot be reclassified by a
+later diagnostic observation.
+
 
 ## Main Native runtime owner
 
@@ -1108,10 +1163,11 @@ mandatory private whole-file pin. API workers refuse installation.
 
 Worker/Guest, Network and Abort share one opaque lifetime and borrowed DB.
 New scope admission seals without waiting, then Close joins borrowers and
-closes Abort/Network/Worker in reverse ownership order. HTTP and RabbitMQ use a
+closes Abort/Network/optional Readiness/Worker in reverse ownership order. HTTP and RabbitMQ use a
 current protected per-operation resolver, not a captured missing owner or stale
 broker. No execution gate or legacy Native dispatcher is enabled. The optional
-independent guest readiness producer remains nil/HOLD. Artifact signing reads
+independent guest readiness producer remains nil/HOLD unless its separately
+pinned private installation is present. Artifact signing reads
 the fixed managed-secret identity on every Retrieve and checks closed safe
 Source/artifact scope, active status, future expiry and exactly three temporary
 credential keys. There is no ambient chain/cache or implicit IAM qualification.
@@ -1123,3 +1179,53 @@ borrowers return. The opt-in dependency-shutdown barrier stops later closes on
 join failure, retaining the original error and durable uncertainty; ordinary
 legacy closer errors still continue. Process exit remains possible and is not
 a successful join or proof that the original survives.
+
+## Finite Native independent readiness
+
+The optional Source-bound readiness producer consumes the actual Guest callback,
+fixed Kubernetes writer/reader ports and one immutable migration121 run per
+Attempt. The protected whole-file inventory pins policy, namespace/floor,
+curated two-container worker template, normal publication receipts, TLS material,
+private journal key and dependency egress. Absence retains HOLD. No workflow
+selects an image, object, endpoint, private key or proof.
+
+A new diagnostic run requires three minutes of original authority and is capped
+at five minutes, still bounded by the original command/parent/qualification.
+Consumed bootstrap time and quote expiry are not renewed. GET-only authenticated
+idle reports from both probe servers precede the first initial POST; a short
+voluntary yield preserves a live dispatch return for an eligible later callback
+using the same run and keys. Existing proof65s/Native-step90s caps remain. A real
+deadline or unknown dispatch continues to HOLD, without automatic replay.
+
+Two Pods/two UDP Services/three Secrets/one NetworkPolicy establish only the
+diagnostic run. Complete independent reads join original UIDs, Node/birth,
+registry, EndpointSlice targets and qualified runtime image/process lifetimes.
+The finite initial/final batches allow at most twelve DF requests plus twelve
+authenticated echoes globally, 31920 IP bytes and thirty seconds per batch.
+Warmup separately joins actual API worker process nonce/roster, exact-Pod startup
+challenge, roots_open and readyz; it never borrows useful floor admission or
+production traffic. The configured Core Source is an expected pin, with actual
+image provenance joined externally rather than invented loopback Source.
+
+A Service request can arrive from the exact peer Pod with a translated nonzero
+UDP source port. Only that canonical signed request accepts the observed port;
+its emitted echo is paired to the same original bytes and exact return address.
+Pod requests and all received echoes retain port9446. No caller-supplied port,
+replay right or extra packet is introduced.
+
+Private mTLS resource callbacks authenticate before body and commit encrypted
+original custody before interpretation. A204 is custody only. Observed
+create/patch and canonical ensured event share one transaction. A delete ACK is
+private audit; only fresh exact independent absence of a known original UID
+commits canonical destroyed with absence custody. Unknown create stays held.
+No result,404 or timer creates a retry right or successful send claim.
+
+One PendingProof is sealed before cleanup from actual final facts and a fresh
+authenticated Guest read. Cleanup, admission/release and later Record retain
+that proof's original hashes and minimum validity; expiry never remints
+packets, process identity or time. Recovery owns finite cleanup only. Private
+journal material stays within48MiB; original/public decoder limits are unchanged.
+Readiness joins cleanup and private receiving before borrowed Workers handles;
+forced/unjoined close retains the opaque owner and dependency barrier through
+startup rollback. Synthetic CI fixtures remain explicitly distinct from actual
+network/provider/warmup qualification. See ADR0150.

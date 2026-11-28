@@ -3,7 +3,7 @@
     {
       "evidence": "docs/service-contract/source/http-egress.json",
       "id": "http_and_rpc_egress_callsites",
-      "sha256": "e8ec179f1336fb55f7e600bd97d0ad5081ddcb16af457a22bb1d5ade50e3c22c"
+      "sha256": "7aded911cc4eefdd6e7231039af4cb1c1f49512702a681e79eda55d2e9798b03"
     },
     {
       "evidence": "docs/service-contract/source/provider-sdk-operations.json",
@@ -13,7 +13,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "parameterized_destination_families",
-      "sha256": "0bea8086202cd81dacc2ff41700f4ef2e6e39195ab3d2abce4324c370b1ed801"
+      "sha256": "ab560648ad80d5f99163a411ad0b7caf0723452ef977b5ea9c62ccf1a22d34ef"
     }
   ],
   "consumes": [
@@ -25,7 +25,7 @@
     {
       "evidence": "docs/service-contract/SEMANTICS.md",
       "id": "http_inbound_protocols_and_auth",
-      "sha256": "0bea8086202cd81dacc2ff41700f4ef2e6e39195ab3d2abce4324c370b1ed801"
+      "sha256": "ab560648ad80d5f99163a411ad0b7caf0723452ef977b5ea9c62ccf1a22d34ef"
     },
     {
       "evidence": "go.mod",
@@ -119,13 +119,18 @@
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
       "id": "auth_dispatch_source_functions",
       "sha256": "23e5f15fe4c9647c01644ddccc51fc5f64f8e9ccd1492cbdb145c4d5d76c1167"
+    },
+    {
+      "evidence": "docs/service-contract/SEMANTICS.md",
+      "id": "native_probe_resource_private_mtls_callbacks",
+      "sha256": "ab560648ad80d5f99163a411ad0b7caf0723452ef977b5ea9c62ccf1a22d34ef"
     }
   ],
   "produces": [
     {
       "evidence": "docs/service-contract/source/event-emissions.json",
       "id": "transactional_event_emission_sites",
-      "sha256": "f7778febdeb758a2086babfe4b603798e0d104a76819d6b6ff87c6f5fe7d0f34"
+      "sha256": "7dea1512ca3bb3ed57179c0b19916a270143a6ceef94f4eb3d0f760ac01ea40f"
     },
     {
       "evidence": "docs/service-contract/source/event-schemas.json",
@@ -149,7 +154,7 @@
   "source_inventory": {
     "evidence": "docs/service-contract/source/sources.json",
     "id": "complete_runtime_source_census",
-    "sha256": "e4c0f31a78d4256c201086315b79ea30a1434b0c329a294a7775aa79723c3e15"
+    "sha256": "d32a937675902fd872562dc1499029b1c3a394996516e312c9aab07b41cf07c9"
   },
   "unresolved": []
 }

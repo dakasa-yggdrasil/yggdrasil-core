@@ -112,14 +112,35 @@ func Run(parent context.Context) error {
 	if source == "" {
 		return ErrUnavailable
 	}
-	// The controller issues the immutable Secret only after the actual PodUID
-	// and PodIP exist. Missing projection waits finitely; malformed data refuses.
-	startup, cancel := context.WithTimeout(parent, 45*time.Second)
+	if waitForProbeProjection(parent, ConfigPath) != nil {
+		return ErrUnavailable
+	}
+	m, err := loadMaterial(filepath.Dir(ConfigPath), source, time.Now().UTC())
+	if err != nil {
+		return ErrUnavailable
+	}
+	return serve(parent, m, source)
+}
+
+// An initially absent optional Secret can need the normal kubelet remount
+// interval: Kubernetes 1.32 defaults to 60s with 0.5 resync jitter. This fixed 120s
+// startup bound covers that normal window without a waiter or cadence override.
+// It does not renew the original config lifetime: once the file appears,
+// loadMaterial immediately validates its original NotBefore/HardNotAfter and
+// every private byte. Malformed/present material is never retried here.
+func waitForProbeProjection(parent context.Context, path string) error {
+	if parent == nil || parent.Err() != nil {
+		return ErrUnavailable
+	}
+	startup, cancel := context.WithTimeout(parent, 120*time.Second)
 	defer cancel()
 	for {
-		_, err := os.Stat(ConfigPath)
+		if startup.Err() != nil {
+			return ErrUnavailable
+		}
+		_, err := os.Stat(path)
 		if err == nil {
-			break
+			return nil
 		}
 		if !os.IsNotExist(err) {
 			return ErrUnavailable
@@ -132,11 +153,6 @@ func Run(parent context.Context) error {
 		case <-timer.C:
 		}
 	}
-	m, err := loadMaterial(filepath.Dir(ConfigPath), source, time.Now().UTC())
-	if err != nil {
-		return ErrUnavailable
-	}
-	return serve(parent, m, source)
 }
 
 func serve(parent context.Context, m *material, source string) error {

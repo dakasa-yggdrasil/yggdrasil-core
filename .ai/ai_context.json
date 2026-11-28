@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-28T03:12:03-03:00",
+  "generated_at": "2026-11-28T05:37:43-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1807,
+    ".go": 1864,
     ".json": 265,
-    ".py": 217,
-    ".sql": 122,
-    ".yaml": 11,
-    ".yml": 39
+    ".py": 218,
+    ".sql": 123,
+    ".yaml": 14,
+    ".yml": 40
   },
   "provenance": {
-    "commit": "4f1a55fa40834dabfcd00ffcc52288ee79bcccc0",
+    "commit": "80733cbd74ceebfadba460c06148a33b96884f80",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "b5ef975436ac458b4d7f6435daea09b6af13356a144a405e96ab8f1d262b6159"
+        "sha256": "e61c9dfffc5054248098b81fd8cbbe7a62767adf3c311f53a94e599967f4485f"
       },
       {
         "path": "AGENTS.md",
@@ -65,33 +65,33 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 473,
-      "kb": 7001
+      "files": 513,
+      "kb": 7385
     },
     {
       "path": "controllers/httpapi",
-      "files": 280,
-      "kb": 2836
+      "files": 282,
+      "kb": 2883
     },
     {
       "path": "controllers/message",
-      "files": 232,
-      "kb": 1978
+      "files": 234,
+      "kb": 1988
     },
     {
       "path": "internal/capacity",
-      "files": 204,
-      "kb": 2085
+      "files": 207,
+      "kb": 2098
     },
     {
       "path": "db/migrations",
-      "files": 118,
-      "kb": 1665
+      "files": 119,
+      "kb": 1672
     },
     {
       "path": "model",
-      "files": 114,
-      "kb": 615
+      "files": 117,
+      "kb": 629
     },
     {
       "path": "manifest",
@@ -105,8 +105,8 @@
     },
     {
       "path": "addons",
-      "files": 59,
-      "kb": 370
+      "files": 61,
+      "kb": 390
     },
     {
       "path": "internal/capacitynativeqemu",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 118,
+    "migrations": 119,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 94,
-    "k8s_manifests": 27
+    "config_files": 95,
+    "k8s_manifests": 28
   }
 }
