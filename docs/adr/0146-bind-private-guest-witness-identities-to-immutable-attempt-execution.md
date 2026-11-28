@@ -1,6 +1,6 @@
 # ADR-0146: Bind private guest witness identities to immutable Attempt Execution
 
-- Status: Proposed; activation gated
+**Status:** Proposed; activation gated
 - Date: 2026-11-27
 - Scope: Core private factory, authenticated guest report and readiness port
 
