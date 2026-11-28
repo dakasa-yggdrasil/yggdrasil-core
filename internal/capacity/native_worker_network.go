@@ -116,7 +116,7 @@ func ValidateNativeWorkerNetworkBinding(p model.CapacityPolicySpec) error {
 		}
 	}
 	if used[w.AdapterID] || used[r.AdapterID] {
-		return fmt.Errorf("Native floor network cannot reuse provider, pricing or registry instances")
+		return fmt.Errorf("native floor network cannot reuse provider, pricing or registry instances")
 	}
 	return nil
 }
