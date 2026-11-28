@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-11-28T04:31:49-03:00",
+  "generated_at": "2026-11-28T05:09:49-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1812,
+    ".go": 1864,
     ".json": 265,
-    ".py": 217,
-    ".sql": 122,
+    ".py": 218,
+    ".sql": 123,
     ".yaml": 14,
-    ".yml": 39
+    ".yml": 40
   },
   "provenance": {
-    "commit": "f24ff3a24b1a7f3622cd6a5e9c8a6aacaed5a82b",
+    "commit": "7416d2143c86a5d62b3b73dbcac3977bbd11cd6a",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "6875c4a7e8826185a0a0f1992be57db4d89e1a5ee2fedd3e88fc199b881df3d7"
+        "sha256": "9b0b710c0bc96c8b57f412046ad3cd8c8be96f9d8890af739ee07a4629727939"
       },
       {
         "path": "AGENTS.md",
@@ -65,33 +65,33 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 473,
-      "kb": 7001
+      "files": 513,
+      "kb": 7385
     },
     {
       "path": "controllers/httpapi",
-      "files": 280,
-      "kb": 2836
+      "files": 282,
+      "kb": 2883
     },
     {
       "path": "controllers/message",
-      "files": 232,
-      "kb": 1978
+      "files": 234,
+      "kb": 1988
     },
     {
       "path": "internal/capacity",
-      "files": 204,
-      "kb": 2085
+      "files": 207,
+      "kb": 2098
     },
     {
       "path": "db/migrations",
-      "files": 118,
-      "kb": 1665
+      "files": 119,
+      "kb": 1672
     },
     {
       "path": "model",
-      "files": 114,
-      "kb": 615
+      "files": 117,
+      "kb": 629
     },
     {
       "path": "manifest",
@@ -105,8 +105,8 @@
     },
     {
       "path": "addons",
-      "files": 59,
-      "kb": 370
+      "files": 61,
+      "kb": 390
     },
     {
       "path": "internal/capacitynativeqemu",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 118,
+    "migrations": 119,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 94,
-    "k8s_manifests": 27
+    "config_files": 95,
+    "k8s_manifests": 28
   }
 }

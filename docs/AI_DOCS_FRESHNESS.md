@@ -1,38 +1,46 @@
 # Documentation freshness
 
-verified_at_commit: f24ff3a24b1a7f3622cd6a5e9c8a6aacaed5a82b
-verified_diff_sha256: 9eb1b34e51ef329d501cef8e18bbc6e92aa3b4dd1050bc675996c776dcc3a1f6
+verified_at_commit: 7416d2143c86a5d62b3b73dbcac3977bbd11cd6a
+verified_diff_sha256: 880f0ebe57f3624668933e08fc3cc179ef88a81a19eb59013729d0daa103856f
 reconciler_schema: 1
 
-Reviewed the exact diagnostic Source union with normal Main75. All seventeen
-changed Source and evidence paths match the frozen union. Every other tracked
-path retains a reviewed parent blob; both parent semantics remain in full.
-The complete census retains all 963 actual records, with only the engine and
-normal startup records differing from Main75. All 27 evidence references match;
-the other ten evidence envelopes retain their exact Main75 bytes.
+Reviewed the final owned Native readiness Controller and inherited Service-NAT
+Source union against freshly fetched Main 75d412ebb924afafeb58245100676446a5213a5c. All72
+Controller paths match their closed partition reviews; the full88-path union
+retains the signed diagnostic and NAT source ancestry. The complete census has
+997 records,34 additions and no omitted Main75 source. All28 contract evidence
+references match exact current files. The standalone four-route private mTLS
+listener is classified explicitly without relabeling the mux/intercept counts.
 
-The existing Service echo rule and finite 120-second missing-projection startup
-retain every signature, packet, replay and original configuration deadline.
-The two reviewed registry selectors require the literal docker.io hostname.
-Failure-only diagnostics retain a bounded public projection of the same failed
-GET and distinguish two subsequent audit GETs. The two disposable worker network
-namespaces provide only passive UDP header text, capped by original time,
-packet count and file size. No payload dump, agent retry, route or kubelet
-cadence change is added. Original seventeen probe roots, two observer roots
-and the single real Kind root remain required without skips.
+The immutable encrypted run, private original custody, qualified Kubernetes
+reads, finite packet reports, real API-worker startup and same PendingProof
+cleanup are one protected opt-in composition. New runs need180s and are capped
+at300s while preserving the original command, lease and qualification expiry.
+Authenticated GET-only idle waiting voluntarily yields with the parent live;
+Proof65s and dispatch90s are unchanged. A new GET cannot refresh original final
+frames, an exposed POST cannot replay, and only independent known-UID absence
+commits a destroyed event. Shutdown/rollback retain borrowed dependencies on
+an unjoined callback or cleanup owner.
 
-Original PR207 CI1 failed material startup before any exchange. CI2 passed all
-seventeen probe roots and both images, then failed its original initial batch
-with datagram_deadline. Its CodeQL hostname alert and exact original logs remain
-preserved. Neither failed run contains a Service proof; the original datagram
-cause remains unproved. The local hostname fix and these additional diagnostics
-require genuine successor CI and cannot reclassify an original failure.
+The actual signed Service request may retain a canonical nonzero translated
+source port only from the exact peer Pod. Its emitted echo must return to that
+same observed address and preserve the original signed request. Pod requests
+and received echoes keep9446. Original signatures, selectors,12requests+12echoes,
+1302-byte payloads and30s batch bounds are unchanged. The original failed
+Service runs and diagnostic headers remain evidence; no successful Service,
+DF, warmup or production qualification is inferred from this Source review.
 
-The installed released CLI produced the actual schema-one plan against normal
-Main75 at the signed Source merge and completed ai all before metadata staging.
-The machine-context outputs and this explicit provenance stamp are metadata
-only. No local test, build, vet or host/provider operation ran. A manual workflow
-dispatch on this isolated branch is diagnostic only and does not publish a Main
-image. The final Controller union still requires full CI. No Native birth,
-startup, readiness, network admission, business or production activation is
-qualified here.
+The authored CI inventory contains56 Controller roots (44unit,10Postgres,
+2clean-Source TLS ownership), plus inherited18 probe roots,2 observer roots and
+the actual disposable-Kind Service case. These tests have not run locally.
+Current-head CI must qualify the complete union; no gate or failed original
+is waived. No cloud, VM, provider or production workload was executed here.
+
+The installed CLI actually produced the schema-one reconciliation plan above
+and completed ai all with exit0 before metadata staging. Its retained binary
+SHA256 is d8ed72559b32e72f7d48071046adbe48ef935d0996b8ff4364a111f70413fab7;
+its own version says dev(none) and buildvcs reports2cb49685 withmodified=true.
+This records actual tool provenance without claiming a clean release binary.
+The two generated outputs and this explicit stamp form the only metadata
+commit. Source acceptance and a draft PR provide no runtime activation,
+installed artifact, useful capacity, readiness or billing-closure authority.

@@ -1,21 +1,21 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-11-28T04:31:49-03:00_
+_Generated from HEAD at: 2026-11-28T05:09:49-03:00_
 
 ## Languages
 
-- `.go`: 1812 files
+- `.go`: 1864 files
 - `.json`: 265 files
-- `.py`: 217 files
-- `.sql`: 122 files
+- `.py`: 218 files
+- `.sql`: 123 files
 - `.yaml`: 14 files
-- `.yml`: 39 files
+- `.yml`: 40 files
 
 ## Contracts & Artifacts
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **118**  (db/migrations)
+- DB Migrations: **119**  (db/migrations)
 
 ## Docs
 
@@ -24,15 +24,15 @@ _Generated from HEAD at: 2026-11-28T04:31:49-03:00_
 
 ## Top Directories by File Count
 
-- repository: 473 files (7001.6 KB)
-- controllers/httpapi: 280 files (2836.6 KB)
-- controllers/message: 232 files (1978.4 KB)
-- internal/capacity: 204 files (2085.3 KB)
-- db/migrations: 118 files (1665.7 KB)
-- model: 114 files (615.0 KB)
+- repository: 513 files (7385.6 KB)
+- controllers/httpapi: 282 files (2883.1 KB)
+- controllers/message: 234 files (1988.8 KB)
+- internal/capacity: 207 files (2098.3 KB)
+- db/migrations: 119 files (1672.4 KB)
+- model: 117 files (629.0 KB)
 - manifest: 70 files (407.6 KB)
 - ops/network-guardian/tests: 67 files (1413.4 KB)
-- addons: 59 files (371.0 KB)
+- addons: 61 files (390.1 KB)
 - internal/capacitynativeqemu: 47 files (308.6 KB)
 - ops/network-guardian/rollout: 40 files (2647.0 KB)
 - cmd/native-guest-lifecycle-fixture: 29 files (268.5 KB)
@@ -54,8 +54,8 @@ _Generated from HEAD at: 2026-11-28T04:31:49-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **94**
-- Manifests (k8s-ish): **27**
+- K8s/Config files scanned: **95**
+- Manifests (k8s-ish): **28**
 
 ## Dependencies
 
