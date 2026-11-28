@@ -3,38 +3,32 @@
 The reconciliation gate measures this source diff and actual generated context.
 Earlier reviews remain in Git history and their owning Source/CI receipts.
 
-verified_at_commit: 7e83213ab825c29c55d81192f22bf6db3c2e3511
-verified_diff_sha256: 35b77b319c421043300897e275865be455fdf682e258ae2a4d376028be3c8199
+verified_at_commit: 489fbc9f5da43792754f20b67d030ee8b92bbbba
+verified_diff_sha256: ab8036970fc4264d4308af2b84188ae3797980b1992012894cf224b2ed4903d5
 reconciler_schema: 1
 
-Reviewed the complete HCloud physical qualifier, safe project/action witness,
-strict original custody joins, canonical System physical materialization and
-preservation through Attempt/Birth JSONB. AWS wire and evidence ordering remain
-unchanged. Historical witnesses do not expire into a new creation permission;
-fresh reobservation preserves the original state and birth. Node, network,
-warmup, admission, useful capacity and full cleanup remain separate proofs.
+Reviewed the concrete Native runtime pairing for the exact provider literals aws
+and hetzner. Every Attempt matches its copied profile/provider/market region;
+aliases cannot choose a real provider path. Existing Source, scope, immutable
+private original/launch joins, shared Close ownership and phase forwarding stay
+intact. HCloud requires the separately typed original201/action and independent
+project/network witness; no account or request ID is invented.
 
-The reviewed Native runtime and floor-network ancestors are integrated by
-signed merges. Source conflicts were confined to documentation, generated
-evidence and the union of authored CI selectors. Every original test root is
-retained, including seventeen new HCloud roots and the real isolated PostgreSQL
-Record/Birth test. The complete census retains all prior facts and now contains
-924 non-test Go paths. Whole-file service-contract evidence hashes agree.
+The new published-factory root uses the real immutable System artifact for pure
+HCloud preparation, empty account, location/network-region distinction and exact
+ownership/refusal checks. Two existing artifact roots, the120s watchdog and
+race/no-skip verdict remain. New PostgreSQL coverage uses actual original and
+birth stores plus the real paired qualifier, then proves sealed reobservation
+writes no transition or witness. A pure exact-profile table checks provider
+aliases and substitution. All three new roots are mandatory remote CI cases.
 
-The released installed CLI produced the actual reconciliation plan and completed
-ai-all generation after the signed Source union. Only reading, deterministic
-generation, formatting and diff checks ran locally. Tests, race checks, builds
-and analysis run only in GitHub CI. No local pass, provider call, purchase,
-Hetzner load, runtime installation or production activation is claimed.
-The supplier Native GET Close-error finding remains an explicit activation
-blocker until its separate SDK correction and CI are qualified.
+Root whole12-path review closed the typed Redeem Permit/reload finding. The
+inherited actual197 compile/lint correction is present before this Source. The
+complete924-fact source census and evidence references were regenerated from the
+actual whole tree with no paths omitted or bounds raised.
 
-The inherited network CI analysis correction changes one diagnostic's initial
-letter only. Its original CI evidence and signed Source remain in ancestry;
-no predicate, test, deadline, guard or acceptance criterion is weakened.
-
-Original CI compiled and passed the published System factory root, then found
-an incompatible assignment in the new PostgreSQL test: Redeem returns a private
-Permit, not an Attempt. The correction asserts that permit's child identity;
-Record retains its original fresh Attempt read. No guard, assertion, test root,
-watchdog or runtime behavior is removed. Original failed CI evidence is retained.
+The signed product precedes the released CLI reconciliation plan and completed
+ai-all generation. Only reading, deterministic generation and cheap format/diff
+checks ran locally. Tests/builds/analysis remain mandatory GitHub CI work. No
+runtime adoption, provider mutation, network/admission qualification, capacity
+purchase, throughput or Hetzner load is claimed.
