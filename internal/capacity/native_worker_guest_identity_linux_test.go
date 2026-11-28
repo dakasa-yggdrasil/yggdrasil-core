@@ -234,7 +234,7 @@ func TestNativeGuestPolicyPinAbsentPreservesLegacyExecutionBytes(t *testing.T) {
 		t.Fatal("optional identity pin was not appended last")
 	}
 	var decoded model.CapacityNativeWorkerExecutionProfile
-	if DecodeNativeCapacity(present, &decoded) != nil || decoded.GuestIdentityPolicySHA256 != a.Execution.GuestIdentityPolicySHA256 {
+	if DecodeNativeCapacity(json.RawMessage(present), &decoded) != nil || decoded.GuestIdentityPolicySHA256 != a.Execution.GuestIdentityPolicySHA256 {
 		t.Fatal("durable optional policy pin lost")
 	}
 }
