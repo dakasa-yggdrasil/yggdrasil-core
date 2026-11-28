@@ -13,7 +13,7 @@ func nativeWorkerRPCRole(capabilities []string) (map[string]bool, bool) {
 		switch capability {
 		case "ensure_native_worker", "destroy_native_worker":
 			group = "provider_mutation"
-		case "observe_native_worker":
+		case "observe_native_worker", "observe_native_worker_cleanup":
 			group = "provider_read"
 		case "ensure_native_worker_pool":
 			group = "kube_writer"
@@ -21,6 +21,8 @@ func nativeWorkerRPCRole(capabilities []string) (map[string]bool, bool) {
 			group = "kube_pool_read"
 		case "observe_native_worker_phase":
 			group = "kube_phase_read"
+		case "observe_native_worker_abort_inventory":
+			group = "kube_abort_read"
 		default:
 			return nil, false
 		}

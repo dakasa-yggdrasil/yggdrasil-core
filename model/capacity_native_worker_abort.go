@@ -49,6 +49,9 @@ type CapacityNativeWorkerAbortReceive struct {
 // Protected runtime facts, never accepted from a workflow or mutation actor.
 // Unknown Node inventory is explicit and cannot authorize a destructive send.
 type CapacityNativeWorkerAbortObservation struct {
+	// This optional safe provider snapshot is privately retained in the abort
+	// event before a send. It never extends the public AbortPermit wire.
+	ResourceFootprint       *CapacityNativeWorkerResourceFootprint `json:"resource_footprint,omitempty"`
 	ObservedAt              time.Time
 	RealmUID                string
 	PoolUID                 string

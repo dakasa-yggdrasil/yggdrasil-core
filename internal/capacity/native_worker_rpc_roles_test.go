@@ -12,9 +12,13 @@ func TestNativeWorkerRPCRoleSeparatesPrincipalsAndExactCapabilities(t *testing.T
 		{"ensure_native_worker", "destroy_native_worker"},
 		{"destroy_native_worker", "ensure_native_worker"},
 		{"observe_native_worker"},
+		{"observe_native_worker_cleanup"},
+		{"observe_native_worker", "observe_native_worker_cleanup"},
+		{"observe_native_worker_cleanup", "observe_native_worker"},
 		{"ensure_native_worker_pool"},
 		{"observe_native_worker_pool"},
 		{"observe_native_worker_phase"},
+		{"observe_native_worker_abort_inventory"},
 	}
 	for _, capabilities := range valid {
 		t.Run("allow/"+strings.Join(capabilities, "+"), func(t *testing.T) {
@@ -32,10 +36,13 @@ func TestNativeWorkerRPCRoleSeparatesPrincipalsAndExactCapabilities(t *testing.T
 			}
 		})
 	}
-	all := []string{"ensure_native_worker", "destroy_native_worker", "observe_native_worker", "ensure_native_worker_pool", "observe_native_worker_pool", "observe_native_worker_phase"}
+	all := []string{"ensure_native_worker", "destroy_native_worker", "observe_native_worker", "observe_native_worker_cleanup", "ensure_native_worker_pool", "observe_native_worker_pool", "observe_native_worker_phase", "observe_native_worker_abort_inventory"}
 	for _, a := range all {
 		for _, b := range all {
 			if a != b && ((a == "ensure_native_worker" && b == "destroy_native_worker") || (a == "destroy_native_worker" && b == "ensure_native_worker")) {
+				continue
+			}
+			if a != b && ((a == "observe_native_worker" && b == "observe_native_worker_cleanup") || (a == "observe_native_worker_cleanup" && b == "observe_native_worker")) {
 				continue
 			}
 			t.Run("refuse_pair/"+a+"+"+b, func(t *testing.T) {

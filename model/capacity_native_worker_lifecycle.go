@@ -14,15 +14,16 @@ import (
 // Native lifecycle is a separate opt-in authority, never a legacy Guest slot
 // or a write credential added to the read-only market collector.
 type CapacityNativeWorkerLifecycleBinding struct {
-	Network           *CapacityNativeWorkerNetworkBinding        `json:"network,omitempty"`
-	PhysicalObservers []CapacityNativeWorkerPhysicalReadBinding  `json:"physical_observers,omitempty"`
-	Mode              string                                     `json:"mode"`
-	SourceCommit      string                                     `json:"source_commit"`
-	MaxReadAgeSeconds int                                        `json:"max_read_age_seconds"`
-	Profiles          []CapacityNativeWorkerExecutionProfile     `json:"profiles"`
-	PhaseObserver     *CapacityNativeWorkerPhaseReadBinding      `json:"phase_observer,omitempty"`
-	RegistryWriter    *CapacityNativeWorkerRegistryWriterBinding `json:"registry_writer,omitempty"`
-	PreAdmissionAbort *CapacityNativeWorkerAbortBinding          `json:"pre_admission_abort,omitempty"`
+	Network                *CapacityNativeWorkerNetworkBinding        `json:"network,omitempty"`
+	PhysicalObservers      []CapacityNativeWorkerPhysicalReadBinding  `json:"physical_observers,omitempty"`
+	Mode                   string                                     `json:"mode"`
+	SourceCommit           string                                     `json:"source_commit"`
+	MaxReadAgeSeconds      int                                        `json:"max_read_age_seconds"`
+	Profiles               []CapacityNativeWorkerExecutionProfile     `json:"profiles"`
+	PhaseObserver          *CapacityNativeWorkerPhaseReadBinding      `json:"phase_observer,omitempty"`
+	RegistryWriter         *CapacityNativeWorkerRegistryWriterBinding `json:"registry_writer,omitempty"`
+	PreAdmissionAbort      *CapacityNativeWorkerAbortBinding          `json:"pre_admission_abort,omitempty"`
+	AbortInventoryObserver *CapacityNativeWorkerPhaseReadBinding      `json:"abort_inventory_observer,omitempty"`
 }
 
 type CapacityNativeWorkerExecutionProfile struct {

@@ -130,6 +130,21 @@ func nativeRPCClientFixture(t *testing.T, handler http.Handler, operation ...str
 	return client, config, server, raw
 }
 
+func TestNativeWorkerRPCOpaqueCopiesRetainSharedCloseOwnership(t *testing.T) {
+	client, c, _, _ := nativeRPCClientFixture(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("ownership comparison must perform no RPC") }))
+	copy := *client
+	var empty NativeWorkerRPCClient
+	if !client.SharesState(&copy) || (&empty).SharesState(&empty) || client.SharesState(nil) {
+		t.Fatal("opaque identity is wrapper address or empty handle")
+	}
+	if err := copy.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if client.Matches(c.Adapter, c.Profile, c.BindingName, c.SDKSourceCommit, c.ScopeSHA256, c.AllowedCapabilities[0]) {
+		t.Fatal("copy obtained independent Close ownership")
+	}
+}
+
 func nativeRPCTestContext(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)

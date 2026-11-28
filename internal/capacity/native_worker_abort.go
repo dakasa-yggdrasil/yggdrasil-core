@@ -16,6 +16,11 @@ func ValidateNativeWorkerAbortBinding(p model.CapacityPolicySpec) error {
 		b.Workflow.ManifestID != "" || b.Workflow.Version != nil || !marketID.MatchString(b.Workflow.Namespace) || !marketID.MatchString(b.Workflow.Name) {
 		return fmt.Errorf("exact source-owned pre-admission cleanup workflow and bounded permit required")
 	}
+	if p.NativeWorkerLifecycleBinding.AbortInventoryObserver != nil {
+		if _, err := NativeWorkerAbortInventoryPolicy(p); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -59,6 +64,13 @@ func NativeWorkerAbortObservationValid(p model.CapacityPolicySpec, a model.Capac
 func NativeWorkerAbortSendSafe(o model.CapacityNativeWorkerAbortObservation) bool {
 	if o.ProviderOutcome != "present" || !ValidDigest(o.ProviderEvidenceSHA256) || !o.NodesComplete || !o.PodsComplete || o.ApplicationPods != 0 {
 		return false
+	}
+	if o.ResourceFootprint != nil && o.ResourceFootprint.HCloud != nil {
+		for _, ip := range o.ResourceFootprint.HCloud.PrimaryIPs {
+			if !ip.AutoDelete || ip.DeleteProtected {
+				return false // A separate IP writer is not part of server deletion.
+			}
+		}
 	}
 	return o.NodeState == "none_confirmed" || o.NodeState == "quarantined" && o.QuarantinePresent && o.Unschedulable
 }
