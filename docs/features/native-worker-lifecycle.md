@@ -520,3 +520,19 @@ actual local-to-runner mTLS role isolation and real factory-handle composition
 using the existing published System CLI artifact. These are Source tests, not
 provider provisioning, production adoption, network qualification or load proof.
 See ADR0139.
+
+
+## Sealed physical transport reobservation
+
+`ReobserveTransportACK` keeps the physical-only `ReobserveACK` API intact while
+returning current transport metadata for protected network preparation. One
+local qualifier wrapper copies the actual independent response, preserving the
+non-wire HCloud carrier, and passes that same read through all existing sealed
+original/launch/provider/lifetime/scope/freshness guards. It returns the actual
+public endpoint, observation time, safe evidence digest and reader Source/scope
+alongside the unchanged physical tuple. Missing transport remains unavailable;
+no expected pin, native IP or second unqualified GET replaces an observed fact.
+
+This read-only Go port creates no new original ACK, birth, HTTP identity,
+lifecycle state, network permission or admission proof. It installs no runtime
+or provider client. See [ADR-0144](../adr/0144-retain-transport-facts-from-the-same-sealed-physical-read.md).
