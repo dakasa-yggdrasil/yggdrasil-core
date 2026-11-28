@@ -190,12 +190,96 @@ func call(ctx context.Context, c *http.Client, ip, path, method, source string) 
 	return out, nil
 }
 
+// Failure-only audit: the first projection is the same original GET that
+// failed. Later GETs are subsequent observations and cannot qualify that read.
+// Deliberately omit Packet, Config, signing material and arbitrary error text.
+func logFailedExchange(t *testing.T, ctx context.Context, original probe.Report, index int, phase, source string, lives []podLife, clients []*http.Client, configs []probe.Config, pubs []ed25519.PublicKey) {
+	t.Helper()
+	type row struct {
+		Batch, Path, Address, RawSHA256 string
+		Sequence, BytesLength           int
+		At                              time.Time
+	}
+	type batch struct {
+		State, ErrorClass                   string
+		StartedAt, CompletedAt              *time.Time
+		SentCount, ReceivedCount, EchoCount int
+		Sent, Received, Echoed              []row
+	}
+	project := func(b probe.BatchReport) batch {
+		rows := func(records []probe.DatagramRecord) []row {
+			out := []row{}
+			for _, r := range records {
+				if len(out) == 16 {
+					break
+				}
+				address := "invalid"
+				if a, err := netip.ParseAddrPort(r.Address); err == nil && a.Addr().Is4() {
+					address = a.String()
+				}
+				b, p := "invalid", "invalid"
+				if r.Batch == "initial" || r.Batch == "final" {
+					b = r.Batch
+				}
+				if r.Path == "pod" || r.Path == "service" {
+					p = r.Path
+				}
+				sha := ""
+				for sender := range configs {
+					peer := 1 - sender
+					if probe.VerifyPacket(r.Packet, configs[sender], pubs[sender], pubs[peer], false) || probe.VerifyPacket(r.Packet, configs[sender], pubs[sender], pubs[peer], true) {
+						sha = digest(r.Packet)
+						break
+					}
+				}
+				out = append(out, row{b, p, address, sha, r.Sequence, len(r.Packet), r.ObservedAt})
+			}
+			return out
+		}
+		state, class := b.State, b.ErrorClass
+		switch state {
+		case "idle", "running", "complete", "failed", "unknown":
+		default:
+			state = "invalid"
+		}
+		switch class {
+		case "", "datagram_deadline", "datagram_send_incomplete", "echo_send_incomplete", "datagram_replay", "receive_limit", "internal_failure":
+		default:
+			class = "invalid"
+		}
+		return batch{state, class, b.StartedAt, b.CompletedAt, len(b.Sent), len(b.Received), len(b.Echoed), rows(b.Sent), rows(b.Received), rows(b.Echoed)}
+	}
+	log := func(origin string, peer int, out probe.Report) {
+		v := struct {
+			Schema, Origin, Phase string
+			Peer                  int
+			ObservedAt            time.Time
+			Initial, Final        batch
+		}{"native_probe_service_failure_audit_v1", origin, phase, peer, out.ObservedAt, project(out.Initial), project(out.Final)}
+		raw, err := json.Marshal(v)
+		if err == nil && len(raw) <= 32<<10 {
+			t.Logf("NATIVE_PROBE_SERVICE_FAILURE_AUDIT %s", raw)
+		}
+	}
+	log("same_original_failed_get", index, original)
+	for i := range lives {
+		audit, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		out, err := call(audit, clients[i], lives[i].IP, probe.ReportPath, http.MethodGet, source)
+		stop()
+		if err != nil {
+			t.Logf("NATIVE_PROBE_SERVICE_SUBSEQUENT_AUDIT_UNAVAILABLE peer=%d", i)
+			continue
+		}
+		log("subsequent_get_not_original_qualification", i, out)
+	}
+}
+
 func TestNativeProbeActualClusterIPReverseSNATEcho(t *testing.T) {
 	if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("REQUIRE_NATIVE_PROBE_SERVICE_KIND") != "true" {
 		t.Fatal("this network qualification is GitHub disposable Kind only")
 	}
 	source, image := os.Getenv("NATIVE_PROBE_SERVICE_SOURCE"), os.Getenv("NATIVE_PROBE_SERVICE_IMAGE")
-	if !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(source) || !regexp.MustCompile(`^docker.io/library/native-probe-service@sha256:[a-f0-9]{64}$`).MatchString(image) {
+	if !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(source) || !regexp.MustCompile(`^docker\.io/library/native-probe-service@sha256:[a-f0-9]{64}$`).MatchString(image) {
 		t.Fatal("exact normal agent Source/image required")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
@@ -400,6 +484,7 @@ func TestNativeProbeActualClusterIPReverseSNATEcho(t *testing.T) {
 					b = out.Final
 				}
 				if b.State == "failed" || b.State == "unknown" {
+					logFailedExchange(t, ctx, out, index, phase.name, source, lives, httpClients, configs, pubs)
 					t.Fatal("real finite network exchange failed:", b.ErrorClass)
 				}
 				raw, _ := json.Marshal(configs[index])

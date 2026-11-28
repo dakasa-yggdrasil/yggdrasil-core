@@ -286,10 +286,41 @@ jobs:
           set -euo pipefail
           kubectl apply -f scripts/ci/native-probe-service/bootstrap.yaml
           directory="$RUNNER_TEMP/probe-service-kind"
+          # GitHub-only passive headers from the two literal disposable worker
+          # network namespaces. Never write pcap or print UDP payload bytes.
+          if ! command -v tcpdump >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends tcpdump
+          fi
+          test "$(command -v tcpdump)" = /usr/bin/tcpdump
+          capture_pids=()
+          observer_pid=''
+          stop_observers() {
+            if [ -n "$observer_pid" ]; then
+              kill -TERM "$observer_pid" 2>/dev/null || true
+              wait "$observer_pid" || true
+            fi
+            # Capture timeout owns its original finite timer and child group;
+            # wait only for these original children, never signal a reaped PID.
+            for pid in "${capture_pids[@]}"; do wait "$pid" || true; done
+            rm -f "$directory/projection-observer"
+          }
+          trap stop_observers EXIT
+          for node in native-probe-service-worker native-probe-service-worker2; do
+            node_pid="$(docker inspect --format '{{.State.Pid}}' "$node")"
+            [[ "$node_pid" =~ ^[1-9][0-9]*$ ]]
+            test "$node_pid" -gt 1
+            (
+              # Bash on this Linux runner expresses file limits in 1024-byte
+              # blocks. Header text plus stderr is capped at 64 KiB per node.
+              # Apply the file limit after sudo/PAM, not before it.
+              exec sudo --non-interactive /usr/bin/bash --noprofile --norc -c 'unset POSIXLY_CORRECT; ulimit -f 64; exec /usr/bin/timeout --kill-after=1s 239s /usr/bin/nsenter --target "$1" --net -- /usr/bin/tcpdump -p -nn -l -vv -tttt -s 48 -i any -c 96 "udp port 9446"' fixed-kind-udp-headers "$node_pid"
+            ) > "$directory/$node-udp-headers.txt" 2>&1 &
+            capture_pids+=("$!")
+          done
           # Read-only metadata observer, not an agent wrapper or startup waiter.
           REQUIRE_NATIVE_PROBE_SERVICE_KIND=true "$directory/projection-observer" > "$directory/projection-metadata.jsonl" &
           observer_pid=$!
-          trap 'kill -TERM "$observer_pid" 2>/dev/null || true; wait "$observer_pid" || true; rm -f "$directory/projection-observer"' EXIT
           # Fixed disposable bootstrap only. Resource creation/protocol/identity
           # joins are performed by the tagged Go controller inside the cluster.
           kubectl set image --local -f scripts/ci/native-probe-service/job.yaml "controller=$NATIVE_PROBE_CONTROLLER_IMAGE" -o yaml |
