@@ -476,7 +476,7 @@ reader; native private addresses are not Internet endpoints. This fact does not
 qualify reachability or authorize a floor peer. ReobserveACK still returns only
 the sealed physical tuple; the protected raw reader port retains endpoint facts.
 
-## Concrete private AWS runtime composition
+## Concrete private runtime composition
 
 `message.NewProtectedNativeWorkerConcreteRuntime` builds the existing catalog/RPC
 readers around Source-owned mTLS handles. The repository runtime binds a copied
@@ -500,8 +500,11 @@ an actor or convert an absent return into empty completed custody. Before a
 physical GET, qualification rechecks exact archived bytes/private digest, current
 Attempt and immutable launch. AWS acknowledgement qualification is separate from
 sealed reobservation; the latter returns only current physical identity and
-preserves lifecycle state. HCloud preparation/qualification remains refused by
-this runtime until the separately typed qualifier is paired.
+preserves lifecycle state. The closed provider set is `aws` and `hetzner`, each matching its copied
+profile and market region. `hcloud` and other aliases remain refused. HCloud
+qualification uses its separately typed original201, action and independent
+project/network witness; empty account and absent HTTP request IDs cannot be
+filled with invented values. The same strict qualifier owns sealed reobservation.
 
 The same real phase reader forwards preparation and GET-only receiving under the
 copied policy, pool epoch, writer inventory scope and shared Close fence. Missing
@@ -520,3 +523,85 @@ actual local-to-runner mTLS role isolation and real factory-handle composition
 using the existing published System CLI artifact. These are Source tests, not
 provider provisioning, production adoption, network qualification or load proof.
 See ADR0139.
+
+
+The paired HCloud runtime keeps factory preparation before CREATE independent of
+physical witness creation. Its market location (`hel1`) remains distinct from
+the canonical System network region (`eu-central`), and the System account stays
+empty. A real factory handle bound to the immutable published System executable
+qualifies pure deterministic preparation and transferred ownership only. Missing
+HCloud reader project/anchor scope is refused at construction. Actual provider
+acceptance still requires committed original bytes, immutable launch and the
+complete independent typed witness; preparation cannot supply that proof.
+
+CI adds exact closed-provider/profile refusal cases, real PostgreSQL original
+custody and sealed-witness reobservation, plus a third mandatory factory artifact
+root. Both existing factory roots and their watchdog/no-skip/race verdict stay
+unchanged. No controller, network writer, readiness/admission callback, process
+activation or provider resource is installed by this Source.
+
+## Protected floor network RPC handles
+
+`NativeWorkerNetworkRPCClient` is separate from provider and Kubernetes clients.
+Protected Go composition fixes the System process role, AdapterID, compiled
+Source, whole binding-file scope, floor identity, template and TLS trust files.
+The destination is calculated from the floor's canonical private IPv4 and the
+reader9444 or writer9443 port, always HTTPS `/rpc/execute`. There is no Describe,
+health, catalog, manifest-selected endpoint or fake provider adapter.
+
+The reader sends only the five declared selectors and checks actual Source,
+scope, floor/template, freshness and complete typed kernel inventories. The
+writer sends only binding name and permit UUID for install/remove. Both require
+the real System three-key request and five-key reply envelopes, explicit false
+network/useful metadata, exact member names, complete original Read and Close,
+and a live bounded context. Missing/null inventories never become absence.
+
+Writer output retains the real five-field disposition: permit ID, state,
+GET-only recovery and two false qualification/admission flags. Unknown and
+`original_return_custodied` remain dispositions rather than effect receipts.
+System checks Core's scope-bound one-use permission independently; the client
+does not invent a reply scope echo or issue permission. Shared Close closes all
+copies. The source installs no network runtime, controller, guest witness or
+production configuration. See [ADR-0143](../adr/0143-bind-floor-network-rpc-to-protected-mutual-tls-clients.md).
+
+## Sealed physical transport reobservation
+
+`ReobserveTransportACK` keeps the physical-only `ReobserveACK` API intact while
+returning current transport metadata for protected network preparation. One
+local qualifier wrapper copies the actual independent response, preserving the
+non-wire HCloud carrier, and passes that same read through all existing sealed
+original/launch/provider/lifetime/scope/freshness guards. It returns the actual
+public endpoint, observation time, safe evidence digest and reader Source/scope
+alongside the unchanged physical tuple. Missing transport remains unavailable;
+no expected pin, native IP or second unqualified GET replaces an observed fact.
+
+This read-only Go port creates no new original ACK, birth, HTTP identity,
+lifecycle state, network permission or admission proof. It installs no runtime
+or provider client. See [ADR-0144](../adr/0144-retain-transport-facts-from-the-same-sealed-physical-read.md).
+
+## Concrete protected network composition
+
+`NewNativeWorkerConcreteNetworkRuntime` connects the existing permission store
+to a borrowed concrete worker runtime and separately owned floor reader/writer
+clients. Construction and every call require the exact database, policy,
+compiled Core Source and protected bindings. Failed construction closes nothing;
+successful shared Close closes only the two network clients. The worker runtime
+and database remain owned by the caller.
+
+Installation loads the private original return and exact stored launch before
+one independent sealed provider read and the protected floor observation.
+Removal after provider deletion retains the sealed physical target without a
+new provider GET. The permission store supplies the endpoint only from an
+original exposed install grant. `RequestNetworkMutation` accepts only a closed
+action and retained UUID and sends only the two fixed writer selectors. The
+store remains the sole owner of redemption and private original custody; an
+unknown RPC disposition permits only receiving, never an automatic resend or
+an effect/admission assertion.
+
+The dedicated CI fixture uses the normally published System executable, real
+factory handles, PostgreSQL archives and the public mTLS clients without a dial
+override. Its owned runner alias and provider/floor facts are synthetic and
+qualify composition only. They do not replace the independent System kernel
+proof or qualify a production network. No main activation is installed; the
+existing nil readiness port continues to hold admission pending real protected
+guest delivery, end-to-end path/MTU and warmup evidence. See ADR-0145.

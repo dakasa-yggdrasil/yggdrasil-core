@@ -183,3 +183,9 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0136](0136-close-expired-unredeemed-native-reservations-with-retained-no-send-proof.md) | Close expired unredeemed Native reservations with retained no-send proof | Proposed | 2026-11-27 | Core / immutable unsent closure and shared redemption arbiter |
 
 - [ADR-0140: Bind Native floor network permissions to sealed births and original custody](0140-bind-native-floor-network-permissions-to-sealed-births-and-original-custody.md)
+
+- [ADR-0142: Pair concrete Native runtime with typed HCloud qualification](0142-pair-concrete-native-runtime-with-typed-hcloud-qualification.md)
+- [ADR-0143: Bind floor network RPC to protected mutual TLS clients](0143-bind-floor-network-rpc-to-protected-mutual-tls-clients.md)
+
+- [ADR-0144: Retain transport facts from the same sealed physical read](0144-retain-transport-facts-from-the-same-sealed-physical-read.md)
+- [ADR-0145: Compose Native network runtime from sealed worker and floor ports](0145-compose-native-network-runtime-from-sealed-worker-and-floor-ports.md)

@@ -743,12 +743,10 @@ func (f *GuestRetirementForwardRecoveryFixture) makeOriginal(count int) {
 		f.Caller.ResponseBodyScope = capacity.GuestOriginalBodyCompleteRead
 	}
 	time.Sleep(time.Until(f.Caller.DriverReturnedAt) + time.Millisecond)
-	retention := ctx
-	if f.callerVariant == "late" {
-		var cancel context.CancelFunc
-		retention, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-	}
+	// Match the production caller: original HTTP work keeps its original
+	// deadline; append-only custody has a separate bounded five-second context.
+	retention, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
 	trace := GuestRetirementForwardInspection{Stage: "caller_return_transaction"}
 	retention = context.WithValue(retention, forwardInspectionKey{}, &trace)
 	if err = store.RecordGuestCallerReturnV2(retention, f.Caller); err != nil {

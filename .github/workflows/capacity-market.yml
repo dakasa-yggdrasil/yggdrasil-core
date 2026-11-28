@@ -74,10 +74,13 @@ jobs:
               'repository/capacity_native_worker_abort_postgres_test.go',
               'repository/capacity_native_worker_abort_commands_postgres_test.go',
               'repository/capacity_native_worker_runtime_postgres_test.go',
+              'repository/capacity_native_worker_runtime_hcloud_postgres_test.go',
+              'repository/capacity_native_worker_runtime_provider_test.go',
               'repository/capacity_native_worker_unsent_postgres_test.go',
               'repository/capacity_native_worker_network_postgres_test.go',
               'repository/capacity_native_worker_network_original_test.go',
               'internal/capacity/native_worker_network_test.go',
+              'internal/capacity/native_worker_network_selector_test.go',
               'model/capacity_native_worker_network_test.go',
               'controllers/httpapi/capacity_native_worker_network_test.go',
               'internal/capacity/native_worker_lifecycle_test.go',
@@ -85,9 +88,11 @@ jobs:
               'internal/capacity/native_worker_private_factory_linux_test.go',
               'internal/capacity/native_worker_abort_test.go',
               'internal/capacity/native_worker_physical_test.go',
+              'internal/capacity/native_worker_transport_observation_test.go',
               'internal/capacity/native_worker_hcloud_physical_test.go',
               'internal/capacity/native_worker_hcloud_guards_test.go',
               'internal/capacity/native_worker_rpc_client_linux_test.go',
+              'internal/capacity/native_worker_network_rpc_client_linux_test.go',
               'internal/capacity/native_worker_rpc_roles_test.go',
               'internal/capacity/native_worker_rpc_roles_linux_test.go',
               'internal/capacity/native_worker_private_factory_binding_test.go',
@@ -260,7 +265,7 @@ jobs:
           set -euo pipefail
           output="$RUNNER_TEMP/native-private-factory"
           git rev-parse HEAD > "$output/core-source-head.txt"
-          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository -run '^(TestNativePrivateFactoryPublishedSystemCLI|TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership)$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
+          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository -run '^(TestNativePrivateFactoryPublishedSystemCLI|TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership|TestNativeConcreteHCloudRuntimePublishedFactoryPreservesCanonicalScopeAndOwnership)$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
       - name: Require the actual executable qualification root without skips
         shell: bash
         run: |
@@ -271,13 +276,13 @@ jobs:
           output = Path(os.environ['RUNNER_TEMP']) / 'native-private-factory'
           events = [json.loads(line) for line in (output / 'original.jsonl').read_text().splitlines() if line.strip()]
           assert not any(event.get('Action') in ('skip', 'fail') for event in events)
-          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity', 'TestNativePrivateFactoryPublishedSystemCLI'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership')}
+          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity', 'TestNativePrivateFactoryPublishedSystemCLI'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeConcreteRuntimePublishedFactoryHandlePrepareAndOwnership'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeConcreteHCloudRuntimePublishedFactoryPreservesCanonicalScopeAndOwnership')}
           for action in ('run', 'pass'):
               actual = collections.Counter((event['Package'], event['Test']) for event in events if event.get('Action') == action and event.get('Test') and '/' not in event['Test'])
               assert set(actual) == expected and all(count == 1 for count in actual.values())
           assert 'WARNING: DATA RACE' not in (output / 'go-test.stderr').read_text()
           assert not any('WARNING: DATA RACE' in event.get('Output', '') for event in events)
-          (output / 'root-census.json').write_text(json.dumps({'roots': 2, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
+          (output / 'root-census.json').write_text(json.dumps({'roots': 3, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
           PY_FACTORY_ROOT
       - name: Preserve qualification evidence without private material
         if: always()
@@ -290,4 +295,156 @@ jobs:
             ${{ runner.temp }}/native-private-factory/original.jsonl
             ${{ runner.temp }}/native-private-factory/go-test.stderr
             ${{ runner.temp }}/native-private-factory/root-census.json
+          if-no-files-found: warn
+
+  concrete-network-published-factory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: market-ci-only
+          POSTGRES_DB: capacity_market
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d capacity_market"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DB_URL: postgres://postgres:market-ci-only@127.0.0.1:5432/capacity_market?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
+      GOWORK: "off"
+      GOMAXPROCS: "2"
+      GOMEMLIMIT: 512MiB
+      NATIVE_FACTORY_SYSTEM_SOURCE: 52ed0d85d5b7e86b82a2fb5cffed65e9855bd81e
+      NATIVE_FACTORY_SYSTEM_SHA256: 29cb1835bb9f6fa999478ff3ae71718e17595ce95f33b13cab54034e07b73874
+      NATIVE_FACTORY_SYSTEM_BYTES: "18096312"
+      NATIVE_NETWORK_ISOLATED_ALIAS: "10.80.0.2"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Read only the fixed published System release
+        id: system-release-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-co
+          repositories: dakasa-system
+          permission-contents: read
+      - name: Receive exact versioned release assets without rebuilding System
+        env:
+          GH_TOKEN: ${{ steps.system-release-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/native-concrete-network"
+          mkdir -m 700 "$output"
+          # Fixed release cli-52ed0d8 assets outlive Actions artifact retention.
+          # No latest lookup, mutable tag fallback or arbitrary download URL.
+          gh api -H 'Accept: application/octet-stream' repos/dakasa-co/dakasa-system/releases/assets/802656106 > "$output/system.tar.gz"
+          gh api -H 'Accept: application/octet-stream' repos/dakasa-co/dakasa-system/releases/assets/802656124 > "$output/SOURCE.txt"
+          gh api -H 'Accept: application/octet-stream' repos/dakasa-co/dakasa-system/releases/assets/802656122 > "$output/BUILDINFO.txt"
+          python3 - <<'PY_SYSTEM_RELEASE'
+          import hashlib, json, os, tarfile
+          from pathlib import Path
+          output = Path(os.environ['RUNNER_TEMP']) / 'native-concrete-network'
+          pins = {
+              'system.tar.gz': (7024477, 'dd09d838d4876a18ba0413b87a0e22b5327070ac1a61bdb7d63e57dba2334427'),
+              'SOURCE.txt': (82, '4ad7fa9e24bab4a18c7655de8d2913df29842704ff494850d22f2eae5e389beb'),
+              'BUILDINFO.txt': (6186, '36bf4ee8c4e2519ff8b40728fc181b2c2cbb4d75703d9dc5c1bfb7b5c187cd6f'),
+          }
+          for name, (size, digest) in pins.items():
+              raw = (output / name).read_bytes()
+              assert len(raw) == size and hashlib.sha256(raw).hexdigest() == digest
+          assert (output / 'SOURCE.txt').read_text().splitlines() == [
+              os.environ['NATIVE_FACTORY_SYSTEM_SOURCE'], 'fc5511031ebc5daebc77f9b62191bbaea5a20e6d',
+          ]
+          settings = {}
+          for line in (output / 'BUILDINFO.txt').read_text().splitlines():
+              if line.startswith('\tbuild\t'):
+                  key, value = line[len('\tbuild\t'):].split('=', 1)
+                  settings[key] = value
+          assert settings.get('vcs.revision') == os.environ['NATIVE_FACTORY_SYSTEM_SOURCE']
+          assert settings.get('vcs.modified') == 'false'
+          assert settings.get('GOOS') == 'linux' and settings.get('GOARCH') == 'amd64'
+          assert settings.get('CGO_ENABLED') == '0'
+          with tarfile.open(output / 'system.tar.gz', 'r:gz') as archive:
+              members = archive.getmembers()
+              assert len(members) == 1 and members[0].name == 'dakasa' and members[0].isfile()
+              assert members[0].size == int(os.environ['NATIVE_FACTORY_SYSTEM_BYTES'])
+              raw = archive.extractfile(members[0]).read(members[0].size + 1)
+          assert len(raw) == int(os.environ['NATIVE_FACTORY_SYSTEM_BYTES'])
+          assert hashlib.sha256(raw).hexdigest() == os.environ['NATIVE_FACTORY_SYSTEM_SHA256']
+          binary = output / 'dakasa'
+          with binary.open('xb') as target:
+              target.write(raw)
+          binary.chmod(0o700)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('NATIVE_FACTORY_SYSTEM_CLI=' + str(binary) + '\n')
+          (output / 'published-system-receipt.json').write_text(json.dumps({
+              'schema': 1, 'release_id': 461198560, 'source_commit': os.environ['NATIVE_FACTORY_SYSTEM_SOURCE'],
+              'asset_ids': [802656106, 802656124, 802656122],
+              'binary_sha256': os.environ['NATIVE_FACTORY_SYSTEM_SHA256'],
+              'binary_bytes': int(os.environ['NATIVE_FACTORY_SYSTEM_BYTES']),
+              'provider_or_production_qualification': False,
+          }, sort_keys=True) + '\n')
+          PY_SYSTEM_RELEASE
+      - name: Own one private alias only on this isolated CI runner
+        id: network-alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is a runner-local fixture, never a provider or production host.
+          test "${GITHUB_ACTIONS}" = true
+          sudo ip address add 10.80.0.2/32 dev lo
+          echo "owned=true" >> "$GITHUB_OUTPUT"
+          ip -j address show dev lo > "$RUNNER_TEMP/native-concrete-network/ci-alias.json"
+      - name: Exercise actual factory handles, immutable PostgreSQL custody and real floor TLS clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/native-concrete-network"
+          git rev-parse HEAD > "$output/core-source-head.txt"
+          go test -buildvcs=true -tags=nativefactoryqualification -race -json -p 1 -count=1 -timeout=120s ./repository -run '^(TestNativeNetworkRuntimePublishedFactoryPrivateArchiveAndOneStoreDispatch|TestNativeNetworkRuntimeRefusesSubstitutionMissingArchiveAndInvalidDispatchBeforeRPC)$' 2> "$output/go-test.stderr" | tee "$output/original.jsonl"
+      - name: Require the actual executable qualification root without skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_FACTORY_ROOT'
+          import collections, json, os
+          from pathlib import Path
+          output = Path(os.environ['RUNNER_TEMP']) / 'native-concrete-network'
+          events = [json.loads(line) for line in (output / 'original.jsonl').read_text().splitlines() if line.strip()]
+          assert not any(event.get('Action') in ('skip', 'fail') for event in events)
+          expected = {('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeNetworkRuntimePublishedFactoryPrivateArchiveAndOneStoreDispatch'), ('github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'TestNativeNetworkRuntimeRefusesSubstitutionMissingArchiveAndInvalidDispatchBeforeRPC')}
+          for action in ('run', 'pass'):
+              actual = collections.Counter((event['Package'], event['Test']) for event in events if event.get('Action') == action and event.get('Test') and '/' not in event['Test'])
+              assert set(actual) == expected and all(count == 1 for count in actual.values())
+          assert 'WARNING: DATA RACE' not in (output / 'go-test.stderr').read_text()
+          assert not any('WARNING: DATA RACE' in event.get('Output', '') for event in events)
+          (output / 'root-census.json').write_text(json.dumps({'roots': 2, 'failures': 0, 'skips': 0, 'provider_or_production_qualification': False}, sort_keys=True) + '\n')
+          PY_FACTORY_ROOT
+      - name: Release the owned isolated CI alias
+        if: always() && steps.network-alias.outputs.owned == 'true'
+        shell: bash
+        run: sudo ip address del 10.80.0.2/32 dev lo
+      - name: Preserve qualification evidence without private material
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-concrete-network-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/native-concrete-network/published-system-receipt.json
+            ${{ runner.temp }}/native-concrete-network/core-source-head.txt
+            ${{ runner.temp }}/native-concrete-network/original.jsonl
+            ${{ runner.temp }}/native-concrete-network/go-test.stderr
+            ${{ runner.temp }}/native-concrete-network/root-census.json
           if-no-files-found: warn
