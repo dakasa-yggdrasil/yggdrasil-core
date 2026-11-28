@@ -20,6 +20,13 @@ twelve echoes, with IPv4 DF and a thirty-second deadline for each batch. A
 failure never grants another send plan; the controller must use Pods with
 `restartPolicy: Never` and retain its durable original run journal.
 
+Address checks follow full frame signature/identity validation. Requests and
+Pod-path echoes require the configured peer Pod IP. Only a signed Service-path
+echo may also come from the exact configured peer ClusterIP, as returned by
+Kubernetes reverse-SNAT; direct Pod-IP replies remain valid for that path. The
+report retains the actual source address. This rule permits neither a foreign
+IP nor another packet, path, signature or replay budget.
+
 Candidate-only GET `/probe/startup` reads the real API worker's fixed loopback
 native-admission endpoint, `/readyz`, and native-admission again. Its separate
 admission key is never sent to `/readyz`. This bracket reports actual process
@@ -31,6 +38,20 @@ controller's independently joined responsibility. Loopback CI socket tests do
 not qualify a real Kubernetes Service or production path. A dedicated normal
 Main publisher verifies both native buildvcs/architectures, publishes a separate
 OCI package and records exact digest promotion; PR image checks never publish.
+
+A separate tagged Go controller runs inside a disposable two-worker Kind
+cluster and calls the normal agent at its actual Pod IP. It reuses the exact
+qualified normal binary, records actual Pod/Node/Service/EndpointSlice identities,
+mounts late immutable per-Pod material through the unchanged optional Secret
+loader, and invokes each original initial/final control POST once. Its own
+server-side creation uses no init container, agent wrapper, host route or
+kubelet cadence override. The case requires original signed frame bytes, all
+twelve requests and twelve echoes, unchanged process/object lifetimes, and an
+actual Service-IP echo source. A Pod-IP-only success cannot qualify that case.
+The ordinary Main stable publisher depends on that CI case as well as the
+existing unit/race and platform-image checks. The case is network-only: its
+synthetic run/birth/startup selection grants no Native birth, startup, readiness,
+MTU qualification on another cluster, or production admission.
 
 The default `authority` role retains the original control-plane startup,
 authentication ceremonies, broker consumers, discovery, schedulers and

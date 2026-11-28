@@ -172,9 +172,175 @@ jobs:
           name: native-worker-probe-image-${{ matrix.arch }}
           path: ${{ runner.temp }}/native-worker-probe-image/
 
+  probe-service-kind:
+    needs: [probe-contract, probe-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ env.SOURCE_COMMIT }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-worker-probe-image-amd64
+          path: ${{ runner.temp }}/probe-service-image
+      - uses: docker/setup-buildx-action@v3
+      - name: Compile only the separate in-cluster Go qualification controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          directory="$RUNNER_TEMP/probe-service-kind"
+          mkdir -p "$directory/context"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -buildvcs=true -tags=nativeprobeservicekind -o "$directory/context/native-probe-service.test" ./internal/nativeprobeservicekind
+          go version -m "$directory/context/native-probe-service.test" > "$directory/controller-build-info.txt"
+          awk -v source="vcs.revision=$SOURCE_COMMIT" '$1 == "build" && $2 == source {found=1} END {exit !found}' "$directory/controller-build-info.txt"
+          awk '$1 == "build" && $2 == "vcs.modified=false" {found=1} END {exit !found}' "$directory/controller-build-info.txt"
+          sha256sum "$directory/context/native-probe-service.test" > "$directory/controller-binary.sha256"
+      - name: Reuse the exact qualified normal agent binary without a wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/probe-service-kind"
+          python3 - <<'PY'
+          import hashlib, json, os, shutil
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          original = root / 'probe-service-image'
+          q = json.loads((original / 'qualified.json').read_text())
+          image = json.loads((original / 'image.json').read_text())[0]
+          raw = (original / 'native-worker-probe').read_bytes()
+          if q['head'] != os.environ['SOURCE_COMMIT'] or q['architecture'] != 'amd64' or not q['clean_buildvcs'] or q['binary_bytes'] != len(raw) or q['binary_sha256'] != hashlib.sha256(raw).hexdigest():
+              raise SystemExit('Unqualified normal binary')
+          if image['Id'] != q['image_id'] or image['Config']['User'] != '65532:65532' or image['Config']['Entrypoint'] != ['/app/native-worker-probe'] or image['Config']['Labels']['org.opencontainers.image.revision'] != q['head']:
+              raise SystemExit('Wrong normal artifact identity')
+          shutil.copyfile(original / 'native-worker-probe', root / 'probe-service-kind/context/native-worker-probe')
+          (root / 'probe-service-kind/normal-agent-qualified.json').write_text(json.dumps(q, indent=2) + '\n')
+          PY
+          chmod 0555 "$directory/context/native-worker-probe" "$directory/context/native-probe-service.test"
+          go version -m "$directory/context/native-worker-probe" > "$directory/agent-build-info.txt"
+          awk -v source="vcs.revision=$SOURCE_COMMIT" '$1 == "build" && $2 == source {found=1} END {exit !found}' "$directory/agent-build-info.txt"
+          awk '$1 == "build" && $2 == "vcs.modified=false" {found=1} END {exit !found}' "$directory/agent-build-info.txt"
+          for target in agent controller; do
+            tag=native-probe-service
+            if [ "$target" = controller ]; then tag=native-probe-service-controller; fi
+            docker buildx build --file scripts/ci/native-probe-service/Dockerfile --target "$target" --platform linux/amd64 --build-arg "SOURCE_COMMIT=$SOURCE_COMMIT" --provenance=false --load --tag "$tag:ci" "$directory/context"
+            docker image inspect "$tag:ci" > "$directory/$target-image.json"
+          done
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: native-probe-service
+          config: scripts/ci/native-probe-service/kind.yaml
+          wait: 120s
+      - name: Pin both actual containerd manifests on every disposable node
+        shell: bash
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/probe-service-kind"
+          for role in agent controller; do
+            image=native-probe-service
+            if [ "$role" = controller ]; then image=native-probe-service-controller; fi
+            kind load docker-image "$image:ci" --name native-probe-service
+            ref="docker.io/library/$image:ci"
+            digest="$(docker exec native-probe-service-control-plane ctr -n k8s.io images ls | awk -v ref="$ref" '$1 == ref {print $3}')"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            docker exec native-probe-service-control-plane ctr -n k8s.io content get "$digest" > "$directory/$role-manifest.json"
+            printf '%s\n' "$digest" > "$directory/$role-manifest-digest.txt"
+            for node in $(kind get nodes --name native-probe-service); do
+              actual="$(docker exec "$node" ctr -n k8s.io images ls | awk -v ref="$ref" '$1 == ref {print $3}')"
+              test "$actual" = "$digest"
+              docker exec "$node" ctr -n k8s.io images tag "$ref" "docker.io/library/$image@$digest"
+            done
+            if [ "$role" = agent ]; then
+              echo "NATIVE_PROBE_SERVICE_IMAGE=docker.io/library/$image@$digest" >> "$GITHUB_ENV"
+            else
+              echo "NATIVE_PROBE_CONTROLLER_IMAGE=docker.io/library/$image@$digest" >> "$GITHUB_ENV"
+            fi
+          done
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'probe-service-kind'
+          for role in ('agent', 'controller'):
+              raw = (p / (role + '-manifest.json')).read_bytes()
+              manifest = json.loads(raw)
+              image = json.loads((p / (role + '-image.json')).read_text())[0]
+              entrypoint = '/app/native-worker-probe' if role == 'agent' else '/app/native-probe-service.test'
+              if 'sha256:' + hashlib.sha256(raw).hexdigest() != (p / (role + '-manifest-digest.txt')).read_text().strip() or manifest['config']['digest'] != image['Id'] or image['Config']['User'] != '65532:65532' or image['Config']['Entrypoint'] != [entrypoint] or image['Config']['Labels']['org.opencontainers.image.revision'] != os.environ['SOURCE_COMMIT']:
+                  raise SystemExit('Loaded manifest/config/Source mismatch')
+          PY
+      - name: Run the normal Pods and real ClusterIP exchange exactly once
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl apply -f scripts/ci/native-probe-service/bootstrap.yaml
+          # Fixed disposable bootstrap only. Resource creation/protocol/identity
+          # joins are performed by the tagged Go controller inside the cluster.
+          kubectl set image --local -f scripts/ci/native-probe-service/job.yaml "controller=$NATIVE_PROBE_CONTROLLER_IMAGE" -o yaml |
+            kubectl set env --local -f - "NATIVE_PROBE_SERVICE_SOURCE=$SOURCE_COMMIT" "NATIVE_PROBE_SERVICE_IMAGE=$NATIVE_PROBE_SERVICE_IMAGE" -o yaml |
+            kubectl apply -f -
+          kubectl -n native-probe-service-ci wait --for=condition=complete job/native-probe-service-controller --timeout=370s
+      - name: Retain original Go output without projected Secrets or kubeconfig
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/probe-service-kind"
+          mkdir -p "$directory"
+          kubectl -n native-probe-service-ci logs job/native-probe-service-controller > "$directory/original.log" 2> "$directory/log-read.stderr" || true
+          kubectl -n native-probe-service-ci get job/native-probe-service-controller -o json > "$directory/job.json" || true
+          # Never collect Secret objects, projected files, bearer or private keys.
+          if [ -s "$directory/original.log" ]; then
+            go tool test2json -t -p github.com/dakasa-yggdrasil/yggdrasil-core/internal/nativeprobeservicekind < "$directory/original.log" > "$directory/original.jsonl"
+          fi
+          rm -rf "$directory/context"
+      - name: Require one real Service proof and one exact RUN/PASS without skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import collections, hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'probe-service-kind'
+          events = [json.loads(line) for line in (p / 'original.jsonl').read_text().splitlines()]
+          root = 'TestNativeProbeActualClusterIPReverseSNATEcho'
+          if any(e.get('Action') in ('fail', 'skip') for e in events):
+              raise SystemExit('Original Service qualification failed/skipped')
+          for action in ('run', 'pass'):
+              actual = collections.Counter(e['Test'] for e in events if e.get('Action') == action and e.get('Test'))
+              if actual != collections.Counter([root]):
+                  raise SystemExit('Missing/repeated/extra Service qualification root')
+          output = ''.join(e.get('Output', '') for e in events)
+          marker = 'NATIVE_PROBE_SERVICE_PROOF '
+          proofs = [json.loads(line.split(marker, 1)[1]) for line in output.splitlines() if marker in line]
+          if len(proofs) != 1:
+              raise SystemExit('Missing/repeated native proof')
+          proof = proofs[0]
+          if proof['Schema'] != 'native_probe_service_kind_public_v1' or proof['Source'] != os.environ['SOURCE_COMMIT'] or proof['Image'] != os.environ['NATIVE_PROBE_SERVICE_IMAGE'] or proof['ServiceSourceEchoes'] < 1 or proof['Requests'] != 12 or proof['Echoes'] != 12 or any(proof[k] for k in ('NativeBirthQualified', 'StartupQualified', 'ReadinessQualified')):
+              raise SystemExit('Wrong Source/actual NAT/budget/scope')
+          job = json.loads((p / 'job.json').read_text())
+          if job.get('status', {}).get('succeeded') != 1 or job.get('status', {}).get('failed', 0) != 0:
+              raise SystemExit('Original controller did not succeed exactly once')
+          result = {'schema': 1, 'source_commit': os.environ['SOURCE_COMMIT'], 'event_sha': os.environ['GITHUB_SHA'], 'root': root, 'run': 1, 'pass': 1, 'skip': 0, 'agent_image': proof['Image'], 'service_source_echoes': proof['ServiceSourceEchoes'], 'requests': 12, 'echoes': 12, 'network_only': True, 'live_adoption': False}
+          result['files'] = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sorted(p.iterdir()) if f.is_file()}
+          (p / 'qualified.json').write_text(json.dumps(result, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-worker-probe-real-service-kind
+          path: ${{ runner.temp }}/probe-service-kind/
+
   probe-normal-publisher:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [probe-contract, probe-image]
+    needs: [probe-contract, probe-image, probe-service-kind]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: native-probe-service-controller
+  namespace: native-probe-service-ci
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 360
+  template:
+    spec:
+      serviceAccountName: controller
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: native-probe-service-controller:ci
+          imagePullPolicy: Never
+          env:
+            - name: GITHUB_ACTIONS
+              value: 'true'
+            - name: REQUIRE_NATIVE_PROBE_SERVICE_KIND
+              value: 'true'
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi

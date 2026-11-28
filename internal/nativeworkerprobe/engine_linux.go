@@ -234,7 +234,7 @@ func (e *engine) runBatch(parent context.Context, name string) {
 }
 
 func (e *engine) accept(raw []byte, address netip.AddrPort) {
-	if len(raw) != PayloadBytes || address.Port() != Port || address.Addr().String() != e.material.config.Peer.PodIPv4 {
+	if len(raw) != PayloadBytes || address.Port() != Port {
 		return
 	}
 	echo := raw[packetKindIndex] == 1
@@ -244,6 +244,13 @@ func (e *engine) accept(raw []byte, address netip.AddrPort) {
 		valid = VerifyPacket(raw, e.material.config, ownPublic, e.material.peer, true)
 	}
 	if !valid {
+		return
+	}
+	// ClusterIP reverse-SNAT may return a service-path echo from the exact
+	// configured Service IP. Only its already verified echo/path may use that
+	// address; requests and Pod-path echoes still require the peer Pod IP.
+	peer := e.material.config.Peer
+	if address.Addr().String() != peer.PodIPv4 && (!echo || raw[10] != 1 || address.Addr().String() != peer.ServiceClusterIPv4) {
 		return
 	}
 	name := "initial"
