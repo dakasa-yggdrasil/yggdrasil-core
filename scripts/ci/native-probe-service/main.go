@@ -25,6 +25,7 @@ const namespace = "native-probe-service-ci"
 
 var uuidText = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
 var podName = regexp.MustCompile(`^nps-[a-f0-9]{12}-(floor|candidate)$`)
+var imageName = regexp.MustCompile(`^docker\.io/library/native-probe-service@sha256:[a-f0-9]{64}$`)
 var files = []string{"config.json", "server.crt", "server.key", "controller-ca.crt", "signing.key", "peer-signing.pub", "admission.key"}
 
 type pod struct {
@@ -184,7 +185,7 @@ func snapshot(ctx context.Context, p pod, k kubeletFact) observation {
 }
 func main() {
 	image := os.Getenv("NATIVE_PROBE_SERVICE_IMAGE")
-	if len(os.Args) != 1 || os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("REQUIRE_NATIVE_PROBE_SERVICE_KIND") != "true" || !regexp.MustCompile(`^docker.io/library/native-probe-service@sha256:[a-f0-9]{64}$`).MatchString(image) {
+	if len(os.Args) != 1 || os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("REQUIRE_NATIVE_PROBE_SERVICE_KIND") != "true" || !imageName.MatchString(image) {
 		os.Exit(1)
 	}
 	parent, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

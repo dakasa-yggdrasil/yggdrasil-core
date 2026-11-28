@@ -8,6 +8,22 @@ import (
 
 func TestProjectionObserverRejectsForeignHostAndObjectSelectors(t *testing.T) {
 	image := "docker.io/library/native-probe-service@sha256:" + strings.Repeat("a", 64)
+	if !imageName.MatchString(image) {
+		t.Fatal("exact immutable image rejected")
+	}
+	for _, foreign := range []string{
+		strings.Replace(image, "docker.io", "dockerXio", 1),
+		strings.Replace(image, "docker.io", "docker-io", 1),
+		"foreign." + image,
+		strings.Replace(image, "docker.io", "DOCKER.IO", 1),
+		strings.Replace(image, "@sha256:", ":tag@sha256:", 1),
+		image + "a",
+		image + "\n",
+	} {
+		if imageName.MatchString(foreign) {
+			t.Fatal("foreign image could start the host metadata observer")
+		}
+	}
 	var p pod
 	raw := `{"metadata":{"name":"nps-234567892345-floor","uid":"12345678-1234-4234-8234-123456789abc","labels":{"yggdrasil.io/probe-service-ci-role":"floor","yggdrasil.io/probe-service-ci-run":"23456789-2345-4345-8345-23456789abcd"}},"spec":{"nodeName":"native-probe-service-worker","containers":[{"name":"probe","image":"` + image + `"}]}}`
 	if json.Unmarshal([]byte(raw), &p) != nil || !ownedPod(p, image) {
