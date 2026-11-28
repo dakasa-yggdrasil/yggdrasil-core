@@ -129,7 +129,7 @@ func decodeClosed(raw []byte, out any) error {
 						return ErrUnavailable
 					}
 					for _, ch := range s {
-						if !(ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '_') {
+						if (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '_' {
 							return ErrUnavailable
 						}
 					}
